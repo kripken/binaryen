@@ -32,7 +32,7 @@
 
 namespace wasm {
 
-const Name DYNAMICTOP_PTR_IMPORT("DYNAMICTOP_PTR");
+const Name SBRK_PTR_IMPORT("emscripten_get_sbrk_ptr");
 const Name SEGFAULT_IMPORT("segfault");
 const Name ALIGNFAULT_IMPORT("alignfault");
 
@@ -111,19 +111,21 @@ struct SafeHeap : public Pass {
     addGlobals(module, module->features);
   }
 
-  Name dynamicTopPtr, segfault, alignfault;
+  Name getSbrkPtr, segfault, alignfault;
 
   void addImports(Module* module) {
     ImportInfo info(*module);
-    if (auto* existing = info.getImportedGlobal(ENV, DYNAMICTOP_PTR_IMPORT)) {
-      dynamicTopPtr = existing->name;
+    if (auto* existing = info.getImportedFunction(ENV, SBRK_PTR_IMPORT)) {
+      getSbrkPtr = existing->name;
     } else {
-      auto* import = new Global;
-      import->name = dynamicTopPtr = DYNAMICTOP_PTR_IMPORT;
+      auto* import = new Function;
+      import->name = getSbrkPtr = SBRK_PTR_IMPORT;
       import->module = ENV;
-      import->base = DYNAMICTOP_PTR_IMPORT;
-      import->type = i32;
-      module->addGlobal(import);
+      import->base = SBRK_PTR_IMPORT;
+      auto* functionType = ensureFunctionType("i", module);
+      import->type = functionType->name;
+      FunctionTypeUtils::fillFunction(import, functionType);
+      module->addFunction(import);
     }
     if (auto* existing = info.getImportedFunction(ENV, SEGFAULT_IMPORT)) {
       segfault = existing->name;
@@ -327,7 +329,7 @@ struct SafeHeap : public Pass {
                              builder.makeLocalGet(local, i32),
                              builder.makeConst(Literal(int32_t(bytes)))),
           builder.makeLoad(
-            4, false, 0, 4, builder.makeGlobalGet(dynamicTopPtr, i32), i32))),
+            4, false, 0, 4, builder.makeCall(getSbrkPtr, {}, i32), i32))),
       builder.makeCall(segfault, {}, none));
   }
 };
