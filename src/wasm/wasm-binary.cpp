@@ -311,6 +311,10 @@ void WasmBinaryWriter::writeFunctions() {
       func->name, sizePos + sizeFieldSize, size);
   });
   finishSection(start);
+
+  if (Debug::hasDWARFSections(*wasm)) {
+    Debug::updateDWARF(*wasm);
+  }
 }
 
 void WasmBinaryWriter::writeGlobals() {
@@ -665,6 +669,9 @@ void WasmBinaryWriter::writeDebugLocation(Expression* curr, Function* func) {
       writeDebugLocation(iter->second);
     }
   }
+  // TODO: remove source map debugging support and refactor this method
+  // to something that directly thinks about DWARF, instead of indirectly
+  // looking at func->binaryLocations as a proxy for that etc.
   if (func && !func->binaryLocations.empty()) {
     binaryLocations[curr] = o.size();
   }
