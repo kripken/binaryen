@@ -35,16 +35,6 @@ struct DWARFDump : public Pass {
   }
 };
 
-// TODO: remove this, as it is just useful during bringup; for real updating
-//       we must actually write the binary so we have new positions.
-struct DWARFUpdate : public Pass {
-  void run(PassRunner* runner, Module* module) override {
-    Debug::updateDWARF(*module);
-  }
-};
-
 Pass* createDWARFDumpPass() { return new DWARFDump(); }
-
-Pass* createDWARFUpdatePass() { return new DWARFUpdate(); }
 
 } // namespace wasm

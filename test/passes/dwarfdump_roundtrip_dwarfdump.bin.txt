@@ -159,17 +159,17 @@ file_names[  1]:
        mod_time: 0x00000000
          length: 0x00000000
 0x00000027: 00 DW_LNE_set_address (0x0000000000000005)
-0x0000002e: 14 address += 0,  line += 2
-            0x0000000000000005      3      0      1   0             0  is_stmt
+0x0000002e: 15 address += 0,  line += 3
+            0x0000000000000005      4      0      1   0             0  is_stmt
 
 0x0000002f: 05 DW_LNS_set_column (1)
 0x00000031: 0a DW_LNS_set_prologue_end
-0x00000032: 21 address += 1,  line += 1
-            0x0000000000000006      4      1      1   0             0  is_stmt prologue_end
+0x00000032: 22 address += 1,  line += 2
+            0x0000000000000006      6      1      1   0             0  is_stmt prologue_end
 
 0x00000033: 02 DW_LNS_advance_pc (1)
 0x00000035: 00 DW_LNE_end_sequence
-            0x0000000000000007      4      1      1   0             0  is_stmt end_sequence
+            0x0000000000000007      6      1      1   0             0  is_stmt end_sequence
 
 
 .debug_str contents:

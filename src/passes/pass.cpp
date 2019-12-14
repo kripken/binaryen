@@ -110,8 +110,6 @@ void PassRegistry::registerPasses() {
   registerPass("dwarfdump",
                "dump DWARF debug info sections from the read binary",
                createDWARFDumpPass);
-  registerPass(
-    "dwarfupdate", "update DWARF debug info sections (without writing a binary; TODO: remove this)", createDWARFUpdatePass);
   registerPass("duplicate-import-elimination",
                "removes duplicate imports",
                createDuplicateImportEliminationPass);

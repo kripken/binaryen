@@ -99,13 +99,10 @@ void dumpDWARF(const Module& wasm) {
 //     StringMap<std::unique_ptr<MemoryBuffer>>
 //     EmitDebugSections(llvm::DWARFYAML::Data &DI, bool ApplyFixups);
 //
-// For modifying data, like line numberes, we can in theory do that either on
-// the DWARFContext or DWARFYAML::Data; unclear which is best, but modifying
-// the DWARFContext may save us doing fixups in EmitDebugSections.
-//
 
-#if 0
-static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data) {
+static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, const BinaryLocationsMap& newLocations) {
+  // TODO: for memory efficiency, we may want to do this in a streaming manner.
+
   // For testing, to prove we do something, bump all the special opcodes by 1.
   // XXX for fun
   for (auto& table : data.DebugLines) {
@@ -117,9 +114,8 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data) {
   }
   // XXX for fun
 }
-#endif
 
-void updateDWARF(Module& wasm) {
+void updateDWARF(Module& wasm, const BinaryLocationsMap& newLocations) {
   BinaryenDWARFInfo info(wasm);
 
   // Convert to Data representation, which YAML can use to write.
@@ -128,7 +124,7 @@ void updateDWARF(Module& wasm) {
     Fatal() << "Failed to parse DWARF to YAML";
   }
 
-  //updateDebugLines(wasm, data);
+  updateDebugLines(wasm, data, newLocations);
 
   // TODO: Actually update, and remove sections we don't know how to update yet?
 
@@ -157,7 +153,7 @@ void dumpDWARF(const Module& wasm) {
   std::cerr << "warning: no DWARF dumping support present\n";
 }
 
-void updateDWARF(Module& wasm) {
+void updateDWARF(Module& wasm, const BinaryLocationsMap& newLocations) {
   std::cerr << "warning: no DWARF updating support present\n";
 }
 
