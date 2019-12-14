@@ -126,9 +126,9 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     LineState state(table);
     std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
     for (auto& opcode : table.Opcodes) {
-      (void)opcode;
+      newOpcodes.push_back(opcode);
     }
-    //table.Opcodes.swap(newOpcodes);
+    table.Opcodes.swap(newOpcodes);
   }
 }
 
