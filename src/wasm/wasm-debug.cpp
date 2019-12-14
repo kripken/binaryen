@@ -126,7 +126,68 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     LineState state(table);
     std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
     for (auto& opcode : table.Opcodes) {
-      newOpcodes.push_back(opcode);
+      LineState oldState(state);
+      switch (opcode.Opcode) {
+        case 0: {
+          // Extended opcodes
+          switch (opcode.SubOpcode) {
+            case DW_LNE_set_address: {
+              state.addr = opcode.Data;
+              break;
+            }
+            default: {
+              Fatal() << "unknown debug line sub-opcode: " << std::hex << opcode.SubOpcode;
+            }
+          }
+          break;
+        }
+        case DW_LNS_set_column: {
+          state.col = opcode.Data;
+          break;
+        }
+        case DW_LNS_set_prologue_end: {
+          state.prologueEnd = true;
+          break;
+        }
+        case DW_LNS_advance_pc: {
+          state.addr += opcode.Data; // XXX
+          break;
+        }
+        default: {
+          if (opcode.Opcode >= table.OpcodeBase) {
+            // Special opcode: adjust line and addr using some math.
+            uint8_t AdjustOpcode = opcode.Opcode - table.OpcodeBase;
+            uint64_t AddrOffset =
+                (AdjustOpcode / table.LineRange) * table.MinInstLength;
+            int32_t LineOffset =
+                table.LineBase + (AdjustOpcode % table.LineRange);
+            state.line += LineOffset;
+            state.addr += AddrOffset;
+          } else {
+            Fatal() << "unknown debug line opcode: " << std::hex << opcode.Opcode;
+          }
+        }
+      }
+
+      // TODO: apply the wasm new locations here..! i.e. find the wasm instr
+      //       this referred to, then find its new location, and that is the
+      //       actual new state.
+
+      // Add the diff between the old state and the new state.
+      if (state.line != oldState.line && state.addr != oldState.addr) {
+        // Try to use a special opcode TODO
+        // if we succeed remove that diff so the next ifs fail to hit
+      }
+      if (state.line != oldState.line) {
+      }
+      if (state.addr != oldState.addr) {
+      }
+      if (state.col != oldState.col) {
+      }
+      if (state.prologueEnd != oldState.prologueEnd) {
+      }
+
+      //newOpcodes.push_back(opcode);
     }
     table.Opcodes.swap(newOpcodes);
   }
