@@ -665,7 +665,7 @@ void WasmBinaryWriter::writeDebugLocation(Expression* curr, Function* func) {
       writeDebugLocation(iter->second);
     }
   }
-  if (!func->binaryLocations.empty()) {
+  if (func && !func->binaryLocations.empty()) {
     binaryLocations[curr] = o.size();
   }
 }

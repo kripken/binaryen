@@ -104,6 +104,7 @@ void dumpDWARF(const Module& wasm) {
 // the DWARFContext may save us doing fixups in EmitDebugSections.
 //
 
+#if 0
 static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data) {
   // For testing, to prove we do something, bump all the special opcodes by 1.
   // XXX for fun
@@ -116,6 +117,7 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data) {
   }
   // XXX for fun
 }
+#endif
 
 void updateDWARF(Module& wasm) {
   BinaryenDWARFInfo info(wasm);
@@ -126,14 +128,14 @@ void updateDWARF(Module& wasm) {
     Fatal() << "Failed to parse DWARF to YAML";
   }
 
-  updateDebugLines(wasm, data);
+  //updateDebugLines(wasm, data);
 
   // TODO: Actually update, and remove sections we don't know how to update yet?
 
   // Convert to binary sections.
   auto newSections = EmitDebugSections(
     data,
-    false /* ApplyFixups, should be true if we modify Data, presumably? */);
+    true);
 
   // Update the custom sections in the wasm.
   // TODO: efficiency
