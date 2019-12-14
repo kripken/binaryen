@@ -101,18 +101,35 @@ void dumpDWARF(const Module& wasm) {
 //
 
 static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, const BinaryLocationsMap& newLocations) {
-  // TODO: for memory efficiency, we may want to do this in a streaming manner.
+  // TODO: for memory efficiency, we may want to do this in a streaming manner,
+  //       binary to binary, without YAML IR.
 
-  // For testing, to prove we do something, bump all the special opcodes by 1.
-  // XXX for fun
+  struct LineState {
+    uint32_t addr = 0;
+    // TODO sectionIndex?
+    uint32_t line = 1;
+    uint32_t col = 0;
+    // TODO uint32_t file = 1;
+    // TODO uint32_t isa = 0;
+    // TODO Discriminator = 0;
+    bool isStmt;
+    bool basicBlock = false;
+    bool endSequence = false;
+    bool prologueEnd = false;
+    bool epilogueBegin = false;
+
+    LineState(const llvm::DWARFYAML::LineTable& table) : isStmt(table.DefaultIsStmt) {}
+  };
+
   for (auto& table : data.DebugLines) {
+    // Parse the original opcodes and emit new ones.
+    LineState state(table);
+    std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
     for (auto& opcode : table.Opcodes) {
-      if (opcode.Opcode > table.OpcodeBase) {
-        opcode.Opcode = llvm::dwarf::LineNumberOps(int(opcode.Opcode) + 1);
-      }
+      (void)opcode;
     }
+    //table.Opcodes.swap(newOpcodes);
   }
-  // XXX for fun
 }
 
 void updateDWARF(Module& wasm, const BinaryLocationsMap& newLocations) {
