@@ -782,7 +782,7 @@ public:
   }
   void emitUnreachable() { writer.emitUnreachable(); }
   void emitDebugLocation(Expression* curr) {
-    if (sourceMap) {
+    if (sourceMap || !func->binaryLocations.empty()) {
       parent.writeDebugLocation(curr, func);
     }
   }

@@ -109,6 +109,7 @@ template<typename T> int32_t WasmBinaryWriter::startSection(T code) {
   if (sourceMap) {
     sourceMapLocationsSizeAtSectionStart = sourceMapLocations.size();
   }
+  binaryLocationsSizeAtSectionStart = binaryLocations.size();
   return writeU32LEBPlaceholder(); // section size to be filled in later
 }
 
@@ -130,6 +131,14 @@ void WasmBinaryWriter::finishSection(int32_t start) {
            ++i) {
         sourceMapLocations[i].first -= adjustment;
       }
+    }
+  }
+  if (binaryLocationsSizeAtSectionStart != binaryLocations.size()) {
+    // We added the binary locations, adjust them: they must be relative
+    // to the code section's body.
+    assert(binaryLocationsSizeAtSectionStart == 0);
+    for (auto& pair : binaryLocations) {
+      pair.second -= start + MaxLEB32Bytes;
     }
   }
 }
@@ -649,10 +658,15 @@ void WasmBinaryWriter::writeDebugLocation(const Function::DebugLocation& loc) {
 }
 
 void WasmBinaryWriter::writeDebugLocation(Expression* curr, Function* func) {
-  auto& debugLocations = func->debugLocations;
-  auto iter = debugLocations.find(curr);
-  if (iter != debugLocations.end()) {
-    writeDebugLocation(iter->second);
+  if (sourceMap) {
+    auto& debugLocations = func->debugLocations;
+    auto iter = debugLocations.find(curr);
+    if (iter != debugLocations.end()) {
+      writeDebugLocation(iter->second);
+    }
+  }
+  if (!func->binaryLocations.empty()) {
+    binaryLocations[curr] = o.size();
   }
 }
 
