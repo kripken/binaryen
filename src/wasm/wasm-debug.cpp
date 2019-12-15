@@ -160,6 +160,35 @@ struct LineState {
       }
     }
   }
+
+  // Given an old state, emit the diff from it to this state into a new line
+  // table.
+  void emitDiff(const LineState& old, std::vector<llvm::DWARFYAML::LineTableOpcode>& newOpcodes) {
+    bool usedSpecial = false;
+    if (state.addr != oldState.addr || state.line != oldState.line) {
+      // Try to use a special opcode TODO
+      if ..
+        usedSpecial = true;
+
+    }
+    if (state.addr != oldState.addr && !usedSpecial) {
+    }
+    if (state.line != oldState.line && !usedSpecial) {
+    }
+    if (state.isStmt != oldState.isStmt) {
+    }
+    if (state.basicBlock != oldState.basicBlock) {
+      abort();
+    }
+    if (state.endSequence != oldState.endSequence) {
+    }
+    if (state.prologueEnd != oldState.prologueEnd) {
+    }
+    if (state.epilogueBegin != oldState.epilogueBegin) {
+      abort();
+    }
+      //newOpcodes.push_back(opcode);
+  }
 };
 
 // Represents a mapping of addresses to expressions.
@@ -205,6 +234,7 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     LineState state(table);
     // All the addresses we need to write out.
     std::vector<uint32_t> newAddrs;
+    std::unordered_map<uint32_t, LineState> newAddrInfo;
     for (auto& opcode : table.Opcodes) {
       state.update(opcode.Opcode);
       // An expression may not exist for this line table item, if we optimized
@@ -214,6 +244,8 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
         if (iter != newLocations.end()) {
           uint32_t newAddr = *iter;
           newAddrs.push_back(newAddr);
+          auto& updatedState = newAddrInfo[newAddr] = state;
+          updatedState.addr = newAddr;
         }
       }
     }
@@ -226,30 +258,9 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
     LineState state(table);
     for (uint32_t addr : newAddrs) {
-      LineState old(state);
-      state.addr = addr;
-XXX need the other stuffs. link newAddr to old line table item
-      // Add the diff between the old state and the new state.
-      if (state.line != oldState.line && state.addr != oldState.addr) {
-        // Try to use a special opcode TODO
-        // if we succeed remove that diff so the next ifs fail to hit
-      }
-      if (state.addr != oldState.addr) {
-      }
-      if (state.line != oldState.line) {
-      }
-      if (state.isStmt != oldState.isStmt) {
-      }
-      if (state.basicBlock != oldState.basicBlock) {
-      }
-      if (state.endSequence != oldState.endSequence) {
-      }
-      if (state.prologueEnd != oldState.prologueEnd) {
-      }
-      if (state.epilogueBegin != oldState.epilogueBegin) {
-      }
-
-      //newOpcodes.push_back(opcode);
+      LineState oldState(state);
+      state = newAddrInfo[addr];
+      state.emitDiff(oldState, newOpcodes);
     }
     table.Opcodes.swap(newOpcodes);
   }
