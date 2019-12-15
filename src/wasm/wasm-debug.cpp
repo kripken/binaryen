@@ -172,15 +172,11 @@ struct LineState {
   // Given an old state, emit the diff from it to this state into a new line
   // table.
   void emitDiff(const LineState& old, std::vector<llvm::DWARFYAML::LineTableOpcode>& newOpcodes) {
-    bool usedSpecial = false;
+    bool useSpecial = false;
     if (addr != old.addr || line != old.line) {
       // Try to use a special opcode TODO
     }
-
-    // Note if we added anything aside from a special opcode (which implicitly
-    // implies a sequence end); if we did, then we need to emit a sequence end.
-    auto sizeBeforeSequence = newOpcodes.size();
-    if (addr != old.addr && !usedSpecial) {
+    if (addr != old.addr && !useSpecial) {
       // len = 1 (subopcode) + 4 (wasm32 address)
       // FIXME: look at AddrSize on the Unit.
       auto item = makeItem(llvm::dwarf::DW_LNE_set_address, 5);
@@ -188,13 +184,13 @@ struct LineState {
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
-    if (line != old.line && !usedSpecial) {
+    if (line != old.line && !useSpecial) {
       auto item = makeItem(llvm::dwarf::DW_LNS_advance_line);
       item.Data = line - old.line;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
-    if (col != old.col && !usedSpecial) {
+    if (col != old.col) {
       auto item = makeItem(llvm::dwarf::DW_LNS_set_column);
       item.Data = col;
       newOpcodes.push_back(item);
@@ -212,8 +208,11 @@ struct LineState {
     if (epilogueBegin != old.epilogueBegin) {
       abort();
     }
-    if (sizeBeforeSequence != newOpcodes.size()) {
-      // We emitted a sequence of opcodes, end it.
+    if (useSpecial) {
+      // Emit a special, which ends a sequence automatically.
+      // TODO
+    } else {
+      // End the sequence manually.
       // len = 1 (subopcode)
       newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNE_end_sequence, 1));
     }
