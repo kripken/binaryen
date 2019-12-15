@@ -181,7 +181,9 @@ struct LineState {
     // implies a sequence end); if we did, then we need to emit a sequence end.
     auto sizeBeforeSequence = newOpcodes.size();
     if (addr != old.addr && !usedSpecial) {
-      auto item = makeItem(llvm::dwarf::DW_LNE_set_address);
+      // len = 1 (subopcode) + 4 (wasm32 address)
+      // FIXME: look at AddrSize on the Unit.
+      auto item = makeItem(llvm::dwarf::DW_LNE_set_address, 5);
       item.Data = addr;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
@@ -212,7 +214,8 @@ struct LineState {
     }
     if (sizeBeforeSequence != newOpcodes.size()) {
       // We emitted a sequence of opcodes, end it.
-      newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNE_end_sequence));
+      // len = 1 (subopcode)
+      newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNE_end_sequence, 1));
     }
   }
 
@@ -224,8 +227,11 @@ private:
     return item;
   }
 
-  llvm::DWARFYAML::LineTableOpcode makeItem(llvm::dwarf::LineNumberExtendedOps opcode) {
+  llvm::DWARFYAML::LineTableOpcode makeItem(llvm::dwarf::LineNumberExtendedOps opcode, uint64_t len) {
     auto item = makeItem(llvm::dwarf::LineNumberOps(0));
+    // All the length after the len field itself, including the subopcode
+    // (1 byte).
+    item.ExtLen = len;
     item.SubOpcode = opcode;
     return item;
   }
@@ -297,6 +303,7 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     std::sort(newAddrs.begin(), newAddrs.end(), [](uint32_t a, uint32_t b) {
       return a < b;
     });
+std::cout << "new addrs: " << newAddrs.size() << '\n';
     // Emit a new line table.
     {
       std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
@@ -306,7 +313,9 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
         state = newAddrInfo[addr];
         state.emitDiff(oldState, newOpcodes);
       }
+std::cout << "line table was " <<table.Opcodes.size() << '\n';
       table.Opcodes.swap(newOpcodes);
+std::cout << "line table is now " <<table.Opcodes.size() << '\n';
     }
   }
 }
