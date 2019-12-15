@@ -322,7 +322,6 @@ void WasmBinaryWriter::writeFunctions() {
         // to the code section.
         assert(binaryLocationsSizeAtSectionStart == 0);
         for (auto& pair : binaryLocations) {
-          // start is after writing the code for the section, which has size 1.
           pair.second -= adjustment;
         }
       }
