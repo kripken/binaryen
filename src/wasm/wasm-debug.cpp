@@ -167,27 +167,43 @@ struct LineState {
     bool usedSpecial = false;
     if (state.addr != oldState.addr || state.line != oldState.line) {
       // Try to use a special opcode TODO
-      if ..
-        usedSpecial = true;
-
     }
     if (state.addr != oldState.addr && !usedSpecial) {
+      llvm::DWARFYAML::LineTableOpcode item;
+      item.Opcode = DW_LNE_set_address;
+      item.Data = state.addr;
+      newOpcodes.push_back(item);
+      // TODO file and all the other fields
     }
     if (state.line != oldState.line && !usedSpecial) {
+      llvm::DWARFYAML::LineTableOpcode item;
+      item.Opcode = DW_LNE_set_line;
+      item.Data = state.line;
+      newOpcodes.push_back(item);
+      // TODO file and all the other fields
+    }
+    if (state.col != oldState.col && !usedSpecial) {
+      llvm::DWARFYAML::LineTableOpcode item;
+      item.Opcode = DW_LNE_set_col;
+      item.Data = state.col;
+      newOpcodes.push_back(item);
+      // TODO file and all the other fields
     }
     if (state.isStmt != oldState.isStmt) {
+      abort();
     }
     if (state.basicBlock != oldState.basicBlock) {
       abort();
     }
     if (state.endSequence != oldState.endSequence) {
+      abort();
     }
     if (state.prologueEnd != oldState.prologueEnd) {
+      abort();
     }
     if (state.epilogueBegin != oldState.epilogueBegin) {
       abort();
     }
-      //newOpcodes.push_back(opcode);
   }
 };
 
@@ -237,6 +253,7 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     std::unordered_map<uint32_t, LineState> newAddrInfo;
     for (auto& opcode : table.Opcodes) {
       state.update(opcode.Opcode);
+// don't we need to seek a "flush" for pushing the next line item? read the reader.
       // An expression may not exist for this line table item, if we optimized
       // it away.
       if (auto* expr = oldAddrMap.get(state.addr)) {
