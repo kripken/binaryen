@@ -153,13 +153,17 @@ struct LineState {
       default: {
         if (opcode.Opcode >= table.OpcodeBase) {
           // Special opcode: adjust line and addr using some math.
-          uint8_t AdjustOpcode = opcode.Opcode - table.OpcodeBase;
+          uint8_t AdjustOpcode = opcode.Opcode - table.OpcodeBase; // 20 - 13 = 7
+std::cout << int(opcode.Opcode) << "  " << int(table.OpcodeBase) << " ==> " << int(AdjustOpcode) << '\n';
           uint64_t AddrOffset =
-              (AdjustOpcode / table.LineRange) * table.MinInstLength;
+              (AdjustOpcode / table.LineRange) * table.MinInstLength; // (7 / 14) * 1 = 0
+std::cout << int(table.LineRange) << "  " << int(table.MinInstLength) << " ==> " << int(AddrOffset) << '\n';
           int32_t LineOffset =
-              table.LineBase + (AdjustOpcode % table.LineRange);
+              table.LineBase + (AdjustOpcode % table.LineRange); // -5 + (7 % 14) = 2
+std::cout << int(table.LineBase) << "  " << " ==> " << int(LineOffset) << '\n';
           line += LineOffset;
           addr += AddrOffset;
+std::cout << int(opcode.Opcode) << " special (line, addr offsets) " << LineOffset << " : " << AddrOffset << '\n';
           return true;
         } else {
           Fatal() << "unknown debug line opcode: " << std::hex << opcode.Opcode;
@@ -312,6 +316,7 @@ std::cout << "      has new addr " << newAddr << "\n";
           }
         }
       }
+std::cout << " line: " << state.line << '\n';
     }
     // Sort the new addresses (which may be substantially different from the
     // original layout after optimization).
@@ -326,6 +331,7 @@ std::cout << "new addrs: " << newAddrs.size() << '\n';
       for (uint32_t addr : newAddrs) {
         LineState oldState(state);
         state = newAddrInfo[addr];
+std::cout << " emit line: " << state.line << '\n';
         state.emitDiff(oldState, newOpcodes);
       }
 std::cout << "line table was " <<table.Opcodes.size() << '\n';
