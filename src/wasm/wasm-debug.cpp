@@ -154,16 +154,13 @@ struct LineState {
         if (opcode.Opcode >= table.OpcodeBase) {
           // Special opcode: adjust line and addr using some math.
           uint8_t AdjustOpcode = opcode.Opcode - table.OpcodeBase; // 20 - 13 = 7
-std::cout << int(opcode.Opcode) << "  " << int(table.OpcodeBase) << " ==> " << int(AdjustOpcode) << '\n';
           uint64_t AddrOffset =
               (AdjustOpcode / table.LineRange) * table.MinInstLength; // (7 / 14) * 1 = 0
-std::cout << int(table.LineRange) << "  " << int(table.MinInstLength) << " ==> " << int(AddrOffset) << '\n';
           int32_t LineOffset =
               table.LineBase + (AdjustOpcode % table.LineRange); // -5 + (7 % 14) = 2
-std::cout << int(table.LineBase) << "  " << " ==> " << int(LineOffset) << '\n';
           line += LineOffset;
+std::cout << "line now " << line << '\n';
           addr += AddrOffset;
-std::cout << int(opcode.Opcode) << " special (line, addr offsets) " << LineOffset << " : " << AddrOffset << '\n';
           return true;
         } else {
           Fatal() << "unknown debug line opcode: " << std::hex << opcode.Opcode;
@@ -184,17 +181,20 @@ std::cout << int(opcode.Opcode) << " special (line, addr offsets) " << LineOffse
       // len = 1 (subopcode) + 4 (wasm32 address)
       // FIXME: look at AddrSize on the Unit.
       auto item = makeItem(llvm::dwarf::DW_LNE_set_address, 5);
+std::cout << "emitDiff: set address to " << addr << '\n';
       item.Data = addr;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
     if (line != old.line && !useSpecial) {
       auto item = makeItem(llvm::dwarf::DW_LNS_advance_line);
-      item.Data = line - old.line;
+std::cout << "emitDiff: advance line from " << old.line << " to " << line << '\n';
+      item.SData = line - old.line;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
     if (col != old.col) {
+std::cout << "emitDiff: set col to " << col << '\n';
       auto item = makeItem(llvm::dwarf::DW_LNS_set_column);
       item.Data = col;
       newOpcodes.push_back(item);
@@ -218,6 +218,7 @@ std::cout << int(opcode.Opcode) << " special (line, addr offsets) " << LineOffse
     } else {
       // End the sequence manually.
       // len = 1 (subopcode)
+std::cout << "emitDiff: end eqeuence\n";
       newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNE_end_sequence, 1));
     }
   }
