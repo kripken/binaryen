@@ -102,8 +102,6 @@ void dumpDWARF(const Module& wasm) {
 
 // Represents the state when parsing a line table.
 struct LineState {
-  const llvm::DWARFYAML::LineTable& table;
-
   uint32_t addr = 0;
   // TODO sectionIndex?
   uint32_t line = 1;
@@ -113,13 +111,14 @@ struct LineState {
   // TODO Discriminator = 0;
   bool isStmt;
   bool basicBlock = false;
+  // XXX these two should be just prologue, epilogue?
   bool prologueEnd = false;
   bool epilogueBegin = false;
 
-  LineState(const llvm::DWARFYAML::LineTable& table) : table(table), isStmt(table.DefaultIsStmt) {}
+  LineState(const llvm::DWARFYAML::LineTable& table) : isStmt(table.DefaultIsStmt) {}
 
   // Updates the state, and returns whether a new row is ready to be emitted.
-  bool update(llvm::DWARFYAML::LineTableOpcode& opcode) {
+  bool update(llvm::DWARFYAML::LineTableOpcode& opcode, const llvm::DWARFYAML::LineTable& table) {
     switch (opcode.Opcode) {
       case 0: {
         // Extended opcodes
@@ -255,7 +254,7 @@ struct AddrExprMap {
   Expression* get(uint32_t addr) {
     auto iter = map.find(addr);
     if (iter != map.end()) {
-      return *iter;
+      return iter->second;
     }
     return nullptr;
   }
@@ -276,13 +275,13 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     std::unordered_map<uint32_t, LineState> newAddrInfo;
     for (auto& opcode : table.Opcodes) {
       // Update the state, and check if we have a new row to emit.
-      if (state.update(opcode.Opcode)) {
+      if (state.update(opcode.Opcode, table)) {
         // An expression may not exist for this line table item, if we optimized
         // it away.
         if (auto* expr = oldAddrMap.get(state.addr)) {
           auto iter = newLocations.find(expr);
           if (iter != newLocations.end()) {
-            uint32_t newAddr = *iter;
+            uint32_t newAddr = iter->second;
             newAddrs.push_back(newAddr);
             auto& updatedState = newAddrInfo[newAddr] = state;
             updatedState.addr = newAddr;
