@@ -115,6 +115,8 @@ struct LineState {
   bool prologueEnd = false;
   bool epilogueBegin = false;
 
+  LineState() = default;
+  LineState(const LineState& other) = default;
   LineState(const llvm::DWARFYAML::LineTable& table) : isStmt(table.DefaultIsStmt) {}
 
   // Updates the state, and returns whether a new row is ready to be emitted.
@@ -275,7 +277,7 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     std::unordered_map<uint32_t, LineState> newAddrInfo;
     for (auto& opcode : table.Opcodes) {
       // Update the state, and check if we have a new row to emit.
-      if (state.update(opcode.Opcode, table)) {
+      if (state.update(opcode, table)) {
         // An expression may not exist for this line table item, if we optimized
         // it away.
         if (auto* expr = oldAddrMap.get(state.addr)) {
@@ -284,6 +286,7 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
             uint32_t newAddr = iter->second;
             newAddrs.push_back(newAddr);
             auto& updatedState = newAddrInfo[newAddr] = state;
+            // The only difference is the address TODO other stuff?
             updatedState.addr = newAddr;
           }
         }
