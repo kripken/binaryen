@@ -100,91 +100,153 @@ void dumpDWARF(const Module& wasm) {
 //     EmitDebugSections(llvm::DWARFYAML::Data &DI, bool ApplyFixups);
 //
 
+// Represents the state when parsing a line table.
+struct LineState {
+  uint32_t addr = 0;
+  // TODO sectionIndex?
+  uint32_t line = 1;
+  uint32_t col = 0;
+  // TODO uint32_t file = 1;
+  // TODO uint32_t isa = 0;
+  // TODO Discriminator = 0;
+  bool isStmt;
+  bool basicBlock = false;
+  bool endSequence = false;
+  bool prologueEnd = false;
+  bool epilogueBegin = false;
+
+  LineState(const llvm::DWARFYAML::LineTable& table) : isStmt(table.DefaultIsStmt) {}
+
+  void update(llvm:DWARFYAML::LineTableOpcode& opcode) {
+    switch (opcode.Opcode) {
+      case 0: {
+        // Extended opcodes
+        switch (opcode.SubOpcode) {
+          case DW_LNE_set_address: {
+            addr = opcode.Data;
+            break;
+          }
+          default: {
+            Fatal() << "unknown debug line sub-opcode: " << std::hex << opcode.SubOpcode;
+          }
+        }
+        break;
+      }
+      case DW_LNS_set_column: {
+        col = opcode.Data;
+        break;
+      }
+      case DW_LNS_set_prologue_end: {
+        prologueEnd = true;
+        break;
+      }
+      case DW_LNS_advance_pc: {
+        addr += opcode.Data; // XXX
+        break;
+      }
+      default: {
+        if (opcode.Opcode >= table.OpcodeBase) {
+          // Special opcode: adjust line and addr using some math.
+          uint8_t AdjustOpcode = opcode.Opcode - table.OpcodeBase;
+          uint64_t AddrOffset =
+              (AdjustOpcode / table.LineRange) * table.MinInstLength;
+          int32_t LineOffset =
+              table.LineBase + (AdjustOpcode % table.LineRange);
+          line += LineOffset;
+          addr += AddrOffset;
+        } else {
+          Fatal() << "unknown debug line opcode: " << std::hex << opcode.Opcode;
+        }
+      }
+    }
+  }
+};
+
+// Represents a mapping of addresses to expressions.
+struct AddrExprMap {
+  std::unordered_map<uint32_t, Expression*> map;
+
+  // Construct the map from the binaryLocations loaded from the wasm.
+  AddrExprMap(const Module& wasm) {
+    for (auto& func : wasm.functions) {
+      for (auto pair : func->binaryLocations) {
+        assert(map.count(pair.second) == 0);
+        map[pair.second] = pair.first;
+      }
+    }
+  }
+
+  // Construct the map from new binaryLocations just written
+  AddrExprMap(const BinaryLocationsMap& newLocations) {
+    for (auto pair : newLocations) {
+      assert(map.count(pair.second) == 0);
+      map[pair.second] = pair.first;
+    }
+  }
+
+  Expression* get(uint32_t addr) {
+    auto iter = map.find(addr);
+    if (iter != map.end()) {
+      return *iter;
+    }
+    return nullptr;
+  }
+};
+
 static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, const BinaryLocationsMap& newLocations) {
   // TODO: for memory efficiency, we may want to do this in a streaming manner,
   //       binary to binary, without YAML IR.
 
-  struct LineState {
-    uint32_t addr = 0;
-    // TODO sectionIndex?
-    uint32_t line = 1;
-    uint32_t col = 0;
-    // TODO uint32_t file = 1;
-    // TODO uint32_t isa = 0;
-    // TODO Discriminator = 0;
-    bool isStmt;
-    bool basicBlock = false;
-    bool endSequence = false;
-    bool prologueEnd = false;
-    bool epilogueBegin = false;
-
-    LineState(const llvm::DWARFYAML::LineTable& table) : isStmt(table.DefaultIsStmt) {}
-  };
+  AddrExprMap oldAddrMap(wasm);
+  AddrExprMap newAddrMap(newLocations);
 
   for (auto& table : data.DebugLines) {
     // Parse the original opcodes and emit new ones.
     LineState state(table);
-    std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
+    // All the addresses we need to write out.
+    std::vector<uint32_t> newAddrs;
     for (auto& opcode : table.Opcodes) {
-      LineState oldState(state);
-      switch (opcode.Opcode) {
-        case 0: {
-          // Extended opcodes
-          switch (opcode.SubOpcode) {
-            case DW_LNE_set_address: {
-              state.addr = opcode.Data;
-              break;
-            }
-            default: {
-              Fatal() << "unknown debug line sub-opcode: " << std::hex << opcode.SubOpcode;
-            }
-          }
-          break;
-        }
-        case DW_LNS_set_column: {
-          state.col = opcode.Data;
-          break;
-        }
-        case DW_LNS_set_prologue_end: {
-          state.prologueEnd = true;
-          break;
-        }
-        case DW_LNS_advance_pc: {
-          state.addr += opcode.Data; // XXX
-          break;
-        }
-        default: {
-          if (opcode.Opcode >= table.OpcodeBase) {
-            // Special opcode: adjust line and addr using some math.
-            uint8_t AdjustOpcode = opcode.Opcode - table.OpcodeBase;
-            uint64_t AddrOffset =
-                (AdjustOpcode / table.LineRange) * table.MinInstLength;
-            int32_t LineOffset =
-                table.LineBase + (AdjustOpcode % table.LineRange);
-            state.line += LineOffset;
-            state.addr += AddrOffset;
-          } else {
-            Fatal() << "unknown debug line opcode: " << std::hex << opcode.Opcode;
-          }
+      state.update(opcode.Opcode);
+      // An expression may not exist for this line table item, if we optimized
+      // it away.
+      if (auto* expr = oldAddrMap.get(state.addr)) {
+        auto iter = newLocations.find(expr);
+        if (iter != newLocations.end()) {
+          uint32_t newAddr = *iter;
+          newAddrs.push_back(newAddr);
         }
       }
-
-      // TODO: apply the wasm new locations here..! i.e. find the wasm instr
-      //       this referred to, then find its new location, and that is the
-      //       actual new state.
-
+    }
+    // Sort the new addresses (which may be substantially different from the
+    // original layout after optimization).
+    std::sort(newAddrs.begin(), newAddrs.end(), [](uint32_t a, uint32_t b) {
+      return a < b;
+    });
+    // Emit a new line table.
+    std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
+    LineState state(table);
+    for (uint32_t addr : newAddrs) {
+      LineState old(state);
+      state.addr = addr;
+XXX need the other stuffs. link newAddr to old line table item
       // Add the diff between the old state and the new state.
       if (state.line != oldState.line && state.addr != oldState.addr) {
         // Try to use a special opcode TODO
         // if we succeed remove that diff so the next ifs fail to hit
       }
-      if (state.line != oldState.line) {
-      }
       if (state.addr != oldState.addr) {
       }
-      if (state.col != oldState.col) {
+      if (state.line != oldState.line) {
+      }
+      if (state.isStmt != oldState.isStmt) {
+      }
+      if (state.basicBlock != oldState.basicBlock) {
+      }
+      if (state.endSequence != oldState.endSequence) {
       }
       if (state.prologueEnd != oldState.prologueEnd) {
+      }
+      if (state.epilogueBegin != oldState.epilogueBegin) {
       }
 
       //newOpcodes.push_back(opcode);
