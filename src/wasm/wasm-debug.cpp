@@ -113,62 +113,59 @@ struct LineState {
   // TODO Discriminator = 0;
   bool isStmt;
   bool basicBlock = false;
-  bool endSequence = false;
   bool prologueEnd = false;
   bool epilogueBegin = false;
 
   LineState(const llvm::DWARFYAML::LineTable& table) : table(table), isStmt(table.DefaultIsStmt) {}
 
-  void update(llvm:DWARFYAML::LineTableOpcode& opcode) {
-    switch (Opcode) {
+  // Updates the state, and returns whether a new row is ready to be emitted.
+  bool update(llvm::DWARFYAML::LineTableOpcode& opcode) {
+    switch (opcode.Opcode) {
       case 0: {
         // Extended opcodes
-        switch (SubOpcode) {
-          case DW_LNE_set_address: {
-            addr = Data;
+        switch (opcode.SubOpcode) {
+          case llvm::dwarf::DW_LNE_set_address: {
+            addr = opcode.Data;
             break;
           }
           default: {
-            Fatal() << "unknown debug line sub-opcode: " << std::hex << SubOpcode;
+            Fatal() << "unknown debug line sub-opcode: " << std::hex << opcode.SubOpcode;
           }
         }
         break;
       }
-      case DW_LNS_set_column: {
-        col = Data;
+      case llvm::dwarf::DW_LNS_set_column: {
+        col = opcode.Data;
         break;
       }
-      case DW_LNS_set_prologue_end: {
+      case llvm::dwarf::DW_LNS_set_prologue_end: {
         prologueEnd = true;
         break;
       }
-      case DW_LNS_advance_pc: {
-        addr += Data; // XXX
+      case llvm::dwarf::DW_LNS_advance_pc: {
+        addr += opcode.Data; // XXX
         break;
       }
+      case llvm::dwarf::DW_LNE_end_sequence: {
+        return true;
+      }
       default: {
-        if (isSpecial()) {
+        if (opcode.Opcode >= table.OpcodeBase) {
           // Special opcode: adjust line and addr using some math.
-          uint8_t AdjustOpcode = Opcode - table.OpcodeBase;
+          uint8_t AdjustOpcode = opcode.Opcode - table.OpcodeBase;
           uint64_t AddrOffset =
               (AdjustOpcode / table.LineRange) * table.MinInstLength;
           int32_t LineOffset =
               table.LineBase + (AdjustOpcode % table.LineRange);
           line += LineOffset;
           addr += AddrOffset;
+          return true;
         } else {
-          Fatal() << "unknown debug line opcode: " << std::hex << Opcode;
+          Fatal() << "unknown debug line opcode: " << std::hex << opcode.Opcode;
         }
       }
     }
-  }
-
-  bool isSpecial() {
-    return Opcode >= table.OpcodeBase;
-  }
-
-  bool addsRow() {
-    return isSpecial() || endSequence;
+    return false;
   }
 
   // Given an old state, emit the diff from it to this state into a new line
@@ -182,42 +179,46 @@ struct LineState {
     };
 
     bool usedSpecial = false;
-    if (addr != oldState.addr || line != oldState.line) {
+    if (addr != old.addr || line != old.line) {
       // Try to use a special opcode TODO
     }
-    if (addr != oldState.addr && !usedSpecial) {
-      auto item = makeItem(DW_LNE_set_address);
+
+    // Note if we added anything aside from a special opcode (which implicitly
+    // implies a sequence end); if we did, then we need to emit a sequence end.
+    auto sizeBeforeSequence = newOpcodes.size();
+    if (addr != old.addr && !usedSpecial) {
+      auto item = makeItem(llvm::dwarf::DW_LNE_set_address);
       item.Data = addr;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
-    if (line != oldState.line && !usedSpecial) {
-      auto item = makeItem(DW_LNE_set_line);
+    if (line != old.line && !usedSpecial) {
+      auto item = makeItem(llvm::dwarf::DW_LNE_set_line);
       item.Data = line;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
-    if (col != oldState.col && !usedSpecial) {
-      auto item = makeItem(DW_LNE_set_col);
+    if (col != old.col && !usedSpecial) {
+      auto item = makeItem(llvm::dwarf::DW_LNE_set_col);
       item.Data = col;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
-    if (isStmt != oldState.isStmt) {
+    if (isStmt != old.isStmt) {
       abort();
     }
-    if (basicBlock != oldState.basicBlock) {
+    if (basicBlock != old.basicBlock) {
       abort();
     }
-    if (endSequence != oldState.endSequence) {
-      auto item = makeItem(DW_LNE_end_sequence);
-      newOpcodes.push_back(item);
-    }
-    if (prologueEnd != oldState.prologueEnd) {
+    if (prologueEnd != old.prologueEnd) {
       abort();
     }
-    if (epilogueBegin != oldState.epilogueBegin) {
+    if (epilogueBegin != old.epilogueBegin) {
       abort();
+    }
+    if (sizeBeforeSequence != newOpcodes.size()) {
+      // We emitted a sequence of opcodes, end it.
+      newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNE_end_sequence));
     }
   }
 };
@@ -267,8 +268,8 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
     std::vector<uint32_t> newAddrs;
     std::unordered_map<uint32_t, LineState> newAddrInfo;
     for (auto& opcode : table.Opcodes) {
-      state.update(opcode.Opcode);
-      if (state.addsRow()) {
+      // Update the state, and check if we have a new row to emit.
+      if (state.update(opcode.Opcode)) {
         // An expression may not exist for this line table item, if we optimized
         // it away.
         if (auto* expr = oldAddrMap.get(state.addr)) {
