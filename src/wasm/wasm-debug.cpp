@@ -128,6 +128,9 @@ struct LineState {
             addr = opcode.Data;
             break;
           }
+          case llvm::dwarf::DW_LNE_end_sequence: {
+            return true;
+          }
           default: {
             Fatal() << "unknown debug line sub-opcode: " << std::hex << opcode.SubOpcode;
           }
@@ -145,9 +148,6 @@ struct LineState {
       case llvm::dwarf::DW_LNS_advance_pc: {
         addr += opcode.Data; // XXX
         break;
-      }
-      case llvm::dwarf::DW_LNE_end_sequence: {
-        return true;
       }
       default: {
         if (opcode.Opcode >= table.OpcodeBase) {
@@ -171,13 +171,6 @@ struct LineState {
   // Given an old state, emit the diff from it to this state into a new line
   // table.
   void emitDiff(const LineState& old, std::vector<llvm::DWARFYAML::LineTableOpcode>& newOpcodes) {
-    auto makeItem = [](dwarf::LineNumberOps opcode) {
-      llvm::DWARFYAML::LineTableOpcode item;
-      memset(&item, 0, sizeof(item));
-      item.Opcode = opcode;
-      return item;
-    };
-
     bool usedSpecial = false;
     if (addr != old.addr || line != old.line) {
       // Try to use a special opcode TODO
@@ -199,7 +192,7 @@ struct LineState {
       // TODO file and all the other fields
     }
     if (col != old.col && !usedSpecial) {
-      auto item = makeItem(llvm::dwarf::DW_LNE_set_col);
+      auto item = makeItem(llvm::dwarf::DW_LNS_set_column);
       item.Data = col;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
@@ -220,6 +213,20 @@ struct LineState {
       // We emitted a sequence of opcodes, end it.
       newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNE_end_sequence));
     }
+  }
+
+private:
+  llvm::DWARFYAML::LineTableOpcode makeItem(dwarf::LineNumberOps opcode) {
+    llvm::DWARFYAML::LineTableOpcode item;
+    memset(&item, 0, sizeof(item));
+    item.Opcode = opcode;
+    return item;
+  }
+
+  llvm::DWARFYAML::LineTableOpcode makeItem(dwarf::LineNumberExtendedOps opcode) {
+    auto item = makeItem(dwarf::LineNumberOps(0));
+    item.SubOpcode = opcode;
+    return item;
   }
 };
 
