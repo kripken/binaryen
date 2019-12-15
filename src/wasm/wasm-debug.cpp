@@ -186,8 +186,8 @@ struct LineState {
       // TODO file and all the other fields
     }
     if (line != old.line && !usedSpecial) {
-      auto item = makeItem(llvm::dwarf::DW_LNE_set_line);
-      item.Data = line;
+      auto item = makeItem(llvm::dwarf::DW_LNS_advance_line);
+      item.Data = line - old.line;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
@@ -216,15 +216,15 @@ struct LineState {
   }
 
 private:
-  llvm::DWARFYAML::LineTableOpcode makeItem(dwarf::LineNumberOps opcode) {
+  llvm::DWARFYAML::LineTableOpcode makeItem(llvm::dwarf::LineNumberOps opcode) {
     llvm::DWARFYAML::LineTableOpcode item;
     memset(&item, 0, sizeof(item));
     item.Opcode = opcode;
     return item;
   }
 
-  llvm::DWARFYAML::LineTableOpcode makeItem(dwarf::LineNumberExtendedOps opcode) {
-    auto item = makeItem(dwarf::LineNumberOps(0));
+  llvm::DWARFYAML::LineTableOpcode makeItem(llvm::dwarf::LineNumberExtendedOps opcode) {
+    auto item = makeItem(llvm::dwarf::LineNumberOps(0));
     item.SubOpcode = opcode;
     return item;
   }
@@ -296,14 +296,16 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
       return a < b;
     });
     // Emit a new line table.
-    std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
-    LineState state(table);
-    for (uint32_t addr : newAddrs) {
-      LineState oldState(state);
-      state = newAddrInfo[addr];
-      state.emitDiff(oldState, newOpcodes);
+    {
+      std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
+      LineState state(table);
+      for (uint32_t addr : newAddrs) {
+        LineState oldState(state);
+        state = newAddrInfo[addr];
+        state.emitDiff(oldState, newOpcodes);
+      }
+      table.Opcodes.swap(newOpcodes);
     }
-    table.Opcodes.swap(newOpcodes);
   }
 }
 
