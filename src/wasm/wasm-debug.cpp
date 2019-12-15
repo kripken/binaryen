@@ -266,6 +266,13 @@ struct AddrExprMap {
     }
     return nullptr;
   }
+
+  void dump() {
+    std::cout << "  (size: " << map.size() << ")\n";
+    for (auto pair : map) {
+      std::cout << "  " << pair.first << " => " << pair.second << '\n';
+    }
+  }
 };
 
 static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, const BinaryLocationsMap& newLocations) {
@@ -273,23 +280,32 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
   //       binary to binary, without YAML IR.
 
   AddrExprMap oldAddrMap(wasm);
+std::cout << "old\n";
+oldAddrMap.dump();
   AddrExprMap newAddrMap(newLocations);
+std::cout << "new\n";
+newAddrMap.dump();
 
   for (auto& table : data.DebugLines) {
+std::cout << "table\n";
     // Parse the original opcodes and emit new ones.
     LineState state(table);
     // All the addresses we need to write out.
     std::vector<uint32_t> newAddrs;
     std::unordered_map<uint32_t, LineState> newAddrInfo;
     for (auto& opcode : table.Opcodes) {
+std::cout << "  opcode\n";
       // Update the state, and check if we have a new row to emit.
       if (state.update(opcode, table)) {
+std::cout << "    update says to add a row for addr " << state.addr << "\n";
         // An expression may not exist for this line table item, if we optimized
         // it away.
         if (auto* expr = oldAddrMap.get(state.addr)) {
+std::cout << "      has old addr\n";
           auto iter = newLocations.find(expr);
           if (iter != newLocations.end()) {
             uint32_t newAddr = iter->second;
+std::cout << "      has new addr " << newAddr << "\n";
             newAddrs.push_back(newAddr);
             auto& updatedState = newAddrInfo[newAddr] = state;
             // The only difference is the address TODO other stuff?

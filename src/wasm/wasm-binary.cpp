@@ -797,6 +797,8 @@ void WasmBinaryBuilder::read() {
 
   // read sections until the end
   while (more()) {
+    auto startOfSection = pos;
+
     uint32_t sectionCode = getU32LEB();
     uint32_t payloadLen = getU32LEB();
     if (pos + payloadLen > input.size()) {
@@ -832,6 +834,9 @@ void WasmBinaryBuilder::read() {
         readFunctionSignatures();
         break;
       case BinaryConsts::Section::Code:
+        if (DWARF) {
+          codeSectionLocation = startOfSection;
+        }
         readFunctions();
         break;
       case BinaryConsts::Section::Export:
@@ -1311,9 +1316,6 @@ void WasmBinaryBuilder::readFunctionSignatures() {
 
 void WasmBinaryBuilder::readFunctions() {
   BYN_TRACE("== readFunctions\n");
-  if (DWARF) {
-    codeSectionLocation = pos;
-  }
   size_t total = getU32LEB();
   if (total != functionSignatures.size()) {
     throwError("invalid function section size, must equal types");
