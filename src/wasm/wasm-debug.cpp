@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "ir/cost.h"
 #include "wasm-debug.h"
 #include "wasm.h"
 
@@ -342,6 +343,17 @@ std::cout << "line table is now " <<table.Opcodes.size() << '\n';
   }
 }
 
+static void fixEmittedSection(const std::string& name, std::vector<uint8_t>& data) {
+  if (name == ".debug_line") {
+    // The YAML code does not update the line section size. However, it is trivial
+    // to do so after the fact, as the wasm section's additional size is easy
+    // to compute.
+    // Start with the total size.
+    uint64_t size = data.size();
+    
+  }
+}
+
 void updateDWARF(Module& wasm, const BinaryLocationsMap& newLocations) {
   BinaryenDWARFInfo info(wasm);
 
@@ -369,6 +381,7 @@ void updateDWARF(Module& wasm, const BinaryLocationsMap& newLocations) {
         auto llvmData = newSections[llvmName]->getBuffer();
         section.data.resize(llvmData.size());
         std::copy(llvmData.begin(), llvmData.end(), section.data.data());
+        fixEmittedSection(section.name, section.data());
       }
     }
   }
