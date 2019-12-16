@@ -347,11 +347,12 @@ static void fixEmittedSection(const std::string& name, std::vector<char>& data) 
   if (name == ".debug_line") {
     // The YAML code does not update the line section size. However, it is trivial
     // to do so after the fact, as the wasm section's additional size is easy
-    // to compute.
-    uint32_t size = data.size() - 16;
+    // to compute: it is the emitted size - the 4 bytes of the size itself.
+    uint32_t size = data.size() - 4;
     BufferWithRandomAccess buf;
     buf << size;
     for (int i = 0; i < 4; i++) {
+std::cout << "patch " << i << " " << int(data[i]) << " => " << int(buf[i]) << '\n';
       data[i] = buf[i];
     }
   }
