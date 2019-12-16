@@ -143,12 +143,9 @@ void WasmBinaryWriter::finishSection(int32_t start) {
     // We added the binary locations, adjust them: they must be relative
     // to the code section.
     assert(binaryLocationsSizeAtSectionStart == 0);
-std::cout << "adjust debug locations, start: " << start << " : " << adjustment << '\n';
     for (auto& pair : binaryLocations) {
       // start is after writing the code for the section, which has size 1.
-std::cout << "  was " << pair.second << '\n';
       pair.second -= start - 1 + adjustment;
-std::cout << "  ==> " << pair.second << '\n';
     }
   }
 }
@@ -688,7 +685,6 @@ void WasmBinaryWriter::writeDebugLocation(Expression* curr, Function* func) {
   // to something that directly thinks about DWARF, instead of indirectly
   // looking at func->binaryLocations as a proxy for that etc.
   if (func && !func->binaryLocations.empty()) {
-std::cout << "write a debug location at " << o.size() << '\n';
     binaryLocations[curr] = o.size();
   }
 }
