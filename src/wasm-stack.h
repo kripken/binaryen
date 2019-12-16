@@ -83,11 +83,14 @@ class BinaryInstWriter : public OverriddenVisitor<BinaryInstWriter> {
 public:
   BinaryInstWriter(WasmBinaryWriter& parent,
                    BufferWithRandomAccess& o,
-                   Function* func)
-    : parent(parent), o(o), func(func) {}
+                   Function* func,
+                   bool sourceMap)
+    : parent(parent), o(o), func(func), sourceMap(sourceMap) {}
 
   void visit(Expression* curr) {
-    parent.writeDebugLocation(curr, func);
+    if (func && !sourceMap) {
+      parent.writeDebugLocation(curr, func);
+    }
     OverriddenVisitor<BinaryInstWriter>::visit(curr);
   }
 
@@ -149,6 +152,8 @@ private:
   WasmBinaryWriter& parent;
   BufferWithRandomAccess& o;
   Function* func = nullptr;
+  bool sourceMap;
+
   std::vector<Name> breakStack;
 
   // type => number of locals of that type in the compact form
@@ -763,7 +768,7 @@ public:
                            Function* func = nullptr,
                            bool sourceMap = false)
     : BinaryenIRWriter<BinaryenIRToBinaryWriter>(func), parent(parent),
-      writer(parent, o, func), sourceMap(sourceMap) {}
+      writer(parent, o, func, sourceMap), sourceMap(sourceMap) {}
 
   void visit(Expression* curr) {
     BinaryenIRWriter<BinaryenIRToBinaryWriter>::visit(curr);
@@ -838,7 +843,7 @@ public:
   StackIRToBinaryWriter(WasmBinaryWriter& parent,
                         BufferWithRandomAccess& o,
                         Function* func)
-    : writer(parent, o, func), func(func) {}
+    : writer(parent, o, func, false /* sourceMap */), func(func) {}
 
   void write();
 

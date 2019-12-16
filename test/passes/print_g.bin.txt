@@ -15,111 +15,111 @@
  (export "stackRestore" (func $stackRestore))
  (export "__growWasmMemory" (func $__growWasmMemory))
  (func $__wasm_call_ctors (; 0 ;)
-  ;; code offset: 0x3
+  ;; code offset: 0x5
   (nop)
  )
  (func $main (; 1 ;) (param $0 i32) (param $1 i32) (result i32)
-  ;; code offset: 0x16
+  ;; code offset: 0x18
   (if
-   ;; code offset: 0x15
+   ;; code offset: 0x17
    (i32.ne
-    ;; code offset: 0x12
+    ;; code offset: 0x14
     (i32.rem_s
-     ;; code offset: 0x7
-     (local.get $0)
      ;; code offset: 0x9
+     (local.get $0)
+     ;; code offset: 0x11
      (i32.const 120)
     )
-    ;; code offset: 0x13
+    ;; code offset: 0x15
     (i32.const 55)
    )
-   ;; code offset: 0x18
+   ;; code offset: 0x20
    (loop $label$2
-    ;; code offset: 0x46
+    ;; code offset: 0x48
     (br_if $label$2
-     ;; code offset: 0x45
+     ;; code offset: 0x47
      (i32.ne
-      ;; code offset: 0x42
+      ;; code offset: 0x44
       (i32.rem_s
-       ;; code offset: 0x37
+       ;; code offset: 0x39
        (local.tee $0
-        ;; code offset: 0x36
+        ;; code offset: 0x38
         (i32.add
-         ;; code offset: 0x33
+         ;; code offset: 0x35
          (i32.add
-          ;; code offset: 0x27
+          ;; code offset: 0x29
           (i32.mul
-           ;; code offset: 0x24
+           ;; code offset: 0x26
            (i32.mul
-            ;; code offset: 0x20
-            (local.get $0)
             ;; code offset: 0x22
             (local.get $0)
+            ;; code offset: 0x24
+            (local.get $0)
            )
-           ;; code offset: 0x25
+           ;; code offset: 0x27
            (local.get $0)
           )
-          ;; code offset: 0x32
+          ;; code offset: 0x34
           (i32.div_s
-           ;; code offset: 0x28
-           (local.get $0)
            ;; code offset: 0x30
+           (local.get $0)
+           ;; code offset: 0x32
            (i32.const -2)
           )
          )
-         ;; code offset: 0x34
+         ;; code offset: 0x36
          (i32.const 13)
         )
        )
-       ;; code offset: 0x39
+       ;; code offset: 0x41
        (i32.const 120)
       )
-      ;; code offset: 0x43
+      ;; code offset: 0x45
       (i32.const 55)
      )
     )
    )
   )
-  ;; code offset: 0x50
+  ;; code offset: 0x52
   (local.get $0)
  )
  (func $stackSave (; 2 ;) (result i32)
-  ;; code offset: 0x55
+  ;; code offset: 0x57
   (global.get $global$0)
  )
  (func $stackAlloc (; 3 ;) (param $0 i32) (result i32)
-  ;; code offset: 0x70
+  ;; code offset: 0x72
   (global.set $global$0
-   ;; code offset: 0x68
+   ;; code offset: 0x70
    (local.tee $0
-    ;; code offset: 0x67
+    ;; code offset: 0x69
     (i32.and
-     ;; code offset: 0x64
+     ;; code offset: 0x66
      (i32.sub
-      ;; code offset: 0x60
-      (global.get $global$0)
       ;; code offset: 0x62
+      (global.get $global$0)
+      ;; code offset: 0x64
       (local.get $0)
      )
-     ;; code offset: 0x65
+     ;; code offset: 0x67
      (i32.const -16)
     )
    )
   )
-  ;; code offset: 0x72
+  ;; code offset: 0x74
   (local.get $0)
  )
  (func $stackRestore (; 4 ;) (param $0 i32)
-  ;; code offset: 0x79
+  ;; code offset: 0x81
   (global.set $global$0
-   ;; code offset: 0x77
+   ;; code offset: 0x79
    (local.get $0)
   )
  )
  (func $__growWasmMemory (; 5 ;) (param $0 i32) (result i32)
-  ;; code offset: 0x86
+  ;; code offset: 0x88
   (memory.grow
-   ;; code offset: 0x84
+   ;; code offset: 0x86
    (local.get $0)
   )
  )
@@ -145,111 +145,111 @@
  (export "stackRestore" (func $stackRestore))
  (export "__growWasmMemory" (func $__growWasmMemory))
  (func $__wasm_call_ctors (; 0 ;)
-  ;; code offset: 0x3
+  ;; code offset: 0x5
   (nop)
  )
  (func $main (; 1 ;) (param $0 i32) (param $1 i32) (result i32)
-  ;; code offset: 0x16
+  ;; code offset: 0x18
   (if
-   ;; code offset: 0x15
+   ;; code offset: 0x17
    (i32.ne
-    ;; code offset: 0x12
+    ;; code offset: 0x14
     (i32.rem_s
-     ;; code offset: 0x7
-     (local.get $0)
      ;; code offset: 0x9
+     (local.get $0)
+     ;; code offset: 0x11
      (i32.const 120)
     )
-    ;; code offset: 0x13
+    ;; code offset: 0x15
     (i32.const 55)
    )
-   ;; code offset: 0x18
+   ;; code offset: 0x20
    (loop $label$2
-    ;; code offset: 0x46
+    ;; code offset: 0x48
     (br_if $label$2
-     ;; code offset: 0x45
+     ;; code offset: 0x47
      (i32.ne
-      ;; code offset: 0x42
+      ;; code offset: 0x44
       (i32.rem_s
-       ;; code offset: 0x37
+       ;; code offset: 0x39
        (local.tee $0
-        ;; code offset: 0x36
+        ;; code offset: 0x38
         (i32.add
-         ;; code offset: 0x33
+         ;; code offset: 0x35
          (i32.add
-          ;; code offset: 0x27
+          ;; code offset: 0x29
           (i32.mul
-           ;; code offset: 0x24
+           ;; code offset: 0x26
            (i32.mul
-            ;; code offset: 0x20
-            (local.get $0)
             ;; code offset: 0x22
             (local.get $0)
+            ;; code offset: 0x24
+            (local.get $0)
            )
-           ;; code offset: 0x25
+           ;; code offset: 0x27
            (local.get $0)
           )
-          ;; code offset: 0x32
+          ;; code offset: 0x34
           (i32.div_s
-           ;; code offset: 0x28
-           (local.get $0)
            ;; code offset: 0x30
+           (local.get $0)
+           ;; code offset: 0x32
            (i32.const -2)
           )
          )
-         ;; code offset: 0x34
+         ;; code offset: 0x36
          (i32.const 13)
         )
        )
-       ;; code offset: 0x39
+       ;; code offset: 0x41
        (i32.const 120)
       )
-      ;; code offset: 0x43
+      ;; code offset: 0x45
       (i32.const 55)
      )
     )
    )
   )
-  ;; code offset: 0x50
+  ;; code offset: 0x52
   (local.get $0)
  )
  (func $stackSave (; 2 ;) (result i32)
-  ;; code offset: 0x55
+  ;; code offset: 0x57
   (global.get $global$0)
  )
  (func $stackAlloc (; 3 ;) (param $0 i32) (result i32)
-  ;; code offset: 0x70
+  ;; code offset: 0x72
   (global.set $global$0
-   ;; code offset: 0x68
+   ;; code offset: 0x70
    (local.tee $0
-    ;; code offset: 0x67
+    ;; code offset: 0x69
     (i32.and
-     ;; code offset: 0x64
+     ;; code offset: 0x66
      (i32.sub
-      ;; code offset: 0x60
-      (global.get $global$0)
       ;; code offset: 0x62
+      (global.get $global$0)
+      ;; code offset: 0x64
       (local.get $0)
      )
-     ;; code offset: 0x65
+     ;; code offset: 0x67
      (i32.const -16)
     )
    )
   )
-  ;; code offset: 0x72
+  ;; code offset: 0x74
   (local.get $0)
  )
  (func $stackRestore (; 4 ;) (param $0 i32)
-  ;; code offset: 0x79
+  ;; code offset: 0x81
   (global.set $global$0
-   ;; code offset: 0x77
+   ;; code offset: 0x79
    (local.get $0)
   )
  )
  (func $__growWasmMemory (; 5 ;) (param $0 i32) (result i32)
-  ;; code offset: 0x86
+  ;; code offset: 0x88
   (memory.grow
-   ;; code offset: 0x84
+   ;; code offset: 0x86
    (local.get $0)
   )
  )

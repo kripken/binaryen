@@ -102,6 +102,7 @@ def update_wasm_opt_tests():
         passname = base
         passes_file = os.path.join(shared.get_test_dir('passes'), passname + '.passes')
         if os.path.exists(passes_file):
+            continue
             passname = open(passes_file).read().strip()
         opts = [('--' + p if not p.startswith('O') and p != 'g' else '-' + p) for p in passname.split('_')]
         actual = ''
