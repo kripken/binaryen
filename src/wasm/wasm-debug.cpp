@@ -221,8 +221,7 @@ struct LineState {
 
 private:
   llvm::DWARFYAML::LineTableOpcode makeItem(llvm::dwarf::LineNumberOps opcode) {
-    llvm::DWARFYAML::LineTableOpcode item;
-    memset(&item, 0, sizeof(item));
+    llvm::DWARFYAML::LineTableOpcode item = {};
     item.Opcode = opcode;
     return item;
   }
