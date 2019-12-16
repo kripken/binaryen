@@ -252,13 +252,10 @@ void DWARFYAML::EmitDebugLine(raw_ostream &OS, const DWARFYAML::Data &DI) {
     for (auto Op : LineTable.Opcodes) {
       writeInteger((uint8_t)Op.Opcode, OS, DI.IsLittleEndian);
       if (Op.Opcode == 0) {
-outs() << "write ext with sub " << Op.SubOpcode << " and data " << Op.Data << "\n";
-if (Op.ExtLen == 0) outs() << "very bad, a zero ext len!\n";
         encodeULEB128(Op.ExtLen, OS);
         writeInteger((uint8_t)Op.SubOpcode, OS, DI.IsLittleEndian);
         switch (Op.SubOpcode) {
         case dwarf::DW_LNE_set_address:
-outs() << "  sub is set addr\n";
         case dwarf::DW_LNE_set_discriminator:
           writeVariableSizedInteger(Op.Data, DI.CompileUnits[0].AddrSize, OS,
                                     DI.IsLittleEndian);

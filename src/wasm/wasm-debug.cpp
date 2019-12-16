@@ -160,7 +160,6 @@ struct LineState {
           int32_t LineOffset =
               table.LineBase + (AdjustOpcode % table.LineRange); // -5 + (7 % 14) = 2
           line += LineOffset;
-std::cout << "line now " << line << '\n';
           addr += AddrOffset;
           return true;
         } else {
@@ -182,20 +181,17 @@ std::cout << "line now " << line << '\n';
       // len = 1 (subopcode) + 4 (wasm32 address)
       // FIXME: look at AddrSize on the Unit.
       auto item = makeItem(llvm::dwarf::DW_LNE_set_address, 5);
-std::cout << "emitDiff: set address to " << addr << '\n';
       item.Data = addr;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
     if (line != old.line && !useSpecial) {
       auto item = makeItem(llvm::dwarf::DW_LNS_advance_line);
-std::cout << "emitDiff: advance line from " << old.line << " to " << line << '\n';
       item.SData = line - old.line;
       newOpcodes.push_back(item);
       // TODO file and all the other fields
     }
     if (col != old.col) {
-std::cout << "emitDiff: set col to " << col << '\n';
       auto item = makeItem(llvm::dwarf::DW_LNS_set_column);
       item.Data = col;
       newOpcodes.push_back(item);
@@ -219,7 +215,6 @@ std::cout << "emitDiff: set col to " << col << '\n';
     } else {
       // End the sequence manually.
       // len = 1 (subopcode)
-std::cout << "emitDiff: end eqeuence\n";
       newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNE_end_sequence, 1));
     }
   }
@@ -285,32 +280,27 @@ static void updateDebugLines(const Module& wasm, llvm::DWARFYAML::Data& data, co
   //       binary to binary, without YAML IR.
 
   AddrExprMap oldAddrMap(wasm);
-std::cout << "old\n";
-oldAddrMap.dump();
+  //std::cout << "old\n";
+  //oldAddrMap.dump();
   AddrExprMap newAddrMap(newLocations);
-std::cout << "new\n";
-newAddrMap.dump();
+  //std::cout << "new\n";
+  //newAddrMap.dump();
 
   for (auto& table : data.DebugLines) {
-std::cout << "table\n";
     // Parse the original opcodes and emit new ones.
     LineState state(table);
     // All the addresses we need to write out.
     std::vector<uint32_t> newAddrs;
     std::unordered_map<uint32_t, LineState> newAddrInfo;
     for (auto& opcode : table.Opcodes) {
-std::cout << "  opcode\n";
       // Update the state, and check if we have a new row to emit.
       if (state.update(opcode, table)) {
-std::cout << "    update says to add a row for addr " << state.addr << "\n";
         // An expression may not exist for this line table item, if we optimized
         // it away.
         if (auto* expr = oldAddrMap.get(state.addr)) {
-std::cout << "      has old addr\n";
           auto iter = newLocations.find(expr);
           if (iter != newLocations.end()) {
             uint32_t newAddr = iter->second;
-std::cout << "      has new addr " << newAddr << "\n";
             newAddrs.push_back(newAddr);
             auto& updatedState = newAddrInfo[newAddr] = state;
             // The only difference is the address TODO other stuff?
@@ -318,14 +308,12 @@ std::cout << "      has new addr " << newAddr << "\n";
           }
         }
       }
-std::cout << " line: " << state.line << '\n';
     }
     // Sort the new addresses (which may be substantially different from the
     // original layout after optimization).
     std::sort(newAddrs.begin(), newAddrs.end(), [](uint32_t a, uint32_t b) {
       return a < b;
     });
-std::cout << "new addrs: " << newAddrs.size() << '\n';
     // Emit a new line table.
     {
       std::vector<llvm::DWARFYAML::LineTableOpcode> newOpcodes;
@@ -333,12 +321,9 @@ std::cout << "new addrs: " << newAddrs.size() << '\n';
       for (uint32_t addr : newAddrs) {
         LineState oldState(state);
         state = newAddrInfo[addr];
-std::cout << " emit line: " << state.line << '\n';
         state.emitDiff(oldState, newOpcodes);
       }
-std::cout << "line table was " <<table.Opcodes.size() << '\n';
       table.Opcodes.swap(newOpcodes);
-std::cout << "line table is now " <<table.Opcodes.size() << '\n';
     }
   }
 }
@@ -352,7 +337,6 @@ static void fixEmittedSection(const std::string& name, std::vector<char>& data) 
     BufferWithRandomAccess buf;
     buf << size;
     for (int i = 0; i < 4; i++) {
-std::cout << "patch " << i << " " << int(data[i]) << " => " << int(buf[i]) << '\n';
       data[i] = buf[i];
     }
   }
