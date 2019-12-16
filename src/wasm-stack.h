@@ -86,6 +86,11 @@ public:
                    Function* func)
     : parent(parent), o(o), func(func) {}
 
+  void visit(Expression* curr) {
+    parent.writeDebugLocation(curr, func);
+    OverriddenVisitor<BinaryInstWriter>::visit(curr);
+  }
+
   void visitBlock(Block* curr);
   void visitIf(If* curr);
   void visitLoop(Loop* curr);
@@ -782,7 +787,7 @@ public:
   }
   void emitUnreachable() { writer.emitUnreachable(); }
   void emitDebugLocation(Expression* curr) {
-    if (sourceMap || (func && !func->binaryLocations.empty())) {
+    if (sourceMap) {
       parent.writeDebugLocation(curr, func);
     }
   }
