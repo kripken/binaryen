@@ -107,7 +107,7 @@ struct LineState {
   // TODO sectionIndex?
   uint32_t line = 1;
   uint32_t col = 0;
-  // TODO uint32_t file = 1;
+  uint32_t file = 1;
   // TODO uint32_t isa = 0;
   // TODO Discriminator = 0;
   bool isStmt;
@@ -156,6 +156,10 @@ struct LineState {
       }
       case llvm::dwarf::DW_LNS_advance_line: {
         line += opcode.SData;
+        break;
+      }
+      case llvm::dwarf::DW_LNS_set_file: {
+        file = opcode.Data;
         break;
       }
       case llvm::dwarf::DW_LNS_negate_stmt: {
@@ -211,6 +215,11 @@ struct LineState {
     }
     if (col != old.col) {
       auto item = makeItem(llvm::dwarf::DW_LNS_set_column);
+      item.Data = col;
+      newOpcodes.push_back(item);
+    }
+    if (file != old.file) {
+      auto item = makeItem(llvm::dwarf::DW_LNS_set_file);
       item.Data = col;
       newOpcodes.push_back(item);
     }
