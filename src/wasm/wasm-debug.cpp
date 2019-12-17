@@ -213,19 +213,19 @@ struct LineState {
       auto item = makeItem(llvm::dwarf::DW_LNS_set_column);
       item.Data = col;
       newOpcodes.push_back(item);
-      // TODO file and all the other fields
     }
     if (isStmt != old.isStmt) {
-      abort();
+      newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNS_negate_stmt));
     }
     if (basicBlock != old.basicBlock) {
-      abort();
+      Fatal() << "bb";
     }
     if (prologueEnd != old.prologueEnd) {
-      abort();
+      assert(prologueEnd);
+      newOpcodes.push_back(makeItem(llvm::dwarf::DW_LNS_set_prologue_end));
     }
     if (epilogueBegin != old.epilogueBegin) {
-      abort();
+      Fatal() << "eb";
     }
     if (useSpecial) {
       // Emit a special, which ends a sequence automatically.
