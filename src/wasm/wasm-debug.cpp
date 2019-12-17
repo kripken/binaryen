@@ -147,8 +147,26 @@ struct LineState {
         prologueEnd = true;
         break;
       }
+      case llvm::dwarf::DW_LNS_copy: {
+        return true;
+      }
       case llvm::dwarf::DW_LNS_advance_pc: {
-        addr += opcode.Data; // XXX
+        addr += opcode.Data;
+        break;
+      }
+      case llvm::dwarf::DW_LNS_advance_line: {
+        line += opcode.SData;
+        break;
+      }
+      case llvm::dwarf::DW_LNS_negate_stmt: {
+        isStmt = not isStmt;
+        break;
+      }
+      case llvm::dwarf::DW_LNS_const_add_pc: {
+        uint8_t AdjustOpcode = 255 - table.OpcodeBase;
+        uint64_t AddrOffset =
+            (AdjustOpcode / table.LineRange) * table.MinInstLength;
+        addr += AddrOffset;
         break;
       }
       default: {
