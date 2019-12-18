@@ -104,7 +104,6 @@ void dumpDWARF(const Module& wasm) {
 //     EmitDebugSections(llvm::DWARFYAML::Data &DI, bool ApplyFixups);
 //
 
-<<<<<<< HEAD
 // Represents the state when parsing a line table.
 struct LineState {
   uint32_t addr = 0;
