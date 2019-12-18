@@ -158,7 +158,7 @@ struct LineState {
         break;
       }
       case llvm::dwarf::DW_LNS_advance_line: {
-        line += opcode.SData;
+        line = opcode.SData;
         break;
       }
       case llvm::dwarf::DW_LNS_set_file: {
@@ -208,13 +208,11 @@ struct LineState {
       auto item = makeItem(llvm::dwarf::DW_LNE_set_address, 5);
       item.Data = addr;
       newOpcodes.push_back(item);
-      // TODO file and all the other fields
     }
     if (line != old.line && !useSpecial) {
       auto item = makeItem(llvm::dwarf::DW_LNS_advance_line);
-      item.SData = line - old.line;
+      item.SData = line;
       newOpcodes.push_back(item);
-      // TODO file and all the other fields
     }
     if (col != old.col) {
       auto item = makeItem(llvm::dwarf::DW_LNS_set_column);

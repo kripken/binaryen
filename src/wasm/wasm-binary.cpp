@@ -72,11 +72,11 @@ void WasmBinaryWriter::write() {
     writeSourceMapEpilog();
   }
 
-#ifdef USE_LLVM_DWARF
+#ifdef BUILD_LLVM_DWARF
   // Update DWARF user sections after writing the data referred to by them
   // (function bodies), and before writing the user sections themselves.
   if (Debug::hasDWARFSections(*wasm)) {
-    Debug::updateDWARF(*wasm, binaryLocations);
+    Debug::writeDWARFSections(*wasm, binaryLocations);
   }
 #endif
 
