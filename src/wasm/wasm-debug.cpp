@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
-#ifdef USE_LLVM_DWARF
-#include "thirdparty/llvm/ObjectYAML/DWARFEmitter.h"
-#include "thirdparty/llvm/ObjectYAML/DWARFYAML.h"
-#include "thirdparty/llvm/include/llvm/DebugInfo/DWARFContext.h"
+#include "wasm-debug.h"
+#include "wasm.h"
+
+#ifdef BUILD_LLVM_DWARF
+#include "llvm/ObjectYAML/DWARFEmitter.h"
+#include "llvm/ObjectYAML/DWARFYAML.h"
+#include "llvm/include/llvm/DebugInfo/DWARFContext.h"
 
 std::error_code dwarf2yaml(llvm::DWARFContext& DCtx, llvm::DWARFYAML::Data& Y);
 #endif
@@ -41,7 +44,7 @@ bool hasDWARFSections(const Module& wasm) {
   return false;
 }
 
-#ifdef USE_LLVM_DWARF
+#ifdef BUILD_LLVM_DWARF
 
 struct BinaryenDWARFInfo {
   llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> sections;
@@ -101,6 +104,7 @@ void dumpDWARF(const Module& wasm) {
 //     EmitDebugSections(llvm::DWARFYAML::Data &DI, bool ApplyFixups);
 //
 
+<<<<<<< HEAD
 // Represents the state when parsing a line table.
 struct LineState {
   uint32_t addr = 0;
@@ -368,7 +372,7 @@ static void fixEmittedSection(const std::string& name, std::vector<char>& data) 
   }
 }
 
-void updateDWARF(Module& wasm, const BinaryLocationsMap& newLocations) {
+void writeDWARFSections(Module& wasm, const BinaryLocationsMap& newLocations) {
   BinaryenDWARFInfo info(wasm);
 
   // Convert to Data representation, which YAML can use to write.
@@ -401,17 +405,17 @@ void updateDWARF(Module& wasm, const BinaryLocationsMap& newLocations) {
   }
 }
 
-#else // USE_LLVM_DWARF
+#else // BUILD_LLVM_DWARF
 
 void dumpDWARF(const Module& wasm) {
   std::cerr << "warning: no DWARF dumping support present\n";
 }
 
-void updateDWARF(Module& wasm, const BinaryLocationsMap& newLocations) {
+void writeDWARFSections(Module& wasm, const BinaryLocationsMap& newLocations) {
   std::cerr << "warning: no DWARF updating support present\n";
 }
 
-#endif // USE_LLVM_DWARF
+#endif // BUILD_LLVM_DWARF
 
 } // namespace Debug
 
