@@ -135,10 +135,8 @@ inline void clearModule(Module& wasm) {
   wasm.functions.clear();
   wasm.globals.clear();
   wasm.events.clear();
-  wasm.table.exists = false;
-  wasm.table.segments.clear();
-  wasm.memory.exists = false;
-  wasm.memory.segments.clear();
+  wasm.table.clear();
+  wasm.memory.clear();
   wasm.start = Name();
   wasm.userSections.clear();
   wasm.debugInfoFileNames.clear();
