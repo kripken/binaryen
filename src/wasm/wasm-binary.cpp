@@ -18,6 +18,7 @@
 #include <fstream>
 
 #include "ir/module-utils.h"
+#include "ir/features.h"
 #include "support/bits.h"
 #include "support/debug.h"
 #include "wasm-binary.h"
