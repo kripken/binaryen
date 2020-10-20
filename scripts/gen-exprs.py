@@ -910,30 +910,90 @@ case Expression::%(name)sId: {
         return text
 
 
+class ExpressionHashRenderer:
+    """Renders code to hash expressions."""
+
+    def render(self, cls):
+        name = cls.__name__
+        operations = []
+
+        # Hash the fields.
+        fields = cls.get_fields()
+        for key, field in fields.items():
+            if is_a(field, Child):
+                # Push the children to be hashed. Note that it is ok to
+                # do this even if they are null (valid for an optional child,
+                # like a Return's value), as the main logic will check that.
+                # TODO: would a check for null here be faster, avoiding even
+                #       pushing such children?
+                operations.append(f'stack.push_back(cast->{key});')
+            elif is_a(field, ChildList):
+                operations.append('for (auto* child : cast->%(key)s) { stack.push_back(child); }' % locals())
+            elif is_a(field, ScopeNameDef):
+                operations.append('noteScopeName(cast->%(key)s);' % locals())
+            elif is_a(field, ScopeNameUse):
+                operations.append('visitScopeName(cast->%(key)s);' % locals())
+            elif is_a(field, ScopeNameUseVector):
+                operations.append('''\
+for (Index i = 0; i < cast->%(key)s.size(); i++) {
+  visitScopeName(cast->%(key)s[i]);
+}''' % locals())
+            elif is_a(field, Name):
+                operations.append('visitNonScopeName(cast->%(key)s);' % locals())
+            elif is_a(field, Type):
+                operations.append('visitType(cast->%(key)s);' % locals())
+            elif is_a(field, Address):
+                operations.append('visitAddress(cast->%(key)s);' % locals())
+            elif is_a(field, SIMDShuffleMask):
+                operations.append('''\
+for (auto x : cast->%(key)s) {
+  rehash(digest, x);
+}''' % locals())
+            else:
+                # In the simple case, we can just call rehash() which has
+                # various useful overloads.
+                operations.append(f'rehash(digest, cast->{key});')
+
+        if len(operations) > 0:
+            operations = [
+                f'auto* cast = curr->cast<{name}>();',
+            ] + operations
+
+        operations_text = join_nested_lines(operations)
+
+        # Combine it all to emit the final rendered code.
+        text = """\
+case Expression::%(name)sId: {
+  %(operations_text)s
+  break;
+}
+""" % locals()
+        text = compact_text(text)
+        return text
+
+
 ########
 # Main
 ########
 
 
-def generate_expression_definitions():
-    target = shared.in_binaryen('src', 'wasm-expressions.generated.h')
+def generate(cls, target, description):
     rendered = ''
     for expr in get_expressions():
-        rendered += ExpressionDefinitionRenderer().render(expr)
-    write_result(rendered, target, 'expression definitions')
-
-
-def generate_comparisons():
-    target = shared.in_binaryen('src', 'ir', 'compare-expressions.generated.h')
-    rendered = ''
-    for expr in get_expressions():
-        rendered += ExpressionComparisonRenderer().render(expr)
-    write_result(rendered, target, 'expression comparisons')
+        rendered += cls().render(expr)
+    write_result(rendered, target, description)
 
 
 def main():
-    generate_expression_definitions()
-    generate_comparisons()
+    generate(ExpressionDefinitionRenderer,
+             shared.in_binaryen('src', 'wasm-expressions.generated.h'),
+             'expression definitions')
+    generate(ExpressionComparisonRenderer,
+             shared.in_binaryen('src', 'ir', 'compare-expressions.generated.h'),
+             'expression comparisons')
+    generate(ExpressionHashRenderer,
+             shared.in_binaryen('src', 'ir', 'hash-expressions.generated.h'),
+             'expression hashing')
 
 
 if __name__ == "__main__":
