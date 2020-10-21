@@ -38,7 +38,7 @@ case Expression::BlockId: {
 case Expression::IfId: {
   self->pushTask(SubType::doVisitIf, currp);
   auto* cast = curr->cast<If>();
-  self->pushTask(SubType::scan, &cast->ifFalse);
+  self->maybePushTask(SubType::scan, &cast->ifFalse);
   self->pushTask(SubType::scan, &cast->ifTrue);
   self->pushTask(SubType::scan, &cast->condition);
   break;
@@ -52,15 +52,15 @@ case Expression::LoopId: {
 case Expression::BreakId: {
   self->pushTask(SubType::doVisitBreak, currp);
   auto* cast = curr->cast<Break>();
-  self->pushTask(SubType::scan, &cast->condition);
-  self->pushTask(SubType::scan, &cast->value);
+  self->maybePushTask(SubType::scan, &cast->condition);
+  self->maybePushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::SwitchId: {
   self->pushTask(SubType::doVisitSwitch, currp);
   auto* cast = curr->cast<Switch>();
   self->pushTask(SubType::scan, &cast->condition);
-  self->pushTask(SubType::scan, &cast->value);
+  self->maybePushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::CallId: {
@@ -252,7 +252,7 @@ case Expression::DropId: {
 case Expression::ReturnId: {
   self->pushTask(SubType::doVisitReturn, currp);
   auto* cast = curr->cast<Return>();
-  self->pushTask(SubType::scan, &cast->value);
+  self->maybePushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::MemorySizeId: {

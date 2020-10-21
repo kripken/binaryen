@@ -68,7 +68,7 @@ class Field(ExpressionChild):
     # the case for fields that allocate (like arrays).
     allocator = False
 
-    def __init__(self, init=None, relevant_if=None):
+    def __init__(self, init=None, relevant_if=None, optional=False):
         # An initial value.
         self.init = init
 
@@ -76,6 +76,11 @@ class Field(ExpressionChild):
         # example, a load's sign does not matter if it is a floating-point
         # operation).
         self.relevant_if = relevant_if
+
+        # Some fields are optional, like a Return will not have a value child if
+        # the function does not have a return value. An optional Child may be
+        # nullptr, for example.
+        self.optional = optional
 
 
 class Name(Field):
@@ -256,7 +261,7 @@ class Block(Expression):
 class If(Expression):
     condition = Child()
     ifTrue = Child()
-    ifFalse = Child(init='nullptr')
+    ifFalse = Child(init='nullptr', optional=True)
 
     """
     finalize has two overloads:
@@ -295,8 +300,8 @@ class Break(Expression):
     __constructor_body__ = 'type = Type::unreachable;'
 
     name = ScopeNameUse()
-    value = Child(init='nullptr')
-    condition = Child(init='nullptr')
+    value = Child(init='nullptr', optional=True)
+    condition = Child(init='nullptr', optional=True)
 
 
 class Switch(Expression):
@@ -304,7 +309,7 @@ class Switch(Expression):
 
     targets = ScopeNameUseVector()
     default_ = ScopeNameUse()
-    value = Child(init='nullptr')
+    value = Child(init='nullptr', optional=True)
     condition = Child()
 
 
@@ -515,7 +520,7 @@ class Drop(Expression):
 class Return(Expression):
     __constructor_body__ = 'type = Type::unreachable;'
 
-    value = Child(init='nullptr')
+    value = Child(init='nullptr', optional=True)
 
 
 class MemorySize(Expression):
@@ -999,7 +1004,8 @@ class ExpressionWalkingRenderer:
                 # like a Return's value), as the main logic will check that.
                 # TODO: would a check for null here be faster, avoiding even
                 #       pushing such children?
-                operations.append(f'self->pushTask(SubType::scan, &cast->{key});')
+                push = 'maybePushTask' if field.optional else 'pushTask'
+                operations.append(f'self->{push}(SubType::scan, &cast->{key});')
             elif is_a(field, ChildList):
                 operations.append('''\
 auto& list = cast->%(key)s;
