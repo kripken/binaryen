@@ -61,8 +61,11 @@ template<typename SubType, typename ReturnType = void> struct Visitor {
       case Expression::Id::CLASS_TO_VISIT##Id:                                 \
         return static_cast<SubType*>(this)->visit##CLASS_TO_VISIT(             \
           static_cast<CLASS_TO_VISIT*>(curr))
+
 #include "wasm-delegations.generated.h"
+
 #undef DELEGATE
+
       default:
         WASM_UNREACHABLE("unexpected expression type");
     }
@@ -91,17 +94,20 @@ struct OverriddenVisitor {
   ReturnType visit(Expression* curr) {
     assert(curr);
 
-#define DELEGATE(CLASS_TO_VISIT)                                               \
-  return static_cast<SubType*>(this)->visit##CLASS_TO_VISIT(                   \
-    static_cast<CLASS_TO_VISIT*>(curr))
-
     switch (curr->_id) {
+#define DELEGATE(CLASS_TO_VISIT)                                               \
+      case Expression::Id::CLASS_TO_VISIT##Id:                                 \
+        return static_cast<SubType*>(this)->visit##CLASS_TO_VISIT(             \
+          static_cast<CLASS_TO_VISIT*>(curr))
+
 #include "wasm-delegations.generated.h"
+
+#undef DELEGATE
+
       default:
         WASM_UNREACHABLE("unexpected expression type");
     }
 
-#undef DELEGATE
   }
 };
 
