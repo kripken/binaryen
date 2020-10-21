@@ -996,7 +996,7 @@ class ExpressionWalkingRenderer:
                 # like a Return's value), as the main logic will check that.
                 # TODO: would a check for null here be faster, avoiding even
                 #       pushing such children?
-                operations.append(f'self->pushTask(SubType::scan, cast->{key});')
+                operations.append(f'self->pushTask(SubType::scan, &cast->{key});')
             elif is_a(field, ChildList):
                 operations.append('''\
 auto& list = cast->%(key)s;

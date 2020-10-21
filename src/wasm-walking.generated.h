@@ -38,29 +38,29 @@ case Expression::BlockId: {
 case Expression::IfId: {
   self->pushTask(SubType::doVisitIf, currp);
   auto* cast = curr->cast<If>();
-  self->pushTask(SubType::scan, cast->ifFalse);
-  self->pushTask(SubType::scan, cast->ifTrue);
-  self->pushTask(SubType::scan, cast->condition);
+  self->pushTask(SubType::scan, &cast->ifFalse);
+  self->pushTask(SubType::scan, &cast->ifTrue);
+  self->pushTask(SubType::scan, &cast->condition);
   break;
 }
 case Expression::LoopId: {
   self->pushTask(SubType::doVisitLoop, currp);
   auto* cast = curr->cast<Loop>();
-  self->pushTask(SubType::scan, cast->body);
+  self->pushTask(SubType::scan, &cast->body);
   break;
 }
 case Expression::BreakId: {
   self->pushTask(SubType::doVisitBreak, currp);
   auto* cast = curr->cast<Break>();
-  self->pushTask(SubType::scan, cast->condition);
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->condition);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::SwitchId: {
   self->pushTask(SubType::doVisitSwitch, currp);
   auto* cast = curr->cast<Switch>();
-  self->pushTask(SubType::scan, cast->condition);
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->condition);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::CallId: {
@@ -75,7 +75,7 @@ case Expression::CallId: {
 case Expression::CallIndirectId: {
   self->pushTask(SubType::doVisitCallIndirect, currp);
   auto* cast = curr->cast<CallIndirect>();
-  self->pushTask(SubType::scan, cast->target);
+  self->pushTask(SubType::scan, &cast->target);
   auto& list = cast->operands;
   for (int i = int(list.size()) - 1; i >= 0; i--) {
     self->pushTask(SubType::scan, &list[i]);
@@ -89,7 +89,7 @@ case Expression::LocalGetId: {
 case Expression::LocalSetId: {
   self->pushTask(SubType::doVisitLocalSet, currp);
   auto* cast = curr->cast<LocalSet>();
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::GlobalGetId: {
@@ -99,50 +99,50 @@ case Expression::GlobalGetId: {
 case Expression::GlobalSetId: {
   self->pushTask(SubType::doVisitGlobalSet, currp);
   auto* cast = curr->cast<GlobalSet>();
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::LoadId: {
   self->pushTask(SubType::doVisitLoad, currp);
   auto* cast = curr->cast<Load>();
-  self->pushTask(SubType::scan, cast->ptr);
+  self->pushTask(SubType::scan, &cast->ptr);
   break;
 }
 case Expression::StoreId: {
   self->pushTask(SubType::doVisitStore, currp);
   auto* cast = curr->cast<Store>();
-  self->pushTask(SubType::scan, cast->value);
-  self->pushTask(SubType::scan, cast->ptr);
+  self->pushTask(SubType::scan, &cast->value);
+  self->pushTask(SubType::scan, &cast->ptr);
   break;
 }
 case Expression::AtomicRMWId: {
   self->pushTask(SubType::doVisitAtomicRMW, currp);
   auto* cast = curr->cast<AtomicRMW>();
-  self->pushTask(SubType::scan, cast->value);
-  self->pushTask(SubType::scan, cast->ptr);
+  self->pushTask(SubType::scan, &cast->value);
+  self->pushTask(SubType::scan, &cast->ptr);
   break;
 }
 case Expression::AtomicCmpxchgId: {
   self->pushTask(SubType::doVisitAtomicCmpxchg, currp);
   auto* cast = curr->cast<AtomicCmpxchg>();
-  self->pushTask(SubType::scan, cast->replacement);
-  self->pushTask(SubType::scan, cast->expected);
-  self->pushTask(SubType::scan, cast->ptr);
+  self->pushTask(SubType::scan, &cast->replacement);
+  self->pushTask(SubType::scan, &cast->expected);
+  self->pushTask(SubType::scan, &cast->ptr);
   break;
 }
 case Expression::AtomicWaitId: {
   self->pushTask(SubType::doVisitAtomicWait, currp);
   auto* cast = curr->cast<AtomicWait>();
-  self->pushTask(SubType::scan, cast->timeout);
-  self->pushTask(SubType::scan, cast->expected);
-  self->pushTask(SubType::scan, cast->ptr);
+  self->pushTask(SubType::scan, &cast->timeout);
+  self->pushTask(SubType::scan, &cast->expected);
+  self->pushTask(SubType::scan, &cast->ptr);
   break;
 }
 case Expression::AtomicNotifyId: {
   self->pushTask(SubType::doVisitAtomicNotify, currp);
   auto* cast = curr->cast<AtomicNotify>();
-  self->pushTask(SubType::scan, cast->notifyCount);
-  self->pushTask(SubType::scan, cast->ptr);
+  self->pushTask(SubType::scan, &cast->notifyCount);
+  self->pushTask(SubType::scan, &cast->ptr);
   break;
 }
 case Expression::AtomicFenceId: {
@@ -152,50 +152,50 @@ case Expression::AtomicFenceId: {
 case Expression::SIMDExtractId: {
   self->pushTask(SubType::doVisitSIMDExtract, currp);
   auto* cast = curr->cast<SIMDExtract>();
-  self->pushTask(SubType::scan, cast->vec);
+  self->pushTask(SubType::scan, &cast->vec);
   break;
 }
 case Expression::SIMDReplaceId: {
   self->pushTask(SubType::doVisitSIMDReplace, currp);
   auto* cast = curr->cast<SIMDReplace>();
-  self->pushTask(SubType::scan, cast->value);
-  self->pushTask(SubType::scan, cast->vec);
+  self->pushTask(SubType::scan, &cast->value);
+  self->pushTask(SubType::scan, &cast->vec);
   break;
 }
 case Expression::SIMDShuffleId: {
   self->pushTask(SubType::doVisitSIMDShuffle, currp);
   auto* cast = curr->cast<SIMDShuffle>();
-  self->pushTask(SubType::scan, cast->right);
-  self->pushTask(SubType::scan, cast->left);
+  self->pushTask(SubType::scan, &cast->right);
+  self->pushTask(SubType::scan, &cast->left);
   break;
 }
 case Expression::SIMDTernaryId: {
   self->pushTask(SubType::doVisitSIMDTernary, currp);
   auto* cast = curr->cast<SIMDTernary>();
-  self->pushTask(SubType::scan, cast->c);
-  self->pushTask(SubType::scan, cast->b);
-  self->pushTask(SubType::scan, cast->a);
+  self->pushTask(SubType::scan, &cast->c);
+  self->pushTask(SubType::scan, &cast->b);
+  self->pushTask(SubType::scan, &cast->a);
   break;
 }
 case Expression::SIMDShiftId: {
   self->pushTask(SubType::doVisitSIMDShift, currp);
   auto* cast = curr->cast<SIMDShift>();
-  self->pushTask(SubType::scan, cast->shift);
-  self->pushTask(SubType::scan, cast->vec);
+  self->pushTask(SubType::scan, &cast->shift);
+  self->pushTask(SubType::scan, &cast->vec);
   break;
 }
 case Expression::SIMDLoadId: {
   self->pushTask(SubType::doVisitSIMDLoad, currp);
   auto* cast = curr->cast<SIMDLoad>();
-  self->pushTask(SubType::scan, cast->ptr);
+  self->pushTask(SubType::scan, &cast->ptr);
   break;
 }
 case Expression::MemoryInitId: {
   self->pushTask(SubType::doVisitMemoryInit, currp);
   auto* cast = curr->cast<MemoryInit>();
-  self->pushTask(SubType::scan, cast->size);
-  self->pushTask(SubType::scan, cast->offset);
-  self->pushTask(SubType::scan, cast->dest);
+  self->pushTask(SubType::scan, &cast->size);
+  self->pushTask(SubType::scan, &cast->offset);
+  self->pushTask(SubType::scan, &cast->dest);
   break;
 }
 case Expression::DataDropId: {
@@ -205,17 +205,17 @@ case Expression::DataDropId: {
 case Expression::MemoryCopyId: {
   self->pushTask(SubType::doVisitMemoryCopy, currp);
   auto* cast = curr->cast<MemoryCopy>();
-  self->pushTask(SubType::scan, cast->size);
-  self->pushTask(SubType::scan, cast->source);
-  self->pushTask(SubType::scan, cast->dest);
+  self->pushTask(SubType::scan, &cast->size);
+  self->pushTask(SubType::scan, &cast->source);
+  self->pushTask(SubType::scan, &cast->dest);
   break;
 }
 case Expression::MemoryFillId: {
   self->pushTask(SubType::doVisitMemoryFill, currp);
   auto* cast = curr->cast<MemoryFill>();
-  self->pushTask(SubType::scan, cast->size);
-  self->pushTask(SubType::scan, cast->value);
-  self->pushTask(SubType::scan, cast->dest);
+  self->pushTask(SubType::scan, &cast->size);
+  self->pushTask(SubType::scan, &cast->value);
+  self->pushTask(SubType::scan, &cast->dest);
   break;
 }
 case Expression::ConstId: {
@@ -225,34 +225,34 @@ case Expression::ConstId: {
 case Expression::UnaryId: {
   self->pushTask(SubType::doVisitUnary, currp);
   auto* cast = curr->cast<Unary>();
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::BinaryId: {
   self->pushTask(SubType::doVisitBinary, currp);
   auto* cast = curr->cast<Binary>();
-  self->pushTask(SubType::scan, cast->right);
-  self->pushTask(SubType::scan, cast->left);
+  self->pushTask(SubType::scan, &cast->right);
+  self->pushTask(SubType::scan, &cast->left);
   break;
 }
 case Expression::SelectId: {
   self->pushTask(SubType::doVisitSelect, currp);
   auto* cast = curr->cast<Select>();
-  self->pushTask(SubType::scan, cast->condition);
-  self->pushTask(SubType::scan, cast->ifFalse);
-  self->pushTask(SubType::scan, cast->ifTrue);
+  self->pushTask(SubType::scan, &cast->condition);
+  self->pushTask(SubType::scan, &cast->ifFalse);
+  self->pushTask(SubType::scan, &cast->ifTrue);
   break;
 }
 case Expression::DropId: {
   self->pushTask(SubType::doVisitDrop, currp);
   auto* cast = curr->cast<Drop>();
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::ReturnId: {
   self->pushTask(SubType::doVisitReturn, currp);
   auto* cast = curr->cast<Return>();
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::MemorySizeId: {
@@ -262,7 +262,7 @@ case Expression::MemorySizeId: {
 case Expression::MemoryGrowId: {
   self->pushTask(SubType::doVisitMemoryGrow, currp);
   auto* cast = curr->cast<MemoryGrow>();
-  self->pushTask(SubType::scan, cast->delta);
+  self->pushTask(SubType::scan, &cast->delta);
   break;
 }
 case Expression::UnreachableId: {
@@ -280,7 +280,7 @@ case Expression::RefNullId: {
 case Expression::RefIsNullId: {
   self->pushTask(SubType::doVisitRefIsNull, currp);
   auto* cast = curr->cast<RefIsNull>();
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::RefFuncId: {
@@ -290,15 +290,15 @@ case Expression::RefFuncId: {
 case Expression::RefEqId: {
   self->pushTask(SubType::doVisitRefEq, currp);
   auto* cast = curr->cast<RefEq>();
-  self->pushTask(SubType::scan, cast->right);
-  self->pushTask(SubType::scan, cast->left);
+  self->pushTask(SubType::scan, &cast->right);
+  self->pushTask(SubType::scan, &cast->left);
   break;
 }
 case Expression::TryId: {
   self->pushTask(SubType::doVisitTry, currp);
   auto* cast = curr->cast<Try>();
-  self->pushTask(SubType::scan, cast->catchBody);
-  self->pushTask(SubType::scan, cast->body);
+  self->pushTask(SubType::scan, &cast->catchBody);
+  self->pushTask(SubType::scan, &cast->body);
   break;
 }
 case Expression::ThrowId: {
@@ -313,13 +313,13 @@ case Expression::ThrowId: {
 case Expression::RethrowId: {
   self->pushTask(SubType::doVisitRethrow, currp);
   auto* cast = curr->cast<Rethrow>();
-  self->pushTask(SubType::scan, cast->exnref);
+  self->pushTask(SubType::scan, &cast->exnref);
   break;
 }
 case Expression::BrOnExnId: {
   self->pushTask(SubType::doVisitBrOnExn, currp);
   auto* cast = curr->cast<BrOnExn>();
-  self->pushTask(SubType::scan, cast->exnref);
+  self->pushTask(SubType::scan, &cast->exnref);
   break;
 }
 case Expression::TupleMakeId: {
@@ -334,19 +334,19 @@ case Expression::TupleMakeId: {
 case Expression::TupleExtractId: {
   self->pushTask(SubType::doVisitTupleExtract, currp);
   auto* cast = curr->cast<TupleExtract>();
-  self->pushTask(SubType::scan, cast->tuple);
+  self->pushTask(SubType::scan, &cast->tuple);
   break;
 }
 case Expression::I31NewId: {
   self->pushTask(SubType::doVisitI31New, currp);
   auto* cast = curr->cast<I31New>();
-  self->pushTask(SubType::scan, cast->value);
+  self->pushTask(SubType::scan, &cast->value);
   break;
 }
 case Expression::I31GetId: {
   self->pushTask(SubType::doVisitI31Get, currp);
   auto* cast = curr->cast<I31Get>();
-  self->pushTask(SubType::scan, cast->i31);
+  self->pushTask(SubType::scan, &cast->i31);
   break;
 }
 case Expression::RefTestId: {
