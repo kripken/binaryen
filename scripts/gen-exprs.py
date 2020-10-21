@@ -972,6 +972,29 @@ case Expression::%(name)sId: {
         return text
 
 
+class ExpressionVisitorRenderer:
+    """Renders code to visit expressions."""
+
+    def render(self, cls):
+        name = cls.__name__
+        operations = []
+
+        # Visit the children.
+        fields = cls.get_fields()
+        for key, field in fields.items():
+            if is_a(field, Child):
+                # Push the children to be hashed. Note that it is ok to
+                # do this even if they are null (valid for an optional child,
+                # like a Return's value), as the main logic will check that.
+                # TODO: would a check for null here be faster, avoiding even
+                #       pushing such children?
+                operations.append("""\
+ReturnType visit%(name)s(%(name)s* curr) { return ReturnType(); }""" % locals())
+
+        text = compact_text(join_nested_lines(operations))
+        return text
+
+
 ########
 # Main
 ########
@@ -994,6 +1017,9 @@ def main():
     generate(ExpressionHashRenderer,
              shared.in_binaryen('src', 'ir', 'hash-expressions.generated.h'),
              'expression hashing')
+    generate(ExpressionVisitorRenderer,
+             shared.in_binaryen('src', 'wasm-visitors.generated.h'),
+             'expression visiting')
 
 
 if __name__ == "__main__":
