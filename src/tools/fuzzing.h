@@ -384,6 +384,7 @@ private:
     std::vector<Expression*> contents;
     contents.push_back(
       builder.makeLocalSet(0, builder.makeConst(uint32_t(5381))));
+    auto zero = Literal::makeFromInt32(0, wasm.memory.indexType);
     for (Index i = 0; i < USABLE_MEMORY; i++) {
       contents.push_back(builder.makeLocalSet(
         0,
@@ -396,7 +397,7 @@ private:
                                builder.makeConst(uint32_t(5))),
             builder.makeLocalGet(0, Type::i32)),
           builder.makeLoad(
-            1, false, i, 1, builder.makeConst(uint32_t(0)), Type::i32))));
+            1, false, i, 1, builder.makeConst(zero), Type::i32))));
     }
     contents.push_back(builder.makeLocalGet(0, Type::i32));
     auto* body = builder.makeBlock(contents);
@@ -674,7 +675,16 @@ private:
 
       void visitExpression(Expression* curr) {
         if (parent.oneIn(10)) {
-          // Replace it!
+          // For constants, perform only a small tweaking in some cases.
+          if (auto* c = curr->dynCast<Const>()) {
+            if (parent.oneIn(2)) {
+              c->value = parent.tweak(c->value);
+              return;
+            }
+          }
+          // TODO: more minor tweaks to immediates, like making a load atomic or
+          // not, changing an offset, etc.
+          // Perform a general replacement.
           // (This is not always valid due to nesting of labels, but
           // we'll fix that up later.)
           replaceCurrent(parent.make(curr->type));
@@ -1260,12 +1270,21 @@ private:
     }
   }
 
+  // Some globals are for internal use, and should not be modified by random
+  // fuzz code.
+  bool isValidGlobal(Name name) { return name != HANG_LIMIT_GLOBAL; }
+
   Expression* makeGlobalGet(Type type) {
     auto it = globalsByType.find(type);
     if (it == globalsByType.end() || it->second.empty()) {
       return makeConst(type);
     }
-    return builder.makeGlobalGet(pick(it->second), type);
+    auto name = pick(it->second);
+    if (isValidGlobal(name)) {
+      return builder.makeGlobalGet(name, type);
+    } else {
+      return makeTrivial(type);
+    }
   }
 
   Expression* makeGlobalSet(Type type) {
@@ -1275,8 +1294,12 @@ private:
     if (it == globalsByType.end() || it->second.empty()) {
       return makeTrivial(Type::none);
     }
-    auto* value = make(type);
-    return builder.makeGlobalSet(pick(it->second), value);
+    auto name = pick(it->second);
+    if (isValidGlobal(name)) {
+      return builder.makeGlobalSet(name, make(type));
+    } else {
+      return makeTrivial(Type::none);
+    }
   }
 
   Expression* makeTupleMake(Type type) {
@@ -1319,13 +1342,18 @@ private:
   }
 
   Expression* makePointer() {
-    auto* ret = make(Type::i32);
+    auto* ret = make(wasm.memory.indexType);
     // with high probability, mask the pointer so it's in a reasonable
     // range. otherwise, most pointers are going to be out of range and
     // most memory ops will just trap
     if (!allowOOB || !oneIn(10)) {
-      ret = builder.makeBinary(
-        AndInt32, ret, builder.makeConst(int32_t(USABLE_MEMORY - 1)));
+      if (wasm.memory.is64()) {
+        ret = builder.makeBinary(
+          AndInt64, ret, builder.makeConst(int64_t(USABLE_MEMORY - 1)));
+      } else {
+        ret = builder.makeBinary(
+          AndInt32, ret, builder.makeConst(int32_t(USABLE_MEMORY - 1)));
+      }
     }
     return ret;
   }
@@ -1517,6 +1545,43 @@ private:
     return store;
   }
 
+  // Makes a small change to a constant value.
+  Literal tweak(Literal value) {
+    auto type = value.type;
+    if (type.isVector()) {
+      // TODO: tweak each lane?
+      return value;
+    }
+    // +- 1
+    switch (upTo(5)) {
+      case 0:
+        value = value.add(Literal::makeNegOne(type));
+        break;
+      case 1:
+        value = value.add(Literal::makeOne(type));
+        break;
+      default: {
+      }
+    }
+    // For floats, optionally add a non-integer adjustment in +- [-1, 1]
+    if (type.isFloat() && oneIn(2)) {
+      const int RANGE = 1000;
+      auto RANGE_LITERAL = Literal::makeFromInt32(RANGE, type);
+      // adjustment -> [0, 2 * RANGE]
+      auto adjustment = Literal::makeFromInt32(upTo(2 * RANGE + 1), type);
+      // adjustment -> [-RANGE, RANGE]
+      adjustment = adjustment.sub(RANGE_LITERAL);
+      // adjustment -> [-1, 1]
+      adjustment = adjustment.div(RANGE_LITERAL);
+      value = value.add(adjustment);
+    }
+    // Flip sign.
+    if (oneIn(2)) {
+      value = value.mul(Literal::makeNegOne(type));
+    }
+    return value;
+  }
+
   Literal makeLiteral(Type type) {
     if (type == Type::v128) {
       // generate each lane individually for random lane interpretation
@@ -1567,38 +1632,6 @@ private:
           WASM_UNREACHABLE("unexpected value");
       }
     }
-
-    // Optional tweaking of the value by a small adjustment.
-    auto tweak = [this, type](Literal value) {
-      // +- 1
-      switch (upTo(5)) {
-        case 0:
-          value = value.add(Literal::makeNegOne(type));
-          break;
-        case 1:
-          value = value.add(Literal::makeOne(type));
-          break;
-        default: {
-        }
-      }
-      // For floats, optionally add a non-integer adjustment in +- [-1, 1]
-      if (type.isFloat() && oneIn(2)) {
-        const int RANGE = 1000;
-        auto RANGE_LITERAL = Literal::makeFromInt32(RANGE, type);
-        // adjustment -> [0, 2 * RANGE]
-        auto adjustment = Literal::makeFromInt32(upTo(2 * RANGE + 1), type);
-        // adjustment -> [-RANGE, RANGE]
-        adjustment = adjustment.sub(RANGE_LITERAL);
-        // adjustment -> [-1, 1]
-        adjustment = adjustment.div(RANGE_LITERAL);
-        value = value.add(adjustment);
-      }
-      // Flip sign.
-      if (oneIn(2)) {
-        value = value.mul(Literal::makeNegOne(type));
-      }
-      return value;
-    };
 
     switch (upTo(4)) {
       case 0: {
@@ -2703,7 +2736,7 @@ private:
     }
     Expression* dest = makePointer();
     Expression* source = makePointer();
-    Expression* size = make(Type::i32);
+    Expression* size = make(wasm.memory.indexType);
     return builder.makeMemoryCopy(dest, source, size);
   }
 
@@ -2712,8 +2745,8 @@ private:
       return makeTrivial(Type::none);
     }
     Expression* dest = makePointer();
-    Expression* value = makePointer();
-    Expression* size = make(Type::i32);
+    Expression* value = make(Type::i32);
+    Expression* size = make(wasm.memory.indexType);
     return builder.makeMemoryFill(dest, value, size);
   }
 
