@@ -266,149 +266,28 @@ struct DeadCodeElimination
   static void scan(DeadCodeElimination* self, Expression** currp) {
     auto* curr = *currp;
     if (!self->reachable) {
+      switch (curr->_id) {
+
 // convert to an unreachable safely
 #define DELEGATE(CLASS_TO_VISIT)                                               \
-  {                                                                            \
-    auto* parent = self->typeUpdater.parents[curr];                            \
-    self->typeUpdater.noteRecursiveRemoval(curr);                              \
-    ExpressionManipulator::convert<CLASS_TO_VISIT, Unreachable>(               \
-      static_cast<CLASS_TO_VISIT*>(curr));                                     \
-    self->typeUpdater.noteAddition(curr, parent);                              \
-    break;                                                                     \
-  }
-      switch (curr->_id) {
-        case Expression::Id::BlockId:
-          DELEGATE(Block);
-        case Expression::Id::IfId:
-          DELEGATE(If);
-        case Expression::Id::LoopId:
-          DELEGATE(Loop);
-        case Expression::Id::BreakId:
-          DELEGATE(Break);
-        case Expression::Id::SwitchId:
-          DELEGATE(Switch);
-        case Expression::Id::CallId:
-          DELEGATE(Call);
-        case Expression::Id::CallIndirectId:
-          DELEGATE(CallIndirect);
-        case Expression::Id::LocalGetId:
-          DELEGATE(LocalGet);
-        case Expression::Id::LocalSetId:
-          DELEGATE(LocalSet);
-        case Expression::Id::GlobalGetId:
-          DELEGATE(GlobalGet);
-        case Expression::Id::GlobalSetId:
-          DELEGATE(GlobalSet);
-        case Expression::Id::LoadId:
-          DELEGATE(Load);
-        case Expression::Id::StoreId:
-          DELEGATE(Store);
-        case Expression::Id::ConstId:
-          DELEGATE(Const);
-        case Expression::Id::UnaryId:
-          DELEGATE(Unary);
-        case Expression::Id::BinaryId:
-          DELEGATE(Binary);
-        case Expression::Id::SelectId:
-          DELEGATE(Select);
-        case Expression::Id::DropId:
-          DELEGATE(Drop);
-        case Expression::Id::ReturnId:
-          DELEGATE(Return);
-        case Expression::Id::MemorySizeId:
-          DELEGATE(MemorySize);
-        case Expression::Id::MemoryGrowId:
-          DELEGATE(MemoryGrow);
-        case Expression::Id::NopId:
-          DELEGATE(Nop);
-        case Expression::Id::UnreachableId:
-          break;
-        case Expression::Id::AtomicCmpxchgId:
-          DELEGATE(AtomicCmpxchg);
-        case Expression::Id::AtomicRMWId:
-          DELEGATE(AtomicRMW);
-        case Expression::Id::AtomicWaitId:
-          DELEGATE(AtomicWait);
-        case Expression::Id::AtomicNotifyId:
-          DELEGATE(AtomicNotify);
-        case Expression::Id::AtomicFenceId:
-          DELEGATE(AtomicFence);
-        case Expression::Id::SIMDExtractId:
-          DELEGATE(SIMDExtract);
-        case Expression::Id::SIMDReplaceId:
-          DELEGATE(SIMDReplace);
-        case Expression::Id::SIMDShuffleId:
-          DELEGATE(SIMDShuffle);
-        case Expression::Id::SIMDTernaryId:
-          DELEGATE(SIMDTernary);
-        case Expression::Id::SIMDShiftId:
-          DELEGATE(SIMDShift);
-        case Expression::Id::SIMDLoadId:
-          DELEGATE(SIMDLoad);
-        case Expression::Id::MemoryInitId:
-          DELEGATE(MemoryInit);
-        case Expression::Id::DataDropId:
-          DELEGATE(DataDrop);
-        case Expression::Id::MemoryCopyId:
-          DELEGATE(MemoryCopy);
-        case Expression::Id::MemoryFillId:
-          DELEGATE(MemoryFill);
-        case Expression::Id::PopId:
-          DELEGATE(Pop);
-        case Expression::Id::RefNullId:
-          DELEGATE(RefNull);
-        case Expression::Id::RefIsNullId:
-          DELEGATE(RefIsNull);
-        case Expression::Id::RefFuncId:
-          DELEGATE(RefFunc);
-        case Expression::Id::RefEqId:
-          DELEGATE(RefEq);
-        case Expression::Id::TryId:
-          DELEGATE(Try);
-        case Expression::Id::ThrowId:
-          DELEGATE(Throw);
-        case Expression::Id::RethrowId:
-          DELEGATE(Rethrow);
-        case Expression::Id::BrOnExnId:
-          DELEGATE(BrOnExn);
-        case Expression::Id::TupleMakeId:
-          DELEGATE(TupleMake);
-        case Expression::Id::TupleExtractId:
-          DELEGATE(TupleExtract);
-        case Expression::Id::I31NewId:
-          DELEGATE(I31New);
-        case Expression::Id::I31GetId:
-          DELEGATE(I31Get);
-        case Expression::Id::RefTestId:
-          DELEGATE(RefTest);
-        case Expression::Id::RefCastId:
-          DELEGATE(RefCast);
-        case Expression::Id::BrOnCastId:
-          DELEGATE(BrOnCast);
-        case Expression::Id::RttCanonId:
-          DELEGATE(RttCanon);
-        case Expression::Id::RttSubId:
-          DELEGATE(RttSub);
-        case Expression::Id::StructNewId:
-          DELEGATE(StructNew);
-        case Expression::Id::StructGetId:
-          DELEGATE(StructGet);
-        case Expression::Id::StructSetId:
-          DELEGATE(StructSet);
-        case Expression::Id::ArrayNewId:
-          DELEGATE(ArrayNew);
-        case Expression::Id::ArrayGetId:
-          DELEGATE(ArrayGet);
-        case Expression::Id::ArraySetId:
-          DELEGATE(ArraySet);
-        case Expression::Id::ArrayLenId:
-          DELEGATE(ArrayLen);
-        case Expression::Id::InvalidId:
-          WASM_UNREACHABLE("unimp");
-        case Expression::Id::NumExpressionIds:
-          WASM_UNREACHABLE("unimp");
-      }
+        case Expression::Id::CLASS_TO_VISIT##Id: {                             \
+          auto* parent = self->typeUpdater.parents[curr];                      \
+          self->typeUpdater.noteRecursiveRemoval(curr);                        \
+          ExpressionManipulator::convert<CLASS_TO_VISIT, Unreachable>(         \
+            static_cast<CLASS_TO_VISIT*>(curr));                               \
+          self->typeUpdater.noteAddition(curr, parent);                        \
+          break;                                                               \
+        }
+
+#include "wasm-delegations.generated.h"
+
 #undef DELEGATE
+
+        case Expression::Id::InvalidId:
+        case Expression::Id::NumExpressionIds: {
+          WASM_UNREACHABLE("invalid id");
+        }
+      }
       return;
     }
     if (curr->is<If>()) {
