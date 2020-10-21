@@ -208,9 +208,12 @@ class Expression:
         return getattr(self, 'methods', [])
 
 
-###################################
+###############################################################################
 # Specific expression definitions
-###################################
+#
+# Note: The order of fields matters, as it is assumed to be the order of
+#       which we walk the expressions, which should be the order of execution.
+###############################################################################
 
 
 class Nop(Expression):
