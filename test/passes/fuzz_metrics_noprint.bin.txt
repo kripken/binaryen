@@ -1,5 +1,65 @@
 total
  [events]       : 0       
+<<<<<<< HEAD
+<<<<<<< HEAD
+ [exports]      : 31      
+ [funcs]        : 42      
+ [globals]      : 7       
+ [imports]      : 4       
+ [memory-data]  : 4       
+ [table-data]   : 14      
+ [total]        : 926     
+ [vars]         : 148     
+ binary         : 95      
+ block          : 127     
+ break          : 9       
+ call           : 47      
+ call_indirect  : 1       
+ const          : 211     
+ drop           : 22      
+ global.get     : 80      
+ global.set     : 38      
+ if             : 43      
+ load           : 21      
+ local.get      : 72      
+ local.set      : 42      
+ loop           : 9       
+ nop            : 11      
+ return         : 50      
+ select         : 1       
+ store          : 4       
+ unary          : 43      
+=======
+ [exports]      : 18      
+ [funcs]        : 22      
+ [globals]      : 7       
+ [imports]      : 4       
+ [memory-data]  : 4       
+ [table-data]   : 9       
+ [total]        : 4993    
+ [vars]         : 58      
+ binary         : 397     
+ block          : 736     
+ break          : 204     
+ call           : 173     
+ call_indirect  : 32      
+ const          : 823     
+ drop           : 42      
+ global.get     : 421     
+ global.set     : 190     
+ if             : 292     
+ load           : 95      
+ local.get      : 392     
+ local.set      : 297     
+ loop           : 146     
+ nop            : 97      
+ return         : 189     
+ select         : 39      
+ store          : 55      
+ switch         : 1       
+ unary          : 372     
+>>>>>>> origin/master
+=======
  [exports]      : 45      
  [funcs]        : 72      
  [globals]      : 7       
@@ -28,3 +88,4 @@ total
  store          : 43      
  unary          : 375     
  unreachable    : 3       
+>>>>>>> origin/master
