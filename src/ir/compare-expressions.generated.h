@@ -91,10 +91,10 @@ case Expression::SwitchId: {
   if (!compareNames(castLeft->default_, castRight->default_)) {
     return false;
   }
-  leftStack.push_back(castLeft->condition);
-  rightStack.push_back(castRight->condition);
   leftStack.push_back(castLeft->value);
   rightStack.push_back(castRight->value);
+  leftStack.push_back(castLeft->condition);
+  rightStack.push_back(castRight->condition);
   break;
 }
 case Expression::CallId: {

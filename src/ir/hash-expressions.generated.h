@@ -59,8 +59,8 @@ case Expression::SwitchId: {
     visitScopeName(cast->targets[i]);
   }
   visitScopeName(cast->default_);
-  stack.push_back(cast->condition);
   stack.push_back(cast->value);
+  stack.push_back(cast->condition);
   break;
 }
 case Expression::CallId: {

@@ -72,8 +72,8 @@ public:
   }
   ArenaVector<Name> targets;
   Name default_;
-  Expression* condition;
   Expression* value = nullptr;
+  Expression* condition;
   void finalize();
 };
 class Call : public SpecificExpression<Expression::CallId> {

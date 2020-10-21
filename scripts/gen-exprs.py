@@ -301,8 +301,8 @@ class Switch(Expression):
 
     targets = ScopeNameUseVector()
     default_ = ScopeNameUse()
-    condition = Child()
     value = Child(init='nullptr')
+    condition = Child()
 
 
 class Call(Expression):
@@ -980,6 +980,53 @@ class ExpressionDelegationRenderer:
         return """DELEGATE(%(name)s);""" % locals()
 
 
+class ExpressionWalkingRenderer:
+    """Renders code to walk expressions."""
+
+    def render(self, cls):
+        name = cls.__name__
+        operations = []
+
+        # Walk the children.
+        fields = cls.get_fields()
+        for key, field in fields.items():
+            if is_a(field, Child):
+                # Push the children to be hashed. Note that it is ok to
+                # do this even if they are null (valid for an optional child,
+                # like a Return's value), as the main logic will check that.
+                # TODO: would a check for null here be faster, avoiding even
+                #       pushing such children?
+                operations.append(f'self->pushTask(SubType::scan, cast->{key});')
+            elif is_a(field, ChildList):
+                operations.append('''\
+auto& list = cast->%(key)s;
+for (int i = int(list.size()) - 1; i >= 0; i--) {
+  self->pushTask(SubType::scan, &list[i]);
+}''' % locals())
+
+        # Children are pushed in reverse order, so that the first popped is the
+        # first to be walked.
+        operations.reverse()
+
+        if len(operations) > 0:
+            operations = [
+                f'auto* cast = curr->cast<{name}>();',
+            ] + operations
+
+        operations_text = join_nested_lines(operations)
+
+        # Combine it all to emit the final rendered code.
+        text = """\
+case Expression::%(name)sId: {
+  self->pushTask(SubType::doVisit%(name)s, currp);
+  %(operations_text)s
+  break;
+}
+""" % locals()
+        text = compact_text(text)
+        return text
+
+
 ########
 # Main
 ########
@@ -1005,6 +1052,9 @@ def main():
     generate(ExpressionDelegationRenderer,
              shared.in_binaryen('src', 'wasm-delegations.generated.h'),
              'expression delegation')
+    generate(ExpressionWalkingRenderer,
+             shared.in_binaryen('src', 'wasm-walking.generated.h'),
+             'expression walking')
 
 
 if __name__ == "__main__":
