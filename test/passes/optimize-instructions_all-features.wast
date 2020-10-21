@@ -284,6 +284,28 @@
       )
       (nop)
     )
+    (if
+      (try (result i32)
+        (do
+          (i32.eqz
+            (i32.eqz
+              (i32.const 123)
+            )
+          )
+        )
+        (catch
+          (drop
+            (pop exnref)
+          )
+          (i32.eqz
+            (i32.eqz
+              (i32.const 456)
+            )
+          )
+        )
+      )
+      (nop)
+    )
     (drop
       (select
         (i32.const 101)
@@ -5338,5 +5360,21 @@
         (i32.const 3) ;; side effect
       )
     )
+  )
+)
+(module
+  (import "env" "memory" (memory $0 (shared 256 256)))
+  (func $x
+   (drop
+    (i32.shr_s
+     (i32.shl
+      (i32.atomic.load8_u ;; can't be signed
+       (i32.const 100)
+      )
+      (i32.const 24)
+     )
+     (i32.const 24)
+    )
+   )
   )
 )

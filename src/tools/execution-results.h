@@ -144,8 +144,7 @@ struct ExecutionResults {
       ModuleInstance instance(wasm, &interface);
       return run(func, wasm, instance);
     } catch (const TrapException&) {
-      return {};
-    } catch (const WasmException&) {
+      // may throw in instance creation (init of offsets)
       return {};
     }
   }
@@ -164,8 +163,6 @@ struct ExecutionResults {
       }
       return instance.callFunction(func->name, arguments);
     } catch (const TrapException&) {
-      return {};
-    } catch (const WasmException&) {
       return {};
     }
   }
