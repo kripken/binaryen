@@ -37,7 +37,12 @@ namespace wasm {
 
 template<typename SubType, typename ReturnType = void> struct Visitor {
   // Expression visitors
-#include "wasm-visitors.generated.h"
+#define DELEGATE(CLASS_TO_VISIT)                                               \
+  ReturnType visit##CLASS_TO_VISIT(CLASS_TO_VISIT* curr) {                     \
+    return ReturnType();                                                       \
+  }
+#include "wasm-delegations.generated.h"
+#undef DELEGATE
 
   // Module-level visitors
   ReturnType visitExport(Export* curr) { return ReturnType(); }
@@ -51,17 +56,17 @@ template<typename SubType, typename ReturnType = void> struct Visitor {
   ReturnType visit(Expression* curr) {
     assert(curr);
 
-#define DELEGATE(CLASS_TO_VISIT)                                               \
-  return static_cast<SubType*>(this)->visit##CLASS_TO_VISIT(                   \
-    static_cast<CLASS_TO_VISIT*>(curr))
-
     switch (curr->_id) {
+#define DELEGATE(CLASS_TO_VISIT)                                               \
+      case Expression::Id::CLASS_TO_VISIT##Id:                                 \
+        return static_cast<SubType*>(this)->visit##CLASS_TO_VISIT(             \
+          static_cast<CLASS_TO_VISIT*>(curr))
 #include "wasm-delegations.generated.h"
+#undef DELEGATE
       default:
         WASM_UNREACHABLE("unexpected expression type");
     }
 
-#undef DELEGATE
   }
 };
 
@@ -70,7 +75,7 @@ template<typename SubType, typename ReturnType = void> struct Visitor {
 template<typename SubType, typename ReturnType = void>
 struct OverriddenVisitor {
 // Expression visitors, which must be overridden
-#define UNIMPLEMENTED(CLASS_TO_VISIT)                                          \
+#define DELEGATE(CLASS_TO_VISIT)                                          \
   ReturnType visit##CLASS_TO_VISIT(CLASS_TO_VISIT* curr) {                     \
     static_assert(                                                             \
       &SubType::visit##CLASS_TO_VISIT !=                                       \
@@ -79,78 +84,9 @@ struct OverriddenVisitor {
     WASM_UNREACHABLE("Derived class must implement visit" #CLASS_TO_VISIT);    \
   }
 
-  UNIMPLEMENTED(Block);
-  UNIMPLEMENTED(If);
-  UNIMPLEMENTED(Loop);
-  UNIMPLEMENTED(Break);
-  UNIMPLEMENTED(Switch);
-  UNIMPLEMENTED(Call);
-  UNIMPLEMENTED(CallIndirect);
-  UNIMPLEMENTED(LocalGet);
-  UNIMPLEMENTED(LocalSet);
-  UNIMPLEMENTED(GlobalGet);
-  UNIMPLEMENTED(GlobalSet);
-  UNIMPLEMENTED(Load);
-  UNIMPLEMENTED(Store);
-  UNIMPLEMENTED(AtomicRMW);
-  UNIMPLEMENTED(AtomicCmpxchg);
-  UNIMPLEMENTED(AtomicWait);
-  UNIMPLEMENTED(AtomicNotify);
-  UNIMPLEMENTED(AtomicFence);
-  UNIMPLEMENTED(SIMDExtract);
-  UNIMPLEMENTED(SIMDReplace);
-  UNIMPLEMENTED(SIMDShuffle);
-  UNIMPLEMENTED(SIMDTernary);
-  UNIMPLEMENTED(SIMDShift);
-  UNIMPLEMENTED(SIMDLoad);
-  UNIMPLEMENTED(MemoryInit);
-  UNIMPLEMENTED(DataDrop);
-  UNIMPLEMENTED(MemoryCopy);
-  UNIMPLEMENTED(MemoryFill);
-  UNIMPLEMENTED(Const);
-  UNIMPLEMENTED(Unary);
-  UNIMPLEMENTED(Binary);
-  UNIMPLEMENTED(Select);
-  UNIMPLEMENTED(Drop);
-  UNIMPLEMENTED(Return);
-  UNIMPLEMENTED(MemorySize);
-  UNIMPLEMENTED(MemoryGrow);
-  UNIMPLEMENTED(RefNull);
-  UNIMPLEMENTED(RefIsNull);
-  UNIMPLEMENTED(RefFunc);
-  UNIMPLEMENTED(RefEq);
-  UNIMPLEMENTED(Try);
-  UNIMPLEMENTED(Throw);
-  UNIMPLEMENTED(Rethrow);
-  UNIMPLEMENTED(BrOnExn);
-  UNIMPLEMENTED(Nop);
-  UNIMPLEMENTED(Unreachable);
-  UNIMPLEMENTED(Pop);
-  UNIMPLEMENTED(TupleMake);
-  UNIMPLEMENTED(TupleExtract);
-  UNIMPLEMENTED(I31New);
-  UNIMPLEMENTED(I31Get);
-  UNIMPLEMENTED(RefTest);
-  UNIMPLEMENTED(RefCast);
-  UNIMPLEMENTED(BrOnCast);
-  UNIMPLEMENTED(RttCanon);
-  UNIMPLEMENTED(RttSub);
-  UNIMPLEMENTED(StructNew);
-  UNIMPLEMENTED(StructGet);
-  UNIMPLEMENTED(StructSet);
-  UNIMPLEMENTED(ArrayNew);
-  UNIMPLEMENTED(ArrayGet);
-  UNIMPLEMENTED(ArraySet);
-  UNIMPLEMENTED(ArrayLen);
-  UNIMPLEMENTED(Export);
-  UNIMPLEMENTED(Global);
-  UNIMPLEMENTED(Function);
-  UNIMPLEMENTED(Table);
-  UNIMPLEMENTED(Memory);
-  UNIMPLEMENTED(Event);
-  UNIMPLEMENTED(Module);
+#include "wasm-delegations.generated.h"
 
-#undef UNIMPLEMENTED
+#undef DELEGATE
 
   ReturnType visit(Expression* curr) {
     assert(curr);
