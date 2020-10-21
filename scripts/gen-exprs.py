@@ -977,9 +977,17 @@ class ExpressionVisitorRenderer:
 
     def render(self, cls):
         name = cls.__name__
-
         return """\
 ReturnType visit%(name)s(%(name)s* curr) { return ReturnType(); }""" % locals()
+
+
+class ExpressionDelegationsRenderer:
+    """Renders code to visit expressions."""
+
+    def render(self, cls):
+        name = cls.__name__
+        return """
+case Expression::Id::%(name)sId: DELEGATE(%(name)s);""" % locals()
 
 
 ########
@@ -1007,6 +1015,9 @@ def main():
     generate(ExpressionVisitorRenderer,
              shared.in_binaryen('src', 'wasm-visitors.generated.h'),
              'expression visiting')
+    generate(ExpressionDelegationsRenderer,
+             shared.in_binaryen('src', 'wasm-delegations.generated.h'),
+             'expression delegation')
 
 
 if __name__ == "__main__":
