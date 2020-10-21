@@ -38,6 +38,7 @@ namespace wasm {
 template<typename SubType, typename ReturnType = void> struct Visitor {
   // Expression visitors
 #include "wasm-visitors.generated.h"
+
   // Module-level visitors
   ReturnType visitExport(Export* curr) { return ReturnType(); }
   ReturnType visitGlobal(Global* curr) { return ReturnType(); }
