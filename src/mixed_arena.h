@@ -405,9 +405,7 @@ public:
     *this = other;
   }
 
-  void operator=(const ArenaVector<T>& other) {
-    set(other);
-  }
+  void operator=(const ArenaVector<T>& other) { set(other); }
 
   void allocate(size_t size) {
     this->allocatedElements = size;
