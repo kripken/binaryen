@@ -259,7 +259,7 @@ public:
     usedElements = size;
   }
 
-  void operator=(SubType& other) { set(other); }
+  void operator=(const SubType& other) { set(other); }
 
   void swap(SubType& other) {
     data = other.data;
@@ -405,9 +405,7 @@ public:
     *this = other;
   }
 
-  void operator=(const ArenaVector<T>& other) {
-    *this = other;
-  }
+  void operator=(const ArenaVector<T>& other) { this->set(other); }
 
   void allocate(size_t size) {
     this->allocatedElements = size;
