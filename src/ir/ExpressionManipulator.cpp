@@ -30,14 +30,6 @@ flexibleCopy(Expression* original, Module& wasm, CustomCopier custom) {
     Expression** destPointer;
   };
   std::vector<CopyTask> tasks;
-  // A child pointer may be nullptr, in which case we don't need to copy.
-  auto handleChild = [&](Expression* source, Expression** destPointer) {
-    if (source == nullptr) {
-      *destPointer = nullptr;
-    } else {
-      tasks.push_back({source, destPointer});
-    }
-  };
   Expression* ret;
   tasks.push_back({original, &ret});
   while (!tasks.empty()) {
@@ -47,6 +39,12 @@ flexibleCopy(Expression* original, Module& wasm, CustomCopier custom) {
     auto* copy = custom(task.source);
     if (copy) {
       *task.destPointer = copy;
+      continue;
+    }
+    // If the source is a null, just copy that. (This can happen for an
+    // optional child.)
+    if (task.source == nullptr) {
+      *task.destPointer = nullptr;
       continue;
     }
     // Copy it ourselves.

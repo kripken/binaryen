@@ -36,7 +36,7 @@ case Expression::BlockId: {
   copy->name = source->name;
   copy->list.resize(source->list.size());
   for (Index i = 0; i < source->list.size(); i++) {
-    handleChild(source->list[i], &copy->list[i]);
+    tasks.push_back({source->list[i], &copy->list[i]});
   }
   copy->type = source->type;
   break;
@@ -45,9 +45,9 @@ case Expression::IfId: {
   auto* source = task.source->cast<If>();
   auto* copy = wasm.allocator.alloc<If>();
   *task.destPointer = copy;
-  handleChild(source->condition, &copy->condition);
-  handleChild(source->ifTrue, &copy->ifTrue);
-  handleChild(source->ifFalse, &copy->ifFalse);
+  tasks.push_back({source->condition, &copy->condition});
+  tasks.push_back({source->ifTrue, &copy->ifTrue});
+  tasks.push_back({source->ifFalse, &copy->ifFalse});
   copy->type = source->type;
   break;
 }
@@ -56,7 +56,7 @@ case Expression::LoopId: {
   auto* copy = wasm.allocator.alloc<Loop>();
   *task.destPointer = copy;
   copy->name = source->name;
-  handleChild(source->body, &copy->body);
+  tasks.push_back({source->body, &copy->body});
   copy->type = source->type;
   break;
 }
@@ -65,8 +65,8 @@ case Expression::BreakId: {
   auto* copy = wasm.allocator.alloc<Break>();
   *task.destPointer = copy;
   copy->name = source->name;
-  handleChild(source->value, &copy->value);
-  handleChild(source->condition, &copy->condition);
+  tasks.push_back({source->value, &copy->value});
+  tasks.push_back({source->condition, &copy->condition});
   copy->type = source->type;
   break;
 }
@@ -76,8 +76,8 @@ case Expression::SwitchId: {
   *task.destPointer = copy;
   copy->targets = source->targets;
   copy->default_ = source->default_;
-  handleChild(source->value, &copy->value);
-  handleChild(source->condition, &copy->condition);
+  tasks.push_back({source->value, &copy->value});
+  tasks.push_back({source->condition, &copy->condition});
   copy->type = source->type;
   break;
 }
@@ -87,7 +87,7 @@ case Expression::CallId: {
   *task.destPointer = copy;
   copy->operands.resize(source->operands.size());
   for (Index i = 0; i < source->operands.size(); i++) {
-    handleChild(source->operands[i], &copy->operands[i]);
+    tasks.push_back({source->operands[i], &copy->operands[i]});
   }
   copy->target = source->target;
   copy->isReturn = source->isReturn;
@@ -101,9 +101,9 @@ case Expression::CallIndirectId: {
   copy->sig = source->sig;
   copy->operands.resize(source->operands.size());
   for (Index i = 0; i < source->operands.size(); i++) {
-    handleChild(source->operands[i], &copy->operands[i]);
+    tasks.push_back({source->operands[i], &copy->operands[i]});
   }
-  handleChild(source->target, &copy->target);
+  tasks.push_back({source->target, &copy->target});
   copy->isReturn = source->isReturn;
   copy->type = source->type;
   break;
@@ -121,7 +121,7 @@ case Expression::LocalSetId: {
   auto* copy = wasm.allocator.alloc<LocalSet>();
   *task.destPointer = copy;
   copy->index = source->index;
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -138,7 +138,7 @@ case Expression::GlobalSetId: {
   auto* copy = wasm.allocator.alloc<GlobalSet>();
   *task.destPointer = copy;
   copy->name = source->name;
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -151,7 +151,7 @@ case Expression::LoadId: {
   copy->offset = source->offset;
   copy->align = source->align;
   copy->isAtomic = source->isAtomic;
-  handleChild(source->ptr, &copy->ptr);
+  tasks.push_back({source->ptr, &copy->ptr});
   copy->type = source->type;
   break;
 }
@@ -163,8 +163,8 @@ case Expression::StoreId: {
   copy->offset = source->offset;
   copy->align = source->align;
   copy->isAtomic = source->isAtomic;
-  handleChild(source->ptr, &copy->ptr);
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->ptr, &copy->ptr});
+  tasks.push_back({source->value, &copy->value});
   copy->valueType = source->valueType;
   copy->type = source->type;
   break;
@@ -176,8 +176,8 @@ case Expression::AtomicRMWId: {
   copy->op = source->op;
   copy->bytes = source->bytes;
   copy->offset = source->offset;
-  handleChild(source->ptr, &copy->ptr);
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->ptr, &copy->ptr});
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -187,9 +187,9 @@ case Expression::AtomicCmpxchgId: {
   *task.destPointer = copy;
   copy->bytes = source->bytes;
   copy->offset = source->offset;
-  handleChild(source->ptr, &copy->ptr);
-  handleChild(source->expected, &copy->expected);
-  handleChild(source->replacement, &copy->replacement);
+  tasks.push_back({source->ptr, &copy->ptr});
+  tasks.push_back({source->expected, &copy->expected});
+  tasks.push_back({source->replacement, &copy->replacement});
   copy->type = source->type;
   break;
 }
@@ -198,9 +198,9 @@ case Expression::AtomicWaitId: {
   auto* copy = wasm.allocator.alloc<AtomicWait>();
   *task.destPointer = copy;
   copy->offset = source->offset;
-  handleChild(source->ptr, &copy->ptr);
-  handleChild(source->expected, &copy->expected);
-  handleChild(source->timeout, &copy->timeout);
+  tasks.push_back({source->ptr, &copy->ptr});
+  tasks.push_back({source->expected, &copy->expected});
+  tasks.push_back({source->timeout, &copy->timeout});
   copy->expectedType = source->expectedType;
   copy->type = source->type;
   break;
@@ -210,8 +210,8 @@ case Expression::AtomicNotifyId: {
   auto* copy = wasm.allocator.alloc<AtomicNotify>();
   *task.destPointer = copy;
   copy->offset = source->offset;
-  handleChild(source->ptr, &copy->ptr);
-  handleChild(source->notifyCount, &copy->notifyCount);
+  tasks.push_back({source->ptr, &copy->ptr});
+  tasks.push_back({source->notifyCount, &copy->notifyCount});
   copy->type = source->type;
   break;
 }
@@ -228,7 +228,7 @@ case Expression::SIMDExtractId: {
   auto* copy = wasm.allocator.alloc<SIMDExtract>();
   *task.destPointer = copy;
   copy->op = source->op;
-  handleChild(source->vec, &copy->vec);
+  tasks.push_back({source->vec, &copy->vec});
   copy->index = source->index;
   copy->type = source->type;
   break;
@@ -238,9 +238,9 @@ case Expression::SIMDReplaceId: {
   auto* copy = wasm.allocator.alloc<SIMDReplace>();
   *task.destPointer = copy;
   copy->op = source->op;
-  handleChild(source->vec, &copy->vec);
+  tasks.push_back({source->vec, &copy->vec});
   copy->index = source->index;
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -248,8 +248,8 @@ case Expression::SIMDShuffleId: {
   auto* source = task.source->cast<SIMDShuffle>();
   auto* copy = wasm.allocator.alloc<SIMDShuffle>();
   *task.destPointer = copy;
-  handleChild(source->left, &copy->left);
-  handleChild(source->right, &copy->right);
+  tasks.push_back({source->left, &copy->left});
+  tasks.push_back({source->right, &copy->right});
   copy->mask = source->mask;
   copy->type = source->type;
   break;
@@ -259,9 +259,9 @@ case Expression::SIMDTernaryId: {
   auto* copy = wasm.allocator.alloc<SIMDTernary>();
   *task.destPointer = copy;
   copy->op = source->op;
-  handleChild(source->a, &copy->a);
-  handleChild(source->b, &copy->b);
-  handleChild(source->c, &copy->c);
+  tasks.push_back({source->a, &copy->a});
+  tasks.push_back({source->b, &copy->b});
+  tasks.push_back({source->c, &copy->c});
   copy->type = source->type;
   break;
 }
@@ -270,8 +270,8 @@ case Expression::SIMDShiftId: {
   auto* copy = wasm.allocator.alloc<SIMDShift>();
   *task.destPointer = copy;
   copy->op = source->op;
-  handleChild(source->vec, &copy->vec);
-  handleChild(source->shift, &copy->shift);
+  tasks.push_back({source->vec, &copy->vec});
+  tasks.push_back({source->shift, &copy->shift});
   copy->type = source->type;
   break;
 }
@@ -282,7 +282,7 @@ case Expression::SIMDLoadId: {
   copy->op = source->op;
   copy->offset = source->offset;
   copy->align = source->align;
-  handleChild(source->ptr, &copy->ptr);
+  tasks.push_back({source->ptr, &copy->ptr});
   copy->type = source->type;
   break;
 }
@@ -291,9 +291,9 @@ case Expression::MemoryInitId: {
   auto* copy = wasm.allocator.alloc<MemoryInit>();
   *task.destPointer = copy;
   copy->segment = source->segment;
-  handleChild(source->dest, &copy->dest);
-  handleChild(source->offset, &copy->offset);
-  handleChild(source->size, &copy->size);
+  tasks.push_back({source->dest, &copy->dest});
+  tasks.push_back({source->offset, &copy->offset});
+  tasks.push_back({source->size, &copy->size});
   copy->type = source->type;
   break;
 }
@@ -309,9 +309,9 @@ case Expression::MemoryCopyId: {
   auto* source = task.source->cast<MemoryCopy>();
   auto* copy = wasm.allocator.alloc<MemoryCopy>();
   *task.destPointer = copy;
-  handleChild(source->dest, &copy->dest);
-  handleChild(source->source, &copy->source);
-  handleChild(source->size, &copy->size);
+  tasks.push_back({source->dest, &copy->dest});
+  tasks.push_back({source->source, &copy->source});
+  tasks.push_back({source->size, &copy->size});
   copy->type = source->type;
   break;
 }
@@ -319,9 +319,9 @@ case Expression::MemoryFillId: {
   auto* source = task.source->cast<MemoryFill>();
   auto* copy = wasm.allocator.alloc<MemoryFill>();
   *task.destPointer = copy;
-  handleChild(source->dest, &copy->dest);
-  handleChild(source->value, &copy->value);
-  handleChild(source->size, &copy->size);
+  tasks.push_back({source->dest, &copy->dest});
+  tasks.push_back({source->value, &copy->value});
+  tasks.push_back({source->size, &copy->size});
   copy->type = source->type;
   break;
 }
@@ -338,7 +338,7 @@ case Expression::UnaryId: {
   auto* copy = wasm.allocator.alloc<Unary>();
   *task.destPointer = copy;
   copy->op = source->op;
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -347,8 +347,8 @@ case Expression::BinaryId: {
   auto* copy = wasm.allocator.alloc<Binary>();
   *task.destPointer = copy;
   copy->op = source->op;
-  handleChild(source->left, &copy->left);
-  handleChild(source->right, &copy->right);
+  tasks.push_back({source->left, &copy->left});
+  tasks.push_back({source->right, &copy->right});
   copy->type = source->type;
   break;
 }
@@ -356,9 +356,9 @@ case Expression::SelectId: {
   auto* source = task.source->cast<Select>();
   auto* copy = wasm.allocator.alloc<Select>();
   *task.destPointer = copy;
-  handleChild(source->ifTrue, &copy->ifTrue);
-  handleChild(source->ifFalse, &copy->ifFalse);
-  handleChild(source->condition, &copy->condition);
+  tasks.push_back({source->ifTrue, &copy->ifTrue});
+  tasks.push_back({source->ifFalse, &copy->ifFalse});
+  tasks.push_back({source->condition, &copy->condition});
   copy->type = source->type;
   break;
 }
@@ -366,7 +366,7 @@ case Expression::DropId: {
   auto* source = task.source->cast<Drop>();
   auto* copy = wasm.allocator.alloc<Drop>();
   *task.destPointer = copy;
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -374,7 +374,7 @@ case Expression::ReturnId: {
   auto* source = task.source->cast<Return>();
   auto* copy = wasm.allocator.alloc<Return>();
   *task.destPointer = copy;
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -390,7 +390,7 @@ case Expression::MemoryGrowId: {
   auto* source = task.source->cast<MemoryGrow>();
   auto* copy = wasm.allocator.alloc<MemoryGrow>();
   *task.destPointer = copy;
-  handleChild(source->delta, &copy->delta);
+  tasks.push_back({source->delta, &copy->delta});
   copy->ptrType = source->ptrType;
   copy->type = source->type;
   break;
@@ -420,7 +420,7 @@ case Expression::RefIsNullId: {
   auto* source = task.source->cast<RefIsNull>();
   auto* copy = wasm.allocator.alloc<RefIsNull>();
   *task.destPointer = copy;
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -436,8 +436,8 @@ case Expression::RefEqId: {
   auto* source = task.source->cast<RefEq>();
   auto* copy = wasm.allocator.alloc<RefEq>();
   *task.destPointer = copy;
-  handleChild(source->left, &copy->left);
-  handleChild(source->right, &copy->right);
+  tasks.push_back({source->left, &copy->left});
+  tasks.push_back({source->right, &copy->right});
   copy->type = source->type;
   break;
 }
@@ -445,8 +445,8 @@ case Expression::TryId: {
   auto* source = task.source->cast<Try>();
   auto* copy = wasm.allocator.alloc<Try>();
   *task.destPointer = copy;
-  handleChild(source->body, &copy->body);
-  handleChild(source->catchBody, &copy->catchBody);
+  tasks.push_back({source->body, &copy->body});
+  tasks.push_back({source->catchBody, &copy->catchBody});
   copy->type = source->type;
   break;
 }
@@ -457,7 +457,7 @@ case Expression::ThrowId: {
   copy->event = source->event;
   copy->operands.resize(source->operands.size());
   for (Index i = 0; i < source->operands.size(); i++) {
-    handleChild(source->operands[i], &copy->operands[i]);
+    tasks.push_back({source->operands[i], &copy->operands[i]});
   }
   copy->type = source->type;
   break;
@@ -466,7 +466,7 @@ case Expression::RethrowId: {
   auto* source = task.source->cast<Rethrow>();
   auto* copy = wasm.allocator.alloc<Rethrow>();
   *task.destPointer = copy;
-  handleChild(source->exnref, &copy->exnref);
+  tasks.push_back({source->exnref, &copy->exnref});
   copy->type = source->type;
   break;
 }
@@ -476,7 +476,7 @@ case Expression::BrOnExnId: {
   *task.destPointer = copy;
   copy->name = source->name;
   copy->event = source->event;
-  handleChild(source->exnref, &copy->exnref);
+  tasks.push_back({source->exnref, &copy->exnref});
   copy->sent = source->sent;
   copy->type = source->type;
   break;
@@ -487,7 +487,7 @@ case Expression::TupleMakeId: {
   *task.destPointer = copy;
   copy->operands.resize(source->operands.size());
   for (Index i = 0; i < source->operands.size(); i++) {
-    handleChild(source->operands[i], &copy->operands[i]);
+    tasks.push_back({source->operands[i], &copy->operands[i]});
   }
   copy->type = source->type;
   break;
@@ -496,7 +496,7 @@ case Expression::TupleExtractId: {
   auto* source = task.source->cast<TupleExtract>();
   auto* copy = wasm.allocator.alloc<TupleExtract>();
   *task.destPointer = copy;
-  handleChild(source->tuple, &copy->tuple);
+  tasks.push_back({source->tuple, &copy->tuple});
   copy->index = source->index;
   copy->type = source->type;
   break;
@@ -505,7 +505,7 @@ case Expression::I31NewId: {
   auto* source = task.source->cast<I31New>();
   auto* copy = wasm.allocator.alloc<I31New>();
   *task.destPointer = copy;
-  handleChild(source->value, &copy->value);
+  tasks.push_back({source->value, &copy->value});
   copy->type = source->type;
   break;
 }
@@ -513,7 +513,7 @@ case Expression::I31GetId: {
   auto* source = task.source->cast<I31Get>();
   auto* copy = wasm.allocator.alloc<I31Get>();
   *task.destPointer = copy;
-  handleChild(source->i31, &copy->i31);
+  tasks.push_back({source->i31, &copy->i31});
   copy->signed_ = source->signed_;
   copy->type = source->type;
   break;

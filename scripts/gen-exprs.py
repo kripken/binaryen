@@ -1047,12 +1047,13 @@ class ExpressionCopyingRenderer:
         fields = cls.get_fields()
         for key, field in fields.items():
             if is_a(field, Child):
-                operations.append(f'handleChild(source->{key}, &copy->{key});')
+                operations.append('''\
+tasks.push_back({source->%(key)s, &copy->%(key)s});''' % locals())
             elif is_a(field, ChildList):
                 operations.append('''\
 copy->%(key)s.resize(source->%(key)s.size());
 for (Index i = 0; i < source->%(key)s.size(); i++) {
-  handleChild(source->%(key)s[i], &copy->%(key)s[i]);
+  tasks.push_back({source->%(key)s[i], &copy->%(key)s[i]});
 }''' % locals())
             else:
                 # In the simple case, we can just copy the field.
