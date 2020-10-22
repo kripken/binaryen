@@ -1036,6 +1036,54 @@ case Expression::%(name)sId: {
         return text
 
 
+class ExpressionCopyingRenderer:
+    """Renders code to copy expressions."""
+
+    def render(self, cls):
+        name = cls.__name__
+        operations = []
+
+        # copy the fields.
+        fields = cls.get_fields()
+        for key, field in fields.items():
+            if is_a(field, Child):
+                operations.append(f'handleChild(source->{key}, &copy->{key});')
+            elif is_a(field, ChildList):
+                operations.append('''\
+copy->%(key)s.resize(source->%(key)s.size());
+for (Index i = 0; i < source->%(key)s.size(); i++) {
+  handleChild(source->%(key)s[i], &copy->%(key)s[i]);
+}''' % locals())
+            else:
+                # In the simple case, we can just copy the field.
+                operations.append(f'copy->{key} = source->{key};')
+
+        # First, create and write the copy.
+        operations = [
+            f'auto* copy = wasm.allocator.alloc<{name}>();',
+            '*task.destPointer = copy;'
+        ] + operations
+
+        # If we need to look at the source, cast it (we don't need to if the
+        # only lines are the two just added to create and write the copy).
+        if len(operations) > 2:
+            operations = [
+                f'auto* source = task.source->cast<{name}>();'
+            ] + operations
+
+        operations_text = join_nested_lines(operations)
+
+        # Combine it all to emit the final rendered code.
+        text = """\
+case Expression::%(name)sId: {
+  %(operations_text)s
+  break;
+}
+""" % locals()
+        text = compact_text(text)
+        return text
+
+
 ########
 # Main
 ########
@@ -1064,6 +1112,9 @@ def main():
     generate(ExpressionWalkingRenderer,
              shared.in_binaryen('src', 'wasm-walking.generated.h'),
              'expression walking')
+    generate(ExpressionCopyingRenderer,
+             shared.in_binaryen('src', 'ir', 'expression-copying.generated.h'),
+             'expression copying')
 
 
 if __name__ == "__main__":
