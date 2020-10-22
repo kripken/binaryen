@@ -1058,18 +1058,18 @@ for (Index i = 0; i < source->%(key)s.size(); i++) {
                 # In the simple case, we can just copy the field.
                 operations.append(f'copy->{key} = source->{key};')
 
-        # First, create and write the copy.
+        # First, create and write the copy. Then copy the fields. Finally,
+        # copy the type (we don't need to call finalize() to compute anything:
+        # as a copy of an# existing node, we know the final type, and can just
+        # copy).
+
         operations = [
+            f'auto* source = task.source->cast<{name}>();'
             f'auto* copy = wasm.allocator.alloc<{name}>();',
             '*task.destPointer = copy;'
-        ] + operations
-
-        # If we need to look at the source, cast it (we don't need to if the
-        # only lines are the two just added to create and write the copy).
-        if len(operations) > 2:
-            operations = [
-                f'auto* source = task.source->cast<{name}>();'
-            ] + operations
+        ] + operations + [
+            'copy->type = source->type;'
+        ]
 
         operations_text = join_nested_lines(operations)
 
