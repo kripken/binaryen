@@ -35,11 +35,11 @@ flexibleCopy(Expression* original, Module& wasm, CustomCopier custom) {
     if (source == nullptr) {
       *destPointer = nullptr;
     } else {
-      tasks.push_back({ source, destPointer });
+      tasks.push_back({source, destPointer});
     }
   };
   Expression* ret;
-  tasks.push_back({ original, &ret });
+  tasks.push_back({original, &ret});
   while (!tasks.empty()) {
     auto task = tasks.back();
     tasks.pop_back();
