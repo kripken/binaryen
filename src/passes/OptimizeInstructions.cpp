@@ -1756,7 +1756,7 @@ private:
           curr->right = inner->right;
           curr->left = inner->left;
           return curr;
-          }
+        }
       }
     }
     return nullptr;
