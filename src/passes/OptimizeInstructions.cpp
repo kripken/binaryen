@@ -1751,13 +1751,7 @@ private:
         if (matches(curr,
                     binary(&op,
                            binary(&inner, Abstract::Sub, any(), any()),
-                           ival(0))) &&
-            (op == Abstract::getBinary(type, Abstract::Eq) ||
-             op == Abstract::getBinary(type, Abstract::Ne) ||
-             op == Abstract::getBinary(type, Abstract::LeS) ||
-             op == Abstract::getBinary(type, Abstract::LtS) ||
-             op == Abstract::getBinary(type, Abstract::GeS) ||
-             op == Abstract::getBinary(type, Abstract::GtS))) {
+                           ival(0))) && inner->isRelational())) {
           curr->right = inner->right;
           curr->left = inner->left;
           return curr;
