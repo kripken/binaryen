@@ -1751,11 +1751,12 @@ private:
         if (matches(curr,
                     binary(&op,
                            binary(&inner, Abstract::Sub, any(), any()),
-                           ival(0))) && inner->isRelational())) {
+                           ival(0))) &&
+            inner->isRelational())) {
           curr->right = inner->right;
           curr->left = inner->left;
           return curr;
-        }
+          }
       }
     }
     return nullptr;
