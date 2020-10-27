@@ -351,7 +351,7 @@ void BinaryInstWriter::visitAtomicRMW(AtomicRMW* curr) {
   o << int8_t(BinaryConsts::AtomicPrefix);
 
 #define CASE_FOR_OP(Op)                                                        \
-  case Op:                                                                     \
+  case RMW##Op:                                                                \
     switch (curr->type.getBasic()) {                                           \
       case Type::i32:                                                          \
         switch (curr->bytes) {                                                 \
@@ -970,6 +970,10 @@ void BinaryInstWriter::visitUnary(Unary* curr) {
     case BitmaskVecI8x16:
       o << int8_t(BinaryConsts::SIMDPrefix)
         << U32LEB(BinaryConsts::I8x16Bitmask);
+      break;
+    case PopcntVecI8x16:
+      o << int8_t(BinaryConsts::SIMDPrefix)
+        << U32LEB(BinaryConsts::I8x16Popcnt);
       break;
     case AbsVecI16x8:
       o << int8_t(BinaryConsts::SIMDPrefix) << U32LEB(BinaryConsts::I16x8Abs);
@@ -1876,10 +1880,10 @@ void BinaryInstWriter::visitArrayLen(ArrayLen* curr) {
 void BinaryInstWriter::emitScopeEnd(Expression* curr) {
   assert(!breakStack.empty());
   breakStack.pop_back();
-  if (func && !sourceMap) {
-    parent.writeExtraDebugLocation(curr, func, BinaryLocations::End);
-  }
   o << int8_t(BinaryConsts::End);
+  if (func && !sourceMap) {
+    parent.writeDebugLocationEnd(curr, func);
+  }
 }
 
 void BinaryInstWriter::emitFunctionEnd() { o << int8_t(BinaryConsts::End); }
