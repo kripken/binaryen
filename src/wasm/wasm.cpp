@@ -474,6 +474,11 @@ void Call::finalize() {
   }
 }
 
+bool CallIndirect::isByIndex() const {
+  // It doesn't matter much how we identify
+  return target->type == Type::i32 || target->type == Type::unreachable;
+}
+
 void CallIndirect::finalize() {
   type = sig.results;
   handleUnreachableOperands(this);

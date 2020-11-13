@@ -41,6 +41,7 @@ struct FunctionDirectizer : public WalkerPass<PostWalker<FunctionDirectizer>> {
   FunctionDirectizer(TableUtils::FlatTable* flatTable) : flatTable(flatTable) {}
 
   void visitCallIndirect(CallIndirect* curr) {
+    // TODO: RefCall
     if (auto* c = curr->target->dynCast<Const>()) {
       Index index = c->value.geti32();
       // If the index is invalid, or the type is wrong, we can

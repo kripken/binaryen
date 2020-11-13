@@ -770,10 +770,21 @@ public:
 class CallIndirect : public SpecificExpression<Expression::CallIndirectId> {
 public:
   CallIndirect(MixedArena& allocator) : operands(allocator) {}
+
+  // An call_indirect via an index into a table requires a signature to know the
+  // expected type of the function called. An indirect call via a typed function
+  // reference does not need this, and this field is therefore unused for a
+  // ref_call.
   Signature sig;
   ExpressionList operands;
+  // A call_indirect has a target of type i32, while a call_ref has one of some
+  // other type (a function reference type).
   Expression* target;
   bool isReturn = false;
+
+  // Returns true if this is a call_indirect, that is, by a table index, and not
+  // a call_ref, which would be by a function reference.
+  bool isByIndex() const;
 
   void finalize();
 };

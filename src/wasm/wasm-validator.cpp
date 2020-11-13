@@ -811,6 +811,7 @@ void FunctionValidator::visitCallIndirect(CallIndirect* curr) {
                                     Type(Type::i32),
                                     curr,
                                     "indirect call target must be an i32");
+  if (curr->target->type
   if (!shouldBeTrue(curr->operands.size() == curr->sig.params.size(),
                     curr,
                     "call param number must match")) {
