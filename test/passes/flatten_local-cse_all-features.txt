@@ -247,12 +247,10 @@
    (local.get $0)
   )
   (local.set $1
-   (i32.load
-    (i32.const 10)
-   )
+   (local.get $0)
   )
   (drop
-   (local.get $1)
+   (local.get $0)
   )
  )
  (func $8 (param $var$0 i32) (result i32)

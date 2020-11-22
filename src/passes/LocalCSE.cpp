@@ -246,10 +246,6 @@ struct LocalCSE : public WalkerPass<LinearExecutionWalker<LocalCSE>> {
     if (!value->type.isConcrete()) {
       return false; // don't bother with unreachable etc.
     }
-    if (EffectAnalyzer(getPassOptions(), getModule()->features, value)
-          .hasSideEffects()) {
-      return false; // we can't combine things with side effects
-    }
     auto& options = getPassRunner()->options;
     // If the size is at least 3, then if we have two of them we have 6,
     // and so adding one set+two gets and removing one of the items itself
