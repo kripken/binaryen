@@ -133,13 +133,20 @@ std::ostream& operator<<(std::ostream& os, HeapTypeName typeName) {
             for (auto& field : struct_.fields) {
               os << sep;
               sep = "_";
+              if (field.mutable_) {
+                os << "mut:";
+              }
               printType(field.type);
             }
             os << "}";
             continue;
           } else if (heapType.isArray()) {
             os << "[";
-            printType(heapType.getArray().element.type);
+            auto element = heapType.getArray().element;
+            if (element.mutable_) {
+              os << "mut:";
+            }
+            printType(element.type);
             os << "]";
             continue;
           }
@@ -163,12 +170,19 @@ std::ostream& operator<<(std::ostream& os, HeapTypeName typeName) {
     for (auto& field : struct_.fields) {
       os << sep;
       sep = "_";
+      if (field.mutable_) {
+        os << "mut:";
+      }
       printType(field.type);
     }
     os << "}";
   } else if (type.isArray()) {
     os << "[";
-    printType(type.getArray().element.type);
+    auto element = type.getArray().element;
+    if (element.mutable_) {
+      os << "mut:";
+    }
+    printType(element.type);
     os << "]";
   } else {
     WASM_UNREACHABLE("bad heap type");
