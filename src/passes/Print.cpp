@@ -184,7 +184,6 @@ std::ostream& operator<<(std::ostream& os, TypeName typeName) {
       os << "null ";
     }
     os << HeapTypeName(type.getHeapType());
-    }
     os << ')';
     return os;
   }
