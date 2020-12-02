@@ -48,7 +48,7 @@ int unhex(char c) {
 
 namespace wasm {
 
-static Name STRUCT("struct"), FIELD("field");
+static Name STRUCT("struct"), FIELD("field"), ARRAY("array");
 
 static Address getAddress(const Element* s) { return atoll(s->c_str()); }
 
@@ -61,6 +61,10 @@ checkAddress(Address a, const char* errorText, const Element* errorElem) {
 
 static bool elementStartsWith(Element& s, IString str) {
   return s.isList() && s.size() > 0 && s[0]->isStr() && s[0]->str() == str;
+}
+
+static bool elementStartsWith(Element* s, IString str) {
+  return elementStartsWith(*s, str);
 }
 
 Element::List& Element::list() {
@@ -910,7 +914,7 @@ Type SExpressionWasmBuilder::elementToType(Element& s) {
   }
   auto& list = s.list();
   auto size = list.size();
-  if (size > 0 && elementStartsWith(s, REF)) {
+  if (elementStartsWith(s, REF)) {
     // It's a reference. It should be in the form
     //   (ref $name)
     // or
@@ -2791,41 +2795,41 @@ HeapType SExpressionWasmBuilder::parseHeapType(Element& s) {
       }
     }
     return Signature(Type(params), Type(results));
-  } else if (*s[0] == STRUCT) {
+  }
+  // It's a struct or an array.
+  auto parseField = [&](Element* t) {
+    bool mutable_ = false;
+    if (t->isStr()) {
+      // t is a simple string name like "i32"
+      return Field(elementToType(*t), mutable_);
+    }
+    // t is a tuple, containing either
+    //   TYPE
+    // or
+    //   (field TYPE)
+    // or
+    //   (field $name TYPE)
+    if (elementStartsWith(t, FIELD)) {
+      // Skip the field and the name. TODO use the name somehow
+      t = (*t)[t->size() - 1];
+    }
+    // The element may also be (mut (..)).
+    if (elementStartsWith(t, MUT)) {
+      mutable_ = true;
+      t = (*t)[1];
+    }
+    // Otherwise it's an arbitrary type.
+    return Field(elementToType(*t), mutable_);
+  };
+  if (elementStartsWith(s, STRUCT)) {
     FieldList fields;
     for (size_t k = 1; k < s.size(); k++) {
-      auto& t = *s[k];
-      bool mutable_ = false;
-      if (t.isStr()) {
-        // t is a simple string name like "i32"
-        fields.emplace_back(elementToType(t), mutable_);
-        continue;
-      }
-      // t is a tuple, containing either
-      //   (field TYPE)
-      // or
-      //   (field $name TYPE)
-      if (*t[0] != FIELD) {
-        throw ParseException("invalid struct field", s.line, s.col);
-      }
-      if (t.size() != 2 && t.size() != 3) {
-        throw ParseException("invalid field size", s.line, s.col);
-      }
-      if (t.size() == 3) {
-        if (!t[1]->isStr()) {
-          throw ParseException("invalid field name", s.line, s.col);
-        }
-        // TODO: save the name of the field.
-      }
-      Element* last = t[t.size() - 1];
-      // The last element may also be (mut (..)).
-      if (last->isList() && *(*last)[0] == MUT) {
-        mutable_ = true;
-        last = (*last)[1];
-      }
-      fields.emplace_back(elementToType(*last), mutable_);
+      fields.emplace_back(parseField(s[k]));
     }
     return Struct(fields);
+  }
+  if (elementStartsWith(s, ARRAY)) {
+    return Array(parseField(s[1]));
   }
   throw ParseException("invalid heap type", s.line, s.col);
 }
