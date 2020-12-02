@@ -186,6 +186,7 @@ size_t hash<wasm::Field>::operator()(const wasm::Field& field) const {
   auto digest = wasm::hash(field.type);
   wasm::rehash(digest, field.packedType);
   wasm::rehash(digest, field.mutable_);
+  wasm::rehash(digest, field.name);
   return digest;
 }
 

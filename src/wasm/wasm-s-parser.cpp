@@ -2809,8 +2809,11 @@ HeapType SExpressionWasmBuilder::parseHeapType(Element& s) {
     //   (field TYPE)
     // or
     //   (field $name TYPE)
+    Name name;
     if (elementStartsWith(t, FIELD)) {
-      // Skip the field and the name. TODO use the name somehow
+      if (t->size() == 3) {
+        name = (*t)[1]->str();
+      }
       t = (*t)[t->size() - 1];
     }
     // The element may also be (mut (..)).
@@ -2819,7 +2822,7 @@ HeapType SExpressionWasmBuilder::parseHeapType(Element& s) {
       t = (*t)[1];
     }
     // Otherwise it's an arbitrary type.
-    return Field(elementToType(*t), mutable_);
+    return Field(elementToType(*t), mutable_, name);
   };
   if (elementStartsWith(s, STRUCT)) {
     FieldList fields;
