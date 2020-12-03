@@ -595,7 +595,6 @@ switch (DELEGATE_ID) {
   }
   case Expression::Id::StructGetId: {
     DELEGATE_START(StructGet);
-    DELEGATE_FIELD_TYPE(StructGet, valueType);
     DELEGATE_FIELD_INT(StructGet, field);
     DELEGATE_FIELD_CHILD(StructGet, value);
     DELEGATE_FIELD_INT(Load, signed_);

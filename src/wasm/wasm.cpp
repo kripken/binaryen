@@ -1087,8 +1087,15 @@ void CallRef::finalize(Type type_) {
 void StructGet::finalize() {
   if (value->type == Type::unreachable) {
     type = Type::unreachable;
+  }
+}
+
+
+void StructGet::finalize(Type type_) {
+  if (value->type == Type::unreachable) {
+    type = Type::unreachable;
   } else {
-    type = valueType.getHeapType().getStruct().fields[field].type;
+    type = type_.getHeapType().getStruct().fields[field].type;
   }
 }
 

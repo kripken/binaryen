@@ -1352,13 +1352,13 @@ class StructGet : public SpecificExpression<Expression::StructGetId> {
 public:
   StructGet(MixedArena& allocator) {}
 
-  Type valueType;
-  // Packed fields have a sign.
   Index field;
   Expression* value;
+  // Packed fields have a sign.
   bool signed_ = false;
 
   void finalize();
+  void finalize(Type type_);
 };
 
 class StructSet : public SpecificExpression<Expression::StructSetId> {

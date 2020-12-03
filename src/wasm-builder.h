@@ -732,11 +732,10 @@ public:
                            Expression* value,
                            bool signed_ = false) {
     auto* ret = wasm.allocator.alloc<StructGet>();
-    ret->valueType = valueType;
     ret->signed_ = signed_;
     ret->field = field;
     ret->value = value;
-    ret->finalize();
+    ret->finalize(valueType);
     return ret;
   }
   StructSet* makeStructSet() {
