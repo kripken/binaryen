@@ -2439,7 +2439,7 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
     o << ')';
   }
   void handleStruct(const Struct& curr) {
-    o << "(struct";
+    o << "(struct ";
     auto sep = "";
     for (auto field : curr.fields) {
       o << sep << "(field ";
