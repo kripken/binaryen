@@ -563,7 +563,9 @@ private:
     }
     void visitStructGet(StructGet* curr) {
       // traps when the arg is null
-      parent.implicitTrap = true;
+      if (curr->value->type.isNullable()) {
+        parent.implicitTrap = true;
+      }
     }
     void visitStructSet(StructSet* curr) {
       WASM_UNREACHABLE("TODO (gc): struct.set");
