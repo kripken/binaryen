@@ -2136,7 +2136,7 @@ Expression* SExpressionWasmBuilder::makeStructNew(Element& s, bool default_) {
   return ret;
 }
 
-Index SExpressionWasmBuilder::getStructIndex(HeapType type, Element& s) {
+Index SExpressionWasmBuilder::getStructIndex(const HeapType& type, Element& s) {
   if (s.dollared()) {
     auto name = s.str();
     auto struct_ = type.getStruct();
@@ -2152,16 +2152,12 @@ Index SExpressionWasmBuilder::getStructIndex(HeapType type, Element& s) {
   return atoi(s.c_str());
 }
 
-Expression* SExpressionWasmBuilder::makeStructGet(Element& s) {
-  auto structType = parseHeapType(*s[1]);
-  return Builder(wasm).makeStructGet(
-    structType, getStructIndex(structType, *s[2]), parseExpression(*s[3]));
-}
-
 Expression* SExpressionWasmBuilder::makeStructGet(Element& s, bool signed_) {
   auto structType = parseHeapType(*s[1]);
-  return Builder(wasm).makeStructGet(
-    structType, getStructIndex(structType, *s[2]), parseExpression(*s[3]), signed_);
+  auto index = getStructIndex(structType, *s[2]);
+  auto type = structType.getStruct().fields[index].type;
+  auto value = parseExpression(*s[3]);
+  return Builder(wasm).makeStructGet(index, value, type, signed_);
 }
 
 Expression* SExpressionWasmBuilder::makeStructSet(Element& s) {

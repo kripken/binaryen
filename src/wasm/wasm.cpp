@@ -1090,15 +1090,6 @@ void StructGet::finalize() {
   }
 }
 
-
-void StructGet::finalize(Type type_) {
-  if (value->type == Type::unreachable) {
-    type = Type::unreachable;
-  } else {
-    type = type_.getHeapType().getStruct().fields[field].type;
-  }
-}
-
 // TODO (gc): struct.set
 // TODO (gc): array.new
 // TODO (gc): array.get

@@ -1358,7 +1358,6 @@ public:
   bool signed_ = false;
 
   void finalize();
-  void finalize(Type type_);
 };
 
 class StructSet : public SpecificExpression<Expression::StructSetId> {
