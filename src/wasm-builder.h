@@ -727,13 +727,13 @@ public:
     ret->finalize();
     return ret;
   }
-  StructGet* makeStructGet(Index field,
+  StructGet* makeStructGet(Index index,
                            Expression* value,
                            Type type,
                            bool signed_ = false) {
     auto* ret = wasm.allocator.alloc<StructGet>();
     ret->signed_ = signed_;
-    ret->field = field;
+    ret->index = index;
     ret->value = value;
     ret->type = type;
     ret->finalize();
