@@ -226,6 +226,16 @@ void WasmBinaryWriter::writeTypes() {
           writeType(type);
         }
       }
+    } else if (type.isArray()) {
+      o << S32LEB(BinaryConsts::EncodedType::Array);
+      writeField(type.getArray().element);
+    } else if (type.isStruct()) {
+      o << S32LEB(BinaryConsts::EncodedType::Struct);
+      auto fields = type.getStruct().fields;
+      o << U32LEB(fields.size());
+      for (const auto& field : fields) {
+        writeField(field);
+      }
     } else {
       WASM_UNREACHABLE("TODO GC type writing");
     }
@@ -1054,6 +1064,11 @@ void WasmBinaryWriter::writeHeapType(HeapType type) {
       WASM_UNREACHABLE("TODO: compound GC types");
   }
   o << S32LEB(ret); // TODO: Actually encoded as s33
+}
+
+void WasmBinaryWriter::writeField(const Field& field) {
+  writeType(field.type);
+  o << U32LEB(field.mutable_);
 }
 
 // reader
