@@ -392,19 +392,11 @@ bool Type::isRtt() const {
 }
 
 bool Type::isStruct() const {
-  if (isBasic()) {
-    return false;
-  } else {
-    return getTypeInfo(*this)->isStruct();
-  }
+  return isRef() && getHeapType().isStruct();
 }
 
 bool Type::isArray() const {
-  if (isBasic()) {
-    return false;
-  } else {
-    return getTypeInfo(*this)->isArray();
-  }
+  return isRef() && getHeapType().isArray();
 }
 
 bool Type::operator<(const Type& other) const {
