@@ -414,14 +414,7 @@ bool Type::operator<(const Type& other) const {
     if (a.isNullable() != b.isNullable()) {
       return a.isNullable();
     }
-    auto aHeap = a.getHeapType();
-    auto bHeap = b.getHeapType();
-    if (aHeap.isSignature() && bHeap.isSignature()) {
-      return aHeap.getSignature() < bHeap.getSignature();
-    }
-    TODO_SINGLE_COMPOUND(a);
-    TODO_SINGLE_COMPOUND(b);
-    WASM_UNREACHABLE("unimplemented type comparison");
+    return a.getHeapType() < b.getHeapType();
   };
   return std::lexicographical_compare(
     begin(), end(), other.begin(), other.end(), comp);
@@ -522,10 +515,15 @@ FeatureSet Type::getFeatures() const {
   return getSingleFeatures(*this);
 }
 
+// getHeapType() returns a const HeapType&, so we need a canonical object to
+// return for the basic types, so that we don't create a temporary copy on each
+// call.
+namespace statics {
 static HeapType funcHeapType(HeapType::FuncKind),
   externHeapType(HeapType::ExternKind), exnHeapType(HeapType::ExnKind),
   anyHeapType(HeapType::AnyKind), eqHeapType(HeapType::EqKind),
   i31HeapType(HeapType::I31Kind);
+}
 
 const HeapType& Type::getHeapType() const {
   if (isRef()) {
@@ -534,17 +532,17 @@ const HeapType& Type::getHeapType() const {
     }
     switch (getBasic()) {
       case funcref:
-        return funcHeapType;
+        return statics::funcHeapType;
       case externref:
-        return externHeapType;
+        return statics::externHeapType;
       case exnref:
-        return exnHeapType;
+        return statics::exnHeapType;
       case anyref:
-        return anyHeapType;
+        return statics::anyHeapType;
       case eqref:
-        return eqHeapType;
+        return statics::eqHeapType;
       case i31ref:
-        return i31HeapType;
+        return statics::i31HeapType;
       default:
         break;
     }
@@ -742,12 +740,48 @@ bool HeapType::operator==(const HeapType& other) const {
   WASM_UNREACHABLE("unexpected kind");
 }
 
+bool HeapType::operator<(const HeapType& other) const {
+  if (kind != other.kind) {
+    return kind < other.kind;
+  }
+  if (isSignature()) {
+    return getSignature() < other.getSignature();
+  }
+  if (isStruct()) {
+    return getStruct() < other.getStruct();
+  }
+  if (isArray()) {
+    return getArray() < other.getArray();
+  }
+  WASM_UNREACHABLE("unimplemented type comparison");
+}
+
 HeapType& HeapType::operator=(const HeapType& other) {
   if (&other != this) {
     this->~HeapType();
     new (this) auto(other);
   }
   return *this;
+}
+
+bool Field::operator<(const Field& other) const {
+  if (type < other.type) {
+    return true;
+  }
+  if (other.type < type) {
+    return false;
+  }
+  if (mutable_ < other.mutable_) {
+    return true;
+  }
+  if (other.mutable_ < mutable_) {
+    return false;
+  }
+  if (type == Type::i32) {
+    return packedType < other.packedType;
+  }
+  // They are equal, so they are not <.
+  return false;
 }
 
 namespace {

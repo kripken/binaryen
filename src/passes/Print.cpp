@@ -204,6 +204,16 @@ std::ostream& operator<<(std::ostream& os, TypeName typeName) {
   return os << SExprType(typeName.type);
 }
 
+std::ostream& operator<<(std::ostream& os, HeapTypeName typeName) {
+  auto type = typeName.type;
+  if (type.isSignature()) {
+    os << SigName(type.getSignature());
+  } else {
+    os << type;
+  }
+  return os;
+}
+
 } // anonymous namespace
 
 // Printing "unreachable" as a instruction prefix type is not valid in wasm text
@@ -2397,10 +2407,10 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
     WASM_UNREACHABLE("TODO (gc): array.len");
   }
   // Module-level visitors
-  void handleSignature(Signature curr, Name* funcName = nullptr) {
+  void handleSignature(Signature curr, Name name = Name()) {
     o << "(func";
-    if (funcName) {
-      o << " $" << *funcName;
+    if (name.is()) {
+      o << " $" << name;
     }
     if (curr.params.size() > 0) {
       o << maybeSpace;
@@ -2423,6 +2433,42 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
       o << ')';
     }
     o << ")";
+  }
+  void handleFieldBody(const Field& field) {
+    if (field.mutable_) {
+      o << "(mut ";
+    }
+    o << TypeName(field.type);
+    if (field.mutable_) {
+      o << ')';
+    }
+  }
+  void handleArray(const Array& curr) {
+    o << "(array ";
+    handleFieldBody(curr.element);
+    o << ')';
+  }
+  void handleStruct(const Struct& curr) {
+    o << "(struct";
+    auto sep = "";
+    for (auto field : curr.fields) {
+      o << sep << "(field ";
+      handleFieldBody(field);
+      o << ')';
+      sep = " ";
+    }
+    o << ')';
+  }
+  void handleHeapType(HeapType type) {
+    if (type.isSignature()) {
+      handleSignature(type.getSignature());
+    } else if (type.isArray()) {
+      handleArray(type.getArray());
+    } else if (type.isStruct()) {
+      handleStruct(type.getStruct());
+    } else {
+      WASM_UNREACHABLE("bad heap type");
+    }
   }
   void visitExport(Export* curr) {
     o << '(';
@@ -2502,7 +2548,7 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
     lastPrintedLocation = {0, 0, 0};
     o << '(';
     emitImportHeader(curr);
-    handleSignature(curr->sig, &curr->name);
+    handleSignature(curr->sig, curr->name);
     o << ')';
     o << maybeNewLine;
   }
@@ -2751,15 +2797,15 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
       printName(curr->name, o);
     }
     incIndent();
-    std::vector<Signature> signatures;
-    std::unordered_map<Signature, Index> indices;
-    ModuleUtils::collectSignatures(*curr, signatures, indices);
-    for (auto sig : signatures) {
+    std::vector<HeapType> types;
+    std::unordered_map<HeapType, Index> indices;
+    ModuleUtils::collectHeapTypes(*curr, types, indices);
+    for (auto type : types) {
       doIndent(o, indent);
       o << '(';
       printMedium(o, "type") << ' ';
-      o << HeapTypeName(sig) << ' ';
-      handleSignature(sig);
+      o << HeapTypeName(type) << ' ';
+      handleHeapType(type);
       o << ")" << maybeNewLine;
     }
     ModuleUtils::iterImportedMemories(
