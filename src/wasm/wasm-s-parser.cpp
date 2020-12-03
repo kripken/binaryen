@@ -23,6 +23,7 @@
 #include "ir/branch-utils.h"
 #include "shared-constants.h"
 #include "wasm-binary.h"
+#include "wasm-builder.h"
 
 #define abort_on(str)                                                          \
   { throw ParseException(std::string("abort_on ") + str); }
@@ -2135,18 +2136,30 @@ Expression* SExpressionWasmBuilder::makeStructNew(Element& s, bool default_) {
   return ret;
 }
 
+Index SExpressionWasmBuilder::getStructIndex(Type type, Element& s) {
+  if (s.dollared()) {
+    auto name = s.str();
+    auto struct_ = type.getHeapType.getStruct();
+    auto& fields = struct_.fields;
+    for (Index i = 0; i < fields.size(); i++) {
+      if (fields[i].name == name) {
+        return i;
+      }
+    }
+    throw ParseException("bad struct name", s.line, s.col);
+  }
+  // this is a numeric index
+  return atoi(s.c_str());
+}
+
 Expression* SExpressionWasmBuilder::makeStructGet(Element& s) {
-  auto ret = allocator.alloc<StructGet>();
-  WASM_UNREACHABLE("TODO (gc): struct.get");
-  ret->finalize();
-  return ret;
+  auto structType = parseHeapType(s[1]);
+  return Builder(wasm).makeStructGet(structType, getStructIndex(s[2]), parseExpression(s[3]));
 }
 
 Expression* SExpressionWasmBuilder::makeStructGet(Element& s, bool signed_) {
-  auto ret = allocator.alloc<StructGet>();
-  WASM_UNREACHABLE("TODO (gc): struct.get_s/u");
-  ret->finalize();
-  return ret;
+  auto structType = parseHeapType(s[1]);
+  return Builder(wasm).makeStructGet(structType, getStructIndex(s[2]), parseExpression(s[3]), signed_);
 }
 
 Expression* SExpressionWasmBuilder::makeStructSet(Element& s) {

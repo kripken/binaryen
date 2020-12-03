@@ -262,6 +262,7 @@ private:
   Expression* makeRttCanon(Element& s);
   Expression* makeRttSub(Element& s);
   Expression* makeStructNew(Element& s, bool default_);
+  Index getStructIndex(Type type, Element& s);
   Expression* makeStructGet(Element& s);
   Expression* makeStructGet(Element& s, bool signed_);
   Expression* makeStructSet(Element& s);

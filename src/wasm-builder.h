@@ -727,9 +727,12 @@ public:
     ret->finalize();
     return ret;
   }
-  StructGet* makeStructGet() {
+  StructGet* makeStructGet(Type valueType, Index field, Expression* value, bool signed_=false) {
     auto* ret = wasm.allocator.alloc<StructGet>();
-    WASM_UNREACHABLE("TODO (gc): struct.get");
+    ret->valueType = valueType;
+    ret->signed_ = signed_;
+    ret->field = field;
+    ret->value = value;
     ret->finalize();
     return ret;
   }
