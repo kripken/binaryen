@@ -1690,7 +1690,10 @@ struct PrintExpressionContents
     WASM_UNREACHABLE("TODO (gc): struct.new");
   }
   void visitStructGet(StructGet* curr) {
-    WASM_UNREACHABLE("TODO (gc): struct.get");
+    // TODO: packed
+    printMedium(o, "struct.get ");
+    o << TypeName(curr->value->type) << ' ';
+    o << curr->index;
   }
   void visitStructSet(StructSet* curr) {
     printMedium(o, "struct.set");
@@ -2364,7 +2367,9 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
   void visitStructGet(StructGet* curr) {
     o << '(';
     PrintExpressionContents(currFunction, o).visit(curr);
-    WASM_UNREACHABLE("TODO (gc): struct.get");
+    incIndent();
+    printFullLine(curr->value);
+    decIndent();
   }
   void visitStructSet(StructSet* curr) {
     o << '(';
