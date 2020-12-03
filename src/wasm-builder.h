@@ -727,7 +727,10 @@ public:
     ret->finalize();
     return ret;
   }
-  StructGet* makeStructGet(Type valueType, Index field, Expression* value, bool signed_=false) {
+  StructGet* makeStructGet(Type valueType,
+                           Index field,
+                           Expression* value,
+                           bool signed_ = false) {
     auto* ret = wasm.allocator.alloc<StructGet>();
     ret->valueType = valueType;
     ret->signed_ = signed_;

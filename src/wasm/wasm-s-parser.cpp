@@ -2154,12 +2154,14 @@ Index SExpressionWasmBuilder::getStructIndex(Type type, Element& s) {
 
 Expression* SExpressionWasmBuilder::makeStructGet(Element& s) {
   auto structType = parseHeapType(s[1]);
-  return Builder(wasm).makeStructGet(structType, getStructIndex(s[2]), parseExpression(s[3]));
+  return Builder(wasm).makeStructGet(
+    structType, getStructIndex(s[2]), parseExpression(s[3]));
 }
 
 Expression* SExpressionWasmBuilder::makeStructGet(Element& s, bool signed_) {
   auto structType = parseHeapType(s[1]);
-  return Builder(wasm).makeStructGet(structType, getStructIndex(s[2]), parseExpression(s[3]), signed_);
+  return Builder(wasm).makeStructGet(
+    structType, getStructIndex(s[2]), parseExpression(s[3]), signed_);
 }
 
 Expression* SExpressionWasmBuilder::makeStructSet(Element& s) {

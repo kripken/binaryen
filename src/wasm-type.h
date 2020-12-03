@@ -17,10 +17,10 @@
 #ifndef wasm_wasm_type_h
 #define wasm_wasm_type_h
 
-#include <ostream>
-#include <vector>
 #include "support/name.h"
 #include "wasm-features.h"
+#include <ostream>
+#include <vector>
 
 // TODO: At various code locations we were assuming that single types are basic
 // types, but this is going to change with the introduction of the compound
@@ -288,9 +288,9 @@ struct Field {
   bool mutable_;
   Name name;
 
-  Field(Type type, bool mutable_, Name name=Name())
+  Field(Type type, bool mutable_, Name name = Name())
     : type(type), packedType(not_packed), mutable_(mutable_), name(name) {}
-  Field(PackedType packedType, bool mutable_, Name name=Name())
+  Field(PackedType packedType, bool mutable_, Name name = Name())
     : type(Type::i32), packedType(packedType), mutable_(mutable_), name(name) {}
 
   constexpr bool isPacked() const {
