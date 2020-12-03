@@ -189,6 +189,11 @@ ExceptionPackage Literal::getExceptionPackage() const {
   return *exn;
 }
 
+std::shared_ptr<Literals> Literal::getGCData() const {
+  assert(type.isStruct() || type.isArray());
+  return gcData;
+}
+
 Literal Literal::castToF32() {
   assert(type == Type::i32);
   Literal ret(Type::f32);

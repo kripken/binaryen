@@ -391,6 +391,22 @@ bool Type::isRtt() const {
   }
 }
 
+bool Type::isStruct() const {
+  if (isBasic()) {
+    return false;
+  } else {
+    return getTypeInfo(*this)->isStruct();
+  }
+}
+
+bool Type::isArray() const {
+  if (isBasic()) {
+    return false;
+  } else {
+    return getTypeInfo(*this)->isArray();
+  }
+}
+
 bool Type::operator<(const Type& other) const {
   auto comp = [](const Type& a, const Type& b) {
     if (a.isBasic() && b.isBasic()) {
