@@ -226,9 +226,6 @@ void WasmBinaryWriter::writeTypes() {
           writeType(type);
         }
       }
-    } else if (type.isArray()) {
-      o << S32LEB(BinaryConsts::EncodedType::Array);
-      writeField(type.getArray().element);
     } else if (type.isStruct()) {
       o << S32LEB(BinaryConsts::EncodedType::Struct);
       auto fields = type.getStruct().fields;
@@ -236,6 +233,9 @@ void WasmBinaryWriter::writeTypes() {
       for (const auto& field : fields) {
         writeField(field);
       }
+    } else if (type.isArray()) {
+      o << S32LEB(BinaryConsts::EncodedType::Array);
+      writeField(type.getArray().element);
     } else {
       WASM_UNREACHABLE("TODO GC type writing");
     }
@@ -505,7 +505,7 @@ uint32_t WasmBinaryWriter::getEventIndex(Name name) const {
   return it->second;
 }
 
-uint32_t WasmBinaryWriter::getTypeIndex(Signature sig) const {
+uint32_t WasmBinaryWriter::getTypeIndex(HeapType sig) const {
   auto it = typeIndices.find(sig);
 #ifndef NDEBUG
   if (it == typeIndices.end()) {
@@ -974,17 +974,13 @@ void WasmBinaryWriter::finishUp() {
 
 void WasmBinaryWriter::writeType(Type type) {
   if (type.isRef()) {
-    auto heapType = type.getHeapType();
-    // TODO: fully handle non-signature reference types (GC), and in reading
-    if (heapType.isSignature()) {
-      if (type.isNullable()) {
-        o << S32LEB(BinaryConsts::EncodedType::nullable);
-      } else {
-        o << S32LEB(BinaryConsts::EncodedType::nonnullable);
-      }
-      writeHeapType(heapType);
-      return;
+    if (type.isNullable()) {
+      o << S32LEB(BinaryConsts::EncodedType::nullable);
+    } else {
+      o << S32LEB(BinaryConsts::EncodedType::nonnullable);
     }
+    writeHeapType(type.getHeapType());
+    return;
   }
   int ret = 0;
   TODO_SINGLE_COMPOUND(type);
@@ -1033,9 +1029,8 @@ void WasmBinaryWriter::writeType(Type type) {
 }
 
 void WasmBinaryWriter::writeHeapType(HeapType type) {
-  if (type.isSignature()) {
-    auto sig = type.getSignature();
-    o << S32LEB(getTypeIndex(sig));
+  if (type.isSignature() || type.isStruct() || type.isArray()) {
+    o << S32LEB(getTypeIndex(type));
     return;
   }
   int ret = 0;
