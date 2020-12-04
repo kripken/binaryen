@@ -19,6 +19,21 @@
     (local (ref null $struct.B))
     (local (ref null $vector))
     (local (ref null $matrix))
+    (drop
+      (local.get $x)
+    )
+    (drop
+      (struct.get $struct.A 0 (local.get $x))
+    )
+    (drop
+      (struct.get $struct.A 1 (local.get $x))
+    )
+    (drop
+      (struct.get $struct.A 2 (local.get $x))
+    )
+    (drop
+      (struct.get $struct.A $named (local.get $x))
+    )
     (unreachable)
   )
 )

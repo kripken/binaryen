@@ -10,6 +10,29 @@
   (local $2 (ref null ${mut:i64_{i32_f32_f64}_mut:{i32_f32_f64}}))
   (local $3 (ref null $[mut:f64]))
   (local $4 (ref null $[[mut:f64]]))
+  (drop
+   (local.get $x)
+  )
+  (drop
+   (struct.get (ref null ${i32_f32_f64}) 0
+    (local.get $x)
+   )
+  )
+  (drop
+   (struct.get (ref null ${i32_f32_f64}) 1
+    (local.get $x)
+   )
+  )
+  (drop
+   (struct.get (ref null ${i32_f32_f64}) 2
+    (local.get $x)
+   )
+  )
+  (drop
+   (struct.get (ref null ${i32_f32_f64}) 2
+    (local.get $x)
+   )
+  )
   (unreachable)
  )
 )
