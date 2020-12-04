@@ -2456,7 +2456,17 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
     if (field.mutable_) {
       o << "(mut ";
     }
-    o << TypeName(field.type);
+    if (field.type == Type::i32 && field.packedType != Field::not_packed) {
+      if (field.packedType == Field::i8) {
+        o << "i8";
+      } else if (field.packedType == Field::i16) {
+        o << "i16";
+      } else {
+        WASM_UNREACHABLE("invalid packed type");
+      }
+    } else {
+      o << TypeName(field.type);
+    }
     if (field.mutable_) {
       o << ')';
     }

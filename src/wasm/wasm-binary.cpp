@@ -1062,7 +1062,17 @@ void WasmBinaryWriter::writeHeapType(HeapType type) {
 }
 
 void WasmBinaryWriter::writeField(const Field& field) {
-  writeType(field.type);
+  if (field.type == Type::i32 && field.packedType != Field::not_packed) {
+    if (field.packedType == Field::i8) {
+      o << S32LEB(BinaryConsts::EncodedType::i8);
+    } else if (field.packedType == Field::i16) {
+      o << S32LEB(BinaryConsts::EncodedType::i16);
+    } else {
+      WASM_UNREACHABLE("invalid packed type");
+    }
+  } else {
+    writeType(field.type);
+  }
   o << U32LEB(field.mutable_);
 }
 
@@ -1408,6 +1418,19 @@ HeapType WasmBinaryBuilder::getHeapType() {
 }
 
 Field WasmBinaryBuilder::getField() {
+  // Peek at the next value, which may be a valid wasm type, or one of the types
+  // only possible in a field
+  auto next = getInt8();
+  if (next == BinaryConsts::EncodedType::i8) {
+    auto mutable_ = getU32LEB();
+    return Field(Field::i8, mutable_);
+  }
+  if (next == BinaryConsts::EncodedType::i16) {
+    auto mutable_ = getU32LEB();
+    return Field(Field::i16, mutable_);
+  }
+  // It's a regular wasm value.
+  ungetInt8();
   auto type = getConcreteType();
   auto mutable_ = getU32LEB();
   return Field(type, mutable_);
