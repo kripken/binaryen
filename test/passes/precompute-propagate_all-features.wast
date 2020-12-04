@@ -200,3 +200,5 @@
    )
   )
 )
+
+;; struct.get where the strcut is through a local
