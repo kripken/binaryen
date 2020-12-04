@@ -1911,8 +1911,7 @@ void BinaryInstWriter::visitStructNew(StructNew* curr) {
 
 void BinaryInstWriter::visitStructGet(StructGet* curr) {
   const auto& heapType = curr->value->type.getHeapType();
-  const auto& field =
-      heapType.getStruct().fields[curr->index];
+  const auto& field = heapType.getStruct().fields[curr->index];
   int8_t op;
   if (field.type != Type::i32 || field.packedType == Field::not_packed) {
     op = BinaryConsts::StructGet;
@@ -1921,8 +1920,7 @@ void BinaryInstWriter::visitStructGet(StructGet* curr) {
   } else {
     op = BinaryConsts::StructGetU;
   }
-  o << int8_t(op)
-    << U32LEB(parent.getTypeIndex(heapType))
+  o << int8_t(op) << U32LEB(parent.getTypeIndex(heapType))
     << U32LEB(curr->index);
 }
 
