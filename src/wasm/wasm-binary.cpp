@@ -1525,15 +1525,15 @@ void WasmBinaryBuilder::readTypes() {
       }
       types.emplace_back(Signature(Type(params), Type(results)));
     } else if (form == BinaryConsts::EncodedType::Struct) {
-      Struct struct_;
+      FieldList fields;
       size_t numFields = getU32LEB();
-      BYN_TRACE("num fields: " << numParams << std::endl);
+      BYN_TRACE("num fields: " << numFields << std::endl);
       for (size_t j = 0; j < numFields; j++) {
-        struct_.fields.push_back(getField());
+        fields.push_back(getField());
       }
-      types.emplace_back(struct_);
+      types.emplace_back(Struct(fields));
     } else if (form == BinaryConsts::EncodedType::Array) {
-      types.emplace_back(Array(getField());
+      types.emplace_back(Array(getField()));
     } else {
       throwError("bad type form " + std::to_string(form));
     }
