@@ -1718,8 +1718,17 @@ struct PrintExpressionContents
     WASM_UNREACHABLE("TODO (gc): struct.new");
   }
   void visitStructGet(StructGet* curr) {
-    // TODO: packed
-    printMedium(o, "struct.get ");
+    const auto& field =
+        curr->value->type.getHeapType().getStruct().fields[curr->index];
+    if (field.type == Type::i32 && field.packedType != Field::not_packed) {
+      if (curr->signed_) {
+        printMedium(o, "struct.get_s ");
+      } else {
+        printMedium(o, "struct.get_u ");
+      }
+    } else {
+      printMedium(o, "struct.get ");
+    }
     o << TypeName(curr->value->type) << ' ';
     o << curr->index;
   }
