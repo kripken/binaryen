@@ -1383,7 +1383,7 @@ Type WasmBinaryBuilder::getType(int initial) {
     case BinaryConsts::EncodedType::i31ref:
       return Type::i31ref;
     default:
-      throwError("invalid wasm type: " + std::to_string(type));
+      throwError("invalid wasm type: " + std::to_string(initial));
   }
   WASM_UNREACHABLE("unexpected type");
 }
@@ -1421,15 +1421,14 @@ HeapType WasmBinaryBuilder::getHeapType() {
 }
 
 Field WasmBinaryBuilder::getField() {
-  // Peek at the next value, which may be a valid wasm type, or one of the types
-  // only possible in a field.
+  // The value may be a general wasm type, or one of the types only possible in
+  // a field.
   auto initial = getS32LEB();
-std::cout << "get field 0x" << std::hex << int(int8_t(initial)) << " : " << int(int8_t(BinaryConsts::EncodedType::i8)) << " : " << int(int8_t(BinaryConsts::EncodedType::i8) == initial) << '\n';
-  if (initial == int8_t(BinaryConsts::EncodedType::i8)) {
+  if (initial == BinaryConsts::EncodedType::i8) {
     auto mutable_ = getU32LEB();
     return Field(Field::i8, mutable_);
   }
-  if (initial == int8_t(BinaryConsts::EncodedType::i16)) {
+  if (initial == BinaryConsts::EncodedType::i16) {
     auto mutable_ = getU32LEB();
     return Field(Field::i16, mutable_);
   }
