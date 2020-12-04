@@ -1407,6 +1407,12 @@ HeapType WasmBinaryBuilder::getHeapType() {
   WASM_UNREACHABLE("unexpected type");
 }
 
+Field WasmBinaryBuilder::getField() {
+  auto type = getConcreteType();
+  auto mutable_ = getU32LEB();
+  return Field(type, mutable_);
+}
+
 Type WasmBinaryBuilder::getConcreteType() {
   auto type = getType();
   if (!type.isConcrete()) {
@@ -1503,23 +1509,34 @@ void WasmBinaryBuilder::readTypes() {
   BYN_TRACE("num: " << numTypes << std::endl);
   for (size_t i = 0; i < numTypes; i++) {
     BYN_TRACE("read one\n");
-    std::vector<Type> params;
-    std::vector<Type> results;
     auto form = getS32LEB();
-    if (form != BinaryConsts::EncodedType::Func) {
-      throwError("bad signature form " + std::to_string(form));
+    if (form == BinaryConsts::EncodedType::Func) {
+      std::vector<Type> params;
+      std::vector<Type> results;
+      size_t numParams = getU32LEB();
+      BYN_TRACE("num params: " << numParams << std::endl);
+      for (size_t j = 0; j < numParams; j++) {
+        params.push_back(getConcreteType());
+      }
+      auto numResults = getU32LEB();
+      BYN_TRACE("num results: " << numResults << std::endl);
+      for (size_t j = 0; j < numResults; j++) {
+        results.push_back(getConcreteType());
+      }
+      types.emplace_back(Signature(Type(params), Type(results)));
+    } else if (form == BinaryConsts::EncodedType::Struct) {
+      Struct struct_;
+      size_t numFields = getU32LEB();
+      BYN_TRACE("num fields: " << numParams << std::endl);
+      for (size_t j = 0; j < numFields; j++) {
+        struct_.fields.push_back(getField());
+      }
+      types.emplace_back(struct_);
+    } else if (form == BinaryConsts::EncodedType::Array) {
+      types.emplace_back(Array(getField());
+    } else {
+      throwError("bad type form " + std::to_string(form));
     }
-    size_t numParams = getU32LEB();
-    BYN_TRACE("num params: " << numParams << std::endl);
-    for (size_t j = 0; j < numParams; j++) {
-      params.push_back(getConcreteType());
-    }
-    auto numResults = getU32LEB();
-    BYN_TRACE("num results: " << numResults << std::endl);
-    for (size_t j = 0; j < numResults; j++) {
-      results.push_back(getConcreteType());
-    }
-    types.emplace_back(Signature(Type(params), Type(results)));
   }
 }
 

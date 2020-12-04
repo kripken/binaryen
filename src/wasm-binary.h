@@ -1254,6 +1254,7 @@ public:
   uint64_t getUPtrLEB();
   Type getType();
   HeapType getHeapType();
+  Field getField();
   Type getConcreteType();
   Name getInlineString();
   void verifyInt8(int8_t x);
