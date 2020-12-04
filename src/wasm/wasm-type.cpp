@@ -391,13 +391,9 @@ bool Type::isRtt() const {
   }
 }
 
-bool Type::isStruct() const {
-  return isRef() && getHeapType().isStruct();
-}
+bool Type::isStruct() const { return isRef() && getHeapType().isStruct(); }
 
-bool Type::isArray() const {
-  return isRef() && getHeapType().isArray();
-}
+bool Type::isArray() const { return isRef() && getHeapType().isArray(); }
 
 bool Type::operator<(const Type& other) const {
   auto comp = [](const Type& a, const Type& b) {

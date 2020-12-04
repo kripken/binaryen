@@ -355,9 +355,9 @@ enum EncodedType {
   // exception reference type
   exnref = -0x18, // 0x68
   // func_type form
-  Func = -0x20, // 0x60
+  Func = -0x20,   // 0x60
   Struct = -0x21, // 0x5f
-  Array = -0x22, // 0x5e
+  Array = -0x22,  // 0x5e
   // block_type
   Empty = -0x40 // 0x40
 };
