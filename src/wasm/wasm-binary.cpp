@@ -5601,20 +5601,20 @@ bool WasmBinaryBuilder::maybeVisitStructGet(Expression*& out, uint32_t code) {
   switch (code) {
     case BinaryConsts::StructGet:
       curr = allocator.alloc<StructGet>();
-      // ...
       break;
     case BinaryConsts::StructGetS:
       curr = allocator.alloc<StructGet>();
-      // ...
+      curr->signed_ = true;
       break;
     case BinaryConsts::StructGetU:
       curr = allocator.alloc<StructGet>();
-      // ...
+      curr->signed_ = true;
       break;
     default:
       return false;
   }
-  WASM_UNREACHABLE("TODO (gc): struct.get");
+  auto type = getHeapType();
+  curr->index = getU32LEB();
   curr->finalize();
   out = curr;
   return true;
