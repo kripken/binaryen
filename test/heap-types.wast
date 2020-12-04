@@ -6,7 +6,8 @@
     (field $named f64)
   ))
   (type $struct.B (struct
-    (field (mut i64))
+    (field i8)
+    (field (mut i16))
     (field (ref $struct.A))
     (field (mut (ref $struct.A)))
   ))
@@ -15,10 +16,10 @@
   (type $matrix (array (ref $vector)))
 
   (func "foo" (param $x (ref $struct.A)) (result (ref $struct.B))
-    (local (ref null $struct.A))
-    (local (ref null $struct.B))
-    (local (ref null $vector))
-    (local (ref null $matrix))
+    (local $tA (ref null $struct.A))
+    (local $tB (ref null $struct.B))
+    (local $tv (ref null $vector))
+    (local $tm (ref null $matrix))
     (drop
       (local.get $x)
     )
@@ -33,6 +34,12 @@
     )
     (drop
       (struct.get $struct.A $named (local.get $x))
+    )
+    (drop
+      (struct.get_u $struct.B 0 (local.get $tB))
+    )
+    (drop
+      (struct.get_s $struct.B 0 (local.get $tB))
     )
     (unreachable)
   )
