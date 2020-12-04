@@ -50,7 +50,7 @@ int unhex(char c) {
 namespace wasm {
 
 static Name STRUCT("struct"), FIELD("field"), ARRAY("array"), I8("i8"),
-       I16("I16");
+       I16("i16");
 
 static Address getAddress(const Element* s) { return atoll(s->c_str()); }
 
@@ -2811,16 +2811,6 @@ HeapType SExpressionWasmBuilder::parseHeapType(Element& s) {
   // It's a struct or an array.
   auto parseField = [&](Element* t) {
     bool mutable_ = false;
-    if (t->isStr()) {
-      // t is a simple string name like "i32". It can be a normal wasm type, or
-      // one of the special types only available in fields.
-      if (*t == I8) {
-        return Field(Field::i8, mutable_);
-      } else if (*t == I16) {
-        return Field(Field::i16, mutable_);
-      }
-      return Field(elementToType(*t), mutable_);
-    }
     // t is a tuple, containing either
     //   TYPE
     // or
@@ -2838,6 +2828,15 @@ HeapType SExpressionWasmBuilder::parseHeapType(Element& s) {
     if (elementStartsWith(t, MUT)) {
       mutable_ = true;
       t = (*t)[1];
+    }
+    if (t->isStr()) {
+      // t is a simple string name like "i32". It can be a normal wasm type, or
+      // one of the special types only available in fields.
+      if (*t == I8) {
+        return Field(Field::i8, mutable_, name);
+      } else if (*t == I16) {
+        return Field(Field::i16, mutable_, name);
+      }
     }
     // Otherwise it's an arbitrary type.
     return Field(elementToType(*t), mutable_, name);
