@@ -11,6 +11,9 @@
     (field (ref $struct.A))
     (field (mut (ref $struct.A)))
   ))
+  (type $struct.C (struct
+    (field $named-mut (mut f32))
+  ))
 
   (type $vector (array (mut f64)))
   (type $matrix (array (ref $vector)))
@@ -18,6 +21,7 @@
   (func "foo" (param $x (ref $struct.A)) (result (ref $struct.B))
     (local $tA (ref null $struct.A))
     (local $tB (ref null $struct.B))
+    (local $tc (ref null $struct.C))
     (local $tv (ref null $vector))
     (local $tm (ref null $matrix))
     (drop

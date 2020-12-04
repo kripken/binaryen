@@ -1,6 +1,7 @@
 (module
  (type ${i32_f32_f64} (struct (field i32) (field f32) (field f64)))
  (type $[mut:f64] (array (mut f64)))
+ (type ${mut:f32} (struct (field (mut f32))))
  (type ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}} (struct (field i8) (field (mut i16)) (field (ref null ${i32_f32_f64})) (field (mut (ref null ${i32_f32_f64})))))
  (type $[[mut:f64]] (array (ref null $[mut:f64])))
  (type ${i32_f32_f64}_=>_{i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}} (func (param (ref null ${i32_f32_f64})) (result (ref null ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}}))))
@@ -8,6 +9,7 @@
  (func $0 (param $x (ref null ${i32_f32_f64})) (result (ref null ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}}))
   (local $tA (ref null ${i32_f32_f64}))
   (local $tB (ref null ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}}))
+  (local $tc (ref null ${mut:f32}))
   (local $tv (ref null $[mut:f64]))
   (local $tm (ref null $[[mut:f64]]))
   (drop
