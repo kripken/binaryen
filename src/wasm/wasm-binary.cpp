@@ -1345,14 +1345,13 @@ uint64_t WasmBinaryBuilder::getUPtrLEB() {
   return wasm.memory.is64() ? getU64LEB() : getU32LEB();
 }
 
-Type WasmBinaryBuilder::getType() {
-  int type = getS32LEB();
+Type WasmBinaryBuilder::getType(int initial) {
   // Single value types are negative; signature indices are non-negative
-  if (type >= 0) {
+  if (initial >= 0) {
     // TODO: Handle block input types properly.
-    return getSignatureByTypeIndex(type).results;
+    return getSignatureByTypeIndex(initial).results;
   }
-  switch (type) {
+  switch (initial) {
     // None only used for block signatures. TODO: Separate out?
     case BinaryConsts::EncodedType::Empty:
       return Type::none;
@@ -1389,6 +1388,10 @@ Type WasmBinaryBuilder::getType() {
   WASM_UNREACHABLE("unexpected type");
 }
 
+Type WasmBinaryBuilder::getType() {
+  return getType(getS32LEB());
+}
+
 HeapType WasmBinaryBuilder::getHeapType() {
   int type = getS32LEB(); // TODO: Actually encoded as s33
   // Single heap types are negative; heap type indices are non-negative
@@ -1419,19 +1422,19 @@ HeapType WasmBinaryBuilder::getHeapType() {
 
 Field WasmBinaryBuilder::getField() {
   // Peek at the next value, which may be a valid wasm type, or one of the types
-  // only possible in a field
-  auto next = getInt8();
-  if (next == BinaryConsts::EncodedType::i8) {
+  // only possible in a field.
+  auto initial = getS32LEB();
+std::cout << "get field 0x" << std::hex << int(int8_t(initial)) << " : " << int(int8_t(BinaryConsts::EncodedType::i8)) << " : " << int(int8_t(BinaryConsts::EncodedType::i8) == initial) << '\n';
+  if (initial == int8_t(BinaryConsts::EncodedType::i8)) {
     auto mutable_ = getU32LEB();
     return Field(Field::i8, mutable_);
   }
-  if (next == BinaryConsts::EncodedType::i16) {
+  if (initial == int8_t(BinaryConsts::EncodedType::i16)) {
     auto mutable_ = getU32LEB();
     return Field(Field::i16, mutable_);
   }
   // It's a regular wasm value.
-  ungetInt8();
-  auto type = getConcreteType();
+  auto type = getType(initial);
   auto mutable_ = getU32LEB();
   return Field(type, mutable_);
 }
@@ -1487,12 +1490,6 @@ void WasmBinaryBuilder::verifyInt64(int64_t x) {
   if (x != y) {
     throwError("surprising value");
   }
-}
-
-void WasmBinaryBuilder::ungetInt8() {
-  assert(pos > 0);
-  BYN_TRACE("ungetInt8 (at " << pos << ")\n");
-  pos--;
 }
 
 void WasmBinaryBuilder::readHeader() {
