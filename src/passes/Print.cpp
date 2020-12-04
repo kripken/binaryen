@@ -157,6 +157,10 @@ std::ostream& operator<<(std::ostream& os, HeapTypeName typeName) {
   };
 
   auto type = typeName.type;
+  if (type.isBasic()) {
+    os << type;
+    return os;
+  }
   os << '$';
   if (type.isSignature()) {
     auto sig = type.getSignature();
@@ -185,7 +189,7 @@ std::ostream& operator<<(std::ostream& os, HeapTypeName typeName) {
     printType(element.type);
     os << "]";
   } else {
-    WASM_UNREACHABLE("bad heap type");
+    os << type;
   }
   return os;
 }
@@ -2452,8 +2456,12 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
   void handleHeapType(HeapType type) {
     if (type.isSignature()) {
       handleSignature(type.getSignature());
+    } else if (type.isArray()) {
+      handleArray(type.getArray());
+    } else if (type.isStruct()) {
+      handleStruct(type.getStruct());
     } else {
-      WASM_UNREACHABLE("unsupported heap type");
+      o << type;
     }
   }
   void visitExport(Export* curr) {
