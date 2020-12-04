@@ -5608,13 +5608,14 @@ bool WasmBinaryBuilder::maybeVisitStructGet(Expression*& out, uint32_t code) {
       break;
     case BinaryConsts::StructGetU:
       curr = allocator.alloc<StructGet>();
-      curr->signed_ = true;
+      curr->signed_ = false;
       break;
     default:
       return false;
   }
   auto type = getHeapType();
   curr->index = getU32LEB();
+  curr->value = popNonVoidExpression();
   curr->finalize();
   out = curr;
   return true;
