@@ -50,7 +50,7 @@
   )
  )
  (func $ref-in-sig (param $0 f64) (result (ref null $none_=>_eqref))
-  (ref.null (func (result eqref)))
+  (ref.null $none_=>_eqref)
  )
  (func $type-only-in-tuple-local
   (local $x i32)

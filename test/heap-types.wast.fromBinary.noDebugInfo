@@ -45,6 +45,9 @@
     (local.get $2)
    )
   )
+  (drop
+   (ref.null ${i32_f32_f64})
+  )
   (unreachable)
  )
 )
