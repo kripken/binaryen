@@ -65,6 +65,13 @@
     (local.get $x)
    )
   )
+  (drop
+   (select(result (ref null ${i32_f32_f64}))
+    (local.get $x)
+    (local.get $x)
+    (i32.const 1)
+   )
+  )
   (unreachable)
  )
 )

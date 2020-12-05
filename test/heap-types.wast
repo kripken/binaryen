@@ -65,6 +65,13 @@
         (local.get $x)
       )
     )
+    (drop
+      (select (result (ref null $struct.A))
+        (local.get $x)
+        (local.get $x)
+        (i32.const 1)
+      )
+    )
     (unreachable)
   )
 )
