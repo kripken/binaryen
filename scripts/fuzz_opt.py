@@ -151,8 +151,7 @@ def randomize_fuzz_settings():
 
 
 IMPORTANT_INITIAL_CONTENTS = [
-    os.path.join('passes', 'optimize-instructions_all-features.wast'),
-    os.path.join('passes', 'optimize-instructions_fuzz-exec.wast'),
+    os.path.join('heap-types.wast'),
 ]
 IMPORTANT_INITIAL_CONTENTS = [os.path.join(shared.get_test_dir('.'), t) for t in IMPORTANT_INITIAL_CONTENTS]
 
@@ -164,11 +163,11 @@ def pick_initial_contents():
 
     INITIAL_CONTENTS = None
     # half the time don't use any initial contents
-    if random.random() < 0.5:
+    if random.random() < 0.1:
         return
     # some of the time use initial contents that are known to be especially
     # important
-    if random.random() < 0.5:
+    if random.random() < 0.9:
         test_name = random.choice(IMPORTANT_INITIAL_CONTENTS)
     else:
         test_name = random.choice(all_tests)
