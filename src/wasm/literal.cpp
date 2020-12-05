@@ -435,6 +435,13 @@ std::ostream& operator<<(std::ostream& o, Literal literal) {
     } else {
       o << "funcref(" << literal.getFunc() << ")";
     }
+  } else if (literal.isGCData()) {
+    auto data = literal.getGCData();
+    if (data) {
+      o << "[ref " << *data << ']';
+    } else {
+      o << "[ref null " << literal.type << ']';
+    }
   } else {
     TODO_SINGLE_COMPOUND(literal.type);
     switch (literal.type.getBasic()) {
