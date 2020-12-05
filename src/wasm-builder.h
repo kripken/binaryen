@@ -786,11 +786,11 @@ public:
     if (type.isNumber()) {
       return makeConst(value);
     }
-    if (type.isFunction()) {
-      if (!value.isNull()) {
-        return makeRefFunc(value.getFunc(), type);
-      }
+    if (value.isNull()) {
       return makeRefNull(type);
+    }
+    if (type.isFunction()) {
+      return makeRefFunc(value.getFunc(), type);
     }
     TODO_SINGLE_COMPOUND(type);
     switch (type.getBasic()) {

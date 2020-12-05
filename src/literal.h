@@ -102,6 +102,9 @@ public:
       if (type.isException()) {
         return !exn;
       }
+      if (isGCData()) {
+        return !gcData;
+      }
       return true;
     }
     return false;
