@@ -40,7 +40,7 @@ assert sys.version_info.major == 3, 'requires Python 3!'
 CONSTANT_FEATURE_OPTS = ['--all-features']
 
 INPUT_SIZE_MIN = 1024
-INPUT_SIZE_MEAN = 40 * 1024 # 40
+INPUT_SIZE_MEAN = 40 * 1024
 INPUT_SIZE_MAX = 5 * INPUT_SIZE_MEAN
 
 PRINT_WATS = False
@@ -151,7 +151,8 @@ def randomize_fuzz_settings():
 
 
 IMPORTANT_INITIAL_CONTENTS = [
-    os.path.join('heap-types.wast'),
+    os.path.join('passes', 'optimize-instructions_all-features.wast'),
+    os.path.join('passes', 'optimize-instructions_fuzz-exec.wast'),
 ]
 IMPORTANT_INITIAL_CONTENTS = [os.path.join(shared.get_test_dir('.'), t) for t in IMPORTANT_INITIAL_CONTENTS]
 
@@ -163,11 +164,11 @@ def pick_initial_contents():
 
     INITIAL_CONTENTS = None
     # half the time don't use any initial contents
-    if random.random() < 0.1:
+    if random.random() < 0.5:
         return
     # some of the time use initial contents that are known to be especially
     # important
-    if random.random() < 0.9:
+    if random.random() < 0.5:
         test_name = random.choice(IMPORTANT_INITIAL_CONTENTS)
     else:
         test_name = random.choice(all_tests)
