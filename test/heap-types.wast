@@ -45,6 +45,9 @@
     (drop
       (struct.get_s $struct.B 0 (local.get $tB))
     )
+    (drop
+      (ref.null $struct.A)
+    )
     (unreachable)
   )
 )

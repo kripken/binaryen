@@ -1889,28 +1889,13 @@ Expression* SExpressionWasmBuilder::makeRefNull(Element& s) {
     throw ParseException("invalid heap type reference", s.line, s.col);
   }
   auto ret = allocator.alloc<RefNull>();
-  if (s[1]->isStr()) {
-    // For example, this parses
-    //  (ref.null func)
-    ret->finalize(stringToHeapType(s[1]->str()));
+  // The heap type may be just "func", that is, the whole thing is just
+  // (ref.null func), or it may be the name of a defined type, such as
+  // (ref.null $struct.FOO)
+  if (s[1]->dollared()) {
+    ret->finalize(parseHeapType(*s[1]));
   } else {
-    // To parse a heap type, create an element around it, and call that method.
-    // That is, given (func) we wrap to (ref (func)).
-    // For example, this parses
-    //  (ref.null (func (param i32)))
-    // TODO add a helper method, but this is the only user atm, and we are
-    // waiting on https://github.com/WebAssembly/function-references/issues/42
-    Element wrapper(wasm.allocator);
-    auto& list = wrapper.list();
-    list.resize(3);
-    Element ref(wasm.allocator);
-    ref.setString(REF, false, false);
-    Element null(wasm.allocator);
-    null.setString(NULL_, false, false);
-    list[0] = &ref;
-    list[1] = &null;
-    list[2] = s[1];
-    ret->finalize(elementToType(wrapper));
+    ret->finalize(stringToHeapType(s[1]->str()));
   }
   return ret;
 }
