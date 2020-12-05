@@ -2,15 +2,15 @@
  (type ${i32_f32_f64} (struct (field i32) (field f32) (field f64)))
  (type $[mut:f64] (array (mut f64)))
  (type ${mut:f32} (struct (field (mut f32))))
- (type ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}} (struct (field i8) (field (mut i16)) (field (ref null ${i32_f32_f64})) (field (mut (ref null ${i32_f32_f64})))))
- (type $[[mut:f64]] (array (ref null $[mut:f64])))
- (type ${i32_f32_f64}_=>_{i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}} (func (param (ref null ${i32_f32_f64})) (result (ref null ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}}))))
+ (type ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}} (struct (field i8) (field (mut i16)) (field (ref null ${i32_f32_f64})) (field (mut (ref null ${i32_f32_f64})))))
+ (type $[ref?{[mut:f64]}] (array (ref null $[mut:f64])))
+ (type $ref?{{i32_f32_f64}}_=>_ref?{{i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}}} (func (param (ref null ${i32_f32_f64})) (result (ref null ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}}))))
  (export "foo" (func $0))
- (func $0 (param $0 (ref null ${i32_f32_f64})) (result (ref null ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}}))
+ (func $0 (param $0 (ref null ${i32_f32_f64})) (result (ref null ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}}))
   (local $1 (ref null ${i32_f32_f64}))
-  (local $2 (ref null ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}}))
+  (local $2 (ref null ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}}))
   (local $3 (ref null ${mut:f32}))
-  (local $4 (ref null $[[mut:f64]]))
+  (local $4 (ref null $[ref?{[mut:f64]}]))
   (local $5 (ref null $[mut:f64]))
   (drop
    (local.get $0)
@@ -36,12 +36,12 @@
    )
   )
   (drop
-   (struct.get_u (ref null ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}}) 0
+   (struct.get_u (ref null ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}}) 0
     (local.get $2)
    )
   )
   (drop
-   (struct.get_s (ref null ${i32_mut:i32_{i32_f32_f64}_mut:{i32_f32_f64}}) 0
+   (struct.get_s (ref null ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}}) 0
     (local.get $2)
    )
   )
