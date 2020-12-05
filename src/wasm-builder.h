@@ -968,13 +968,12 @@ public:
     if (curr->type.isTuple()) {
       return makeConstantExpression(Literal::makeZeros(curr->type));
     }
+    if (curr->type.isNullable()) {
+      return ExpressionManipulator::refNull(curr, curr->type);
+    }
     if (curr->type.isFunction()) {
-      if (curr->type.isNullable()) {
-        return ExpressionManipulator::refNull(curr, curr->type);
-      } else {
-        // We can't do any better, keep the original.
-        return curr;
-      }
+      // We can't do any better, keep the original.
+      return curr;
     }
     Literal value;
     // TODO: reuse node conditionally when possible for literals
