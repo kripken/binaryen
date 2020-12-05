@@ -16,32 +16,32 @@
    (local.get $0)
   )
   (drop
-   (struct.get (ref null ${i32_f32_f64}) 0
+   (struct.get ${i32_f32_f64} 0
     (local.get $0)
    )
   )
   (drop
-   (struct.get (ref null ${i32_f32_f64}) 1
+   (struct.get ${i32_f32_f64} 1
     (local.get $0)
    )
   )
   (drop
-   (struct.get (ref null ${i32_f32_f64}) 2
+   (struct.get ${i32_f32_f64} 2
     (local.get $0)
    )
   )
   (drop
-   (struct.get (ref null ${i32_f32_f64}) 2
+   (struct.get ${i32_f32_f64} 2
     (local.get $0)
    )
   )
   (drop
-   (struct.get_u (ref null ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}}) 0
+   (struct.get_u ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}} 0
     (local.get $2)
    )
   )
   (drop
-   (struct.get_s (ref null ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}}) 0
+   (struct.get_s ${i32_mut:i32_ref?{{i32_f32_f64}}_mut:ref?{{i32_f32_f64}}} 0
     (local.get $2)
    )
   )

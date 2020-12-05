@@ -1695,7 +1695,8 @@ struct PrintExpressionContents
     } else {
       printMedium(o, "struct.get ");
     }
-    o << TypeName(curr->value->type) << ' ';
+    printHeapTypeName(o, curr->value->type.getHeapType());
+    o << ' ';
     o << curr->index;
   }
   void visitStructSet(StructSet* curr) {
