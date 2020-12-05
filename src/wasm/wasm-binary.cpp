@@ -1388,9 +1388,7 @@ Type WasmBinaryBuilder::getType(int initial) {
   WASM_UNREACHABLE("unexpected type");
 }
 
-Type WasmBinaryBuilder::getType() {
-  return getType(getS32LEB());
-}
+Type WasmBinaryBuilder::getType() { return getType(getS32LEB()); }
 
 HeapType WasmBinaryBuilder::getHeapType() {
   int type = getS32LEB(); // TODO: Actually encoded as s33

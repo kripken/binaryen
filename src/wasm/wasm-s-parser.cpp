@@ -50,7 +50,7 @@ int unhex(char c) {
 namespace wasm {
 
 static Name STRUCT("struct"), FIELD("field"), ARRAY("array"), I8("i8"),
-       I16("i16");
+  I16("i16");
 
 static Address getAddress(const Element* s) { return atoll(s->c_str()); }
 

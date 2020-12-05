@@ -1685,7 +1685,7 @@ struct PrintExpressionContents
   }
   void visitStructGet(StructGet* curr) {
     const auto& field =
-        curr->value->type.getHeapType().getStruct().fields[curr->index];
+      curr->value->type.getHeapType().getStruct().fields[curr->index];
     if (field.type == Type::i32 && field.packedType != Field::not_packed) {
       if (curr->signed_) {
         printMedium(o, "struct.get_s ");
