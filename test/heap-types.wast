@@ -48,6 +48,23 @@
     (drop
       (ref.null $struct.A)
     )
+    (drop
+      (block (result (ref null $struct.A))
+        (local.get $x)
+      )
+    )
+    (drop
+      (if (result (ref null $struct.A))
+        (i32.const 1)
+        (local.get $x)
+        (local.get $x)
+      )
+    )
+    (drop
+      (loop (result (ref null $struct.A))
+        (local.get $x)
+      )
+    )
     (unreachable)
   )
 )

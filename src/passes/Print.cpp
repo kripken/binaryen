@@ -222,13 +222,13 @@ struct PrintExpressionContents
       printName(curr->name, o);
     }
     if (curr->type.isConcrete()) {
-      o << ' ' << ResultType(curr->type);
+      o << ' ' << ResultTypeName(curr->type);
     }
   }
   void visitIf(If* curr) {
     printMedium(o, "if");
     if (curr->type.isConcrete()) {
-      o << ' ' << ResultType(curr->type);
+      o << ' ' << ResultTypeName(curr->type);
     }
   }
   void visitLoop(Loop* curr) {
@@ -238,7 +238,7 @@ struct PrintExpressionContents
       printName(curr->name, o);
     }
     if (curr->type.isConcrete()) {
-      o << ' ' << ResultType(curr->type);
+      o << ' ' << ResultTypeName(curr->type);
     }
   }
   void visitBreak(Break* curr) {

@@ -48,6 +48,23 @@
   (drop
    (ref.null ${i32_f32_f64})
   )
+  (drop
+   (block $label$1 (result (ref null ${i32_f32_f64}))
+    (local.get $0)
+   )
+  )
+  (drop
+   (if (result (ref null ${i32_f32_f64}))
+    (i32.const 1)
+    (local.get $0)
+    (local.get $0)
+   )
+  )
+  (drop
+   (loop $label$4 (result (ref null ${i32_f32_f64}))
+    (local.get $0)
+   )
+  )
   (unreachable)
  )
 )
