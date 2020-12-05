@@ -1406,7 +1406,11 @@ public:
     if (flow.breaking()) {
       return flow;
     }
-    return flow.values[curr->index];
+    auto data = flow.getSingleValue().getGCData();
+    if (!data) {
+      trap("null ref");
+    }
+    return (*data)[curr->index];
   }
   Flow visitStructSet(StructSet* curr) {
     NOTE_ENTER("StructSet");
