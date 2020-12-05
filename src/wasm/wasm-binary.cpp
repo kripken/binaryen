@@ -1030,7 +1030,7 @@ void WasmBinaryWriter::writeType(Type type) {
 
 void WasmBinaryWriter::writeHeapType(HeapType type) {
   if (type.isSignature() || type.isStruct() || type.isArray()) {
-    o << S32LEB(getTypeIndex(type));
+    o << S64LEB(getTypeIndex(type)); // TODO: Actually s33
     return;
   }
   int ret = 0;
@@ -1058,7 +1058,7 @@ void WasmBinaryWriter::writeHeapType(HeapType type) {
     case HeapType::ArrayKind:
       WASM_UNREACHABLE("TODO: compound GC types");
   }
-  o << S32LEB(ret); // TODO: Actually encoded as s33
+  o << S64LEB(ret); // TODO: Actually s33
 }
 
 void WasmBinaryWriter::writeField(const Field& field) {
@@ -1391,7 +1391,7 @@ Type WasmBinaryBuilder::getType(int initial) {
 Type WasmBinaryBuilder::getType() { return getType(getS32LEB()); }
 
 HeapType WasmBinaryBuilder::getHeapType() {
-  int type = getS32LEB(); // TODO: Actually encoded as s33
+  auto type = getS64LEB(); // TODO: Actually s33
   // Single heap types are negative; heap type indices are non-negative
   if (type >= 0) {
     if (size_t(type) >= types.size()) {
