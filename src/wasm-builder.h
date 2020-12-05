@@ -732,10 +732,10 @@ public:
                            Type type,
                            bool signed_ = false) {
     auto* ret = wasm.allocator.alloc<StructGet>();
-    ret->signed_ = signed_;
     ret->index = index;
     ret->value = value;
     ret->type = type;
+    ret->signed_ = signed_;
     ret->finalize();
     return ret;
   }
