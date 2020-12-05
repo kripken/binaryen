@@ -55,6 +55,8 @@ Literal::Literal(const Literal& other) : type(other.type) {
     } else {
       new (&exn) std::unique_ptr<ExceptionPackage>();
     }
+  } else if (isGCData()) {
+    gcData = other.gcData;
   } else if (type.isFunction()) {
     func = other.func;
   } else {
@@ -190,7 +192,7 @@ ExceptionPackage Literal::getExceptionPackage() const {
 }
 
 std::shared_ptr<Literals> Literal::getGCData() const {
-  assert(type.isStruct() || type.isArray());
+  assert(isGCData());
   return gcData;
 }
 

@@ -166,6 +166,7 @@ public:
         WASM_UNREACHABLE("unexpected type");
     }
   }
+  bool isGCData() const { return type.isStruct() || type.isArray(); }
 
   static Literals makeZeros(Type type);
   static Literals makeOnes(Type type);

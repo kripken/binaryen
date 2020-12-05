@@ -1120,6 +1120,7 @@ private:
       options.add(FeatureSet::ReferenceTypes | FeatureSet::GC,
                   &Self::makeI31New);
     }
+    // TODO: struct.get and other GC things
     return (this->*pick(options))(type);
   }
 
