@@ -547,6 +547,11 @@ const HeapType& Type::getHeapType() const {
   WASM_UNREACHABLE("unexpected type");
 }
 
+const Rtt& Type::getRtt() const {
+  assert(isRtt());
+  return getTypeInfo(*this)->rtt;
+}
+
 Type Type::get(unsigned byteSize, bool float_) {
   if (byteSize < 4) {
     return Type::i32;

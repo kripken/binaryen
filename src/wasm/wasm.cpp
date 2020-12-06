@@ -1080,8 +1080,20 @@ void CallRef::finalize(Type type_) {
 // TODO (gc): ref.test
 // TODO (gc): ref.cast
 // TODO (gc): br_on_cast
-// TODO (gc): rtt.canon
-// TODO (gc): rtt.sub
+
+void RttCanon::finalize() {
+  // Nothing to do - the type must have been set already during construction.
+}
+
+void RttSub::finalize() {
+  if (ref->type == Type::unreachable) {
+    type = Type::unreachable;
+  } else {
+    auto parentRtt = parent->type.getRtt();
+    type = Type(Rtt(parentRtt.depth + 1))
+  }
+}
+
 // TODO (gc): struct.new
 
 void StructGet::finalize() {
