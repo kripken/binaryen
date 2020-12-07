@@ -1088,10 +1088,9 @@ void RttCanon::finalize() {
 void RttSub::finalize() {
   if (ref->type == Type::unreachable) {
     type = Type::unreachable;
-  } else {
-    auto parentRtt = parent->type.getRtt();
-    type = Type(Rtt(parentRtt.depth + 1))
   }
+  // Else nothing to do - the type must have been set already during
+  // construction.
 }
 
 // TODO (gc): struct.new
