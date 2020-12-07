@@ -546,6 +546,9 @@ const HeapType& Type::getHeapType() const {
         break;
     }
   }
+  if (isRtt()) {
+    return getRtt().heapType;
+  }
   WASM_UNREACHABLE("unexpected type");
 }
 
