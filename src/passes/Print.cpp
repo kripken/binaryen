@@ -1673,12 +1673,12 @@ struct PrintExpressionContents
     WASM_UNREACHABLE("TODO (gc): br_on_cast");
   }
   void visitRttCanon(RttCanon* curr) {
-    printMedium(o, "rtt.canon");
-    WASM_UNREACHABLE("TODO (gc): rtt.canon");
+    printMedium(o, "rtt.canon ");
+    printHeapTypeName(o, curr->type.getRtt().heapType);
   }
   void visitRttSub(RttSub* curr) {
-    printMedium(o, "rtt.sub");
-    WASM_UNREACHABLE("TODO (gc): rtt.sub");
+    printMedium(o, "rtt.sub ");
+    printHeapTypeName(o, curr->type.getRtt().heapType);
   }
   void visitStructNew(StructNew* curr) {
     WASM_UNREACHABLE("TODO (gc): struct.new");
@@ -2358,12 +2358,13 @@ struct PrintSExpression : public OverriddenVisitor<PrintSExpression> {
   void visitRttCanon(RttCanon* curr) {
     o << '(';
     PrintExpressionContents(currFunction, o).visit(curr);
-    WASM_UNREACHABLE("TODO (gc): rtt.canon");
   }
   void visitRttSub(RttSub* curr) {
     o << '(';
     PrintExpressionContents(currFunction, o).visit(curr);
-    WASM_UNREACHABLE("TODO (gc): rtt.sub");
+    incIndent();
+    printFullLine(curr->parent);
+    decIndent();
   }
   void visitStructNew(StructNew* curr) {
     o << '(';
