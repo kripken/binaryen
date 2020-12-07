@@ -569,7 +569,7 @@ struct CostAnalyzer : public OverriddenVisitor<CostAnalyzer, Index> {
   Index visitStructGet(StructGet* curr) {
     return 1 + nullCheckCost(curr->ref) + visit(curr->ref);
   }
-  Index visitStructGet(StructGet* curr) {
+  Index visitStructSet(StructSet* curr) {
     return 1 + nullCheckCost(curr->ref) + visit(curr->ref) + visit(curr->value);
   }
   Index visitArrayNew(ArrayNew* curr) { WASM_UNREACHABLE("TODO: GC"); }
