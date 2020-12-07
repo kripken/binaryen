@@ -151,7 +151,18 @@ struct SExprType {
 };
 
 static std::ostream& operator<<(std::ostream& o, const SExprType& localType) {
-  printTypeName(o, localType.type);
+  Type type = localType.type;
+  if (type.isTuple()) {
+    o << '(';
+    auto sep = "";
+    for (const auto& t : type) {
+      o << sep << t;
+      sep = " ";
+    }
+    o << ')';
+  } else {
+    printTypeName(o, localType.type);
+  }
   return o;
 }
 
