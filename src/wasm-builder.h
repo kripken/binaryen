@@ -717,11 +717,9 @@ public:
   }
   RttSub* makeRttSub(HeapType heapType, Expression* parent) {
     auto* ret = wasm.allocator.alloc<RttSub>();
-std::cout << "a1 " << parent->type << '\n';
+    ret->parent = parent;
     auto parentRtt = parent->type.getRtt();
-std::cout << "a2 " << parentRtt << '\n';
     ret->type = Type(Rtt(parentRtt.depth + 1, heapType));
-std::cout << "a3 " << ret->type << '\n';
     ret->finalize();
     return ret;
   }

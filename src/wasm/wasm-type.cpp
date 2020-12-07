@@ -483,6 +483,8 @@ FeatureSet Type::getFeatures() const {
       if (heapType.isStruct() || heapType.isArray()) {
         return FeatureSet::ReferenceTypes | FeatureSet::GC;
       }
+    } else if (t.isRtt()) {
+      return FeatureSet::ReferenceTypes | FeatureSet::GC;
     }
     TODO_SINGLE_COMPOUND(t);
     switch (t.getBasic()) {
