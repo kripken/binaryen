@@ -5575,21 +5575,20 @@ bool WasmBinaryBuilder::maybeVisitRttCanon(Expression*& out, uint32_t code) {
   if (code != BinaryConsts::RttCanon) {
     return false;
   }
-  auto* curr = allocator.alloc<RttCanon>();
-  WASM_UNREACHABLE("TODO (gc): rtt.canon");
-  curr->finalize();
-  out = curr;
+  auto heapType = getHeapType();
+  out = Builder(wasm).makeRttCanon(heapType);
   return true;
 }
 
 bool WasmBinaryBuilder::maybeVisitRttSub(Expression*& out, uint32_t code) {
-  if (code != BinaryConsts::RttSub) {
+  if (code != BinaryConsts::RttCanon) {
     return false;
   }
-  auto* curr = allocator.alloc<RttSub>();
-  WASM_UNREACHABLE("TODO (gc): rtt.sub");
-  curr->finalize();
-  out = curr;
+  // FIXME: the binary format may also have an extra heap type and index that
+  //        are not needed
+  auto heapType = getHeapType();
+  auto* parent = popNonVoidExpression();
+  out = Builder(wasm).makeRttSub(heapType, parent);
   return true;
 }
 
