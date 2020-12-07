@@ -22,8 +22,8 @@
 
   ;; RTT
   (type $parent (struct))
-  (type $child (struct (field i32)))
-  (type $grandchild (struct (field i32 i64)))
+  (type $child (struct i32))
+  (type $grandchild (struct i32 i64))
   (global $rttparent (rtt 0 $parent) (rtt.canon $parent))
   (global $rttchild (rtt 1 $child) (rtt.sub $child (global.get $rttparent)))
   (global $rttgrandchild (rtt 2 $grandchild) (rtt.sub $grandchild (global.get $rttchild)))
