@@ -5593,7 +5593,7 @@ bool WasmBinaryBuilder::maybeVisitRttCanon(Expression*& out, uint32_t code) {
 }
 
 bool WasmBinaryBuilder::maybeVisitRttSub(Expression*& out, uint32_t code) {
-  if (code != BinaryConsts::RttCanon) {
+  if (code != BinaryConsts::RttSub) {
     return false;
   }
   // FIXME: the binary format may also have an extra heap type and index that
