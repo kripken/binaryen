@@ -354,6 +354,8 @@ enum EncodedType {
   nonnullable = -0x15, // 0x6b
   // integer reference type
   i31ref = -0x16, // 0x6a
+  // run-time type info type
+  rtt = -0x17, // 0x69
   // exception reference type
   exnref = -0x18, // 0x68
   // func_type form
