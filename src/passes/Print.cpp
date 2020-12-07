@@ -57,29 +57,6 @@ static std::ostream& printLocal(Index index, Function* func, std::ostream& o) {
   return printName(name, o);
 }
 
-// Unlike the default format, tuple types in s-expressions should not have
-// commas.
-struct SExprType {
-  Type type;
-  SExprType(Type type) : type(type){};
-};
-
-static std::ostream& operator<<(std::ostream& o, const SExprType& localType) {
-  Type type = localType.type;
-  if (type.isTuple()) {
-    o << '(';
-    auto sep = "";
-    for (const auto& t : type) {
-      o << sep << t;
-      sep = " ";
-    }
-    o << ')';
-  } else {
-    o << type;
-  }
-  return o;
-}
-
 // Wrapper for printing a type when we try to print the type name as much as
 // possible. For example, for a signature we will print the signature's name,
 // not its contents.
@@ -88,17 +65,19 @@ struct TypeName {
   TypeName(Type type) : type(type) {}
 };
 
-struct ResultTypeName {
-  Type type;
-  ResultTypeName(Type type) : type(type) {}
-};
-
 static void
 printHeapTypeName(std::ostream& os, HeapType type, bool first = true);
 
 static void printTypeName(std::ostream& os, Type type) {
   if (type.isBasic()) {
     os << type;
+    return;
+  }
+  if (type.isRtt()) {
+    auto rtt = type.getRtt();
+    os << "(rtt " << rtt.depth << ' ';
+    printHeapTypeName(os, rtt.heapType);
+    os << ')';
     return;
   }
   if (type.isTuple()) {
@@ -164,6 +143,18 @@ static void printHeapTypeName(std::ostream& os, HeapType type, bool first) {
   }
 }
 
+// Unlike the default format, tuple types in s-expressions should not have
+// commas.
+struct SExprType {
+  Type type;
+  SExprType(Type type) : type(type){};
+};
+
+static std::ostream& operator<<(std::ostream& o, const SExprType& localType) {
+  printTypeName(o, localType.type);
+  return o;
+}
+
 std::ostream& operator<<(std::ostream& os, TypeName typeName) {
   auto type = typeName.type;
   if (type.isRef() && !type.isBasic()) {
@@ -177,6 +168,12 @@ std::ostream& operator<<(std::ostream& os, TypeName typeName) {
   }
   return os << SExprType(typeName.type);
 }
+
+// TODO: remove this
+struct ResultTypeName {
+  Type type;
+  ResultTypeName(Type type) : type(type) {}
+};
 
 std::ostream& operator<<(std::ostream& os, ResultTypeName typeName) {
   auto type = typeName.type;
