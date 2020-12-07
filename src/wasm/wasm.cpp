@@ -1086,6 +1086,7 @@ void RttCanon::finalize() {
 }
 
 void RttSub::finalize() {
+std::cout << "parent t ype: " << parent->type << '\n';
   if (parent->type == Type::unreachable) {
     type = Type::unreachable;
   }

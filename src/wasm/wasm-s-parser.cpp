@@ -2112,7 +2112,10 @@ Expression* SExpressionWasmBuilder::makeRttCanon(Element& s) {
 }
 
 Expression* SExpressionWasmBuilder::makeRttSub(Element& s) {
-  return Builder(wasm).makeRttSub(parseHeapType(*s[1]), parseExpression(*s[2]));
+  auto heapType = parseHeapType(*s[1]);
+  auto parent = parseExpression(*s[2]);
+std::cout << heapType << " : " << parent << '\n';
+  return Builder(wasm).makeRttSub(heapType, parent);
 }
 
 Expression* SExpressionWasmBuilder::makeStructNew(Element& s, bool default_) {
