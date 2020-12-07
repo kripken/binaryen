@@ -1086,7 +1086,7 @@ void RttCanon::finalize() {
 }
 
 void RttSub::finalize() {
-  if (ref->type == Type::unreachable) {
+  if (parent->type == Type::unreachable) {
     type = Type::unreachable;
   }
   // Else nothing to do - the type must have been set already during

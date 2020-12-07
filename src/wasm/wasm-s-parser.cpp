@@ -2102,17 +2102,11 @@ Expression* SExpressionWasmBuilder::makeBrOnCast(Element& s) {
 }
 
 Expression* SExpressionWasmBuilder::makeRttCanon(Element& s) {
-  auto ret = allocator.alloc<RttCanon>();
-  WASM_UNREACHABLE("TODO (gc): rtt.canon");
-  ret->finalize();
-  return ret;
+  return Builder(wasm).makeRttCanon(parseHeapType(*s[1]));
 }
 
 Expression* SExpressionWasmBuilder::makeRttSub(Element& s) {
-  auto ret = allocator.alloc<RttSub>();
-  WASM_UNREACHABLE("TODO (gc): rtt.sub");
-  ret->finalize();
-  return ret;
+  return Builder(wasm).makeRttSub(parseHeapType(*s[1]), parseExpression(*s[2]));
 }
 
 Expression* SExpressionWasmBuilder::makeStructNew(Element& s, bool default_) {
