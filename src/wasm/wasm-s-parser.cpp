@@ -50,7 +50,7 @@ int unhex(char c) {
 namespace wasm {
 
 static Name STRUCT("struct"), FIELD("field"), ARRAY("array"), I8("i8"),
-  I16("i16");
+  I16("i16"), RTT("rtt");
 
 static Address getAddress(const Element* s) { return atoll(s->c_str()); }
 
@@ -939,6 +939,12 @@ Type SExpressionWasmBuilder::elementToType(Element& s) {
       i++;
     }
     return Type(parseHeapType(*s[i]), nullable);
+  }
+  if (elementStartsWith(s, RTT)) {
+    // It's an RTT, something like (rtt N $typename)
+    auto depth = atoi(s[1]->str().c_str());
+    auto heapType = parseHeapType(*s[2]);
+    return Type(Rtt(depth, heapType));
   }
   // It's a tuple.
   std::vector<Type> types;
