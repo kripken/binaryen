@@ -1330,7 +1330,11 @@ class BrOnCast : public SpecificExpression<Expression::BrOnCastId> {
 public:
   BrOnCast(MixedArena& allocator) {}
 
-  void finalize() { WASM_UNREACHABLE("TODO (gc): br_on_cast"); }
+  Name name;
+  Expression* ref;
+  Expression* rtt;
+
+  void finalize();
 };
 
 class RttCanon : public SpecificExpression<Expression::RttCanonId> {

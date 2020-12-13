@@ -2207,11 +2207,12 @@ void FunctionValidator::visitRefCast(RefCast* curr) {
     getModule()->features.hasGC(), curr, "ref.cast requires gc to be enabled");
   if (curr->ref->type != Type::unreachable) {
     shouldBeTrue(
-      curr->ref->type.isRef(), curr, "ref.test ref must have ref type");
+      curr->ref->type.isRef(), curr, "ref.cast ref must have ref type");
   }
   if (curr->rtt->type != Type::unreachable) {
     shouldBeTrue(
-      curr->rtt->type.isRtt(), curr, "ref.test rtt must have rtt type");
+      curr->rtt->type.isRtt(), curr, "ref.cast rtt must have rtt type");
+    noteBreak(curr->name, Type(curr->rtt->type.getHeapType(), /* nullable = */ false, curr);
   }
 }
 
@@ -2219,7 +2220,14 @@ void FunctionValidator::visitBrOnCast(BrOnCast* curr) {
   shouldBeTrue(getModule()->features.hasGC(),
                curr,
                "br_on_cast requires gc to be enabled");
-  WASM_UNREACHABLE("TODO (gc): br_on_cast");
+  if (curr->ref->type != Type::unreachable) {
+    shouldBeTrue(
+      curr->ref->type.isRef(), curr, "br_on_cast ref must have ref type");
+  }
+  if (curr->rtt->type != Type::unreachable) {
+    shouldBeTrue(
+      curr->rtt->type.isRtt(), curr, "br_on_cast rtt must have rtt type");
+  }
 }
 
 void FunctionValidator::visitRttCanon(RttCanon* curr) {
