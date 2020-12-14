@@ -1378,64 +1378,91 @@ public:
     return Literal(value.geti31(curr->signed_));
   }
 
-  // Helper for ref.test and ref.cast, which share almost all their logic except
-  // for what they return.
-  template<typename T> Flow doRefCast(T* curr) {
-    Flow ref = this->visit(curr->ref);
-    if (ref.breaking()) {
-      return ref;
-    }
-    Flow rtt = this->visit(curr->rtt);
-    if (rtt.breaking()) {
-      return rtt;
-    }
-    auto gcData = ref.getSingleValue().getGCData();
-    auto isBr = curr->template is<BrOnCast>();
-    if (!gcData) {
-      // It's a null.
-      if (isBr) {
-        // Return the original ref, uncast.
-        return ref;
+  // Helper for ref.test, ref.cast, and br_on_cast which share almost all their
+  // logic except for what they return.
+  template<typename T>
+  struct CastResult {
+    enum Outcome {
+      // We took a break before doing anything.
+      Break,
+      // The input was null.
+      Null,
+      // The cast succeeded.
+      Success,
+      // The cast failed.
+      Failure
+    } outcome;
+
+    Flow breaking;
+    Literal originalRef;
+    Literal castRef;
+
+    CastResult(T* curr) {
+      Flow ref = this->visit(curr->ref);
+      if (ref.breaking()) {
+        outcome = Breaking;
+        breakingFlow = ref;
+        return;
+      }
+      Flow rtt = this->visit(curr->rtt);
+      if (rtt.breaking()) {
+        outcome = Breaking;
+        breakingFlow = rtt;
+        return;
+      }
+      originalRef = ref.getSingleValue();
+      auto gcData = originalRef.getGCData();
+      auto isBr = curr->template is<BrOnCast>();
+      if (!gcData) {
+        outcome = Null;
+        return;
+      }
+      auto isRefCast = curr->template is<RefCast>();
+      auto refRtt = gcData->rtt;
+      auto intendedRtt = rtt.getSingleValue();
+      if (!refRtt.isSubRtt(intendedRtt)) {
+        outcome = Failure;
       } else {
-        // Return a 0 of the proper type (null for cast, 0 for test).
-        return Literal::makeZero(curr->type);
+        outcome = Success;
+        castRef = Literal(gcData, curr->type);
       }
     }
-    auto isRefCast = curr->template is<RefCast>();
-    auto refRtt = gcData->rtt;
-    auto intendedRtt = rtt.getSingleValue();
-    if (!refRtt.isSubRtt(intendedRtt)) {
-      // We failed.
-      if (isRefCast) {
-        trap("cast error");
-      } else if (isBr) {
-        return ref;
-      } else {
-        return Literal(int32_t(0));
-      }
-    }
-    // The cast succeeded, return the data properly.
-    auto castRef = Literal(gcData, curr->type);
-    if (isRefCast || isBr) {
-      return castRef;
-    } else if (isBr) {
-      return Flow(curr->cast<BrOnCast>()->name, castRef);
-    } else {
-      return Literal(int32_t(1));
-    }
-  }
+  };
 
   Flow visitRefTest(RefTest* curr) {
     NOTE_ENTER("RefTest");
-    return doRefCast(curr);
+    CastResult cast(curr);
+    if (cast.outcome == cast.Break) {
+      return cast.breaking;
+    }
+    return Literal(int32_t(cast.outcome == cast.Success));
   }
   Flow visitRefCast(RefCast* curr) {
     NOTE_ENTER("RefCast");
-    return doRefCast(curr);
+    CastResult cast(curr);
+    if (cast.outcome == cast.Break) {
+      return cast.breaking;
+    }
+    if (cast.outcome == cast.Null) {
+      return Literal::makeNull(curr->type);
+    }
+    if (cast.outcome == cast.Failure) {
+      trap("cast error");
+    }
+    assert(cast.outcome == cast.Success);
+    return cast.castRef;
   }
   Flow visitBrOnCast(BrOnCast* curr) {
     NOTE_ENTER("BrOnCast");
-    return doRefCast(curr);
+    CastResult cast(curr);
+    if (cast.outcome == cast.Break) {
+      return cast.breaking;
+    }
+    if (cast.outcome == cast.Null || cast.outcome == cast.Failure) {
+      return cast.originalRef;
+    }
+    assert(cast.outcome == cast.Success);
+    return Flow(curr->name, cast.castRef);
   }
   Flow visitRttCanon(RttCanon* curr) { return Literal(curr->type); }
   Flow visitRttSub(RttSub* curr) {
