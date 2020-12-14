@@ -1401,28 +1401,28 @@ public:
     Cast cast;
     Flow ref = this->visit(curr->ref);
     if (ref.breaking()) {
-      cast.outcome = Break;
+      cast.outcome = cast.Break;
       cast.breaking = ref;
-      return;
+      return cast;
     }
     Flow rtt = this->visit(curr->rtt);
     if (rtt.breaking()) {
-      cast.outcome = Break;
+      cast.outcome = cast.Break;
       cast.breaking = rtt;
-      return;
+      return cast;
     }
     cast.originalRef = ref.getSingleValue();
-    auto gcData = originalRef.getGCData();
+    auto gcData = cast.originalRef.getGCData();
     if (!gcData) {
-      cast.outcome = Null;
-      return;
+      cast.outcome = cast.Null;
+      return cast;
     }
     auto refRtt = gcData->rtt;
     auto intendedRtt = rtt.getSingleValue();
     if (!refRtt.isSubRtt(intendedRtt)) {
-      cast.outcome = Failure;
+      cast.outcome = cast.Failure;
     } else {
-      cast.outcome = Success;
+      cast.outcome = cast.Success;
       cast.castRef = Literal(gcData, curr->type);
     }
     return cast;
