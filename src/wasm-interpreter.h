@@ -1397,8 +1397,7 @@ public:
     Literal castRef;
   };
 
-  template<typename T>
-  Cast doCast(T* curr) {
+  template<typename T> Cast doCast(T* curr) {
     Cast cast;
     Flow ref = this->visit(curr->ref);
     if (ref.breaking()) {
