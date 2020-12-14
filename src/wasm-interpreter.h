@@ -1380,8 +1380,7 @@ public:
 
   // Helper for ref.test, ref.cast, and br_on_cast which share almost all their
   // logic except for what they return.
-  template<typename T>
-  struct CastResult {
+  template<typename T> struct CastResult {
     enum Outcome {
       // We took a break before doing anything.
       Break,
