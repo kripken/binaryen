@@ -60,6 +60,7 @@ public:
   Flow(Literals& values) : values(values) {}
   Flow(Literals&& values) : values(std::move(values)) {}
   Flow(Name breakTo) : values(), breakTo(breakTo) {}
+  Flow(Name breakTo, Literal value) : values{value}, breakTo(breakTo) {}
 
   Literals values;
   Name breakTo; // if non-null, a break is going on
@@ -1389,24 +1390,36 @@ public:
       return rtt;
     }
     auto gcData = ref.getSingleValue().getGCData();
+    auto isBr = curr->template is<BrOnCast>();
     if (!gcData) {
-      // It's a null. Return a 0 of the proper type (null for cast, 0 for test).
-      return Literal::makeZero(curr->type);
+      // It's a null.
+      if (isBr) {
+        // Return the original ref, uncast.
+        return ref;
+      } else {
+        // Return a 0 of the proper type (null for cast, 0 for test).
+        return Literal::makeZero(curr->type);
+      }
     }
     auto isRefCast = curr->template is<RefCast>();
     auto refRtt = gcData->rtt;
     auto intendedRtt = rtt.getSingleValue();
     if (!refRtt.isSubRtt(intendedRtt)) {
-      // We failed. Cast traps while test returns 0.
+      // We failed.
       if (isRefCast) {
         trap("cast error");
+      } if (isBr) {
+        return ref;
       } else {
         return Literal(int32_t(0));
       }
     }
-    // The cast succeeded, return the data properly
+    // The cast succeeded, return the data properly.
+    auto castRef = Literal(gcData, curr->type);
     if (isRefCast) {
-      return Literal(gcData, curr->type);
+      return castRef;
+    } else if (isBr) {
+      return Flow(curr->name, castRef);
     } else {
       return Literal(int32_t(1));
     }
@@ -1422,7 +1435,7 @@ public:
   }
   Flow visitBrOnCast(BrOnCast* curr) {
     NOTE_ENTER("BrOnCast");
-    WASM_UNREACHABLE("TODO (gc): br_on_cast");
+    return doRefCast(curr);
   }
   Flow visitRttCanon(RttCanon* curr) { return Literal(curr->type); }
   Flow visitRttSub(RttSub* curr) {
