@@ -1380,7 +1380,7 @@ public:
 
   // Helper for ref.test, ref.cast, and br_on_cast which share almost all their
   // logic except for what they return.
-  template<typename T> struct CastResult {
+  struct Cast {
     enum Outcome {
       // We took a break before doing anything.
       Break,
@@ -1395,42 +1395,43 @@ public:
     Flow breaking;
     Literal originalRef;
     Literal castRef;
-
-    CastResult(T* curr) {
-      Flow ref = this->visit(curr->ref);
-      if (ref.breaking()) {
-        outcome = Breaking;
-        breakingFlow = ref;
-        return;
-      }
-      Flow rtt = this->visit(curr->rtt);
-      if (rtt.breaking()) {
-        outcome = Breaking;
-        breakingFlow = rtt;
-        return;
-      }
-      originalRef = ref.getSingleValue();
-      auto gcData = originalRef.getGCData();
-      auto isBr = curr->template is<BrOnCast>();
-      if (!gcData) {
-        outcome = Null;
-        return;
-      }
-      auto isRefCast = curr->template is<RefCast>();
-      auto refRtt = gcData->rtt;
-      auto intendedRtt = rtt.getSingleValue();
-      if (!refRtt.isSubRtt(intendedRtt)) {
-        outcome = Failure;
-      } else {
-        outcome = Success;
-        castRef = Literal(gcData, curr->type);
-      }
-    }
   };
+
+  template<typename T>
+  Cast doCast(T* curr) {
+    Cast cast;
+    Flow ref = this->visit(curr->ref);
+    if (ref.breaking()) {
+      cast.outcome = Break;
+      cast.breaking = ref;
+      return;
+    }
+    Flow rtt = this->visit(curr->rtt);
+    if (rtt.breaking()) {
+      cast.outcome = Break;
+      cast.breaking = rtt;
+      return;
+    }
+    cast.originalRef = ref.getSingleValue();
+    auto gcData = originalRef.getGCData();
+    if (!gcData) {
+      cast.outcome = Null;
+      return;
+    }
+    auto refRtt = gcData->rtt;
+    auto intendedRtt = rtt.getSingleValue();
+    if (!refRtt.isSubRtt(intendedRtt)) {
+      cast.outcome = Failure;
+    } else {
+      cast.outcome = Success;
+      cast.castRef = Literal(gcData, curr->type);
+    }
+    return cast;
+  }
 
   Flow visitRefTest(RefTest* curr) {
     NOTE_ENTER("RefTest");
-    CastResult cast(curr);
+    auto cast = doCast(curr);
     if (cast.outcome == cast.Break) {
       return cast.breaking;
     }
@@ -1438,7 +1439,7 @@ public:
   }
   Flow visitRefCast(RefCast* curr) {
     NOTE_ENTER("RefCast");
-    CastResult cast(curr);
+    auto cast = doCast(curr);
     if (cast.outcome == cast.Break) {
       return cast.breaking;
     }
@@ -1453,7 +1454,7 @@ public:
   }
   Flow visitBrOnCast(BrOnCast* curr) {
     NOTE_ENTER("BrOnCast");
-    CastResult cast(curr);
+    auto cast = doCast(curr);
     if (cast.outcome == cast.Break) {
       return cast.breaking;
     }
