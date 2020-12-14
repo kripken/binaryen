@@ -1408,7 +1408,8 @@ public:
       // We failed.
       if (isRefCast) {
         trap("cast error");
-      } if (isBr) {
+      }
+      if (isBr) {
         return ref;
       } else {
         return Literal(int32_t(0));
