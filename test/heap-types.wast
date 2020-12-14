@@ -169,7 +169,10 @@
     )
     (drop
       (block $out (result (ref $struct.B))
-        (br_on_cast $out $struct.B (ref.null $struct.A) (rtt.canon $struct.B))
+        (drop
+          (br_on_cast $out $struct.B (ref.null $struct.A) (rtt.canon $struct.B))
+        )
+        (unreachable)
       )
     )
   )
