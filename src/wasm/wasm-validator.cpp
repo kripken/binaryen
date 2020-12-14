@@ -2212,7 +2212,6 @@ void FunctionValidator::visitRefCast(RefCast* curr) {
   if (curr->rtt->type != Type::unreachable) {
     shouldBeTrue(
       curr->rtt->type.isRtt(), curr, "ref.cast rtt must have rtt type");
-    noteBreak(curr->name, Type(curr->rtt->type.getHeapType(), /* nullable = */ false, curr);
   }
 }
 
@@ -2227,6 +2226,7 @@ void FunctionValidator::visitBrOnCast(BrOnCast* curr) {
   if (curr->rtt->type != Type::unreachable) {
     shouldBeTrue(
       curr->rtt->type.isRtt(), curr, "br_on_cast rtt must have rtt type");
+    noteBreak(curr->name, Type(curr->rtt->type.getHeapType(), /* nullable = */ false, curr);
   }
 }
 
