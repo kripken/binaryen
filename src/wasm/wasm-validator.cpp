@@ -2227,8 +2227,7 @@ void FunctionValidator::visitBrOnCast(BrOnCast* curr) {
     shouldBeTrue(
       curr->rtt->type.isRtt(), curr, "br_on_cast rtt must have rtt type");
     noteBreak(curr->name,
-              Type(curr->rtt->type.getHeapType(),
-              /* nullable = */ false,
+              Type(curr->rtt->type.getHeapType(), /* nullable = */ false),
               curr);
   }
 }
