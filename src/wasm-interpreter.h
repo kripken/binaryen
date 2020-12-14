@@ -1416,10 +1416,10 @@ public:
     }
     // The cast succeeded, return the data properly.
     auto castRef = Literal(gcData, curr->type);
-    if (isRefCast) {
+    if (isRefCast || isBr) {
       return castRef;
     } else if (isBr) {
-      return Flow(curr->name, castRef);
+      return Flow(curr->cast<BrOnCast>()->name, castRef);
     } else {
       return Literal(int32_t(1));
     }
