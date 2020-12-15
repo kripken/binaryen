@@ -2136,8 +2136,8 @@ private:
       // give up
       return makeTrivial(type);
     }
-    // There's no unary ops for reference types
-    if (type.isRef()) {
+    // There's no unary ops for reference or rtt types
+    if (type.isRef() or type.isRtt()) {
       return makeTrivial(type);
     }
 
@@ -2364,8 +2364,8 @@ private:
       // give up
       return makeTrivial(type);
     }
-    // There's no binary ops for reference types
-    if (type.isRef()) {
+    // There's no unary ops for reference or rtt types
+    if (type.isRef() or type.isRtt()) {
       return makeTrivial(type);
     }
 
