@@ -2095,6 +2095,21 @@ private:
         builder.makeUnreachable()));
       return builder.makeRefFunc(func->name, type);
     }
+    if (type.isRtt()) {
+      auto rtt = type.getRtt();
+      auto heapType = type.getHeapType();
+      Expression* ret = builder.makeRttCanon(heapType);
+      if (rtt.hasDepth()) {
+        // Achieve the proper depth by adding unnecessary rtt.subs.
+        for (Index i = 0; i < rtt.depth; i++) {
+          ret = builder.makeRttSub(heapType, ret);
+        }
+        assert(ret->type == type);
+      } else {
+        assert(Type::isSubType(ret->type, type));
+      }
+      return ret;
+    }
     if (type.isTuple()) {
       std::vector<Expression*> operands;
       for (const auto& t : type) {
