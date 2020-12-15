@@ -492,6 +492,8 @@ public:
         return value.anyTrueI64x2();
       case AllTrueVecI64x2:
         return value.allTrueI64x2();
+      case BitmaskVecI64x2:
+        WASM_UNREACHABLE("unimp");
       case AbsVecF32x4:
         return value.absF32x4();
       case NegVecF32x4:
@@ -552,6 +554,11 @@ public:
         return value.widenLowUToVecI32x4();
       case WidenHighUVecI16x8ToVecI32x4:
         return value.widenHighUToVecI32x4();
+      case WidenLowSVecI32x4ToVecI64x2:
+      case WidenHighSVecI32x4ToVecI64x2:
+      case WidenLowUVecI32x4ToVecI64x2:
+      case WidenHighUVecI32x4ToVecI64x2:
+        WASM_UNREACHABLE("unimp");
       case InvalidUnary:
         WASM_UNREACHABLE("invalid unary op");
     }
@@ -797,6 +804,8 @@ public:
         return left.geSI32x4(right);
       case GeUVecI32x4:
         return left.geUI32x4(right);
+      case EqVecI64x2:
+        return left.eqI64x2(right);
       case EqVecF32x4:
         return left.eqF32x4(right);
       case NeVecF32x4:
@@ -1068,7 +1077,7 @@ public:
       case Bitselect:
         return c.bitselectV128(a, b);
       default:
-        // TODO: implement qfma/qfms
+        // TODO: implement qfma/qfms and signselect
         WASM_UNREACHABLE("not implemented");
     }
   }
