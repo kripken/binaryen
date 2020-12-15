@@ -1660,8 +1660,8 @@ private:
   }
 
   Expression* makeLoad(Type type) {
-    // reference types cannot be stored in memory
-    if (!allowMemory || type.isRef()) {
+    // some types cannot be stored in memory
+    if (!allowMemory || type.isRef() || type.isRtt()) {
       return makeTrivial(type);
     }
     auto* ret = makeNonAtomicLoad(type);
@@ -1766,7 +1766,8 @@ private:
   }
 
   Expression* makeStore(Type type) {
-    if (!allowMemory || type.isRef()) {
+    // some types cannot be stored in memory
+    if (!allowMemory || type.isRef() || type.isRtt()) {
       return makeTrivial(type);
     }
     auto* ret = makeNonAtomicStore(type);
