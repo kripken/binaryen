@@ -1387,7 +1387,7 @@ public:
     return Literal(value.geti31(curr->signed_));
   }
 
-  // Helper for ref.test, ref.cast, and br_on_cast which share almost all their
+  // Helper for ref.test, ref.cast, and br_on_cast, which share almost all their
   // logic except for what they return.
   struct Cast {
     enum Outcome {
@@ -1483,9 +1483,9 @@ public:
       return parent;
     }
     auto parentValue = parent.getSingleValue();
-    RttSupers newSupers = parentValue.getRttSupers();
-    newSupers.push_back(parentValue.type);
-    return Literal(newSupers, curr->type);
+    auto newSupers = std::make_unique<RttSupers>(parentValue.getRttSupers());
+    newSupers->push_back(parentValue.type);
+    return Literal(std::move(newSupers), curr->type);
   }
   Flow visitStructNew(StructNew* curr) {
     NOTE_ENTER("StructNew");
@@ -1520,7 +1520,7 @@ public:
       trap("null ref");
     }
     auto field = curr->ref->type.getHeapType().getStruct().fields[curr->index];
-    return extendForPacking((data->values)[curr->index], field, curr->signed_);
+    return extendForPacking(data->values[curr->index], field, curr->signed_);
   }
   Flow visitStructSet(StructSet* curr) {
     NOTE_ENTER("StructSet");

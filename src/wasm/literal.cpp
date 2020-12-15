@@ -59,8 +59,8 @@ Literal::Literal(std::shared_ptr<GCData> gcData, Type type)
   assert(isGCData());
 }
 
-Literal::Literal(RttSupers rttSupers, Type type)
-  : rttSupers(std::make_unique<RttSupers>(rttSupers)), type(type) {
+Literal::Literal(std::unique_ptr<RttSupers>&& rttSupers, Type type)
+  : rttSupers(std::move(rttSupers)), type(type) {
   assert(type.isRtt());
 }
 
@@ -114,6 +114,11 @@ Literal::~Literal() {
     gcData.~shared_ptr();
   } else if (type.isRtt()) {
     rttSupers.~unique_ptr();
+  } else if (type.isFunction()) {
+    // Nothing special to do.
+  } else {
+    // Basic types need no special handling.
+    assert(type.isBasic());
   }
 }
 

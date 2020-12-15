@@ -97,7 +97,7 @@ public:
   explicit Literal(std::unique_ptr<ExceptionPackage>&& exn)
     : exn(std::move(exn)), type(Type::exnref) {}
   explicit Literal(std::shared_ptr<GCData> gcData, Type type);
-  explicit Literal(RttSupers rttSupers, Type type);
+  explicit Literal(std::unique_ptr<RttSupers>&& rttSupers, Type type);
   Literal(const Literal& other);
   Literal& operator=(const Literal& other);
   ~Literal();
@@ -640,6 +640,9 @@ public:
   Literal widenHighUToVecI32x4() const;
   Literal swizzleVec8x16(const Literal& other) const;
 
+  // Checks if an RTT value is a sub-rtt of another, that is, whether GC data
+  // with this object's RTT can be successfuly cast using the other RTT
+  // according to the wasm rules for that.
   bool isSubRtt(const Literal& other) const;
 
 private:
