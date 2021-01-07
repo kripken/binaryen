@@ -618,8 +618,8 @@ switch (DELEGATE_ID) {
   case Expression::Id::StructSetId: {
     DELEGATE_START(StructSet);
     DELEGATE_FIELD_INT(StructSet, index);
-    DELEGATE_FIELD_CHILD(StructSet, ref);
     DELEGATE_FIELD_CHILD(StructSet, value);
+    DELEGATE_FIELD_CHILD(StructSet, ref);
     DELEGATE_END(StructSet);
     break;
   }
