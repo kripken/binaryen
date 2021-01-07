@@ -5732,6 +5732,8 @@ bool WasmBinaryBuilder::maybeVisitRttSub(Expression*& out, uint32_t code) {
   if (code != BinaryConsts::RttSub) {
     return false;
   }
+  // GC prototype 2 docs have 2 here, which may be removed. wasp appears to have
+  // just 1, https://github.com/WebAssembly/wasp/issues/52
   auto heapType1 = getHeapType();
   auto heapType2 = getHeapType();
   auto* parent = popNonVoidExpression();
