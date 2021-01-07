@@ -7,12 +7,12 @@
   ;; Test global initializer expressions
   (global $global_anyref (mut anyref) (ref.null any))
   (global $global_eqref (mut eqref) (ref.null eq))
-  (global $global_i31ref (mut i31ref) (i31.new (i32.const 0)))
+  (global $global_i31ref (mut (ref null i31)) (ref.null i31))
 
   ;; Test subtype relationship in global initializer expressions
   (global $global_anyref2 (mut anyref) (ref.null eq))
-  (global $global_anyref3 (mut anyref) (i31.new (i32.const 0)))
-  (global $global_eqref2 (mut eqref) (i31.new (i32.const 0)))
+  (global $global_anyref3 (mut anyref) (ref.null i31))
+  (global $global_eqref3 (mut eqref) (ref.null i31))
 
   (func $test
     (local $local_i32 i32)
