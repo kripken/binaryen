@@ -160,7 +160,8 @@
 
   ;; RTT types as parameters
   (func $rtt-param-with-depth (param $rtt (rtt 1 $parent)))
-  (func $rtt-param-without-depth (param $rtt (rtt $parent)))
+  ;; Note: rtt without a depth is not in the prototype impl v2.
+  (func $rtt-param-without-depth (param $rtt (rtt 0 $parent)))
 
   (func $rtt-operations
     (local $temp.A (ref null $struct.A))
