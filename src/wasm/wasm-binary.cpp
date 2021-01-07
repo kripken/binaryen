@@ -5833,9 +5833,9 @@ bool WasmBinaryBuilder::maybeVisitArrayGet(Expression*& out, uint32_t code) {
       return false;
   }
   auto heapType = getHeapType();
+  auto* index = popNonVoidExpression();
   auto* ref = popNonVoidExpression();
   validateHeapTypeUsingChild(ref, heapType);
-  auto* index = popNonVoidExpression();
   out = Builder(wasm).makeArrayGet(ref, index, signed_);
   return true;
 }

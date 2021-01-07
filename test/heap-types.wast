@@ -127,62 +127,6 @@
         (i32.const 2)
       )
     )
-    (array.set $vector
-      (local.get $x)
-      (i32.const 2)
-      (f64.const 2.18281828)
-    )
-    (drop
-      (array.len $vector
-        (local.get $x)
-      )
-    )
-    (drop
-      (array.get $words
-        (local.get $tw)
-        (i32.const 1)
-      )
-    )
-    (drop
-      (array.get_u $bytes
-        (local.get $tb)
-        (i32.const 2)
-      )
-    )
-    (drop
-      (array.get_s $bytes
-        (local.get $tb)
-        (i32.const 3)
-      )
-    )
     (unreachable)
-  )
-
-  ;; RTT types as parameters
-  (func $rtt-param-with-depth (param $rtt (rtt 1 $parent)))
-  ;; Note: rtt without a depth is not in the prototype impl v2.
-  (func $rtt-param-without-depth (param $rtt (rtt 0 $parent)))
-
-  (func $rtt-operations
-    (local $temp.A (ref null $struct.A))
-    (drop
-      (ref.test $struct.B (ref.null $struct.A) (rtt.canon $struct.B))
-    )
-    (drop
-      (ref.cast $struct.B (ref.null $struct.A) (rtt.canon $struct.B))
-    )
-    (drop
-      (block $out (result (ref $struct.B))
-        ;; set the value to a local with type $struct.A, showing that the value
-        ;; flowing out has the right type
-        (local.set $temp.A
-          (br_on_cast $out $struct.B (ref.null $struct.A) (rtt.canon $struct.B))
-        )
-        ;; an untaken br_on_cast, with unreachable rtt - so we cannot use the
-        ;; RTT in binaryen IR to find the cast type.
-        (br_on_cast $out $struct.B (ref.null $struct.A) (unreachable))
-        (unreachable)
-      )
-    )
   )
 )
