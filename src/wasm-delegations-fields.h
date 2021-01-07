@@ -641,9 +641,9 @@ switch (DELEGATE_ID) {
   }
   case Expression::Id::ArraySetId: {
     DELEGATE_START(ArraySet);
-    DELEGATE_FIELD_CHILD(ArrayGet, ref);
-    DELEGATE_FIELD_CHILD(ArrayGet, index);
     DELEGATE_FIELD_CHILD(ArrayGet, value);
+    DELEGATE_FIELD_CHILD(ArrayGet, index);
+    DELEGATE_FIELD_CHILD(ArrayGet, ref);
     DELEGATE_END(ArraySet);
     break;
   }

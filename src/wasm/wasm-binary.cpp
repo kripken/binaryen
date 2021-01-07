@@ -5845,10 +5845,10 @@ bool WasmBinaryBuilder::maybeVisitArraySet(Expression*& out, uint32_t code) {
     return false;
   }
   auto heapType = getHeapType();
+  auto* value = popNonVoidExpression();
+  auto* index = popNonVoidExpression();
   auto* ref = popNonVoidExpression();
   validateHeapTypeUsingChild(ref, heapType);
-  auto* index = popNonVoidExpression();
-  auto* value = popNonVoidExpression();
   out = Builder(wasm).makeArraySet(ref, index, value);
   return true;
 }
