@@ -18,7 +18,7 @@
 
   ;; Arrays
   (type $vector (array (mut f64)))
-  (type $matrix (array (ref $vector)))
+  (type $matrix (array (mut (ref $vector))))
   (type $bytes (array (mut i8)))
   (type $words (array (mut i32)))
 
@@ -157,9 +157,11 @@
     )
     (unreachable)
   )
+
   ;; RTT types as parameters
   (func $rtt-param-with-depth (param $rtt (rtt 1 $parent)))
   (func $rtt-param-without-depth (param $rtt (rtt $parent)))
+
   (func $rtt-operations
     (local $temp.A (ref null $struct.A))
     (drop
