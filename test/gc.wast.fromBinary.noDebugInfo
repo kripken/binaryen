@@ -2,16 +2,10 @@
  (type $none_=>_none (func))
  (global $global$0 (mut anyref) (ref.null any))
  (global $global$1 (mut eqref) (ref.null eq))
- (global $global$2 (mut (ref null i31)) (i31.new
-  (i32.const 0)
- ))
+ (global $global$2 (mut (ref null i31)) (ref.null i31))
  (global $global$3 (mut anyref) (ref.null eq))
- (global $global$4 (mut anyref) (i31.new
-  (i32.const 0)
- ))
- (global $global$5 (mut eqref) (i31.new
-  (i32.const 0)
- ))
+ (global $global$4 (mut anyref) (ref.null i31))
+ (global $global$5 (mut eqref) (ref.null i31))
  (func $0
   (local $0 i32)
   (local $1 anyref)
