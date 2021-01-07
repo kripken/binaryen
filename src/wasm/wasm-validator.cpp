@@ -2341,10 +2341,8 @@ void FunctionValidator::visitStructSet(StructSet* curr) {
                   field.type,
                   curr,
                   "struct.set must have the proper type");
-    shouldBeEqual(field.mutable_,
-                  Mutable,
-                  curr,
-                  "struct.set field must be mutable");
+    shouldBeEqual(
+      field.mutable_, Mutable, curr, "struct.set field must be mutable");
   }
 }
 
