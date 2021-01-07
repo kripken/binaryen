@@ -5731,11 +5731,11 @@ bool WasmBinaryBuilder::maybeVisitRttSub(Expression*& out, uint32_t code) {
   if (code != BinaryConsts::RttSub) {
     return false;
   }
-  // FIXME: the binary format may also have an extra heap type and index that
-  //        are not needed
-  auto heapType = getHeapType();
+  auto heapType1 = getHeapType();
+  auto heapType2 = getHeapType();
   auto* parent = popNonVoidExpression();
-  out = Builder(wasm).makeRttSub(heapType, parent);
+  validateHeapTypeUsingChild(parent, heapType1);
+  out = Builder(wasm).makeRttSub(heapType2, parent);
   return true;
 }
 
