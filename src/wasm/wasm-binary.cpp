@@ -5682,10 +5682,10 @@ bool WasmBinaryBuilder::maybeVisitRefTest(Expression*& out, uint32_t code) {
   }
   auto heapType1 = getHeapType();
   auto heapType2 = getHeapType();
-  auto* ref = popNonVoidExpression();
-  validateHeapTypeUsingChild(ref, heapType1);
   auto* rtt = popNonVoidExpression();
   validateHeapTypeUsingChild(rtt, heapType2);
+  auto* ref = popNonVoidExpression();
+  validateHeapTypeUsingChild(ref, heapType1);
   out = Builder(wasm).makeRefTest(ref, rtt);
   return true;
 }
@@ -5696,10 +5696,10 @@ bool WasmBinaryBuilder::maybeVisitRefCast(Expression*& out, uint32_t code) {
   }
   auto heapType1 = getHeapType();
   auto heapType2 = getHeapType();
-  auto* ref = popNonVoidExpression();
-  validateHeapTypeUsingChild(ref, heapType1);
   auto* rtt = popNonVoidExpression();
   validateHeapTypeUsingChild(rtt, heapType2);
+  auto* ref = popNonVoidExpression();
+  validateHeapTypeUsingChild(ref, heapType1);
   out = Builder(wasm).makeRefCast(ref, rtt);
   return true;
 }
@@ -5711,10 +5711,10 @@ bool WasmBinaryBuilder::maybeVisitBrOnCast(Expression*& out, uint32_t code) {
   auto name = getBreakTarget(getU32LEB()).name;
   auto heapType1 = getHeapType();
   auto heapType2 = getHeapType();
-  auto* ref = popNonVoidExpression();
-  validateHeapTypeUsingChild(ref, heapType1);
   auto* rtt = popNonVoidExpression();
   validateHeapTypeUsingChild(rtt, heapType2);
+  auto* ref = popNonVoidExpression();
+  validateHeapTypeUsingChild(ref, heapType1);
   out = Builder(wasm).makeBrOnCast(name, heapType2, ref, rtt);
   return true;
 }

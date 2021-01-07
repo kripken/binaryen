@@ -568,15 +568,15 @@ switch (DELEGATE_ID) {
   }
   case Expression::Id::RefTestId: {
     DELEGATE_START(RefTest);
-    DELEGATE_FIELD_CHILD(RefTest, ref);
     DELEGATE_FIELD_CHILD(RefTest, rtt);
+    DELEGATE_FIELD_CHILD(RefTest, ref);
     DELEGATE_END(RefTest);
     break;
   }
   case Expression::Id::RefCastId: {
     DELEGATE_START(RefCast);
-    DELEGATE_FIELD_CHILD(RefCast, ref);
     DELEGATE_FIELD_CHILD(RefCast, rtt);
+    DELEGATE_FIELD_CHILD(RefCast, ref);
     DELEGATE_END(RefCast);
     break;
   }
@@ -584,8 +584,8 @@ switch (DELEGATE_ID) {
     DELEGATE_START(BrOnCast);
     DELEGATE_FIELD_SCOPE_NAME_USE(BrOnCast, name);
     DELEGATE_FIELD_TYPE(BrOnCast, castType);
-    DELEGATE_FIELD_CHILD(BrOnCast, ref);
     DELEGATE_FIELD_CHILD(BrOnCast, rtt);
+    DELEGATE_FIELD_CHILD(BrOnCast, ref);
     DELEGATE_END(BrOnCast);
     break;
   }
