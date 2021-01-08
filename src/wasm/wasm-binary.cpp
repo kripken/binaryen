@@ -5733,13 +5733,11 @@ bool WasmBinaryBuilder::maybeVisitRttSub(Expression*& out, uint32_t code) {
   if (code != BinaryConsts::RttSub) {
     return false;
   }
-  // GC prototype 2 docs have 2 here, which may be removed. wasp appears to have
-  // just 1, https://github.com/WebAssembly/wasp/issues/52
-  auto heapType1 = getHeapType();
-  auto heapType2 = getHeapType();
+  // TODO the spec has two heaptype immediates, but the V8 prototype does not;
+  //      match that for now.
+  auto targetHeapType = getHeapType();
   auto* parent = popNonVoidExpression();
-  validateHeapTypeUsingChild(parent, heapType1);
-  out = Builder(wasm).makeRttSub(heapType2, parent);
+  out = Builder(wasm).makeRttSub(targetHeapType, parent);
   return true;
 }
 

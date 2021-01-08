@@ -1961,7 +1961,6 @@ void BinaryInstWriter::visitRttCanon(RttCanon* curr) {
 
 void BinaryInstWriter::visitRttSub(RttSub* curr) {
   o << int8_t(BinaryConsts::GCPrefix) << U32LEB(BinaryConsts::RttSub);
-  parent.writeHeapType(curr->parent->type.getRtt().heapType);
   parent.writeHeapType(curr->type.getRtt().heapType);
 }
 
