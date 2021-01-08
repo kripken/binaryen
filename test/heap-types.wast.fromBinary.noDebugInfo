@@ -3,8 +3,14 @@
  (type $[mut:f64] (array (mut f64)))
  (type ${mut:i32_f32_f64_i64} (struct (field (mut i32)) (field f32) (field f64) (field i64)))
  (type ${} (struct ))
- (type $none_=>_none (func))
  (type ${mut:f32} (struct (field (mut f32))))
+ (type $none_=>_none (func))
+<<<<<<< HEAD
+ (type ${mut:f32} (struct (field (mut f32))))
+=======
+ (type ${i32} (struct (field i32)))
+ (type ${i32_i64} (struct (field i32) (field i64)))
+>>>>>>> origin/master
  (type $[mut:i32] (array (mut i32)))
  (type $[mut:i8] (array (mut i8)))
  (type ${i8_mut:i16_ref?|{mut:i32_f32_f64}|_mut:ref?|{mut:i32_f32_f64}|} (struct (field i8) (field (mut i16)) (field (ref null ${mut:i32_f32_f64})) (field (mut (ref null ${mut:i32_f32_f64})))))
@@ -80,9 +86,15 @@
     (i32.const 1)
    )
   )
+<<<<<<< HEAD
   (struct.set ${mut:i32_f32_f64} 0
    (local.get $0)
    (i32.const 100)
+=======
+  (struct.set ${mut:f32} 0
+   (ref.null ${mut:f32})
+   (f32.const 100)
+>>>>>>> origin/master
   )
   (drop
    (struct.new_default_with_rtt ${mut:i32_f32_f64}
