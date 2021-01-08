@@ -1952,8 +1952,6 @@ void BinaryInstWriter::visitRefCast(RefCast* curr) {
 void BinaryInstWriter::visitBrOnCast(BrOnCast* curr) {
   o << int8_t(BinaryConsts::GCPrefix) << U32LEB(BinaryConsts::BrOnCast)
     << U32LEB(getBreakIndex(curr->name));
-  parent.writeHeapType(curr->ref->type.getHeapType());
-  parent.writeHeapType(curr->getCastType().getHeapType());
 }
 
 void BinaryInstWriter::visitRttCanon(RttCanon* curr) {

@@ -5709,13 +5709,14 @@ bool WasmBinaryBuilder::maybeVisitBrOnCast(Expression*& out, uint32_t code) {
     return false;
   }
   auto name = getBreakTarget(getU32LEB()).name;
-  auto heapType1 = getHeapType();
-  auto heapType2 = getHeapType();
+  // TODO the spec has two heaptype immediates, but the V8 prototype does not;
+  //      match that for now.
   auto* rtt = popNonVoidExpression();
-  validateHeapTypeUsingChild(rtt, heapType2);
+  if (!rtt->type.isRtt()) {
+    throwError("bad rtt for br_on_cast");
+  }
   auto* ref = popNonVoidExpression();
-  validateHeapTypeUsingChild(ref, heapType1);
-  out = Builder(wasm).makeBrOnCast(name, heapType2, ref, rtt);
+  out = Builder(wasm).makeBrOnCast(name, rtt->type.getHeapType(), ref, rtt);
   return true;
 }
 
