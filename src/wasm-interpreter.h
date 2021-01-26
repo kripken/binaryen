@@ -1318,7 +1318,7 @@ public:
       case RefIsNull:
         return Literal(value.isNull());
       case RefIsFunc:
-        return Literal(!value.isNull() && value.isFunction());
+        return Literal(!value.isNull() && value.type.isFunction());
       case RefIsData:
         return Literal(!value.isNull() && value.isGCData());
       case RefIsI31:
