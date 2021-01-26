@@ -2865,9 +2865,6 @@ BinaryConsts::ASTNodes WasmBinaryBuilder::readExpression(Expression*& curr) {
       visitRefNull((curr = allocator.alloc<RefNull>())->cast<RefNull>());
       break;
     case BinaryConsts::RefIsNull:
-    case BinaryConsts::RefIsFunc:
-    case BinaryConsts::RefIsData:
-    case BinaryConsts::RefIsI31:
       visitRefIs((curr = allocator.alloc<RefIs>())->cast<RefIs>(), code);
       break;
     case BinaryConsts::RefFunc:
@@ -3047,6 +3044,12 @@ BinaryConsts::ASTNodes WasmBinaryBuilder::readExpression(Expression*& curr) {
         break;
       }
       if (maybeVisitArrayLen(curr, opcode)) {
+        break;
+      }
+      if (opcode == BinaryConsts::RefIsFunc ||
+          opcode == BinaryConsts::RefIsData ||
+          opcode == BinaryConsts::RefIsI31) {
+        visitRefIs((curr = allocator.alloc<RefIs>())->cast<RefIs>(), code);
         break;
       }
       throwError("invalid code after GC prefix: " + std::to_string(opcode));
