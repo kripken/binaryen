@@ -2847,6 +2847,9 @@ BinaryConsts::ASTNodes WasmBinaryBuilder::readExpression(Expression*& curr) {
       visitRefNull((curr = allocator.alloc<RefNull>())->cast<RefNull>());
       break;
     case BinaryConsts::RefIsNull:
+    case BinaryConsts::RefIsFunc:
+    case BinaryConsts::RefIsData:
+    case BinaryConsts::RefIsI31:
       visitRefIs((curr = allocator.alloc<RefIs>())->cast<RefIs>(), code);
       break;
     case BinaryConsts::RefFunc:
@@ -5527,6 +5530,15 @@ void WasmBinaryBuilder::visitRefIs(RefIs* curr, uint8_t code) {
   switch (code) {
     case BinaryConsts::RefIsNull:
       curr->op = RefIsNull;
+      break;
+    case BinaryConsts::RefIsFunc:
+      curr->op = RefIsFunc;
+      break;
+    case BinaryConsts::RefIsData:
+      curr->op = RefIsData;
+      break;
+    case BinaryConsts::RefIsI31:
+      curr->op = RefIsI31;
       break;
     default:
       WASM_UNREACHABLE("invalid code for ref.is_*");
