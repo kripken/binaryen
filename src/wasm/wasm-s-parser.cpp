@@ -1928,14 +1928,11 @@ Expression* SExpressionWasmBuilder::makeRefIs(Element& s) {
   auto ret = allocator.alloc<RefIs>();
   if (*s[0] == REF_IS_NULL) {
     ret->op = RefIsNull;
-  }
-  if (*s[0] == REF_IS_FUNC) {
+  } else if (*s[0] == REF_IS_FUNC) {
     ret->op = RefIsFunc;
-  }
-  if (*s[0] == REF_IS_DATA) {
+  } else if (*s[0] == REF_IS_DATA) {
     ret->op = RefIsData;
-  }
-  if (*s[0] == REF_IS_I31) {
+  } else if (*s[0] == REF_IS_I31) {
     ret->op = RefIsI31;
   } else {
     WASM_UNREACHABLE("unimplemented ref.is_*");
