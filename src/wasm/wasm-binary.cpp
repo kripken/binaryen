@@ -3049,7 +3049,7 @@ BinaryConsts::ASTNodes WasmBinaryBuilder::readExpression(Expression*& curr) {
       if (opcode == BinaryConsts::RefIsFunc ||
           opcode == BinaryConsts::RefIsData ||
           opcode == BinaryConsts::RefIsI31) {
-        visitRefIs((curr = allocator.alloc<RefIs>())->cast<RefIs>(), code);
+        visitRefIs((curr = allocator.alloc<RefIs>())->cast<RefIs>(), opcode);
         break;
       }
       throwError("invalid code after GC prefix: " + std::to_string(opcode));
