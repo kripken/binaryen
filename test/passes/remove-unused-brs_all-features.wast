@@ -30,38 +30,44 @@
   (drop
    (block $func (result funcref)
     ;; a non-null function reference means we always take the br
-    (br_on_null $func (ref.func $br_on-to-br))
+    (drop
+     (br_on_func $func (ref.func $br_on-to-br))
+    )
+    (ref.func $br_on-to-br)
    )
    (call $log (i32.const 3))
-   (ref.func $br_on-to-br)
   )
   (call $log (i32.const 4))
   (drop
    (block $data (result dataref)
     ;; a non-null data reference means we always take the br
-    (br_on_null $data
-     (array.new_default_with_rtt $vector
-      (i32.const 1)
-      (rtt.canon $vector)
+    (drop
+     (br_on_data $data
+      (array.new_default_with_rtt $vector
+       (i32.const 1)
+       (rtt.canon $vector)
+      )
      )
+    )
+    (array.new_default_with_rtt $vector
+     (i32.const 2)
+     (rtt.canon $vector)
     )
    )
    (call $log (i32.const 5))
-   (array.new_default_with_rtt $vector
-    (i32.const 2)
-    (rtt.canon $vector)
-   )
   )
   (call $log (i32.const 6))
   (drop
    (block $i31 (result i31ref)
     ;; a non-null i31 reference means we always take the br
-    (br_on_null $i31
-     (i31.new (i32.const 42))
+    (drop
+     (br_on_i31 $i31
+      (i31.new (i32.const 42))
+     )
     )
+    (i31.new (i32.const 1337))
    )
    (call $log (i32.const 7))
-   (i31.new (i32.const 1337))
   )
  )
 )

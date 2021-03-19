@@ -357,13 +357,22 @@ struct RemoveUnusedBrs : public WalkerPass<PostWalker<RemoveUnusedBrs>> {
     if (curr->type == Type::unreachable) {
       return;
     }
+
     // If the type provides enough information we may be able to know if this
-    // br is taken or not. If so, a br_on* may be replaceable with a br.
+    // br is taken or not. If so, the br_on* may be unneeded. First, check for a
+    // possible null which would prevent such an optimization.
+    auto refType = curr->ref->type;
+    if (refType.isNullable()) {
+      return;
+    }
+
+    // Nulls are not possible, so specialization may be achievable, either
+    // removing the br_on* entirely or replacing it with a br.
     auto replaceWithBr = [&]() {
       replaceCurrent(Builder(*getModule()).makeBreak(curr->name, curr->ref));
       anotherCycle = true;
     };
-    auto refType = curr->ref->type;
+
     switch (curr->op) {
       case BrOnNull: {
         if (!refType.isNullable()) {
