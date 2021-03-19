@@ -33,9 +33,9 @@
     (drop
      (br_on_func $func (ref.func $br_on-to-br))
     )
+    (call $log (i32.const 3))
     (ref.func $br_on-to-br)
    )
-   (call $log (i32.const 3))
   )
   (call $log (i32.const 4))
   (drop
@@ -49,12 +49,12 @@
       )
      )
     )
+    (call $log (i32.const 5))
     (array.new_default_with_rtt $vector
      (i32.const 2)
      (rtt.canon $vector)
     )
    )
-   (call $log (i32.const 5))
   )
   (call $log (i32.const 6))
   (drop
@@ -65,9 +65,9 @@
       (i31.new (i32.const 42))
      )
     )
+    (call $log (i32.const 7))
     (i31.new (i32.const 1337))
    )
-   (call $log (i32.const 7))
   )
  )
 )
