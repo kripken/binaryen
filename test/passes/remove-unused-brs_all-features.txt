@@ -2,7 +2,7 @@
  (type $struct (struct (field (ref null $vector))))
  (type $vector (array (mut i32)))
  (type $i32_=>_none (func (param i32)))
- (type $funcref_=>_none (func (param funcref)))
+ (type $ref|func|_=>_none (func (param (ref func))))
  (type $none_=>_ref?|$struct| (func (result (ref null $struct))))
  (import "out" "log" (func $log (param i32)))
  (elem declare func $br_on-to-br)
@@ -19,15 +19,13 @@
    (ref.null $struct)
   )
  )
- (func $br_on-to-br (param $func funcref)
+ (func $br_on-to-br (param $func (ref func))
   (call $log
    (i32.const 0)
   )
   (block $null
    (drop
-    (br_on_null $null
-     (ref.func $br_on-to-br)
-    )
+    (ref.func $br_on-to-br)
    )
    (call $log
     (i32.const 1)
@@ -39,7 +37,7 @@
   (drop
    (block $func (result funcref)
     (drop
-     (br_on_func $func
+     (br $func
       (ref.func $br_on-to-br)
      )
     )
@@ -53,9 +51,9 @@
    (i32.const 4)
   )
   (drop
-   (block $data (result (ref null data))
+   (block $data (result dataref)
     (drop
-     (br_on_data $data
+     (br $data
       (array.new_default_with_rtt $vector
        (i32.const 1)
        (rtt.canon $vector)
@@ -75,7 +73,7 @@
    (i32.const 6)
   )
   (drop
-   (block $i31 (result (ref null i31))
+   (block $i31 (result i31ref)
     (drop
      (br $i31
       (i31.new
