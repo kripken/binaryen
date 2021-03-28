@@ -90,13 +90,14 @@ static std::string generateJSWrapper(Module& wasm) {
       continue; // something exported other than a function
     }
     auto* func = wasm.getFunction(exp->value);
-    ret += "if (instance.exports.hangLimitInitializer) {\n";
-    ret += "  try {\n";
-    ret += "    instance.exports.hangLimitInitializer();\n";
-    ret += "  } catch (e) {\n";
-    ret += "    console.log('exception!' /* + e */);\n";
-    ret += "  }\n";
-    ret += "}\n";
+
+    // Call the hang limit initializer. It's ok if it doesn't exist or fails,
+    // just ignore that, as this is an internal detail.
+    ret += "try {\n";
+    ret += "  instance.exports.hangLimitInitializer();\n";
+    ret += "} catch (e) {}\n";
+
+    // Call the function.
     ret += "try {\n";
     ret += std::string("  console.log('[fuzz-exec] calling ") + exp->name.str +
            "');\n";
