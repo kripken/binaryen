@@ -197,7 +197,13 @@ struct ExecutionResults {
       LiteralList arguments;
       // init hang support, if present
       if (auto* ex = wasm.getExportOrNull("hangLimitInitializer")) {
-        instance.callFunction(ex->value, arguments);
+        try {
+          instance.callFunction(ex->value, arguments);
+        } catch (const TrapException&) {
+          // May throw if the reducer replaced the body with something else,
+          // but we don't care. (If it did, and that was bad, the reducer would
+          // have rejected the change.)
+        }
       }
       // call the method
       for (const auto& param : func->sig.params) {

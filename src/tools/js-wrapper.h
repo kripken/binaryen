@@ -91,8 +91,9 @@ static std::string generateJSWrapper(Module& wasm) {
     }
     auto* func = wasm.getFunction(exp->value);
 
-    // Call the hang limit initializer. It's ok if it doesn't exist or fails,
-    // just ignore that, as this is an internal detail.
+    // Call the hang limit initializer. It may throw if the reducer replaced the
+    // body with something else, but we don't care. (If it did, and that was
+    // bad, the reducer would have rejected the change.)
     ret += "try {\n";
     ret += "  instance.exports.hangLimitInitializer();\n";
     ret += "} catch (e) {}\n";
