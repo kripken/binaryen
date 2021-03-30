@@ -38,7 +38,8 @@ struct SetGlobals : public Pass {
       auto value = nameAndValue[1];
       auto* glob = module->getGlobalOrNull(name);
       if (!glob) {
-        std::cerr << "warning: could not find global: " << name << '\n';
+        std::cerr << "warning: skipping missing global: " << name << '\n';
+        continue;
       }
       // Parse the input.
       Literal lit;
