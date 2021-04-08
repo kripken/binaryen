@@ -40,13 +40,12 @@ struct Flower
 
   std::map<Expression*, Expression**> locations;
 
-  Flower(UseDefAnalysis& analysis, Function* func) : analysis(analysis) {
-    this->setFunction(func);
+  Flower(UseDefAnalysis& analysis, Expression* curr) : analysis(analysis) {
     // create the CFG by walking the IR
-    CFGWalker<Flower, UnifiedExpressionVisitor<Flower>, Info>::doWalkFunction(
-      func);
+    walk(curr);
+
     // flow uses across blocks
-    flow(func);
+    flow(curr);
   }
 
   BasicBlock* makeBasicBlock() { return new BasicBlock(); }
@@ -67,7 +66,7 @@ struct Flower
     }
   }
 
-  void flow(Function* func) {
+  void flow(Expression* curr) {
     // This block struct is optimized for this flow process (Minimal
     // information, iteration index).
     struct FlowBlock {
@@ -80,7 +79,7 @@ struct Flower
       size_t lastTraversedIteration;
       std::vector<Expression*> actions;
       std::vector<FlowBlock*> in;
-      // Sor each index, the last def for it.
+      // For each index, the last def for it.
       // The unordered_map from BasicBlock.Info is converted into a vector
       // This speeds up search as there are usually few defs in a block, so
       // just scanning them linearly is efficient, avoiding hash computations
@@ -221,8 +220,8 @@ struct Flower
 
 // UseDefAnalysis implementation
 
-void UseDefAnalysis::analyze(Function* func) {
-  Flower flower(*this, func);
+void UseDefAnalysis::analyze(Expression* curr) {
+  Flower flower(*this, curr);
 
   locations = std::move(flower.locations);
 
@@ -243,7 +242,7 @@ void UseDefAnalysis::analyze(Function* func) {
 // LocalGraph implementation
 
 LocalGraph::LocalGraph(Function* func) : func(func) {
-  analyze(func);
+  analyze(func->body);
 }
 
 bool LocalGraph::isUse(Expression* curr) { return curr->is<LocalGet>(); }

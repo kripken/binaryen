@@ -33,12 +33,12 @@ struct DeadStoreElimination
   Pass* create() override { return new DeadStoreElimination; }
 
   void doWalkFunction(Function* curr) {
-
+#if 0
     struct Analysis : public UseDefAnalysis {
-      PassOptions& options;
-      Features features;
+      DeadStoreElimination& parent;
+      Function* func;
 
-      Analysis(PassOptions& options, Features features) : options(options), features(features) {}
+      Analysis(DeadStoreElimination& parent, Function* func) : parent(parent), func(func) {}
 
       virtual bool isUse(Expression* curr) {
         EffectAnalyzer effects(passOptions, features).visit(curr);
@@ -64,10 +64,15 @@ struct DeadStoreElimination
         useDefs[use->cast<LocalGet>()].insert(def ? def->cast<LocalSet>()
                                                : nullptr);
       }
+
+    private:
+      EffectAnalyzer getEffects(Expression* curr) {
+        return EffectAnalyzer(parent.getPassOptions(), parent.getModule()->features);
     };
 
     UseDefAnalysis analyzer;
     analyzer.analyze(curr);
+#endif
   }
 };
 
