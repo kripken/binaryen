@@ -33,7 +33,7 @@ struct DeadStoreElimination
   Pass* create() override { return new DeadStoreElimination; }
 
   void doWalkFunction(Function* curr) {
-#if 0
+
     struct Analysis : public UseDefAnalysis {
       PassOptions& options;
       Features features;
@@ -68,7 +68,6 @@ struct DeadStoreElimination
 
     UseDefAnalysis analyzer;
     analyzer.analyze(curr);
-#endif
   }
 };
 

@@ -36,10 +36,8 @@ namespace wasm {
 // used.
 //
 struct UseDefAnalysis {
-  static const Index WildcardLane = -1;
-
   // Virtual methods to be implemented by users.
-
+  
   // Check if an expression is a use.
   virtual bool isUse(Expression*) = 0;
 

@@ -40,12 +40,7 @@ struct Flower
 
   std::map<Expression*, Expression**> locations;
 
-  // The number of lanes. The wildcard lane is implemented as an extra lane at
-  // the end.
-  Index numLanes;
-
   Flower(UseDefAnalysis& analysis, Function* func) : analysis(analysis) {
-    numLanes = analysis.getNumLanes();
     this->setFunction(func);
     // create the CFG by walking the IR
     CFGWalker<Flower, UnifiedExpressionVisitor<Flower>, Info>::doWalkFunction(
@@ -55,15 +50,6 @@ struct Flower
   }
 
   BasicBlock* makeBasicBlock() { return new BasicBlock(); }
-
-  Index getLane(Expression* curr) {
-    auto lane = analysis.getLane(curr);
-    // The wildcard lane is implemented as the very last lane at the end.
-    if (lane == UseDefAnalysis::WildcardLane) {
-      return numLanes;
-    }
-    return lane;
-  }
 
   // cfg traversal work
 
@@ -76,7 +62,7 @@ struct Flower
       currBasicBlock->contents.actions.emplace_back(curr);
       locations[curr] = getCurrentPointer();
       if (analysis.isDef(curr)) {
-        currBasicBlock->contents.lastDefs[getLane(curr)] = curr;
+        currBasicBlock->contents.lastDefs[analysis.getLane(curr)] = curr;
       }
     }
   }
@@ -104,8 +90,9 @@ struct Flower
       std::vector<std::pair<Index, Expression*>> lastDefs;
     };
 
+    auto numLanes = analysis.getNumLanes();
     std::vector<std::vector<Expression*>> allUses;
-    allUses.resize(numLanes + 1);
+    allUses.resize(numLanes);
     std::vector<FlowBlock*> work;
 
     // Convert input blocks (basicBlocks) into more efficient flow blocks to
@@ -164,12 +151,12 @@ struct Flower
       for (int i = int(actions.size()) - 1; i >= 0; i--) {
         auto* action = actions[i];
         if (analysis.isUse(action)) {
-          allUses[getLane(action)].push_back(action);
+          allUses[analysis.getLane(action)].push_back(action);
         } else {
           assert(analysis.isDef(action));
 
           // This def is the only def for all those uses.
-          auto& uses = allUses[getLane(action)];
+          auto& uses = allUses[analysis.getLane(action)];
           for (auto* use : uses) {
             analysis.noteUseDef(use, action);
           }
@@ -178,8 +165,8 @@ struct Flower
       }
       // If anything is left, we must flow it back through other blocks. we
       // can do that for all uses as a whole, they will use the same results.
-      for (Index lane = 0; lane < numLanes + 1; lane++) {
-        auto& uses = allUses[lane];
+      for (Index index = 0; index < numLanes; index++) {
+        auto& uses = allUses[index];
         if (uses.empty()) {
           continue;
         }
@@ -209,7 +196,7 @@ struct Flower
                 std::find_if(pred->lastDefs.begin(),
                              pred->lastDefs.end(),
                              [&](std::pair<Index, Expression*>& value) {
-                               return value.first == lane;
+                               return value.first == index;
                              });
               if (lastDef != pred->lastDefs.end()) {
                 // There is a def here, apply it, and stop the flow.
