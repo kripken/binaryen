@@ -94,21 +94,15 @@ struct Flower
       size_t lastTraversedIteration;
       std::vector<Expression*> actions;
       std::vector<FlowBlock*> in;
-      // For each index, the last def for it.
+      // Sor each index, the last def for it.
       // The unordered_map from BasicBlock.Info is converted into a vector
       // This speeds up search as there are usually few defs in a block, so
       // just scanning them linearly is efficient, avoiding hash computations
       // (while in Info, it's convenient to have a map so we can assign them
       // easily, where the last one seen overwrites the previous; and, we do
-      // that O(1) times).
+      // that O(1)).
       std::vector<std::pair<Index, Expression*>> lastDefs;
-      // If there is a wildcard def, the last one is stored here so that we do
-      // not need to traverse all of lastDefs to see if there is one (as if one
-      // exists it affects all uses).
-      Expression* lastWildcardDef = nullptr;
     };
-
-    const auto wildcardLane = numLanes;
 
     std::vector<std::vector<Expression*>> allUses;
     allUses.resize(numLanes + 1);
@@ -147,11 +141,7 @@ struct Flower
       // Convert unordered_map to vector.
       flowBlock.lastDefs.reserve(block->contents.lastDefs.size());
       for (auto def : block->contents.lastDefs) {
-        if (def.first != wildcardLane) {
-          flowBlock.lastDefs.emplace_back(std::make_pair(def.first, def.second));
-        } else {
-          flowBlock.lastWildcardDef = def.second;
-        }
+        flowBlock.lastDefs.emplace_back(std::make_pair(def.first, def.second));
       }
     }
     assert(entryFlowBlock != nullptr);
@@ -167,42 +157,23 @@ struct Flower
         std::cout << "  last def " << lastDef << '\n';
       }
 #endif
-      // go through the block, finding each get and adding it to its lane,
+      // go through the block, finding each get and adding it to its index,
       // and seeing how defs affect that
       auto& actions = block.actions;
       // move towards the front, handling things as we go
       for (int i = int(actions.size()) - 1; i >= 0; i--) {
         auto* action = actions[i];
-        if (analysis.isDef(action)) {
-          auto applyDefToUses = [&](Index lane) {
-            // This def is the only def for all those uses.
-            auto& uses = allUses[lane];
-            for (auto* use : uses) {
-              analysis.noteUseDef(use, action);
-            }
-            uses.clear();
-          };
-          auto lane = getLane(action);
-          applyDefToUses(lane);
-          if (lane == wildcardLane) {
-            // This also applies to all other lanes.
-            for (Index i = 0; i < numLanes; i++) {
-              applyDefToUses(i);
-            }
-          } else {
-            // This def is not a wildcard. But it still affects wildcard uses.
-            // (Note that this does not clear the uses; wildcard uses are only
-            // cleared by a wildcard def.)
-            if (allUses.count(wildcardLane)) {
-              auto& uses = allUses[wildcardLane];
-              for (auto* use : uses) {
-                analysis.noteUseDef(use, action);
-              }
-            }
-          }
-        }
         if (analysis.isUse(action)) {
           allUses[getLane(action)].push_back(action);
+        } else {
+          assert(analysis.isDef(action));
+
+          // This def is the only def for all those uses.
+          auto& uses = allUses[getLane(action)];
+          for (auto* use : uses) {
+            analysis.noteUseDef(use, action);
+          }
+          uses.clear();
         }
       }
       // If anything is left, we must flow it back through other blocks. we
@@ -234,22 +205,10 @@ struct Flower
                 continue;
               }
               pred->lastTraversedIteration = currentIteration;
-              if (lane == wildcardLane) {
-                // The uses are wildcard uses. They are affected, but not
-                // cleared, but all defs, and possibly cleared if there is a
-                // wildcard def. (Clearing only in that case avoids needing to
-                // carry around state for which parts have been cleared, and is
-                // good enough for most analyses.)
-              } else {
-                // These are not wildcard uses. They are cleared by either a def
-                // of their lane, or a wildcard def.
               auto lastDef =
                 std::find_if(pred->lastDefs.begin(),
                              pred->lastDefs.end(),
                              [&](std::pair<Index, Expression*>& value) {
-                               // Wildcard lane defs are stored on the side, and
-                               // must not appear here.
-                               assert(value.first != wildcardLane);
                                return value.first == lane;
                              });
               if (lastDef != pred->lastDefs.end()) {
