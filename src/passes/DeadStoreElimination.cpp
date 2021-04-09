@@ -21,6 +21,7 @@
 
 #include <ir/effects.h>
 #include <ir/local-graph.h>
+#include <ir/utils.h>
 #include <pass.h>
 #include <wasm.h>
 
@@ -33,12 +34,12 @@ struct DeadStoreElimination
   Pass* create() override { return new DeadStoreElimination; }
 
   void doWalkFunction(Function* curr) {
-#if 0
+#if 1
+    // First, find 
     struct Analysis : public UseDefAnalysis {
       DeadStoreElimination& parent;
-      Function* func;
 
-      Analysis(DeadStoreElimination& parent, Function* func) : parent(parent), func(func) {}
+      Analysis(DeadStoreElimination& parent) : parent(parent) {}
 
       virtual bool isUse(Expression* curr) {
         EffectAnalyzer effects(passOptions, features).visit(curr);

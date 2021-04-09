@@ -57,7 +57,7 @@ struct UseDefAnalysis {
   // Main API.
 
   // Perform the analysis.
-  void analyze(Expression* curr);
+  void analyze(Function* func);
 
   // Maps expressions to the pointers to them (for easy replacing). It is
   // efficiend and convenient to collect these while performing the analysis, so

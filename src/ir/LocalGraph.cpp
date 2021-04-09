@@ -40,12 +40,12 @@ struct Flower
 
   std::map<Expression*, Expression**> locations;
 
-  Flower(UseDefAnalysis& analysis, Expression* curr) : analysis(analysis) {
+  Flower(UseDefAnalysis& analysis, Function* func) : analysis(analysis) {
     // create the CFG by walking the IR
-    walk(curr);
-
+    CFGWalker<Flower, UnifiedExpressionVisitor<Flower>, Info>::doWalkFunction(
+      func);
     // flow uses across blocks
-    flow(curr);
+    flow(func);
   }
 
   BasicBlock* makeBasicBlock() { return new BasicBlock(); }
@@ -66,7 +66,7 @@ struct Flower
     }
   }
 
-  void flow(Expression* curr) {
+  void flow(Function* func) {
     // This block struct is optimized for this flow process (Minimal
     // information, iteration index).
     struct FlowBlock {
@@ -220,8 +220,8 @@ struct Flower
 
 // UseDefAnalysis implementation
 
-void UseDefAnalysis::analyze(Expression* curr) {
-  Flower flower(*this, curr);
+void UseDefAnalysis::analyze(Function* func) {
+  Flower flower(*this, func);
 
   locations = std::move(flower.locations);
 
@@ -242,7 +242,7 @@ void UseDefAnalysis::analyze(Expression* curr) {
 // LocalGraph implementation
 
 LocalGraph::LocalGraph(Function* func) : func(func) {
-  analyze(func->body);
+  analyze(func);
 }
 
 bool LocalGraph::isUse(Expression* curr) { return curr->is<LocalGet>(); }
