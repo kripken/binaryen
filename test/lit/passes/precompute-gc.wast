@@ -3,6 +3,7 @@
 ;; RUN:   | filecheck %s
 
 (module
+ (type $struct (struct))
  ;; CHECK:      (func $test-fallthrough (result i32)
  ;; CHECK-NEXT:  (local $x funcref)
  ;; CHECK-NEXT:  (local.set $x
@@ -33,5 +34,39 @@
   (ref.is_null
    (local.get $x)
   )
+ )
+ (func $propagate-equal (result i32)
+  (local $tempresult i32)
+  (local $tempref (ref null $struct))
+  ;; assign the result, so that propagate calculates the ref.eq
+  (local.set $tempresult
+   (ref.eq
+    ;; allocate one struct
+    (local.tee $tempref
+     (struct.new_with_rtt $struct
+      (rtt.canon $struct)
+     )
+    )
+    (local.get $tempref)
+   )
+  )
+  (local.get $tempresult)
+ )
+ (func $propagate-unequal (result i32)
+  (local $tempresult i32)
+  (local $tempref (ref null $struct))
+  ;; assign the result, so that propagate calculates the ref.eq
+  (local.set $tempresult
+   ;; allocate two different structs
+   (ref.eq
+    (struct.new_with_rtt $struct
+     (rtt.canon $struct)
+    )
+    (struct.new_with_rtt $struct
+     (rtt.canon $struct)
+    )
+   )
+  )
+  (local.get $tempresult)
  )
 )
