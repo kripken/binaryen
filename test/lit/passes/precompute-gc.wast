@@ -35,6 +35,21 @@
    (local.get $x)
   )
  )
+ ;; CHECK:      (func $propagate-equal (result i32)
+ ;; CHECK-NEXT:  (local $tempresult i32)
+ ;; CHECK-NEXT:  (local $tempref (ref null $struct))
+ ;; CHECK-NEXT:  (local.set $tempresult
+ ;; CHECK-NEXT:   (ref.eq
+ ;; CHECK-NEXT:    (local.tee $tempref
+ ;; CHECK-NEXT:     (struct.new_default_with_rtt $struct
+ ;; CHECK-NEXT:      (rtt.canon $struct)
+ ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (local.get $tempref)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (i32.const 0)
+ ;; CHECK-NEXT: )
  (func $propagate-equal (result i32)
   (local $tempresult i32)
   (local $tempref (ref null $struct))
@@ -52,6 +67,14 @@
   )
   (local.get $tempresult)
  )
+ ;; CHECK:      (func $propagate-unequal (result i32)
+ ;; CHECK-NEXT:  (local $tempresult i32)
+ ;; CHECK-NEXT:  (local $tempref (ref null $struct))
+ ;; CHECK-NEXT:  (local.set $tempresult
+ ;; CHECK-NEXT:   (i32.const 0)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (i32.const 0)
+ ;; CHECK-NEXT: )
  (func $propagate-unequal (result i32)
   (local $tempresult i32)
   (local $tempref (ref null $struct))
