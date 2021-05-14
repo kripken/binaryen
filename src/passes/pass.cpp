@@ -500,7 +500,7 @@ void PassRunner::addDefaultGlobalOptimizationPostPasses() {
     addIfNoDWARFIssues("simplify-globals");
   }
   if (options.optimizeLevel >= 2 || options.shrinkLevel >= 1) {
-    //addIfNoDWARFIssues("gdse");
+    // addIfNoDWARFIssues("gdse");
   }
   addIfNoDWARFIssues("remove-unused-module-elements");
   // may allow more inlining/dae/etc., need --converge for that

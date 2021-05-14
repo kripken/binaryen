@@ -117,7 +117,7 @@ struct ComparingLocalGraph : public LocalGraph {
 class WholeProgramInfo {
 public:
   struct FunctionEffects : public ModuleUtils::CallGraphPropertyAnalysis<
-                          FunctionEffects>::FunctionInfo {
+                             FunctionEffects>::FunctionInfo {
     // Set to true when anything can happen, which is the case when calling an
     // import, doing an indirect call, etc. In such cases, we don't need to
     // bother with computing specific effects, and this is just a barrier to any
