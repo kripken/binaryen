@@ -76,14 +76,14 @@
  (func $sp-middle
   (local $old i32)
   ;; Use the stack pointer in a realistic manner. This function will be at the
-  ;; middle of a stack of calls
+  ;; middle of a stack of calls:
   ;;
   ;;   $sp-bottom  =>  $sp-middle  =>  $do-nothing
   ;;
   (local.set $old
    (global.get $sp)
   )
-  ;; As we will call $do-nothing, then trample, this store is dead
+  ;; As we will call $do-nothing, then trample, this store is dead.
   (global.set $sp
    (i32.add
     (global.get $sp)
@@ -91,6 +91,8 @@
    )
   )
   (call $do-nothing)
+  ;; This store is dead, as all our callers will immediately trample it, but the
+  ;; analysis does not handle that yet.
   (global.set $sp
    (local.get $old)
   )
