@@ -38,6 +38,7 @@ set(passes_SOURCES
   LegalizeJSInterface.cpp
   LimitSegments.cpp
   LocalCSE.cpp
+  LocalSubtyping.cpp
   LogExecution.cpp
   LoopInvariantCodeMotion.cpp
   Memory64Lowering.cpp

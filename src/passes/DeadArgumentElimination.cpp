@@ -15,10 +15,8 @@
  */
 
 //
-// Optimizes call arguments in a whole-program manner, removing ones
-// that are not used (dead).
-//
-// Specifically, this does these things:
+// Optimizes call arguments in a whole-program manner. In particular, this
+// removes ones that are not used (dead), but it also does more things:
 //
 //  * Find functions for whom an argument is always passed the same
 //    constant. If so, we can just set that local to that constant
@@ -28,6 +26,8 @@
 //    the previous point was true for an argument, then the second
 //    must as well.)
 //  * Find return values ("return arguments" ;) that are never used.
+//  * Refine the types of arguments, that is make the argument type more
+//    specific if all the passed values allow that.
 //
 // This pass does not depend on flattening, but it may be more effective,
 // as then call arguments never have side effects (which we need to
@@ -40,8 +40,10 @@
 #include "cfg/cfg-traversal.h"
 #include "ir/effects.h"
 #include "ir/element-utils.h"
+#include "ir/find_all.h"
 #include "ir/module-utils.h"
 #include "ir/type-updating.h"
+#include "ir/utils.h"
 #include "pass.h"
 #include "passes/opt-utils.h"
 #include "support/sorted_vector.h"
@@ -307,18 +309,29 @@ struct DAE : public Pass {
         allDroppedCalls[pair.first] = pair.second;
       }
     }
-    // We now have a mapping of all call sites for each function. Check which
-    // are always passed the same constant for a particular argument.
+    // If we refine return types then we will need to do more type updating
+    // at the end.
+    bool refinedReturnTypes = false;
+    // We now have a mapping of all call sites for each function, and can look
+    // for optimization opportunities.
     for (auto& pair : allCalls) {
       auto name = pair.first;
-      // We can only optimize if we see all the calls and can modify
-      // them.
+      // We can only optimize if we see all the calls and can modify them.
       if (infoMap[name].hasUnseenCalls) {
         continue;
       }
       auto& calls = pair.second;
       auto* func = module->getFunction(name);
       auto numParams = func->getNumParams();
+      // Refine argument types before doing anything else. This does not
+      // affect whether an argument is used or not, it just refines the type
+      // where possible.
+      refineArgumentTypes(func, calls, module);
+      // Refine return types as well.
+      if (refineReturnTypes(func, calls, module)) {
+        refinedReturnTypes = true;
+      }
+      // Check if all calls pass the same constant for a particular argument.
       for (Index i = 0; i < numParams; i++) {
         Literal value;
         for (auto* call : calls) {
@@ -351,6 +364,12 @@ struct DAE : public Pass {
           infoMap[name].unusedParams.insert(i);
         }
       }
+    }
+    if (refinedReturnTypes) {
+      // Changing a call expression's return type can propagate out to its
+      // parents, and so we must refinalize.
+      // TODO: We could track in which functions we actually make changes.
+      ReFinalize().run(runner, module);
     }
     // Track which functions we changed, and optimize them later if necessary.
     std::unordered_set<Function*> changed;
@@ -415,7 +434,7 @@ struct DAE : public Pass {
         if (infoMap[name].hasTailCalls) {
           continue;
         }
-        if (tailCallees.find(name) != tailCallees.end()) {
+        if (tailCallees.count(name)) {
           continue;
         }
         auto iter = allCalls.find(name);
@@ -439,7 +458,7 @@ struct DAE : public Pass {
     if (optimize && !changed.empty()) {
       OptUtils::optimizeAfterInlining(changed, module, runner);
     }
-    return !changed.empty();
+    return !changed.empty() || refinedReturnTypes;
   }
 
 private:
@@ -514,6 +533,184 @@ private:
         call->type = Type::none;
       }
     }
+  }
+
+  // Given a function and all the calls to it, see if we can refine the type of
+  // its arguments. If we only pass in a subtype, we may as well refine the type
+  // to that.
+  //
+  // This assumes that the function has no calls aside from |calls|, that is, it
+  // is not exported or called from the table or by reference.
+  void refineArgumentTypes(Function* func,
+                           const std::vector<Call*>& calls,
+                           Module* module) {
+    if (!module->features.hasGC()) {
+      return;
+    }
+    auto numParams = func->getNumParams();
+    std::vector<Type> newParamTypes;
+    newParamTypes.reserve(numParams);
+    for (Index i = 0; i < numParams; i++) {
+      auto originalType = func->getLocalType(i);
+      if (!originalType.isRef()) {
+        newParamTypes.push_back(originalType);
+        continue;
+      }
+      Type refinedType = Type::unreachable;
+      for (auto* call : calls) {
+        auto* operand = call->operands[i];
+        refinedType = Type::getLeastUpperBound(refinedType, operand->type);
+        if (refinedType == originalType) {
+          // We failed to refine this parameter to anything more specific.
+          break;
+        }
+      }
+
+      // Nothing is sent here at all; leave such optimizations to DCE.
+      if (refinedType == Type::unreachable) {
+        return;
+      }
+      newParamTypes.push_back(refinedType);
+    }
+
+    // Check if we are able to optimize here before we do the work to scan the
+    // function body.
+    if (Type(newParamTypes) == func->getParams()) {
+      return;
+    }
+
+    // In terms of parameters, we can do this. However, we must also check
+    // local operations in the body, as if the parameter is reused and written
+    // to, then those types must be taken into account as well.
+    FindAll<LocalSet> sets(func->body);
+    for (auto* set : sets.list) {
+      auto index = set->index;
+      if (func->isParam(index) &&
+          !Type::isSubType(set->value->type, newParamTypes[index])) {
+        // TODO: we could still optimize here, by creating a new local.
+        newParamTypes[index] = func->getLocalType(index);
+      }
+    }
+
+    auto newParams = Type(newParamTypes);
+    if (newParams == func->getParams()) {
+      return;
+    }
+
+    // We can do this! Update the types, including the types of gets and tees.
+    func->setParams(newParams);
+    for (auto* get : FindAll<LocalGet>(func->body).list) {
+      auto index = get->index;
+      if (func->isParam(index)) {
+        get->type = func->getLocalType(index);
+      }
+    }
+    for (auto* set : sets.list) {
+      auto index = set->index;
+      if (func->isParam(index) && set->isTee()) {
+        set->type = func->getLocalType(index);
+        set->finalize();
+      }
+    }
+
+    // Propagate the new get and set types outwards.
+    ReFinalize().walkFunctionInModule(func, module);
+  }
+
+  // See if the types returned from a function allow us to define a more refined
+  // return type for it. If so, we can update it and all calls going to it.
+  //
+  // This assumes that the function has no calls aside from |calls|, that is, it
+  // is not exported or called from the table or by reference. Exports should be
+  // fine, as should indirect calls in principle, but VMs will need to support
+  // function subtyping in indirect calls. TODO: relax this when possible
+  //
+  // Returns whether we optimized.
+  //
+  // TODO: We may be missing a global optimum here, as e.g. if a function calls
+  //       itself and returns that value, then we would not do any change here,
+  //       as one of the return values is exactly what it already is. Similar
+  //       unoptimality can happen with multiple functions, more local code in
+  //       the middle, etc.
+  bool refineReturnTypes(Function* func,
+                         const std::vector<Call*>& calls,
+                         Module* module) {
+    if (!module->features.hasGC()) {
+      return false;
+    }
+
+    Type originalType = func->getResults();
+    if (!originalType.hasRef()) {
+      // Nothing to refine.
+      return false;
+    }
+
+    // Before we do anything, we must refinalize the function, because otherwise
+    // its body may contain a block with a forced type,
+    //
+    // (func (result X)
+    //  (block (result X)
+    //   (..content with more specific type Y..)
+    //  )
+    ReFinalize().walkFunctionInModule(func, module);
+
+    Type refinedType = func->body->type;
+    if (refinedType == originalType) {
+      return false;
+    }
+
+    // Scan the body and look at the returns.
+    auto processReturnType = [&](Type type) {
+      refinedType = Type::getLeastUpperBound(refinedType, type);
+      // Return whether we still look ok to do the optimization. If this is
+      // false then we can stop here.
+      return refinedType != originalType;
+    };
+    for (auto* ret : FindAll<Return>(func->body).list) {
+      if (!processReturnType(ret->value->type)) {
+        return false;
+      }
+    }
+    for (auto* call : FindAll<Call>(func->body).list) {
+      if (call->isReturn &&
+          !processReturnType(module->getFunction(call->target)->getResults())) {
+        return false;
+      }
+    }
+    for (auto* call : FindAll<CallIndirect>(func->body).list) {
+      if (call->isReturn && !processReturnType(call->sig.results)) {
+        return false;
+      }
+    }
+    for (auto* call : FindAll<CallRef>(func->body).list) {
+      if (call->isReturn) {
+        auto targetType = call->target->type;
+        if (targetType == Type::unreachable) {
+          continue;
+        }
+        if (!processReturnType(
+              targetType.getHeapType().getSignature().results)) {
+          return false;
+        }
+      }
+    }
+    assert(refinedType != originalType);
+
+    // If the refined type is unreachable then nothing actually returns from
+    // this function.
+    // TODO: We can propagate that to the outside, and not just for GC.
+    if (refinedType == Type::unreachable) {
+      return false;
+    }
+
+    // Success. Update the type, and the calls.
+    func->setResults(refinedType);
+    for (auto* call : calls) {
+      if (call->type != Type::unreachable) {
+        call->type = refinedType;
+      }
+    }
+    return true;
   }
 };
 

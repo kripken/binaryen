@@ -1023,7 +1023,8 @@ struct RemoveUnusedBrs : public WalkerPass<PostWalker<RemoveUnusedBrs>> {
                     EffectAnalyzer(passOptions, features, curr)
                       .hasSideEffects();
                   list[0] = old;
-                  if (canReorder && !hasSideEffects) {
+                  if (canReorder && !hasSideEffects &&
+                      Properties::canEmitSelectWithArms(br->value, curr)) {
                     ExpressionManipulator::nop(list[0]);
                     replaceCurrent(
                       builder.makeSelect(br->condition, br->value, curr));
@@ -1044,8 +1045,11 @@ struct RemoveUnusedBrs : public WalkerPass<PostWalker<RemoveUnusedBrs>> {
 
       // Convert an if into a select, if possible and beneficial to do so.
       Select* selectify(If* iff) {
-        if (!iff->ifFalse || !iff->ifTrue->type.isSingle() ||
-            !iff->ifFalse->type.isSingle()) {
+        // Only an if-else can be turned into a select.
+        if (!iff->ifFalse) {
+          return nullptr;
+        }
+        if (!Properties::canEmitSelectWithArms(iff->ifTrue, iff->ifFalse)) {
           return nullptr;
         }
         if (iff->condition->type == Type::unreachable) {

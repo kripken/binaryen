@@ -330,8 +330,8 @@ struct Reducer
     loadWorking();
     reduced = 0;
     funcsSeen = 0;
-    // before we do any changes, it should be valid to write out the module:
-    // size should be as expected, and output should be as expected
+    // Before we do any changes, it should be valid to write out the module:
+    // size should be as expected, and output should be as expected.
     ProgramResult result;
     if (!writeAndTestReduction(result)) {
       std::cerr << "\n|! WARNING: writing before destructive reduction fails, "
@@ -475,35 +475,6 @@ struct Reducer
   // since we don't need to duplicate work that they do
 
   void visitExpression(Expression* curr) {
-    if (getFunction() && curr == getFunction()->body) {
-      // At the top level, we can try to reduce anything to an unreachable or a
-      // nop, and it is useful to do so when possible.
-      if (!curr->is<Unreachable>() && !curr->is<Nop>() &&
-          shouldTryToReduce(1000)) {
-        auto* save = curr;
-        Unreachable un;
-        Nop nop;
-        bool useUnreachable = getFunction()->getResults() != Type::none;
-        if (useUnreachable) {
-          replaceCurrent(&un);
-        } else {
-          replaceCurrent(&nop);
-        }
-        if (writeAndTestReduction()) {
-          if (useUnreachable) {
-            replaceCurrent(builder->makeUnreachable());
-          } else {
-            replaceCurrent(builder->makeNop());
-          }
-          std::cerr << "|        body emptied (" << getFunction()->name
-                    << ")\n";
-          noteReduction();
-          return;
-        } else {
-          replaceCurrent(save);
-        }
-      }
-    }
     // type-based reductions
     if (curr->type == Type::none) {
       if (tryToReduceCurrentToNop()) {
@@ -813,7 +784,6 @@ struct Reducer
     // try to reduce to first function. first, shrink segment elements.
     // while we are shrinking successfully, keep going exponentially.
     bool justShrank = false;
-    bool shrank = false;
 
     auto& data = segment->data;
     // when we succeed, try to shrink by more and more, similar to bisection
@@ -822,48 +792,52 @@ struct Reducer
       if (justShrank || shouldTryToReduce(bonus)) {
         auto save = data;
         for (size_t j = 0; j < skip; j++) {
-          if (!data.empty()) {
+          if (data.empty()) {
+            break;
+          } else {
             data.pop_back();
           }
         }
         justShrank = writeAndTestReduction();
         if (justShrank) {
-          std::cerr << "|      shrank segment (skip: " << skip << ")\n";
-          shrank = true;
+          std::cerr << "|      shrank segment from " << save.size() << " => "
+                    << data.size() << " (skip: " << skip << ")\n";
           noteReduction();
           skip = std::min(size_t(factor), 2 * skip);
         } else {
-          data = save;
-          break;
+          data = std::move(save);
+          return false;
         }
       }
     }
 
-    return shrank;
+    return true;
   }
 
-  void shrinkElementSegments(Module* module) {
+  void shrinkElementSegments() {
     std::cerr << "|    try to simplify elem segments\n";
-    Expression* first = nullptr;
+
+    // First, shrink segment elements.
+    bool shrank = false;
+    for (auto& segment : module->elementSegments) {
+      shrank = shrank || shrinkByReduction(segment.get(), 1);
+    }
+
+    // Second, try to replace elements with a "zero".
     auto it =
       std::find_if_not(module->elementSegments.begin(),
                        module->elementSegments.end(),
                        [&](auto& segment) { return segment->data.empty(); });
 
+    Expression* first = nullptr;
     if (it != module->elementSegments.end()) {
       first = it->get()->data[0];
     }
     if (first == nullptr) {
-      // The elements are all empty, nothing to shrink
+      // The elements are all empty, nothing left to do.
       return;
     }
 
-    // try to reduce to first function. first, shrink segment elements.
-    // while we are shrinking successfully, keep going exponentially.
-    bool shrank = false;
-    for (auto& segment : module->elementSegments) {
-      shrank = shrinkByReduction(segment.get(), 100);
-    }
     // the "opposite" of shrinking: copy a 'zero' element
     for (auto& segment : module->elementSegments) {
       reduceByZeroing(
@@ -882,16 +856,14 @@ struct Reducer
             return f->func == e->func;
           }
         },
-        100,
+        1,
         shrank);
     }
   }
 
-  void visitModule(Module* curr) {
-    assert(curr == module.get());
-
-    shrinkElementSegments(curr);
-
+  // Reduces entire functions at a time. Returns whether we did a significant
+  // amount of reduction that justifies doing even more.
+  bool reduceFunctions() {
     // try to remove functions
     std::cerr << "|    try to remove functions\n";
     std::vector<Name> functionNames;
@@ -899,13 +871,14 @@ struct Reducer
       functionNames.push_back(func->name);
     }
     size_t skip = 1;
+    size_t maxSkip = 1;
     // If we just removed some functions in the previous iteration, keep trying
     // to remove more as this is one of the most efficient ways to reduce.
-    bool justRemoved = false;
+    bool justReduced = true;
     for (size_t i = 0; i < functionNames.size(); i++) {
-      if (!justRemoved &&
+      if (!justReduced &&
           functionsWeTriedToRemove.count(functionNames[i]) == 1 &&
-          !shouldTryToReduce(std::max((factor / 100) + 1, 1000))) {
+          !shouldTryToReduce(std::max((factor / 5) + 1, 20000))) {
         continue;
       }
       std::vector<Name> names;
@@ -920,25 +893,49 @@ struct Reducer
       if (names.size() == 0) {
         continue;
       }
-      std::cout << "|    try to remove " << names.size()
-                << " functions (skip: " << skip << ")\n";
-      justRemoved = tryToRemoveFunctions(names);
-      if (justRemoved) {
+      // Try to remove functions and/or empty them. Note that
+      // tryToRemoveFunctions() will reload the module if it fails, which means
+      // function names may change - for that reason, run it second.
+      justReduced = tryToEmptyFunctions(names) || tryToRemoveFunctions(names);
+      if (justReduced) {
         noteReduction(names.size());
         i += skip;
         skip = std::min(size_t(factor), 2 * skip);
+        maxSkip = std::max(skip, maxSkip);
       } else {
         skip = std::max(skip / 2, size_t(1)); // or 1?
         i += factor / 100;
       }
     }
+    // If maxSkip is 1 then we never reduced at all. If it is 2 then we did
+    // manage to reduce individual functions, but all our attempts at
+    // exponential growth failed. Only suggest doing a new iteration of this
+    // function if we did in fact manage to grow, which indicated there are lots
+    // of opportunities here, and it is worth focusing on this.
+    return maxSkip > 2;
+  }
+
+  void visitModule(Module* curr) {
+    // The initial module given to us is our global object. As we continue to
+    // process things here, we may replace the module, so we should never again
+    // refer to curr.
+    assert(curr == module.get());
+    curr = nullptr;
+
+    // Reduction of entire functions at a time is very effective, and we do it
+    // with exponential growth and backoff, so keep doing it while it works.
+    while (reduceFunctions()) {
+    }
+
+    shrinkElementSegments();
+
     // try to remove exports
     std::cerr << "|    try to remove exports (with factor " << factor << ")\n";
     std::vector<Export> exports;
     for (auto& exp : module->exports) {
       exports.push_back(*exp);
     }
-    skip = 1;
+    size_t skip = 1;
     for (size_t i = 0; i < exports.size(); i++) {
       if (!shouldTryToReduce(std::max((factor / 100) + 1, 1000))) {
         continue;
@@ -1001,6 +998,43 @@ struct Reducer
     }
   }
 
+  // Try to empty out the bodies of some functions.
+  bool tryToEmptyFunctions(std::vector<Name> names) {
+    std::vector<Expression*> oldBodies;
+    size_t actuallyEmptied = 0;
+    for (auto name : names) {
+      auto* func = module->getFunction(name);
+      auto* oldBody = func->body;
+      oldBodies.push_back(oldBody);
+      // Nothing to do for imported functions (body is nullptr) or for bodies
+      // that have already been as reduced as we can make them.
+      if (func->imported() || oldBody->is<Unreachable>() ||
+          oldBody->is<Nop>()) {
+        continue;
+      }
+      actuallyEmptied++;
+      bool useUnreachable = func->getResults() != Type::none;
+      if (useUnreachable) {
+        func->body = builder->makeUnreachable();
+      } else {
+        func->body = builder->makeNop();
+      }
+    }
+    if (actuallyEmptied > 0 && writeAndTestReduction()) {
+      std::cerr << "|        emptied " << actuallyEmptied << " / "
+                << names.size() << " functions\n";
+      return true;
+    } else {
+      // Restore the bodies.
+      for (size_t i = 0; i < names.size(); i++) {
+        module->getFunction(names[i])->body = oldBodies[i];
+      }
+      return false;
+    }
+  }
+
+  // Try to actually remove functions. If they are somehow referred to, we will
+  // get a validation error and undo it.
   bool tryToRemoveFunctions(std::vector<Name> names) {
     for (auto name : names) {
       module->removeFunction(name);
@@ -1045,7 +1079,7 @@ struct Reducer
     if (WasmValidator().validate(
           *module, WasmValidator::Globally | WasmValidator::Quiet) &&
         writeAndTestReduction()) {
-      std::cerr << "|      removed " << names.size() << " functions\n";
+      std::cerr << "|        removed " << names.size() << " functions\n";
       return true;
     } else {
       loadWorking(); // restore it from orbit
@@ -1353,8 +1387,8 @@ int main(int argc, const char* argv[]) {
         // stop
         stopping = true;
       } else {
-        // just try to remove all we can and finish up
-        factor = 1;
+        // decrease the factor quickly
+        factor = (factor + 1) / 2; // stable on 1
       }
     }
     lastPostPassesSize = newSize;
