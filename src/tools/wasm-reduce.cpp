@@ -248,34 +248,16 @@ struct Reducer
   void reduceUsingPasses() {
     // run optimization passes until we can't shrink it any more
     std::vector<std::string> passes = {
-      "-Oz",
-      "-Os",
-      "-O1",
-      "-O2",
-      "-O3",
-      "-O4",
-      "--flatten -Os",
-      "--flatten -O3",
-      "--flatten --local-cse -Os",
       "--coalesce-locals --vacuum",
       "--dce",
       "--duplicate-function-elimination",
       "--inlining",
-      "--inlining-optimizing",
-      "--optimize-level=3 --inlining-optimizing",
-      "--memory-packing",
       "--remove-unused-names --merge-blocks --vacuum",
       "--optimize-instructions",
       "--precompute",
-      "--remove-imports",
-      "--remove-memory",
       "--remove-unused-names --remove-unused-brs",
       "--remove-unused-module-elements",
-      "--remove-unused-nonfunction-module-elements",
-      "--reorder-functions",
-      "--reorder-locals",
       "--simplify-locals --vacuum",
-      "--strip",
       "--vacuum"};
     auto oldSize = file_size(working);
     bool more = true;
@@ -305,7 +287,7 @@ struct Reducer
               std::cerr << "|    command \"" << currCommand
                         << "\" succeeded, reduced size to " << newSize << '\n';
               copy_file(test, working);
-              more = true;
+              //more = true;
               oldSize = newSize;
             }
           }
@@ -416,7 +398,6 @@ struct Reducer
       return false;
     }
     auto* curr = getCurrent();
-    // std::cerr << "try " << curr << " => " << with << '\n';
     if (curr->type != with->type) {
       return false;
     }
@@ -876,9 +857,10 @@ struct Reducer
     // to remove more as this is one of the most efficient ways to reduce.
     bool justReduced = true;
     for (size_t i = 0; i < functionNames.size(); i++) {
+      bool seenBefore = functionsWeTriedToRemove.count(functionNames[i]);
+
       if (!justReduced &&
-          functionsWeTriedToRemove.count(functionNames[i]) == 1 &&
-          !shouldTryToReduce(std::max((factor / 5) + 1, 20000))) {
+          !shouldTryToReduce(std::max((factor / 5) + 1, seenBefore ? 100 : 20000))) {
         continue;
       }
       std::vector<Name> names;
@@ -1125,8 +1107,8 @@ struct Reducer
       return false;
     }
     // try to replace with a trivial value
-    if (curr->type.isNullable()) {
-      RefNull* n = builder->makeRefNull(curr->type);
+    if (curr->type.isNullable() && !curr->is<RefNull>()) {
+      auto* n = builder->makeRefNull(curr->type);
       return tryToReplaceCurrent(n);
     }
     if (curr->type.isTuple() && curr->type.isDefaultable()) {
@@ -1169,6 +1151,8 @@ struct Reducer
 //
 
 int main(int argc, const char* argv[]) {
+setTypeSystem(TypeSystem::Nominal);
+
   std::string input, test, working, command;
   // By default, look for binaries alongside our own binary.
   std::string binDir = Path::getDirName(argv[0]);
