@@ -95,7 +95,8 @@ struct GlobalUseScanner : public WalkerPass<PostWalker<GlobalUseScanner>> {
     }
 
     // See if reading a specific global is the only effect the condition has.
-    EffectAnalyzer condition(getPassOptions(), getModule()->features, curr->condition);
+    EffectAnalyzer condition(
+      getPassOptions(), getModule()->features, curr->condition);
 
     if (condition.globalsRead.size() != 1) {
       return;
@@ -109,7 +110,8 @@ struct GlobalUseScanner : public WalkerPass<PostWalker<GlobalUseScanner>> {
     // See if writing the same global is the only effect the body has. (Note
     // that we don't need to care about the case where the body has no effects
     // at all - other pass would handle that trivial situation.)
-    EffectAnalyzer ifTrue(getPassOptions(), getModule()->features, curr->ifTrue);
+    EffectAnalyzer ifTrue(
+      getPassOptions(), getModule()->features, curr->ifTrue);
     if (ifTrue.globalsWritten.size() != 1) {
       return;
     }
@@ -272,18 +274,29 @@ struct SimplifyGlobals : public Pass {
     runner = runner_;
     module = module_;
 
+    while (iteration()) {
+    }
+  }
+
+  bool iteration() {
     analyze();
 
-    removeUnneededOperations();
+    // Removing unneeded writes can in some cases lead to more optimizations
+    // that we need an entire additional iteration to perform, see below.
+    bool more = removeUnneededWrites();
 
     preferEarlierImports();
 
     propagateConstantsToGlobals();
 
     propagateConstantsToCode();
+
+    return more;
   }
 
   void analyze() {
+    map.clear();
+
     // First, find out all the relevant info.
     for (auto& global : module->globals) {
       auto& info = map[global->name];
@@ -307,13 +320,30 @@ struct SimplifyGlobals : public Pass {
     }
   }
 
-  void removeUnneededOperations() {
+  // Removes writes from globals that will never do anything useful with the
+  // written value anyhow. Returns whether an addition iteration is necessary.
+  bool removeUnneededWrites() {
+    bool more = false;
+
     // Globals that are not exports and not read from are unnecessary (even if
     // they are written to). Likewise, globals that are only read from in order
     // to write to themselves are unnecessary. First, find such globals.
     NameSet unnecessaryGlobals;
     for (auto& global : module->globals) {
       auto& info = map[global->name];
+
+      if (!info.written) {
+        // No writes occur here, so there is nothing for us to remove.
+        continue;
+      }
+
+      if (info.imported || info.exported) {
+        // If the global is observable from the outside, we can't do anythng
+        // here.
+        //
+        // TODO: optimize the case of an imported but immutable global, etc.
+        continue;
+      }
 
       // We only ever read-only-to-write if all of our reads are done in places
       // we identified as read-only-to-write. That is, we have eliminated the
@@ -329,13 +359,30 @@ struct SimplifyGlobals : public Pass {
       bool onlyReadOnlyToWrite = (info.read == info.readOnlyToWrite);
       assert(!onlyReadOnlyToWrite || info.written >= info.readOnlyToWrite);
 
-      if (!info.imported && !info.exported && (!info.read || onlyReadOnlyToWrite)) {
+      if (!info.read || onlyReadOnlyToWrite) {
         unnecessaryGlobals.insert(global->name);
 
         // We can now mark this global as immutable, and un-written, since we
         // are about to remove all the operations on it.
         global->mutable_ = false;
         info.written = 0;
+
+        // Nested old-read-to-write expressions require another full iteration
+        // to optimize, as we have:
+        //
+        //   if (a) {
+        //     a = 1;
+        //     if (b) {
+        //       b = 1;
+        //     }
+        //   }
+        //
+        // The first iteration can only optimize b, as the outer if's body has
+        // more effects than we understand. After finishing the first iteration,
+        // b will no longer exist, removing those effects.
+        if (onlyReadOnlyToWrite) {
+          more = true;
+        }
       }
     }
 
@@ -344,6 +391,8 @@ struct SimplifyGlobals : public Pass {
     // will lead to removal of gets, and after removing them, the global itself
     // will be removed as well.
     GlobalSetRemover(&unnecessaryGlobals, optimize).run(runner, module);
+
+    return more;
   }
 
   void preferEarlierImports() {
