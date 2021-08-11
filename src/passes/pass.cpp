@@ -474,6 +474,9 @@ void PassRunner::addDefaultFunctionOptimizationPasses() {
     addIfNoDWARFIssues("local-subtyping");
   }
   addIfNoDWARFIssues("coalesce-locals");
+  if (options.optimizeLevel >= 3 || options.shrinkLevel >= 1) {
+    addIfNoDWARFIssues("local-cse");
+  }
   addIfNoDWARFIssues("simplify-locals");
   addIfNoDWARFIssues("vacuum");
   addIfNoDWARFIssues("reorder-locals");
