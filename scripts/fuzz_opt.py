@@ -165,8 +165,13 @@ def randomize_fuzz_settings():
 
 
 IMPORTANT_INITIAL_CONTENTS = [
-    os.path.join('lit', 'passes', 'optimize-instructions.wast'),
-    os.path.join('passes', 'optimize-instructions_fuzz-exec.wast'),
+    os.path.join('lit', 'passes', 'local-cse.wast'),
+    os.path.join('lit', 'passes', 'local-cse_all-features.wast'),
+    os.path.join('lit', 'passes', 'local-cse.wast'),
+    os.path.join('lit', 'passes', 'local-cse_all-features.wast'),
+    os.path.join('lit', 'passes', 'O4_disable-bulk-memory.wast'),
+    os.path.join('lit', 'passes', 'Oz.wast'),
+    os.path.join('lit', 'passes', 'inlining-optimizing_optimize-level=3.wast'),
 ]
 IMPORTANT_INITIAL_CONTENTS = [os.path.join(shared.get_test_dir('.'), t) for t in IMPORTANT_INITIAL_CONTENTS]
 
