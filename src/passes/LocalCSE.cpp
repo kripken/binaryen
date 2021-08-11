@@ -359,9 +359,15 @@ struct Checker
       assert(!(info.requests && info.original));
 
       if (info.requests > 0) {
+        // We cannot optimize away repeats of something with side effects. But,
+        // we can ignore traps here: as we will replace repeated expressions
+        // A, A, A with a single A and then a get of the value from a local, if
+        // a trap occurs then it happens at the first A anyhow (unless the trap
+        // depends on state that changes - but such state would have invalidated
+        // us anyhow before we got here.)
         EffectAnalyzer effects(options, getModule()->features, curr);
-        // We cannot optimize away repeats of something with side effects.
-        //
+        effects.trap = false;
+
         // We also cannot optimize away something that is not observably-
         // deterministic: even if it has no side effects, if it may return a
         // different result each time, we cannot optimize away repeats.
