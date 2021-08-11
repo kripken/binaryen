@@ -365,26 +365,25 @@
   )
 
   ;; CHECK:      (func $structs-and-arrays-do-not-alias (param $array (ref null $B)) (param $struct (ref $A))
+  ;; CHECK-NEXT:  (local $2 i32)
   ;; CHECK-NEXT:  (array.set $B
   ;; CHECK-NEXT:   (local.get $array)
   ;; CHECK-NEXT:   (i32.const 0)
-  ;; CHECK-NEXT:   (struct.get $A 0
-  ;; CHECK-NEXT:    (local.get $struct)
+  ;; CHECK-NEXT:   (local.tee $2
+  ;; CHECK-NEXT:    (struct.get $A 0
+  ;; CHECK-NEXT:     (local.get $struct)
+  ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (array.set $B
   ;; CHECK-NEXT:   (local.get $array)
   ;; CHECK-NEXT:   (i32.const 1)
-  ;; CHECK-NEXT:   (struct.get $A 0
-  ;; CHECK-NEXT:    (local.get $struct)
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.get $2)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (array.set $B
   ;; CHECK-NEXT:   (local.get $array)
   ;; CHECK-NEXT:   (i32.const 2)
-  ;; CHECK-NEXT:   (struct.get $A 0
-  ;; CHECK-NEXT:    (local.get $struct)
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.get $2)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $structs-and-arrays-do-not-alias (param $array (ref null $B)) (param $struct (ref $A))
