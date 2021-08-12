@@ -270,7 +270,6 @@ struct Scanner
       // requestInfo for it, if it is the first request (this avoids us creating
       // requests eagerly).
       requestInfos[original].requests++;
-      found = true;
 
       // Remove any requests from the expression's children, as we will replace
       // the entire thing (see explanation earlier). Note that we just need to
