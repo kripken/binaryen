@@ -19,48 +19,61 @@
 //
 // This finds common sub-expressions and saves them to a local to avoid
 // recomputing them. It runs in each basic block separately, and uses a simple
-// algorithm:
+// algorithm, where we track "requests" to reuse a value. That is, if we see
+// an add operation appear twice, and the inputs must be identical in both
+// cases, then the second one requests to reuse the computed value from the
+// first. The first one to appear is the "original" expression that will remain
+// in the code; we will save it's value to a local, and get it from that local
+// later:
+//
+//  (i32.add (A) (B))
+//  (i32.add (A) (B))
+//
+//    =>
+//
+//  (local.tee $temp (i32.add (A) (B)))
+//  (local.get $temp)
+//
+// The algorithm used here is as follows:
 //
 //  * Scan: Hash each expression and see if it repeats later.
 //          If it does:
 //            * Note that the original appearance is requested to be reused
 //              an additional time.
-//            * Note that the repeat appearance requests to be replaced.
+//            * Link the first expression as the original appearance of the
+//              later one.
 //            * Scan the children of the repeat and undo their requests to be
 //              replaced (as if we will reuse the parent, we don't need to do
 //              anything for the children, see below).
 //
 //  * Check: Check if effects prevent some of the requests from being done. For
-//           example, if the value is a load from memory, we cannot optimize
-//           around a store, as the value before the store might be different
-//           (see below).
+//           example, if the value contains a load from memory, we cannot
+//           optimize around a store, as the value before the store might be
+//           different (see below).
 //
 //  * Apply: Go through the basic block again, this time adding a tee on an
 //           expression whose value we want to use later, and replacing the
 //           uses with gets.
 //
-// For example:
+// For example, here is what the algorithm would do on
 //
-//   (something
-//     (i32.eqz
-//       (A)
-//     )
-//     (i32.eqz
-//       (A)
-//     )
-//   )
+//  (i32.eqz (A))
+//  ..
+//  (i32.eqz (A))
 //
 // Assuming A does not have side effects that interfere, this will happen:
 //
 //  1. Scan A and add it to the hash map of things we have seen.
 //  2. Scan the eqz, and do the same for it.
 //  3. Scan the second A. Increment the first A's requests counter, and mark the
-//     second A as intended to be replaced.
-//  4. Scan the second eqz, and do the same for it. Then also scan its children,
-//     in this case A, and decrement the first A's reuse counter, and unmark the
-//     second A's note that it is intended to be replaced.
-//  5. After that, the second eqz request to be replaced by the first, and there
-//     is no request on A.
+//     second A as intended to be replaced by the original A.
+//  4. Scan the second eqz, and do similar things for it: increment the requests
+//     for the original eqz, and point to the original from the repeat.
+//     * Then also scan its children, in this case A, and decrement the first
+//       A's reuse counter, and unmark the second A's note that it is intended
+//       to be replaced.
+//  5. After that, the second eqz requests to be replaced by the first, and
+//     there is no request on A.
 //  6. Run through the block again, adding a tee and replacing the second eqz,
 //     resulting in:
 //
@@ -83,7 +96,7 @@
 //  y = load(a);
 //
 // Even though the load looks identical, the store means we may load a
-// different value, so we will invalidate and not optimize here.
+// different value, so we will invalidate the request to optimize here.
 //
 // This pass only finds entire expression trees, and not parts of them, so we
 // will not optimize this:
@@ -138,6 +151,8 @@ struct HEHasher {
   }
 };
 
+// A full equality check for HashedExpressions. The hash is used as a speedup,
+// but if it matches we still verify the contents are identical.
 struct HEComparer {
   bool operator()(const HashedExpression a, const HashedExpression b) const {
     if (a.digest != b.digest) {
@@ -162,34 +177,52 @@ struct RequestInfo {
   // The number of other expressions that would like to reuse this value.
   Index requests = 0;
 
-  // If this is a repeat value, that is, something we would like to replace
-  // with a local.get of the original value (the first time this value
-  // appeared) then we point to that original value here. In that case we have
-  // incremented the original's |requests|.
+  // If this is a repeat value, this points to the original. (And we have
+  // incremented the original's |requests|.)
   Expression* original = nullptr;
+
+  void validate() const {
+    // An expression cannot both be requested and make requests. If we see A
+    // appear three times, both repeats must request from the very first.
+    assert(!(requests && original));
+
+    // When we encounter a requestInfo (after its initial creation) then it
+    // must either request or be requested - otherwise, it should not exist,
+    // as we remove unneeded things from our tracking.
+    assert(requests || original);
+  }
 };
 
 // A map of expressions to their request info.
-using RequestInfoMap = std::unordered_map<Expression*, RequestInfo>;
+struct RequestInfoMap : public std::unordered_map<Expression*, RequestInfo> {
+  void dump(std::ostream& o) {
+    for (auto& kv : *this) {
+      auto* curr = kv.first;
+      auto& info = kv.second;
+      o << *curr << " has " << info.requests << " reqs, orig: " << info.original
+        << '\n';
+    }
+  }
+};
 
 struct Scanner
   : public LinearExecutionWalker<Scanner, UnifiedExpressionVisitor<Scanner>> {
   PassOptions options;
 
-  Scanner(PassOptions options) : options(options) {}
+  // Request info for all expressions ever seen.
+  RequestInfoMap& requestInfos;
 
-  // Currently active hashed expressions in the current basic block.
+  Scanner(PassOptions options, RequestInfoMap& requestInfos)
+    : options(options), requestInfos(requestInfos) {}
+
+  // Currently active hashed expressions in the current basic block. If we see
+  // an active expression before us that is identical to us, then it becomes our
+  // original expression that we request from.
   HashedExprs activeExprs;
 
-  // Hash values of all active expressions.
+  // Hash values of all active expressions. We store these so that we do not end
+  // up recomputing hashes of children in an N^2 manner.
   std::unordered_map<Expression*, size_t> activeHashes;
-
-  // Request info for all expressions.
-  RequestInfoMap requestInfos;
-
-  // Set to true if we found any requests, that is, if there are things we may
-  // be able to optimize.
-  bool found = false;
 
   static void doNoteNonLinear(Scanner* self, Expression** currp) {
     // We are starting a new basic block. Forget all the currently-hashed
@@ -227,12 +260,15 @@ struct Scanner
 
     auto& vec = activeExprs[HashedExpression(curr, hash)];
     vec.push_back(curr);
-    auto& info = requestInfos[curr];
     if (vec.size() > 1) {
-      // This is a repeat expression. Mark it as such, and add a request for the
-      // original appearance of the value.
+      // This is a repeat expression. Add a request for it.
+      auto& info = requestInfos[curr];
       auto* original = vec[0];
       info.original = original;
+
+      // Mark the request on the original. Note that this may create the
+      // requestInfo for it, if it is the first request (this avoids us creating
+      // requests eagerly).
       requestInfos[original].requests++;
       found = true;
 
@@ -249,13 +285,25 @@ struct Scanner
       // to update is the second B.
       for (auto* child : ChildIterator(curr)) {
         if (!requestInfos.count(child)) {
+          // The child never had a request. While it repeated (since the parent
+          // repeats), it was not relevant for the optimization so we never
+          // created a requestInfo for it.
           continue;
         }
+
+        // Remove the child.
         auto& childInfo = requestInfos[child];
-        if (childInfo.original) {
-          assert(requestInfos[childInfo.original].requests > 0);
-          requestInfos[childInfo.original].requests--;
-          childInfo.original = nullptr;
+        auto* childOriginal = childInfo.original;
+        requestInfos.erase(child);
+
+        // Update the child's original, potentially erasing it too if no
+        // requests remain.
+        assert(childOriginal);
+        auto& childOriginalRequests = requestInfos[childOriginal].requests;
+        assert(childOriginalRequests > 0);
+        childOriginalRequests--;
+        if (childOriginalRequests == 0) {
+          requestInfos.erase(childOriginal);
         }
       }
     }
@@ -312,7 +360,9 @@ struct Checker
     : options(options), requestInfos(requestInfos) {}
 
   struct ActiveOriginalInfo {
-    // How many of the requests remain to be seen.
+    // How many of the requests remain to be seen during our walk. When this
+    // reaches 0, we know that the original is no longer requested from later in
+    // the block.
     Index requestsLeft;
 
     // The effects in the expression.
@@ -320,11 +370,13 @@ struct Checker
   };
 
   // The currently relevant original expressions, that is, the ones that may be
-  // optimized in the current basic block. This maps each one to the number of
-  // requests for it, which allows us to know when it is no longer relevant.
+  // optimized in the current basic block.
   std::unordered_map<Expression*, ActiveOriginalInfo> activeOriginals;
 
   void visitExpression(Expression* curr) {
+    // This is the first time we encounter this expression.
+    assert(!activeOriginals.count(curr));
+
     // Given the current expression, see what it invalidates of the currently-
     // hashed expressions, if there are any.
     if (!activeOriginals.empty()) {
@@ -346,56 +398,63 @@ struct Checker
         requestInfos[original].requests -=
           activeOriginals.at(original).requestsLeft;
 
+        // If no requests remain at all (that is, there were no requests we
+        // could provide before we ran into this invalidation) then we do not
+        // need this original at all.
+        if (requestInfos[original].requests == 0) {
+          requestInfos.erase(original);
+        }
+
         activeOriginals.erase(original);
       }
     }
 
-    assert(!activeOriginals.count(curr));
-
-    // Check if the current expression is an original or requests from one.
     auto iter = requestInfos.find(curr);
-    if (iter != requestInfos.end()) {
-      auto& info = iter->second;
+    if (iter == requestInfos.end()) {
+      return;
+    }
+    auto& info = iter->second;
+    info.validate();
 
-      // An expression cannot both be requested to be copied to a local, and
-      // also have some other expression it is a repeat of - if it is a repeat,
-      // then anything that requests to be copied from it should have requested
-      // from the the original of this expression.
-      assert(!(info.requests && info.original));
+    if (info.requests > 0) {
+      // This is an original. Compute its side effects, as we cannot optimize
+      // away repeated apperances if it has any.
+      EffectAnalyzer effects(options, getModule()->features, curr);
 
-      if (info.requests > 0) {
-        // We cannot optimize away repeats of something with side effects. But,
-        // we can ignore traps here: as we will replace repeated expressions
-        // A, A, A with a single A and then a get of the value from a local, if
-        // a trap occurs then it happens at the first A anyhow (unless the trap
-        // depends on state that changes - but such state would have invalidated
-        // us anyhow before we got here.)
-        EffectAnalyzer effects(options, getModule()->features, curr);
-        effects.trap = false;
+      // But we can ignore traps here: as we will replace repeated expressions
+      // A, A, A with a single A and then a get of the value from a local, if
+      // a trap occurs then it happens at the first A anyhow (unless the trap
+      // depends on state that changes - but such state would have invalidated
+      // us anyhow before we got here.)
+      effects.trap = false;
 
-        // We also cannot optimize away something that is not observably-
-        // deterministic: even if it has no side effects, if it may return a
-        // different result each time, we cannot optimize away repeats.
-        if (effects.hasSideEffects() || !Properties::isObservablyDeterministic(
-                                          curr, getModule()->features)) {
-          requestInfos[curr].requests = 0;
-        } else {
-          activeOriginals.emplace(
-            curr, ActiveOriginalInfo{info.requests, std::move(effects)});
-        }
-      } else if (info.original) {
-        // The original may have already been invalidated.
-        auto iter = activeOriginals.find(info.original);
-        if (iter != activeOriginals.end()) {
-          // After visiting this expression, we have one less request for its
-          // original, and perhaps none are left.
-          auto& originalInfo = iter->second;
-          if (originalInfo.requestsLeft == 1) {
-            activeOriginals.erase(info.original);
-          } else {
-            originalInfo.requestsLeft--;
-          }
-        }
+      // We also cannot optimize away something that is intrinsically
+      // nondeterministic: even if it has no side effects, if it may return a
+      // different result each time, then we cannot optimize away repeats.
+      if (effects.hasSideEffects() ||
+          Properties::isIntrinsicallyNondeterministic(curr,
+                                                      getModule()->features)) {
+        requestInfos.erase(curr);
+      } else {
+        activeOriginals.emplace(
+          curr, ActiveOriginalInfo{info.requests, std::move(effects)});
+      }
+    } else if (info.original) {
+      // The original may have already been invalidated. If so, remove our info
+      // as well.
+      auto originalIter = activeOriginals.find(info.original);
+      if (originalIter == activeOriginals.end()) {
+        requestInfos.erase(iter);
+        return;
+      }
+
+      // After visiting this expression, we have one less request for its
+      // original, and perhaps none are left.
+      auto& originalInfo = originalIter->second;
+      if (originalInfo.requestsLeft == 1) {
+        activeOriginals.erase(info.original);
+      } else {
+        originalInfo.requestsLeft--;
       }
     }
   }
@@ -411,17 +470,16 @@ struct Checker
   }
 };
 
-// Applies the optimization now that we know which requests are valid. We track
-// the number of remaining valid requests (after Checker decreased them to leave
-// only valid ones), and stop optimizing when none remain.
+// Applies the optimization now that we know which requests are valid.
 struct Applier
   : public LinearExecutionWalker<Applier, UnifiedExpressionVisitor<Applier>> {
   RequestInfoMap requestInfos;
 
   Applier(RequestInfoMap& requestInfos) : requestInfos(requestInfos) {}
 
-  // Maps expressions that we save to locals to the local index for them.
-  std::unordered_map<Expression*, Index> exprLocals;
+  // Maps the original expressions that we save to locals to the local indexes
+  // for them.
+  std::unordered_map<Expression*, Index> originalLocalMap;
 
   void visitExpression(Expression* curr) {
     auto iter = requestInfos.find(curr);
@@ -430,12 +488,12 @@ struct Applier
     }
 
     const auto& info = iter->second;
-    assert(!(info.requests && info.original));
+    info.validate();
 
     if (info.requests) {
       // We have requests for this value. Add a local and tee the value to
       // there.
-      Index local = exprLocals[curr] =
+      Index local = originalLocalMap[curr] =
         Builder::addVar(getFunction(), curr->type);
       replaceCurrent(
         Builder(*getModule()).makeLocalTee(local, curr, curr->type));
@@ -444,9 +502,10 @@ struct Applier
       if (originalInfo.requests) {
         // This is a valid request of an original value. Get the value from the
         // local.
-        assert(exprLocals.count(info.original));
-        replaceCurrent(Builder(*getModule())
-                         .makeLocalGet(exprLocals[info.original], curr->type));
+        assert(originalLocalMap.count(info.original));
+        replaceCurrent(
+          Builder(*getModule())
+            .makeLocalGet(originalLocalMap[info.original], curr->type));
         originalInfo.requests--;
       }
     }
@@ -454,7 +513,7 @@ struct Applier
 
   static void doNoteNonLinear(Applier* self, Expression** currp) {
     // Clear the state between blocks.
-    self->exprLocals.clear();
+    self->originalLocalMap.clear();
   }
 };
 
@@ -471,16 +530,23 @@ struct LocalCSE : public WalkerPass<PostWalker<LocalCSE>> {
   void doWalkFunction(Function* func) {
     auto options = getPassOptions();
 
-    Scanner scanner(options);
+    RequestInfoMap requestInfos;
+
+    Scanner scanner(options, requestInfos);
     scanner.walkFunctionInModule(func, getModule());
-    if (!scanner.found) {
+    if (requestInfos.empty()) {
+      // We did not find any repeated expressions at all.
       return;
     }
 
-    Checker checker(options, scanner.requestInfos);
+    Checker checker(options, requestInfos);
     checker.walkFunctionInModule(func, getModule());
+    if (requestInfos.empty()) {
+      // No repeated expressions remain after checking for effects.
+      return;
+    }
 
-    Applier applier(scanner.requestInfos);
+    Applier applier(requestInfos);
     applier.walkFunctionInModule(func, getModule());
 
     TypeUpdating::handleNonDefaultableLocals(func, *getModule());
