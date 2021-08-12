@@ -475,7 +475,7 @@ void PassRunner::addDefaultFunctionOptimizationPasses() {
   }
   addIfNoDWARFIssues("coalesce-locals");
   if (options.optimizeLevel >= 3 || options.shrinkLevel >= 1) {
-    addIfNoDWARFIssues("local-cse");
+    addIfNoDWARFIssues("local-cse"); // 1% code size on emscripten benchmark suite, or less. But huge on j2cl.
   }
   addIfNoDWARFIssues("simplify-locals");
   addIfNoDWARFIssues("vacuum");
