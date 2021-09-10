@@ -1842,34 +1842,65 @@ private:
       // up with this form of the above pattern, that we want to optimize:
       //
       //  (select
-      //   (i32.lt_s
-      //    (x)
+      //   (i32.lt_s ;; this may be flipped
+      //    (x2)
       //    (y)
       //   )
       //   (i32.const 0)
       //   (i32.ge_s
-      //    (x)
+      //    (x1)
       //    (i32.const 0)
       //   )
       //  )
       // )
-      Binary* ltsBinary;
+      Binary* bin;
       Expression* x1;
-      Expression* x2;
-      Expression* y;
+      Expression* r;
+      Expression* s;
       if (matches(
             curr,
             select(
-              binary(&ltsBinary, LtS, any(&x1), any(&y)),
+              binary(&bin, any(&r), any(&s)),
               ival(0),
-              binary(           GeS, any(&x2), ival(0))
+              binary(           GeS, any(&x1), ival(0))
             )
-          ) &&
+          )
+        ) {
+        Expression* x2 = nullptr;
+        Expression* y = nullptr;
+        bool lts;
+        if (matches(
+              bin,
+              binary(LtS, any(), any())
+        )) {
+          x2 = r;
+          y = s;
+          lts = true;
+        } else if (matches(
+              bin,
+              binary(GtS, any(), any())
+        )) {
+          x2 = s;
+          y = r;
+          lts = false;
+        }
+        // Check the remaining conditions, now that we have identified x1, x2,
+        // and y.
+        //
+        // Note that we leave x2 and y in their original positions, and so we do
+        // not need to care about side effects. However, we plan to remove x1,
+        // so check effects there.
+        if (x2 && y &&
             Bits::getMaxBits(y, this) < x1->type.getByteSize() * 8 &&
-            ExpressionAnalyzer::equal(x1, x2) // TODO: tee and get
-          ) {
-        ltsBinary->op = Abstract::getBinary(x1->type, LtU);
-        return ltsBinary;
+            ExpressionAnalyzer::equal(x1, x2) && // TODO: tee and get
+            !effects(x1).hasUnremovableSideEffects()) {
+          if (lts) {
+            bin->op = Abstract::getBinary(x1->type, LtU);
+          } else {
+            bin->op = Abstract::getBinary(x1->type, GtU);
+          }
+          return bin;
+        }
       }
     }
     {

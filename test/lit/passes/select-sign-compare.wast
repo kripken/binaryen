@@ -2,19 +2,14 @@
 ;; RUN: wasm-opt %s --remove-unused-brs --optimize-instructions -S -o - | filecheck %s
 
 (module
+  (import "a" "b" (func $get (result i32)))
+
   ;; CHECK:      (func $select (param $x i32) (param $y i32) (result i32)
-  ;; CHECK-NEXT:  (select
-  ;; CHECK-NEXT:   (i32.gt_s
-  ;; CHECK-NEXT:    (i32.and
-  ;; CHECK-NEXT:     (local.get $y)
-  ;; CHECK-NEXT:     (i32.const 2147483647)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (i32.const 0)
-  ;; CHECK-NEXT:   (i32.ge_s
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:  (i32.lt_u
+  ;; CHECK-NEXT:   (local.get $x)
+  ;; CHECK-NEXT:   (i32.and
+  ;; CHECK-NEXT:    (local.get $y)
+  ;; CHECK-NEXT:    (i32.const 2147483647)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -37,19 +32,42 @@
     )
   )
 
-  ;; CHECK:      (func $if (param $x i32) (param $y i32) (result i32)
-  ;; CHECK-NEXT:  (select
-  ;; CHECK-NEXT:   (i32.gt_s
-  ;; CHECK-NEXT:    (i32.and
-  ;; CHECK-NEXT:     (local.get $y)
-  ;; CHECK-NEXT:     (i32.const 2147483647)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK:      (func $select-flipped (param $x i32) (param $y i32) (result i32)
+  ;; CHECK-NEXT:  (i32.gt_u
+  ;; CHECK-NEXT:   (i32.and
+  ;; CHECK-NEXT:    (local.get $y)
+  ;; CHECK-NEXT:    (i32.const 2147483647)
   ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (i32.const 0)
-  ;; CHECK-NEXT:   (i32.ge_s
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:   (local.get $x)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $select-flipped (param $x i32) (param $y i32) (result i32)
+    (select
+      ;; The first comparison is flipped compared to before. Canonicalization
+      ;; cannot be relied upon to get this the way we want it (unlike the second
+      ;; comparison which is against a constant), so we need to handle both
+      ;; cases.
+      (i32.gt_s
+        (i32.and
+          (local.get $y)
+          (i32.const 0x7fffffff)
+        )
+        (local.get $x)
+      )
+      (i32.const 0)
+      (i32.ge_s
+        (local.get $x)
+        (i32.const 0)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $if (param $x i32) (param $y i32) (result i32)
+  ;; CHECK-NEXT:  (i32.lt_u
+  ;; CHECK-NEXT:   (local.get $x)
+  ;; CHECK-NEXT:   (i32.and
+  ;; CHECK-NEXT:    (local.get $y)
+  ;; CHECK-NEXT:    (i32.const 2147483647)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -163,6 +181,25 @@
       (i32.const 0)
       (i32.ge_s
         (local.get $y) ;; This should be $x
+        (i32.const 0)
+      )
+    )
+  )
+
+  (func $side-effects (param $y i32) (result i32)
+    (select
+      (i32.lt_s
+        (call $get)
+        (i32.and
+          (local.get $y)
+          (i32.const 0x7fffffff)
+        )
+      )
+      (i32.const 0)
+      (i32.ge_s
+        ;; This is identical to the previous location, as we need, but it has
+        ;; side effects, which prevent optimization.
+        (call $get)
         (i32.const 0)
       )
     )
