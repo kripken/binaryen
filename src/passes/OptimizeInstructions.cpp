@@ -1819,6 +1819,43 @@ private:
         }
       }
     }
+
+    {
+      // [------A-----]    [---------B---------]      [-----------C-----------]
+      // (signed)x >= 0 && signed(x) < (signed)y  =>  (unsigned)x < (unsigned)y
+      //   where maxBits(y) < 32
+      //
+      // Proof:
+      //  1. A implies maxBits(x) < 32, and so if A is true then comparisons
+      //     between x and y can be switched between signed or unsigned.
+      //  2. Hence if A && B is true, then it implies C is true (by switching
+      //     B's comparison from signed to unsigned).
+      //  3. Conversely, if C is true, then since maxBits(y) < 32 it implies
+      //     that maxBits(x) < 32 as well (as if x had the top bit set then C
+      //     would have been false), showing A is true.
+      //  4. And if A and C are true then once more we can switch the comparison
+      //     between x and y, this time from unsigned to signed, to see that B
+      //     is true.
+      Binary* bin;
+      if (matches(
+            curr,
+            select(ival(-1), ival(1), binary(&bin, LtS, any(), ival(0)))) ||
+          matches(
+            curr,
+            select(ival(1), ival(-1), binary(&bin, GeS, any(), ival(0))))) {
+        auto c = bin->right->cast<Const>();
+        auto type = curr->ifTrue->type;
+        if (type == c->type) {
+          bin->type = type;
+          bin->op = Abstract::getBinary(type, ShrS);
+          c->value = Literal::makeFromInt32(type.getByteSize() * 8 - 1, type);
+          curr->ifTrue->cast<Const>()->value = Literal::makeOne(type);
+          return builder.makeBinary(
+            Abstract::getBinary(type, Or), bin, curr->ifTrue);
+        }
+      }
+    }
+
     {
       // Sides are identical, fold
       Expression *ifTrue, *ifFalse, *c;
