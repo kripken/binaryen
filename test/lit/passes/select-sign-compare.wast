@@ -2,6 +2,7 @@
 ;; RUN: wasm-opt %s --remove-unused-brs --optimize-instructions -S -o - | filecheck %s
 
 (module
+  ;; CHECK:      (import "a" "b" (func $get (result i32)))
   (import "a" "b" (func $get (result i32)))
 
   ;; CHECK:      (func $select (param $x i32) (param $y i32) (result i32)
@@ -186,6 +187,22 @@
     )
   )
 
+  ;; CHECK:      (func $side-effects (param $y i32) (result i32)
+  ;; CHECK-NEXT:  (select
+  ;; CHECK-NEXT:   (i32.lt_s
+  ;; CHECK-NEXT:    (call $get)
+  ;; CHECK-NEXT:    (i32.and
+  ;; CHECK-NEXT:     (local.get $y)
+  ;; CHECK-NEXT:     (i32.const 2147483647)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:   (i32.ge_s
+  ;; CHECK-NEXT:    (call $get)
+  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
   (func $side-effects (param $y i32) (result i32)
     (select
       (i32.lt_s
