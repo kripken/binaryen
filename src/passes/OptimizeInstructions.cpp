@@ -1860,12 +1860,12 @@ private:
       if (matches(
             curr,
             select(
-              binary(&ltBinary, LtS, any(&x1), any(&y)),
+              binary(&ltsBinary, LtS, any(&x1), any(&y)),
               ival(0),
               binary(           GeS, any(&x2), ival(0))
             )
           ) &&
-            Bits::getMaxBits(left, this) < getBitsForType(x1->type) &&
+            Bits::getMaxBits(y, this) < x1->type.getByteSize() * 8 &&
             ExpressionAnalyzer::equal(x1, x2) // TODO: tee and get
           ) {
         ltsBinary->op = Abstract::getBinary(x1->type, LtU);
