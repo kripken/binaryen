@@ -1890,6 +1890,8 @@ private:
         // Note that we leave x2 and y in their original positions, and so we do
         // not need to care about side effects. However, we plan to remove x1,
         // so check effects there.
+        // TODO precondition inferences on locals, so this works with ifs too,
+        // and more generally.
         if (x2 && y &&
             Bits::getMaxBits(y, this) < x1->type.getByteSize() * 8 &&
             ExpressionAnalyzer::equal(x1, x2) && // TODO: tee and get
