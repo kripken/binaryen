@@ -1819,11 +1819,12 @@ private:
         }
       }
     }
-
     {
       // [------A-----]    [---------B---------]      [-----------C-----------]
       // (signed)x >= 0 && signed(x) < (signed)y  =>  (unsigned)x < (unsigned)y
       //   where maxBits(y) < 32
+      //
+      // (and the same for i64)
       //
       // Proof:
       //  1. A implies maxBits(x) < 32, and so if A is true then comparisons
@@ -1836,26 +1837,41 @@ private:
       //  4. And if A and C are true then once more we can switch the comparison
       //     between x and y, this time from unsigned to signed, to see that B
       //     is true.
-      Binary* bin;
+      //
+      // After canonicalization, as well as if=>select by other passes, we end
+      // up with this form of the above pattern, that we want to optimize:
+      //
+      //  (select
+      //   (i32.lt_s
+      //    (x)
+      //    (y)
+      //   )
+      //   (i32.const 0)
+      //   (i32.ge_s
+      //    (x)
+      //    (i32.const 0)
+      //   )
+      //  )
+      // )
+      Binary* ltsBinary;
+      Expression* x1;
+      Expression* x2;
+      Expression* y;
       if (matches(
             curr,
-            select(ival(-1), ival(1), binary(&bin, LtS, any(), ival(0)))) ||
-          matches(
-            curr,
-            select(ival(1), ival(-1), binary(&bin, GeS, any(), ival(0))))) {
-        auto c = bin->right->cast<Const>();
-        auto type = curr->ifTrue->type;
-        if (type == c->type) {
-          bin->type = type;
-          bin->op = Abstract::getBinary(type, ShrS);
-          c->value = Literal::makeFromInt32(type.getByteSize() * 8 - 1, type);
-          curr->ifTrue->cast<Const>()->value = Literal::makeOne(type);
-          return builder.makeBinary(
-            Abstract::getBinary(type, Or), bin, curr->ifTrue);
-        }
+            select(
+              binary(&ltBinary, LtS, any(&x1), any(&y)),
+              ival(0),
+              binary(           GeS, any(&x2), ival(0))
+            )
+          ) &&
+            Bits::getMaxBits(left, this) < getBitsForType(x1->type) &&
+            ExpressionAnalyzer::equal(x1, x2) // TODO: tee and get
+          ) {
+        ltsBinary->op = Abstract::getBinary(x1->type, LtU);
+        return ltsBinary;
       }
     }
-
     {
       // Sides are identical, fold
       Expression *ifTrue, *ifFalse, *c;
