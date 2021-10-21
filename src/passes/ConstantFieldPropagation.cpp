@@ -285,7 +285,7 @@ private:
 
 struct PCVScanner : public Scanner<PossibleConstantValues, PCVScanner> {
   Pass* create() override {
-    return new PCVScanner(functionNewInfos, functionSetInfos);
+    return new PCVScanner(functionNewInfos, functionSetGetInfos);
   }
 
   PCVScanner(FunctionStructValuesMap<PossibleConstantValues>& functionNewInfos,
@@ -342,6 +342,10 @@ struct PCVScanner : public Scanner<PossibleConstantValues, PCVScanner> {
     // TODO: This may be extensible to a copy from a subtype by the above
     //       analysis (but this is already entering the realm of diminishing
     //       returns).
+  }
+
+  void noteRead(HeapType type, Index index, PossibleConstantValues& info) {
+    // Reads do not interest us.
   }
 };
 
