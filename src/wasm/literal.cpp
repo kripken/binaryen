@@ -30,18 +30,41 @@ namespace wasm {
 template<int N> using LaneArray = std::array<Literal, N>;
 
 Literal::Literal(Type type) : type(type) {
-  // Early exit for the common case; basic types need no special handling, as we
-  // do not need to zero out anything - an explicit zero must be created (see
-  // makeZero).
   if (type.isBasic()) {
-    return;
+    switch (type.getBasic()) {
+      case Type::i32:
+      case Type::f32:
+        // TODO; why
+        i32 = 0;
+        return;
+      case Type::i64:
+      case Type::f64:
+        i64 = 0;
+        return;
+      case Type::v128:
+        memset(&v128, 0, 16);
+        return;
+      case Type::none:
+        return;
+      case Type::unreachable:
+      case Type::funcref:
+      case Type::externref:
+      case Type::anyref:
+      case Type::eqref:
+      case Type::i31ref:
+      case Type::dataref:
+        break;
+    }
   }
 
-  // Only do work if the type requires special storage.
   if (isData()) {
+    assert(!type.isNonNullable());
     new (&gcData) std::shared_ptr<GCData>();
   } else if (type.isRtt()) {
     new (this) Literal(Literal::makeCanonicalRtt(type.getHeapType()));
+  } else {
+    // For anything else, zero out all the union data.
+    memset(&v128, 0, 16);
   }
 }
 
