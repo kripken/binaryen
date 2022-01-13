@@ -29,6 +29,152 @@ namespace wasm {
 
 template<int N> using LaneArray = std::array<Literal, N>;
 
+
+
+
+Literal::Literal(Type type) : type(type) {
+  if (type.isBasic()) {
+    switch (type.getBasic()) {
+      case Type::i32:
+      case Type::f32:
+        i32 = 0;
+        return;
+      case Type::i64:
+      case Type::f64:
+        i64 = 0;
+        return;
+      case Type::v128:
+        memset(&v128, 0, 16);
+        return;
+      case Type::none:
+        return;
+      case Type::unreachable:
+      case Type::funcref:
+      case Type::externref:
+      case Type::anyref:
+      case Type::eqref:
+      case Type::i31ref:
+      case Type::dataref:
+        break;
+    }
+  }
+
+  assert(!type.isNonNullable());
+  if (isData()) {
+    new (&gcData) std::shared_ptr<GCData>();
+  } else if (type.isRtt()) {
+    new (this) Literal(Literal::makeCanonicalRtt(type.getHeapType()));
+  } else {
+    memset(&v128, 0, 16);
+  }
+}
+
+// v128 literal from bytes
+Literal::Literal(const uint8_t init[16]) : type(Type::v128) {
+  memcpy(&v128, init, 16);
+}
+
+// v128 literal from lane value literals
+//Literal::Literal(const std::array<Literal, 16>&);
+//Literal::Literal(const std::array<Literal, 8>&);
+//Literal::Literal(const std::array<Literal, 4>&);
+//Literal::Literal(const std::array<Literal, 2>&);
+
+Literal::Literal(std::shared_ptr<GCData> gcData, Type type)
+  : gcData(gcData), type(type) {
+  // Null data is only allowed if nullable.
+  assert(gcData || type.isNullable());
+  // The type must be a proper type for GC data.
+  assert(isData());
+}
+
+Literal::Literal(std::unique_ptr<RttSupers>&& rttSupers, Type type)
+  : rttSupers(std::move(rttSupers)), type(type) {
+  assert(type.isRtt());
+}
+
+Literal::Literal(const Literal& other) : type(other.type) {
+  if (type.isBasic()) {
+    switch (type.getBasic()) {
+      case Type::i32:
+      case Type::f32:
+        i32 = other.i32;
+        return;
+      case Type::i64:
+      case Type::f64:
+        i64 = other.i64;
+        return;
+      case Type::v128:
+        memcpy(&v128, other.v128, 16);
+        return;
+      case Type::none:
+        return;
+      case Type::unreachable:
+      case Type::funcref:
+      case Type::externref:
+      case Type::anyref:
+      case Type::eqref:
+      case Type::i31ref:
+      case Type::dataref:
+        break;
+    }
+  }
+  if (other.isData()) {
+    new (&gcData) std::shared_ptr<GCData>(other.gcData);
+    return;
+  }
+  if (type.isFunction()) {
+    func = other.func;
+    return;
+  }
+  if (type.isRtt()) {
+    // Allocate a new RttSupers with a copy of the other's data.
+    new (&rttSupers) auto(std::make_unique<RttSupers>(*other.rttSupers));
+    return;
+  }
+  if (type.isRef()) {
+    auto heapType = type.getHeapType();
+    if (heapType.isBasic()) {
+      switch (heapType.getBasic()) {
+        case HeapType::any:
+        case HeapType::ext:
+        case HeapType::eq:
+          return; // null
+        case HeapType::i31:
+          i32 = other.i32;
+          return;
+        case HeapType::func:
+        case HeapType::data:
+          WASM_UNREACHABLE("invalid type");
+      }
+    }
+  }
+  //TODO_SINGLE_COMPOUND(type);
+}
+
+Literal& Literal::operator=(const Literal& other) {
+  if (this != &other) {
+    this->~Literal();
+    new (this) auto(other);
+  }
+  return *this;
+}
+
+Literal::~Literal() {
+  if (type.isBasic()) {
+    return;
+  }
+  if (isData()) {
+    exit(100);
+  } else if (type.isRtt()) {
+    exit(101);
+  }
+}
+
+
+
+
+
 Literal Literal::makeCanonicalRtt(HeapType type) {
   auto supers = std::make_unique<RttSupers>();
   std::optional<HeapType> supertype;
