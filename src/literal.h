@@ -73,8 +73,7 @@ public:
   // Type of the literal. Immutable because the literal's payload depends on it.
   const Type type;
 
-  Literal() : v128(), type(Type::none) {}
-  explicit Literal(Type type);
+  Literal() : type(Type::none) {}
   explicit Literal(Type::BasicType type) : Literal(Type(type)) {}
   explicit Literal(int32_t init) : i32(init), type(Type::i32) {}
   explicit Literal(uint32_t init) : i32(init), type(Type::i32) {}
@@ -84,19 +83,146 @@ public:
     : i32(bit_cast<int32_t>(init)), type(Type::f32) {}
   explicit Literal(double init)
     : i64(bit_cast<int64_t>(init)), type(Type::f64) {}
+  explicit Literal(Name func, Type type) : func(func), type(type) {}
+
+  explicit Literal(Type type) : type(type) {
+    if (type.isBasic()) {
+      switch (type.getBasic()) {
+        case Type::i32:
+        case Type::f32:
+          i32 = 0;
+          return;
+        case Type::i64:
+        case Type::f64:
+          i64 = 0;
+          return;
+        case Type::v128:
+          memset(&v128, 0, 16);
+          return;
+        case Type::none:
+          return;
+        case Type::unreachable:
+        case Type::funcref:
+        case Type::externref:
+        case Type::anyref:
+        case Type::eqref:
+        case Type::i31ref:
+        case Type::dataref:
+          break;
+      }
+    }
+
+    assert(!type.isNonNullable());
+    if (isData()) {
+      new (&gcData) std::shared_ptr<GCData>();
+    } else if (type.isRtt()) {
+      new (this) Literal(Literal::makeCanonicalRtt(type.getHeapType()));
+    } else {
+      memset(&v128, 0, 16);
+    }
+  }
+
   // v128 literal from bytes
-  explicit Literal(const uint8_t init[16]);
+  explicit Literal(const uint8_t init[16]) : type(Type::v128) {
+    memcpy(&v128, init, 16);
+  }
+
   // v128 literal from lane value literals
   explicit Literal(const std::array<Literal, 16>&);
   explicit Literal(const std::array<Literal, 8>&);
   explicit Literal(const std::array<Literal, 4>&);
   explicit Literal(const std::array<Literal, 2>&);
-  explicit Literal(Name func, Type type) : func(func), type(type) {}
-  explicit Literal(std::shared_ptr<GCData> gcData, Type type);
-  explicit Literal(std::unique_ptr<RttSupers>&& rttSupers, Type type);
-  Literal(const Literal& other);
-  Literal& operator=(const Literal& other);
-  ~Literal();
+
+  explicit Literal(std::shared_ptr<GCData> gcData, Type type)
+    : gcData(gcData), type(type) {
+    // Null data is only allowed if nullable.
+    assert(gcData || type.isNullable());
+    // The type must be a proper type for GC data.
+    assert(isData());
+  }
+
+  explicit Literal(std::unique_ptr<RttSupers>&& rttSupers, Type type)
+    : rttSupers(std::move(rttSupers)), type(type) {
+    assert(type.isRtt());
+  }
+
+  Literal(const Literal& other) : type(other.type) { // had to remove 'explicit' here
+    if (type.isBasic()) {
+      switch (type.getBasic()) {
+        case Type::i32:
+        case Type::f32:
+          i32 = other.i32;
+          return;
+        case Type::i64:
+        case Type::f64:
+          i64 = other.i64;
+          return;
+        case Type::v128:
+          memcpy(&v128, other.v128, 16);
+          return;
+        case Type::none:
+          return;
+        case Type::unreachable:
+        case Type::funcref:
+        case Type::externref:
+        case Type::anyref:
+        case Type::eqref:
+        case Type::i31ref:
+        case Type::dataref:
+          break;
+      }
+    }
+    if (other.isData()) {
+      new (&gcData) std::shared_ptr<GCData>(other.gcData);
+      return;
+    }
+    if (type.isFunction()) {
+      func = other.func;
+      return;
+    }
+    if (type.isRtt()) {
+      // Allocate a new RttSupers with a copy of the other's data.
+      new (&rttSupers) auto(std::make_unique<RttSupers>(*other.rttSupers));
+      return;
+    }
+    if (type.isRef()) {
+      auto heapType = type.getHeapType();
+      if (heapType.isBasic()) {
+        switch (heapType.getBasic()) {
+          case HeapType::any:
+          case HeapType::ext:
+          case HeapType::eq:
+            return; // null
+          case HeapType::i31:
+            i32 = other.i32;
+            return;
+          case HeapType::func:
+          case HeapType::data:
+            WASM_UNREACHABLE("invalid type");
+        }
+      }
+    }
+    //TODO_SINGLE_COMPOUND(type);
+  }
+
+  Literal& operator=(const Literal& other) {
+    if (this != &other) {
+      this->~Literal();
+      new (this) auto(other);
+    }
+    return *this;
+  }
+
+  ~Literal() {
+    if (type.isBasic()) {
+      return;
+    }
+    if (isData()) {
+      exit(100);
+    } else if (type.isRtt()) {
+      exit(101);
+    }
+  }
 
   bool isConcrete() const { return type.isConcrete(); }
   bool isNone() const { return type == Type::none; }
@@ -693,6 +819,12 @@ public:
   Literals(size_t initialSize) : SmallVector(initialSize) {}
 
   Type getType() {
+    if (empty()) {
+      return Type::none;
+    }
+    if (size() == 1) {
+      return (*this)[0].type;
+    }
     std::vector<Type> types;
     for (auto& val : *this) {
       types.push_back(val.type);

@@ -1049,6 +1049,9 @@ Type Type::get(unsigned byteSize, bool float_) {
 }
 
 bool Type::isSubType(Type left, Type right) {
+  if (left == right) {
+    return true;
+  }
   return SubTyper().isSubType(left, right);
 }
 
@@ -1220,6 +1223,9 @@ bool HeapType::isNominal() const {
 }
 
 bool HeapType::isSubType(HeapType left, HeapType right) {
+  if (left == right) {
+    return true;
+  }
   return SubTyper().isSubType(left, right);
 }
 
