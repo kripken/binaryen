@@ -919,25 +919,10 @@ private:
     // particular they are saved and loaded. That way if we resume from the
     // first if arm we will avoid the second.
     if (auto* block = curr->dynCast<Block>()) {
-      // Look into an inner block, if there is one. This lets us handle the
-      // common case of massively-nested blocks forming a switch in an efficient
-      // manner that avoid massive recursion.
-      auto* innerBlock = block;
-      while (1) {
-        if (innerBlock->list.size() != 1) {
-          break;
-        }
-        if (auto* next = innerBlock->list[0]->dynCast<Block>()) {
-          innerBlock = next;
-        } else {
-          break;
-        }
-      }
-
       // At least one of our children may change the state. Clump them as
       // necessary.
       Index i = 0;
-      auto& list = innerBlock->list;
+      auto& list = block->list;
       while (i < list.size()) {
         if (analyzer->canChangeState(list[i], func)) {
           list[i] = process(list[i]);
