@@ -278,10 +278,13 @@ struct SimplifyLocals
   }
 
   void checkInvalidations(EffectAnalyzer& effects) {
+    EffectAnalyzer effectsWithoutTrap = effects;
+    effectsWithoutTrap.trap = false;
+
     // TODO: this is O(bad)
     std::vector<Index> invalidated;
     for (auto& [index, info] : sinkables) {
-      if (effects.invalidates(info.effects)) {
+      if (effectsWithoutTrap.invalidates(info.effects)) {
         invalidated.push_back(index);
       }
     }
