@@ -463,9 +463,76 @@ Expression* TranslateToFuzzReader::makeHangLimitCheck() {
 }
 
 Expression* TranslateToFuzzReader::makeLogging() {
-  auto type = getLoggableType();
-  return builder.makeCall(
-    std::string("log-") + type.toString(), {make(type)}, Type::none);
+  auto makeLoggingCall = [&](Type type, Expression* value) {
+    return builder.makeCall(
+      std::string("log-") + type.toString(), {value}, Type::none);
+  };
+
+  // Generic path: Log something of a type we can log.
+  auto generic = [&]() {
+    auto type = getLoggableType();
+    return makeLoggingCall(type, make(type));
+  };
+
+  if (oneIn(2)) {
+    return generic();
+  }
+
+  // Try to find a local to log. Locals are particularly interesting because
+  // they are updated in loops etc.
+  //
+  // If we fail to find a local to log, just fall through to the generic path
+  // below.
+  auto* func = funcContext->func;
+  if (func->getNumLocals() == 0) {
+    return generic();
+  }
+
+  auto index = upTo(func->getNumLocals());
+  auto type = func->getLocalType(index);
+  if (isLoggableType(type)) {
+    return makeLoggingCall(type, builder.makeLocalGet(index, type));
+  }
+std::cout << "waka3 " << type << "\n";
+
+  // If the local contains a reference, we can try to read a value from it
+  // and log that.
+  if (!type.isStruct()) {
+    return generic();
+  }
+  // TODO: arrays
+std::cout << "waka4\n";
+abort();
+
+  auto& fields = type.getHeapType().getStruct().fields;
+  if (fields.empty()) {
+    return generic();
+  }
+std::cout << "waka5\n";
+
+  auto field = pick(fields.size());
+  auto fieldType = fields[field].type;
+  if (!isLoggableType(fieldType)) {
+    return generic();
+  }
+std::cout << "waka6\n";
+abort();
+
+  // If the reference is null, log an indication of that (to avoid causing
+  // a trap just because of logging code), and otherwise read the value
+  // and log it.
+  auto* condition =
+    builder.makeRefIs(RefIsNull, builder.makeLocalGet(index, type));
+
+  //
+  // Log an "odd" number for null, just to avoid logging 0 that has a high
+  // chance of overlapping with real values (as 0 is the default for i32).
+  auto* nullCase = makeLoggingCall(Type::i32, builder.makeConst(int32_t(0x2371c6a8)));
+
+  auto* nonNullCase =
+    builder.makeStructGet(field, builder.makeLocalGet(index, type), fieldType);
+
+  return builder.makeIf(condition, nullCase, nonNullCase);
 }
 
 Expression* TranslateToFuzzReader::makeMemoryHashLogging() {
