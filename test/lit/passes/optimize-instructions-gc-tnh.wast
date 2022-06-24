@@ -7,6 +7,14 @@
   ;; NO_TNH:      (type $struct (struct_subtype  data))
   (type $struct (struct_subtype data))
 
+  ;; TNH:      (type $substruct (struct_subtype (field i32) $struct))
+  ;; NO_TNH:      (type $substruct (struct_subtype (field i32) $struct))
+  (type $substruct (struct_subtype (field i32) $struct))
+
+  ;; TNH:      (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
+  ;; NO_TNH:      (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
+  (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
+
   ;; TNH:      (func $ref.eq (type $eqref_eqref_=>_i32) (param $a eqref) (param $b eqref) (result i32)
   ;; TNH-NEXT:  (ref.eq
   ;; TNH-NEXT:   (local.get $a)
@@ -240,6 +248,130 @@
     (ref.is_func
       (ref.as_data
         (local.get $a)
+      )
+    )
+  )
+
+  ;; TNH:      (func $struct.get (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $substruct 0
+  ;; TNH-NEXT:    (ref.cast_static $substruct
+  ;; TNH-NEXT:     (local.get $struct)
+  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; TNH-NEXT:     (local.get $struct)
+  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $substruct 0
+  ;; TNH-NEXT:    (local.get $substruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $substruct 0
+  ;; TNH-NEXT:    (local.get $substruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; TNH-NEXT:    (local.get $subsubstruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; TNH-NEXT:    (local.get $subsubstruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT: )
+  ;; NO_TNH:      (func $struct.get (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $substruct 0
+  ;; NO_TNH-NEXT:    (ref.cast_static $substruct
+  ;; NO_TNH-NEXT:     (local.get $struct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; NO_TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:     (local.get $struct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $substruct 0
+  ;; NO_TNH-NEXT:    (local.get $substruct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; NO_TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:     (local.get $substruct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; NO_TNH-NEXT:    (local.get $subsubstruct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; NO_TNH-NEXT:    (local.get $subsubstruct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT: )
+  (func $struct.get (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+    ;; Field 0 exists in sub and subsub, so we can remove casts to subsub in
+    ;; some cases. First, start with $struct and then cast. In these two we need
+    ;; to cast, as we start with a type that doesn't have the field.
+    (drop
+      (struct.get $substruct 0
+        (ref.cast_static $substruct
+          (local.get $struct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 0
+        (ref.cast_static $subsubstruct
+          (local.get $struct)
+        )
+      )
+    )
+    ;; Next start with $substruct. These casts can be removed (with TNH).
+    (drop
+      (struct.get $substruct 0
+        (ref.cast_static $substruct
+          (local.get $substruct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 0
+        (ref.cast_static $subsubstruct
+          (local.get $substruct)
+        )
+      )
+    )
+    ;; Next start with $subsubstruct. We can remove these too.
+    (drop
+      (struct.get $substruct 0
+        (ref.cast_static $substruct
+          (local.get $subsubstruct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 0
+        (ref.cast_static $subsubstruct
+          (local.get $subsubstruct)
+        )
       )
     )
   )
