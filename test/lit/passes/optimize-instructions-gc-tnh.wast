@@ -482,8 +482,8 @@
 ;; tests the case where we stop iterating on supertypes because we reach the
 ;; end of the supers.
 (module
-  ;; TNH:      (type $struct (struct_subtype  data))
-  ;; NO_TNH:      (type $struct (struct_subtype  data))
+  ;; TNH:      (type $struct (struct_subtype (field i32) data))
+  ;; NO_TNH:      (type $struct (struct_subtype (field i32) data))
   (type $struct (struct_subtype (field i32) data))
 
   ;; TNH:      (type $substruct (struct_subtype (field i32) $struct))
@@ -498,17 +498,13 @@
 
   ;; TNH:      (func $struct.get (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
   ;; TNH-NEXT:  (drop
-  ;; TNH-NEXT:   (struct.get $substruct 0
-  ;; TNH-NEXT:    (ref.cast_static $substruct
-  ;; TNH-NEXT:     (local.get $struct)
-  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   (struct.get $struct 0
+  ;; TNH-NEXT:    (local.get $struct)
   ;; TNH-NEXT:   )
   ;; TNH-NEXT:  )
   ;; TNH-NEXT:  (drop
-  ;; TNH-NEXT:   (struct.get $subsubstruct 0
-  ;; TNH-NEXT:    (ref.cast_static $subsubstruct
-  ;; TNH-NEXT:     (local.get $struct)
-  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   (struct.get $struct 0
+  ;; TNH-NEXT:    (local.get $struct)
   ;; TNH-NEXT:   )
   ;; TNH-NEXT:  )
   ;; TNH-NEXT:  (drop
@@ -573,6 +569,7 @@
   ;; NO_TNH-NEXT:  )
   ;; NO_TNH-NEXT: )
   (func $struct.get (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+    ;; Since field 0 is in $struct, none of these casts are needed (in TNH).
     (drop
       (struct.get $substruct 0
         (ref.cast_static $substruct
