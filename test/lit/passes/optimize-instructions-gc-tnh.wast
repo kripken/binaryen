@@ -678,3 +678,8 @@
     )
   )
 )
+
+;; TODO: arrays
+;; TODO: ref.cast (and the nullability requirement)
+;; TODO: ref.test
+;; TODO: ref.as
