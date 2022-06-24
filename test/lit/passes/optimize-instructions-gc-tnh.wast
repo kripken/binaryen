@@ -268,13 +268,13 @@
   ;; NO_TNH:      (type $struct (struct_subtype  data))
   (type $struct (struct_subtype data))
 
-  ;; TNH:      (type $substruct (struct_subtype (field i32) $struct))
-  ;; NO_TNH:      (type $substruct (struct_subtype (field i32) $struct))
-  (type $substruct (struct_subtype (field i32) $struct))
+  ;; TNH:      (type $substruct (struct_subtype (field (mut i32)) $struct))
+  ;; NO_TNH:      (type $substruct (struct_subtype (field (mut i32)) $struct))
+  (type $substruct (struct_subtype (field (mut i32)) $struct))
 
-  ;; TNH:      (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
-  ;; NO_TNH:      (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
-  (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
+  ;; TNH:      (type $subsubstruct (struct_subtype (field (mut i32)) (field (mut i32)) $substruct))
+  ;; NO_TNH:      (type $subsubstruct (struct_subtype (field (mut i32)) (field (mut i32)) $substruct))
+  (type $subsubstruct (struct_subtype (field (mut i32)) (field (mut i32)) $substruct))
 
   ;; TNH:      (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none (func_subtype (param (ref $struct) (ref $substruct) (ref $subsubstruct)) func))
 
@@ -482,17 +482,17 @@
 ;; tests the case where we stop iterating on supertypes because we reach the
 ;; end of the supers.
 (module
-  ;; TNH:      (type $struct (struct_subtype (field i32) data))
-  ;; NO_TNH:      (type $struct (struct_subtype (field i32) data))
-  (type $struct (struct_subtype (field i32) data))
+  ;; TNH:      (type $struct (struct_subtype (field (mut i32)) data))
+  ;; NO_TNH:      (type $struct (struct_subtype (field (mut i32)) data))
+  (type $struct (struct_subtype (field (mut i32)) data))
 
-  ;; TNH:      (type $substruct (struct_subtype (field i32) $struct))
-  ;; NO_TNH:      (type $substruct (struct_subtype (field i32) $struct))
-  (type $substruct (struct_subtype (field i32) $struct))
+  ;; TNH:      (type $substruct (struct_subtype (field (mut i32)) $struct))
+  ;; NO_TNH:      (type $substruct (struct_subtype (field (mut i32)) $struct))
+  (type $substruct (struct_subtype (field (mut i32)) $struct))
 
-  ;; TNH:      (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
-  ;; NO_TNH:      (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
-  (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
+  ;; TNH:      (type $subsubstruct (struct_subtype (field (mut i32)) (field (mut i32)) $substruct))
+  ;; NO_TNH:      (type $subsubstruct (struct_subtype (field (mut i32)) (field (mut i32)) $substruct))
+  (type $subsubstruct (struct_subtype (field (mut i32)) (field (mut i32)) $substruct))
 
   ;; TNH:      (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none (func_subtype (param (ref $struct) (ref $substruct) (ref $subsubstruct)) func))
 
@@ -677,6 +677,30 @@
           (local.get $subsubstruct)
         )
       )
+    )
+  )
+
+  ;; TNH:      (func $struct.set (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; TNH-NEXT:  (struct.set $struct 0
+  ;; TNH-NEXT:   (local.get $struct)
+  ;; TNH-NEXT:   (i32.const 1)
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT: )
+  ;; NO_TNH:      (func $struct.set (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; NO_TNH-NEXT:  (struct.set $subsubstruct 0
+  ;; NO_TNH-NEXT:   (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:    (local.get $struct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:   (i32.const 1)
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT: )
+  (func $struct.set (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+    ;; This cast is not needed (with TNH).
+    (struct.set $subsubstruct 0
+      (ref.cast_static $subsubstruct
+        (local.get $struct)
+      )
+      (i32.const 1)
     )
   )
 )
