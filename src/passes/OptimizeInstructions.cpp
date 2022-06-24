@@ -1447,10 +1447,44 @@ struct OptimizeInstructions
     }
   }
 
-  void visitStructGet(StructGet* curr) { skipNonNullCast(curr->ref); }
+  // Given a struct type, finds the earliest super type that has that field.
+  // For example:
+  //
+  //  struct A { x: int };
+  //  struct B { x: int, y: float } subtype of A;
+  //
+  // getEarliestSuperWithField(B, 0) returns A, while
+  // getEarliestSuperWithField(B, 1) returns B.
+  HeapType getEarliestSuperWithField(HeapType type, Index field) {
+    while (1) {
+      const auto& fields = type.getStruct().fields;
+      if (field >= fields.size()) {
+        return type;
+      }
+      if (auto super = type.getSuperType()) {
+        type = super;
+        continue;
+      }
+      return type;
+    }
+  }
+
+  void visitStructGet(StructGet* curr) {
+    // We will trap on null anyhow.
+    skipNonNullCast(curr->ref);
+
+    // Remove casts that are not necessary for us to validate, if we can.
+    if (type != Type::unreachable) {
+      skipCast(curr->ref, getEarliestSuperWithField(curr->ref->type.getHeapType(), curr->index));
+    }
+  }
 
   void visitStructSet(StructSet* curr) {
     skipNonNullCast(curr->ref);
+
+    if (type != Type::unreachable) {
+      skipCast(curr->ref, getEarliestSuperWithField(curr->ref->type.getHeapType(), curr->index));
+    }
 
     if (curr->ref->type != Type::unreachable && curr->value->type.isInteger()) {
       const auto& fields = curr->ref->type.getHeapType().getStruct().fields;
@@ -1598,10 +1632,33 @@ struct OptimizeInstructions
     return true;
   }
 
-  void visitArrayGet(ArrayGet* curr) { skipNonNullCast(curr->ref); }
+  // Returns the top super type that is still an array. That is, it is the
+  // supertype whose supertype is |data|.
+  HeapType getTopArrayType(HeapType type) {
+    while (1) {
+      auto super = type.getSuper();
+      assert(super);
+      if (*super == HeapType::data) {
+        return type;
+      }
+      type = *super;
+    }
+  }
+
+  void visitArrayGet(ArrayGet* curr) {
+    skipNonNullCast(curr->ref);
+
+    if (type != Type::unreachable) {
+      skipCast(curr->ref, getTopArrayType(curr->ref.getHeapType()));
+    }
+  }
 
   void visitArraySet(ArraySet* curr) {
     skipNonNullCast(curr->ref);
+
+    if (type != Type::unreachable) {
+      skipCast(curr->ref, getTopArrayType(curr->ref.getHeapType()));
+    }
 
     if (curr->ref->type != Type::unreachable && curr->value->type.isInteger()) {
       auto element = curr->ref->type.getHeapType().getArray().element;
@@ -1609,11 +1666,24 @@ struct OptimizeInstructions
     }
   }
 
-  void visitArrayLen(ArrayLen* curr) { skipNonNullCast(curr->ref); }
+  void visitArrayLen(ArrayLen* curr) {
+    skipNonNullCast(curr->ref);
+
+    if (type != Type::unreachable) {
+      skipCast(curr->ref, getTopArrayType(curr->ref.getHeapType()));
+    }
+  }
 
   void visitArrayCopy(ArrayCopy* curr) {
     skipNonNullCast(curr->destRef);
     skipNonNullCast(curr->srcRef);
+
+    if (type != Type::unreachable) {
+      skipCast(curr->destRef, getTopArrayType(curr->ref.getHeapType()));
+    }
+    if (type != Type::unreachable) {
+      skipCast(curr->srcRef, getTopArrayType(curr->ref.getHeapType()));
+    }
   }
 
   bool canBeCastTo(HeapType a, HeapType b) {
@@ -1623,6 +1693,14 @@ struct OptimizeInstructions
   void visitRefCast(RefCast* curr) {
     if (curr->type == Type::unreachable) {
       return;
+    }
+
+    // All casts before us may be removable, as the cast forces a type on the
+    // output. However, non-nullability must be preserved.
+    if (curr->ref.isNullable()) {
+      skipCast(curr->ref);
+    } else {
+      skipCast(curr->ref, Type(HeapType::any, NonNullable));
     }
 
     Builder builder(*getModule());
@@ -1830,6 +1908,12 @@ struct OptimizeInstructions
 
     Builder builder(*getModule());
 
+    // What the reference points to does not depend on the type, so casts may be
+    // removable.
+    // XXX removing casts like this may limit optimizations like those right
+    //     below!
+    skipCast(curr->value);
+
     auto refType = curr->ref->type.getHeapType();
     auto intendedType = curr->getIntendedType();
 
@@ -1928,6 +2012,20 @@ struct OptimizeInstructions
     }
 
     skipNonNullCast(curr->value);
+
+    switch (op) {
+      case RefAsNonNull:
+        break;
+      case RefAsFunc:
+      case RefAsData:
+      case RefAsI31:
+        // These casts force a type on the output, so all casts leading to them
+        // can be removed.
+        skipCast(curr->value);
+        break;
+      default:
+        WASM_UNREACHABLE("invalid ref.as_*");
+    }
 
     // Check if the type is the kind we are checking for.
     auto result = GCTypeUtils::evaluateKindCheck(curr);
