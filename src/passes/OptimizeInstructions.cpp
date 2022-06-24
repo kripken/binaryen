@@ -1452,7 +1452,7 @@ struct OptimizeInstructions
     return skipCast(input, Type(requiredType, Nullable));
   }
 
-  // Given a struct type, finds the earliest super type that has that field.
+  // Given a struct type, finds the earliest supertype that has that field.
   // For example:
   //
   //  struct A { x: int };
