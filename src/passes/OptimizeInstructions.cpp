@@ -1462,11 +1462,11 @@ struct OptimizeInstructions
   // getFirstSuperWithField(B, 1) returns B.
   HeapType getFirstSuperWithField(HeapType type, Index field) {
     while (1) {
-      const auto& fields = type.getStruct().fields;
-      if (field >= fields.size()) {
-        return type;
-      }
       if (auto super = type.getSuperType()) {
+        const auto& fields = super->getStruct().fields;
+        if (field >= fields.size()) {
+          return type;
+        }
         type = *super;
         continue;
       }
@@ -1479,23 +1479,27 @@ struct OptimizeInstructions
   }
 
   void visitStructGet(StructGet* curr) {
+    if (curr->ref->type == Type::unreachable) {
+      return;
+    }
+
     // We will trap on null anyhow.
     skipNonNullCast(curr->ref);
 
     // Remove casts that are not necessary for us to validate, if we can.
-    if (curr->ref->type != Type::unreachable) {
-      skipCast(curr->ref, getFirstSuperWithField(curr->ref->type, curr->index));
-    }
+    skipCast(curr->ref, getFirstSuperWithField(curr->ref->type, curr->index));
   }
 
   void visitStructSet(StructSet* curr) {
-    skipNonNullCast(curr->ref);
-
-    if (curr->ref->type != Type::unreachable) {
-      skipCast(curr->ref, getFirstSuperWithField(curr->ref->type, curr->index));
+    if (curr->ref->type == Type::unreachable) {
+      return;
     }
 
-    if (curr->ref->type != Type::unreachable && curr->value->type.isInteger()) {
+    skipNonNullCast(curr->ref);
+
+    skipCast(curr->ref, getFirstSuperWithField(curr->ref->type, curr->index));
+
+    if (curr->value->type.isInteger()) {
       const auto& fields = curr->ref->type.getHeapType().getStruct().fields;
       optimizeStoredValue(curr->value, fields[curr->index].getByteSize());
     }
@@ -1646,8 +1650,7 @@ struct OptimizeInstructions
   HeapType getTopArrayType(HeapType type) {
     while (1) {
       auto super = type.getSuperType();
-      assert(super);
-      if (*super == HeapType::data) {
+      if (!super || *super == HeapType::data) {
         return type;
       }
       type = *super;
@@ -1659,19 +1662,23 @@ struct OptimizeInstructions
   }
 
   void visitArrayGet(ArrayGet* curr) {
+    if (curr->ref->type == Type::unreachable) {
+      return;
+    }
+
     skipNonNullCast(curr->ref);
 
-    if (curr->ref->type != Type::unreachable) {
-      skipCast(curr->ref, getTopArrayType(curr->ref->type));
-    }
+    skipCast(curr->ref, getTopArrayType(curr->ref->type));
   }
 
   void visitArraySet(ArraySet* curr) {
+    if (curr->ref->type == Type::unreachable) {
+      return;
+    }
+
     skipNonNullCast(curr->ref);
 
-    if (curr->ref->type != Type::unreachable) {
-      skipCast(curr->ref, getTopArrayType(curr->ref->type));
-    }
+    skipCast(curr->ref, getTopArrayType(curr->ref->type));
 
     if (curr->ref->type != Type::unreachable && curr->value->type.isInteger()) {
       auto element = curr->ref->type.getHeapType().getArray().element;
@@ -1680,23 +1687,26 @@ struct OptimizeInstructions
   }
 
   void visitArrayLen(ArrayLen* curr) {
+    if (curr->ref->type == Type::unreachable) {
+      return;
+    }
+
     skipNonNullCast(curr->ref);
 
-    if (curr->ref->type != Type::unreachable) {
-      skipCast(curr->ref, getTopArrayType(curr->ref->type));
-    }
+    skipCast(curr->ref, getTopArrayType(curr->ref->type));
   }
 
   void visitArrayCopy(ArrayCopy* curr) {
+    if (curr->destRef->type == Type::unreachable ||
+        curr->srcRef->type == Type::unreachable) {
+      return;
+    }
+
     skipNonNullCast(curr->destRef);
     skipNonNullCast(curr->srcRef);
 
-    if (curr->destRef->type != Type::unreachable) {
-      skipCast(curr->destRef, getTopArrayType(curr->destRef->type));
-    }
-    if (curr->srcRef->type != Type::unreachable) {
-      skipCast(curr->srcRef, getTopArrayType(curr->srcRef->type));
-    }
+    skipCast(curr->destRef, getTopArrayType(curr->destRef->type));
+    skipCast(curr->srcRef, getTopArrayType(curr->srcRef->type));
   }
 
   bool canBeCastTo(HeapType a, HeapType b) {
