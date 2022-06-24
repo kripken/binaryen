@@ -476,3 +476,210 @@
     )
   )
 )
+
+;; Identical to the above module, but now $struct has field 0 already. As a
+;; result, we do not need to cast to $substruct to access that field. This also
+;; tests the case where we stop iterating on supertypes because we reach the
+;; end of the supers.
+(module
+  ;; TNH:      (type $struct (struct_subtype  data))
+  ;; NO_TNH:      (type $struct (struct_subtype  data))
+  (type $struct (struct_subtype (field i32) data))
+
+  ;; TNH:      (type $substruct (struct_subtype (field i32) $struct))
+  ;; NO_TNH:      (type $substruct (struct_subtype (field i32) $struct))
+  (type $substruct (struct_subtype (field i32) $struct))
+
+  ;; TNH:      (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
+  ;; NO_TNH:      (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
+  (type $subsubstruct (struct_subtype (field i32) (field i32) $substruct))
+
+  ;; TNH:      (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none (func_subtype (param (ref $struct) (ref $substruct) (ref $subsubstruct)) func))
+
+  ;; TNH:      (func $struct.get (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $substruct 0
+  ;; TNH-NEXT:    (ref.cast_static $substruct
+  ;; TNH-NEXT:     (local.get $struct)
+  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; TNH-NEXT:     (local.get $struct)
+  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $substruct 0
+  ;; TNH-NEXT:    (local.get $substruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $substruct 0
+  ;; TNH-NEXT:    (local.get $substruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; TNH-NEXT:    (local.get $subsubstruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; TNH-NEXT:    (local.get $subsubstruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT: )
+  ;; NO_TNH:      (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none (func_subtype (param (ref $struct) (ref $substruct) (ref $subsubstruct)) func))
+
+  ;; NO_TNH:      (func $struct.get (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $substruct 0
+  ;; NO_TNH-NEXT:    (ref.cast_static $substruct
+  ;; NO_TNH-NEXT:     (local.get $struct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; NO_TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:     (local.get $struct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $substruct 0
+  ;; NO_TNH-NEXT:    (local.get $substruct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; NO_TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:     (local.get $substruct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; NO_TNH-NEXT:    (local.get $subsubstruct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 0
+  ;; NO_TNH-NEXT:    (local.get $subsubstruct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT: )
+  (func $struct.get (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+    (drop
+      (struct.get $substruct 0
+        (ref.cast_static $substruct
+          (local.get $struct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 0
+        (ref.cast_static $subsubstruct
+          (local.get $struct)
+        )
+      )
+    )
+    (drop
+      (struct.get $substruct 0
+        (ref.cast_static $substruct
+          (local.get $substruct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 0
+        (ref.cast_static $subsubstruct
+          (local.get $substruct)
+        )
+      )
+    )
+    (drop
+      (struct.get $substruct 0
+        (ref.cast_static $substruct
+          (local.get $subsubstruct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 0
+        (ref.cast_static $subsubstruct
+          (local.get $subsubstruct)
+        )
+      )
+    )
+  )
+
+  ;; TNH:      (func $struct.get-1 (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; TNH-NEXT:     (local.get $struct)
+  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; TNH-NEXT:     (local.get $substruct)
+  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; TNH-NEXT:    (local.get $subsubstruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT: )
+  ;; NO_TNH:      (func $struct.get-1 (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; NO_TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:     (local.get $struct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; NO_TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:     (local.get $substruct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; NO_TNH-NEXT:    (local.get $subsubstruct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT: )
+  (func $struct.get-1 (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+    (drop
+      (struct.get $subsubstruct 1
+        (ref.cast_static $subsubstruct
+          (local.get $struct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 1
+        (ref.cast_static $subsubstruct
+          (local.get $substruct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 1
+        (ref.cast_static $subsubstruct
+          (local.get $subsubstruct)
+        )
+      )
+    )
+  )
+)
