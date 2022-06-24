@@ -359,7 +359,9 @@
         )
       )
     )
-    ;; Next start with $subsubstruct. We can remove these too.
+    ;; Next start with $subsubstruct. We can remove these too. Note that
+    ;; we can optimize it them even without TNH as the casts themselves are
+    ;; trivially unnecessary (with static typing).
     (drop
       (struct.get $substruct 0
         (ref.cast_static $substruct
@@ -369,6 +371,76 @@
     )
     (drop
       (struct.get $subsubstruct 0
+        (ref.cast_static $subsubstruct
+          (local.get $subsubstruct)
+        )
+      )
+    )
+  )
+
+  ;; TNH:      (func $struct.get-1 (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; TNH-NEXT:     (local.get $struct)
+  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; TNH-NEXT:     (local.get $substruct)
+  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT:  (drop
+  ;; TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; TNH-NEXT:    (local.get $subsubstruct)
+  ;; TNH-NEXT:   )
+  ;; TNH-NEXT:  )
+  ;; TNH-NEXT: )
+  ;; NO_TNH:      (func $struct.get-1 (type $ref|$struct|_ref|$substruct|_ref|$subsubstruct|_=>_none) (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; NO_TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:     (local.get $struct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; NO_TNH-NEXT:    (ref.cast_static $subsubstruct
+  ;; NO_TNH-NEXT:     (local.get $substruct)
+  ;; NO_TNH-NEXT:    )
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT:  (drop
+  ;; NO_TNH-NEXT:   (struct.get $subsubstruct 1
+  ;; NO_TNH-NEXT:    (local.get $subsubstruct)
+  ;; NO_TNH-NEXT:   )
+  ;; NO_TNH-NEXT:  )
+  ;; NO_TNH-NEXT: )
+  (func $struct.get-1 (param $struct (ref $struct)) (param $substruct (ref $substruct)) (param $subsubstruct (ref $subsubstruct))
+    ;; As the previous function, but now we read from field 1, which only
+    ;; exists in $subsubstruct. We need all casts but the very last. Note that
+    ;; we can optimize it out even without TNH as the cast itself is trivially
+    ;; unnecessary (with static typing).
+    (drop
+      (struct.get $subsubstruct 1
+        (ref.cast_static $subsubstruct
+          (local.get $struct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 1
+        (ref.cast_static $subsubstruct
+          (local.get $substruct)
+        )
+      )
+    )
+    (drop
+      (struct.get $subsubstruct 1
         (ref.cast_static $subsubstruct
           (local.get $subsubstruct)
         )
