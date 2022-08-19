@@ -296,7 +296,10 @@ struct ExecutionResults {
     return info;
   }
 
-  FunctionResult run(Function* func, Module& wasm, ModuleRunner& instance, ExportExecutionInfo& info) {
+  FunctionResult run(Function* func,
+                     Module& wasm,
+                     ModuleRunner& instance,
+                     ExportExecutionInfo& info) {
     // The call will append to globalLoggings, so we must note how many exist
     // before us: anything new will be ours.
     struct LoggingMonitor {
@@ -304,7 +307,9 @@ struct ExecutionResults {
       Loggings& globalLoggings;
       size_t initialNum;
 
-      LoggingMonitor(ExportExecutionInfo& info, Loggings& globalLoggings) : info(info), globalLoggings(globalLoggings), initialNum(globalLoggings.size()) {}
+      LoggingMonitor(ExportExecutionInfo& info, Loggings& globalLoggings)
+        : info(info), globalLoggings(globalLoggings),
+          initialNum(globalLoggings.size()) {}
       ~LoggingMonitor() {
         auto finalNum = globalLoggings.size();
         for (size_t i = initialNum; i < finalNum; i++) {
