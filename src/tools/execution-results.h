@@ -90,21 +90,42 @@ struct ExecutionResults {
   struct Trap {};
   struct Exception {};
   using FunctionResult = std::variant<Literals, Trap, Exception>;
-  std::map<Name, FunctionResult> results;
-  Loggings loggings;
+
+  struct ExportExecutionInfo {
+    // The export name that was executed.
+    Name name;
+
+    // The result of running the function, which is either a Literals, or a trap
+    // or an exception.
+    FunctionResult result;
+
+    // Logged values using the logging APIs. These are side effects that must
+    // compare equal.
+    Loggings loggings;
+  };
+
+  std::vector<ExportExecutionInfo> infos;
+
+  // Loggings that happen during global execution, such as the start function,
+  // which are not tied to calling an export
+  Loggings globalLoggings;
 
   // If set, we should ignore this and not compare it to anything.
   bool ignore = false;
-  // If set, we don't compare whether a trap has occurred or not.
-  bool ignoreTrap = false;
+  // If set, we are in a mode where traps can be ignored by the optimizer. That
+  // means that if trap doesn't happen, we can compare normally, but if a trap
+  // does then we should stop comparing from there, since the optimizer is free
+  // to handle code that traps like undefined behavior, and might cause side
+  // effects that are noticeable later.
+  bool optimizerIgnoresTraps = false;
 
   ExecutionResults(const PassOptions& options)
-    : ignoreTrap(options.ignoreImplicitTraps || options.trapsNeverHappen) {}
-  ExecutionResults(bool ignoreTrap) : ignoreTrap(ignoreTrap) {}
+    : optimizerIgnoresTraps(options.ignoreImplicitTraps || options.trapsNeverHappen) {}
+  ExecutionResults(bool optimizerIgnoresTraps) : optimizerIgnoresTraps(optimizerIgnoresTraps) {}
 
   // get results of execution
   void get(Module& wasm) {
-    LoggingExternalInterface interface(loggings);
+    LoggingExternalInterface interface(globalLoggings);
     try {
       ModuleRunner instance(wasm, &interface);
       // execute all exported methods (that are therefore preserved through
@@ -140,7 +161,7 @@ struct ExecutionResults {
 
   // get current results and check them against previous ones
   void check(Module& wasm) {
-    ExecutionResults optimizedResults(ignoreTrap);
+    ExecutionResults optimizedResults(optimizerIgnoresTraps);
     optimizedResults.get(wasm);
     if (optimizedResults != *this) {
       std::cout << "[fuzz-exec] optimization passes changed results\n";
@@ -190,39 +211,66 @@ struct ExecutionResults {
     return true;
   }
 
+  bool compareLoggings(const Loggings& a, const Loggings& b) {
+    if (a.size() != b.size()) {
+      std::cout << "logging counts not identical!\n";
+      return false;
+    }
+    for (Index i = 0; i < a.size(); i++) {
+      if (!areEqual(a[i], b[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   bool operator==(ExecutionResults& other) {
     if (ignore || other.ignore) {
       std::cout << "ignoring comparison of ExecutionResults!\n";
       return true;
     }
-    for (auto& [name, _] : other.results) {
-      if (results.find(name) == results.end()) {
-        std::cout << "[fuzz-exec] missing " << name << '\n';
+    if (!compareLoggings(globalLoggings, other.globalLoggings)) {
+      std::cout << "[fuzz-exec] global loggings did not match\n";
+      return false;
+    }
+
+    if (infos.size() != other.infos.size()) {
+      std::cout << "[fuzz-exec] number of export executions did not match\n";
+      return false;
+    }
+    for (Index i = 0; i < infos.size; i++) {
+      auto& info = infos[i];
+      auto& otherInfo = other.infos[i];
+      std::cout << "[fuzz-exec] comparing " << info.name << " (" << otherInfo.name << ")\n";
+      if (info.name != otherInfo.name) {
+        std::cout << "[fuzz-exec] export name did not match\n";
         return false;
       }
-      std::cout << "[fuzz-exec] comparing " << name << '\n';
-      if (results[name].index() != other.results[name].index()) {
-        if (ignoreTrap) {
-          if (!std::get_if<Trap>(&results[name]) &&
-              !std::get_if<Trap>(&other.results[name])) {
-            return false;
-          }
-        } else {
-          return false;
+      // We should see see same result kind: both Literals, or both Traps, or
+      // both Exceptions.
+      if (info.result.index() != otherInfo.result.index()) {
+        // If we are running in a mode where the optimizer can ignore traps, and
+        // one is a trap then we can't report an error
+        // here since the optimizer considered a trap to be undefined behavior.
+        // We must also stop comparing here since anything later might be
+        // affected by side effects of that undefined behavior.
+        if (optimizerIgnoresTraps && (std::get_if<Trap>(&info.result) ||
+            std::get_if<Trap>(&otherInfo.result))) {
+          std::cout << "[fuzz-exec] comparing results in a trap-ignoring mode "
+                    << "and a trap happened, so ignoring results from here\n";
+          return true;
         }
+
+        std::cout << "[fuzz-exec] Function result kind did not match\n";
+        return false;
       }
-      auto* values = std::get_if<Literals>(&results[name]);
-      auto* otherValues = std::get_if<Literals>(&other.results[name]);
+      auto* values = std::get_if<Literals>(&info.result);
+      auto* otherValues = std::get_if<Literals>(&otherInfo.result);
       if (values && otherValues && !areEqual(*values, *otherValues)) {
         return false;
       }
-    }
-    if (loggings.size() != other.loggings.size()) {
-      std::cout << "logging counts not identical!\n";
-      return false;
-    }
-    for (Index i = 0; i < loggings.size(); i++) {
-      if (!areEqual(loggings[i], other.loggings[i])) {
+      if (!compareLoggings(info.loggings, otherInfo.loggings)) {
+        std::cout << "[fuzz-exec] loggings did not match\n";
         return false;
       }
     }
