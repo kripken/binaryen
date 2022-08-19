@@ -641,6 +641,14 @@ class FuzzExec(TestCaseHandler):
     frequency = 1
 
     def handle_pair(self, input, before_wasm, after_wasm, opts):
+        # possibly use traps-never-happen mode. note that it is not safe to use
+        # that in other fuzzer modes, since we need special logic to ignore
+        # traps in tnh mode (since a trap is undefined behavior there, observed
+        # results may change). that special logic does exist in fuzz-exec
+        # (specifically in execution-results.h).
+        # TODO: reduce this constant?
+        if random.random() < 0.5:
+            opts = opts + ['-tnh']
         run([in_bin('wasm-opt'), before_wasm] + opts + ['--fuzz-exec'])
 
 
