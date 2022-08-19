@@ -120,8 +120,10 @@ struct ExecutionResults {
   bool optimizerIgnoresTraps = false;
 
   ExecutionResults(const PassOptions& options)
-    : optimizerIgnoresTraps(options.ignoreImplicitTraps || options.trapsNeverHappen) {}
-  ExecutionResults(bool optimizerIgnoresTraps) : optimizerIgnoresTraps(optimizerIgnoresTraps) {}
+    : optimizerIgnoresTraps(options.ignoreImplicitTraps ||
+                            options.trapsNeverHappen) {}
+  ExecutionResults(bool optimizerIgnoresTraps)
+    : optimizerIgnoresTraps(optimizerIgnoresTraps) {}
 
   // get results of execution
   void get(Module& wasm) {
@@ -241,7 +243,8 @@ struct ExecutionResults {
     for (Index i = 0; i < infos.size; i++) {
       auto& info = infos[i];
       auto& otherInfo = other.infos[i];
-      std::cout << "[fuzz-exec] comparing " << info.name << " (" << otherInfo.name << ")\n";
+      std::cout << "[fuzz-exec] comparing " << info.name << " ("
+                << otherInfo.name << ")\n";
       if (info.name != otherInfo.name) {
         std::cout << "[fuzz-exec] export name did not match\n";
         return false;
@@ -255,7 +258,7 @@ struct ExecutionResults {
         // We must also stop comparing here since anything later might be
         // affected by side effects of that undefined behavior.
         if (optimizerIgnoresTraps && (std::get_if<Trap>(&info.result) ||
-            std::get_if<Trap>(&otherInfo.result))) {
+                                      std::get_if<Trap>(&otherInfo.result))) {
           std::cout << "[fuzz-exec] comparing results in a trap-ignoring mode "
                     << "and a trap happened, so ignoring results from here\n";
           return true;
