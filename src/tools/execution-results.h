@@ -138,9 +138,10 @@ struct ExecutionResults {
         }
         std::cout << "[fuzz-exec] calling " << exp->name << "\n";
         auto* func = wasm.getFunction(exp->value);
-        FunctionResult ret = run(func, wasm, instance);
-        results[exp->name] = ret;
-        if (auto* values = std::get_if<Literals>(&ret)) {
+        ExportExecutionInfo info;
+        info.name = exp->name;
+        run(func, wasm, instance, info);
+        if (auto* values = std::get_if<Literals>(&info.result)) {
           // ignore the result if we hit an unreachable and returned no value
           if (values->size() > 0) {
             std::cout << "[fuzz-exec] note result: " << exp->name << " => ";
@@ -240,7 +241,7 @@ struct ExecutionResults {
       std::cout << "[fuzz-exec] number of export executions did not match\n";
       return false;
     }
-    for (Index i = 0; i < infos.size; i++) {
+    for (Index i = 0; i < infos.size(); i++) {
       auto& info = infos[i];
       auto& otherInfo = other.infos[i];
       std::cout << "[fuzz-exec] comparing " << info.name << " ("
@@ -282,18 +283,37 @@ struct ExecutionResults {
 
   bool operator!=(ExecutionResults& other) { return !((*this) == other); }
 
-  FunctionResult run(Function* func, Module& wasm) {
-    LoggingExternalInterface interface(loggings);
+  ExportExecutionInfo run(Name exportName, Function* func, Module& wasm) {
+    ExportExecutionInfo info;
+    info.name = exportName;
+    LoggingExternalInterface interface(info.loggings);
     try {
       ModuleRunner instance(wasm, &interface);
-      return run(func, wasm, instance);
+      info.result = run(func, wasm, instance, info);
     } catch (const TrapException&) {
       // may throw in instance creation (init of offsets)
-      return {};
     }
+    return info;
   }
 
-  FunctionResult run(Function* func, Module& wasm, ModuleRunner& instance) {
+  FunctionResult run(Function* func, Module& wasm, ModuleRunner& instance, ExportExecutionInfo& info) {
+    // The call will append to globalLoggings, so we must note how many exist
+    // before us: anything new will be ours.
+    struct LoggingMonitor {
+      ExportExecutionInfo& info;
+      Loggings& globalLoggings;
+      size_t initialNum;
+
+      LoggingMonitor(ExportExecutionInfo& info, Loggings& globalLoggings) : info(info), globalLoggings(globalLoggings), initialNum(globalLoggings.size()) {}
+      ~LoggingMonitor() {
+        auto finalNum = globalLoggings.size();
+        for (size_t i = initialNum; i < finalNum; i++) {
+          info.loggings.push_back(globalLoggings[i]);
+        }
+        globalLoggings.resize(initialNum);
+      }
+    } monitor(info, globalLoggings);
+
     try {
       Literals arguments;
       // init hang support, if present
