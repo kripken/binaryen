@@ -32,6 +32,9 @@
 // this basic block, and can remove code1 and code2, even if they have side
 // effects.
 //
+// TODO: whole-program analysis? or should another pass do that, to propagate
+//       a call to a function whose body is unreachable to an unreachable?
+//
 
 #include "ir/linear-execution.h"
 #include "ir/utils.h"
@@ -95,6 +98,7 @@ struct Remover
 
   void visitExpression(Expression* curr) {
     if (removable.count(curr)) {
+      // TODO explain why we do not need to drop children here
       replaceCurrent(Builder(*getModule()).makeUnreachable());
     }
   }
@@ -134,6 +138,7 @@ std::cout << "iter2\n";
       PassRunner runner(getModule(), getPassRunner()->options);
       runner.setIsNested(true);
       runner.add("dce");
+      runner.add("vacuum"); // TODO: more opts there
       runner.runOnFunction(func);
     }
   }
