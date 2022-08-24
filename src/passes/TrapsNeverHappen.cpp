@@ -51,12 +51,12 @@ struct Scanner
   std::vector<Expression*> inBlock;
 
   // All the expressions we have seen that we can remove.
-  std::unordered_map<Expression*> removable;
+  std::unordered_set<Expression*> removable;
 
   static void doNoteNonLinear(Scanner* self, Expression** currp) {
     // Control flow is splitting or merging; clear the current list of items in
     // the current block.
-    inBlock.clear();
+    self->inBlock.clear();
   }
 
   void visitExpression(Expression* curr) {
@@ -79,9 +79,9 @@ struct Scanner
 struct Remover
   : public PostWalker<Remover, UnifiedExpressionVisitor<Remover>> {
 
-  std::unordered_map<Expression*>& removable;
+  std::unordered_set<Expression*>& removable;
 
-  Remover(std::unordered_map<Expression*>& removable) : removable(removable) {}
+  Remover(std::unordered_set<Expression*>& removable) : removable(removable) {}
 
   void visitExpression(Expression* curr) {
     if (removable.count(curr)) {
@@ -101,10 +101,8 @@ struct TrapsNeverHappen : public WalkerPass<PostWalker<TrapsNeverHappen>> {
   Pass* create() override { return new TrapsNeverHappen(); }
 
   void doWalkFunction(Function* func) {
-    auto& options = getPassOptions();
-
     while (1) {
-      Scanner scanner();
+      Scanner scanner;
       scanner.walkFunctionInModule(func, getModule());
       if (scanner.removable.empty()) {
         return;
@@ -112,7 +110,7 @@ struct TrapsNeverHappen : public WalkerPass<PostWalker<TrapsNeverHappen>> {
 
       // We have things to remove. Remove them, then apply DCE to propagate that
       // further, and then loop around.
-      Remover remover(scanner.removable).
+      Remover remover(scanner.removable);
       remover.walkFunctionInModule(func, getModule());
 
       ReFinalize().walkFunctionInModule(func, getModule());
