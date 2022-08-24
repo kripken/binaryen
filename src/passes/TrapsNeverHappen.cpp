@@ -56,23 +56,33 @@ struct Scanner
   static void doNoteNonLinear(Scanner* self, Expression** currp) {
     // Control flow is splitting or merging; clear the current list of items in
     // the current block.
-    self->inBlock.clear();
+    //
+    // Note that we do *not* do this if the cause of the nonlinear control flow
+    // is an unreachable - that is the very thing we want to optimize here. We
+    // optimize under the assumption that that nonlinearity never occurs.
+    if (!(*currp)->is<Unreachable>()) {
+      self->inBlock.clear();
+    }
+std::cout << "nonlinear\n";
   }
 
   void visitExpression(Expression* curr) {
     if (curr->is<Unreachable>()) {
+std::cout << "trap!\n";
       // This traps, so everything in this basic block can be removed.
       //
       // Note that we don't need to bother with things after the trap - dce will
       // handle those anyhow.
       for (auto* item : inBlock) {
         removable.insert(item);
+std::cout << "  mark removable\n";
       }
       inBlock.clear();
       return;
     }
 
     inBlock.push_back(curr);
+std::cout << "push inNBlock\n";
   }
 };
 
@@ -101,12 +111,18 @@ struct TrapsNeverHappen : public WalkerPass<PostWalker<TrapsNeverHappen>> {
   Pass* create() override { return new TrapsNeverHappen(); }
 
   void doWalkFunction(Function* func) {
+    if (!getPassOptions().trapsNeverHappen) {
+      Fatal() << "Cannot run traps-never-happen opts pass without -tnh";
+    }
+
     while (1) {
+std::cout << "iter1\n";
       Scanner scanner;
       scanner.walkFunctionInModule(func, getModule());
       if (scanner.removable.empty()) {
         return;
       }
+std::cout << "iter2\n";
 
       // We have things to remove. Remove them, then apply DCE to propagate that
       // further, and then loop around.
