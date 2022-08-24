@@ -431,6 +431,9 @@ void PassRegistry::registerPasses() {
   registerPass("trap-mode-js",
                "replace trapping operations with js semantics",
                createTrapModeJS);
+  registerPass("traps-never-happen-opts",
+               "optimize away unneeded code assuming traps never happen",
+               createTrapsNeverHappenPass);
   registerPass("untee",
                "removes local.tees, replacing them with sets and gets",
                createUnteePass);

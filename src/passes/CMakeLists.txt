@@ -92,6 +92,7 @@ set(passes_SOURCES
   ReorderFunctions.cpp
   ReReloop.cpp
   TrapMode.cpp
+  TrapsNeverHappen.cpp
   TypeRefining.cpp
   SafeHeap.cpp
   SimplifyGlobals.cpp
