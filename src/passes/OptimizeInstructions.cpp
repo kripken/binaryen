@@ -2117,7 +2117,8 @@ private:
       }
 
       // Prefer to compare to smaller absolute numbers, e.g., compare to 0
-      // instead of to -1 or 1.
+      // instead of to -1 or 1, and things like <= 5 over < 6.
+      // XXX This saves a few bytes, and more on compression.
       auto cValue = c->value.getInteger();
       if (cValue == 0) {
         // Already zero, nothing to do.
