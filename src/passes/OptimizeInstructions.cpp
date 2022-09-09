@@ -2102,7 +2102,12 @@ private:
     if (binary->left->is<Const>() && !binary->right->is<Const>()) {
       swap();
     }
-    if (auto* c = binary->right->dynCast<Const>()) {
+    auto* c = binary->right->dynCast<Const>();
+    if (c && c->type.isFloat()) {
+      // Nothing more we can do.
+      return;
+    }
+    if (c && c->type.isInteger()) {
       // x - C   ==>   x + (-C)
       // Prefer use addition if there is a constant on the right.
       if (binary->op == Abstract::getBinary(c->type, Abstract::Sub)) {
@@ -2110,108 +2115,47 @@ private:
         binary->op = Abstract::getBinary(c->type, Abstract::Add);
         return;
       }
-      // Prefer to compare to 0 instead of to -1 or 1.
-      // (signed)x > -1   ==>   x >= 0
-      if (binary->op == Abstract::getBinary(c->type, Abstract::GtS) &&
-          c->value.getInteger() == -1LL) {
-        binary->op = Abstract::getBinary(c->type, Abstract::GeS);
-        c->value = Literal::makeZero(c->type);
-        return;
+      // Prefer to compare to smaller absolute numbers, e.g., compare to 0
+      // instead of to -1 or 1.
+      if (c->value.getInteger() < 0) {
+        // (signed)x > -C   ==>   x >= -C+1
+        if (binary->op == Abstract::getBinary(c->type, Abstract::GtS)) {
+          binary->op = Abstract::getBinary(c->type, Abstract::GeS);
+          c->value = c->value.add(Literal::makeOne(c->type));
+          return;
+        }
+        // (signed)x <= -C   ==>   x < -C+1
+        if (binary->op == Abstract::getBinary(c->type, Abstract::LeS)) {
+          binary->op = Abstract::getBinary(c->type, Abstract::LtS);
+          c->value = c->value.add(Literal::makeOne(c->type));
+          return;
+        }
+      } else if (c->value.getInteger() > 0) {
+        // (signed)x < C   ==>   x <= C-1
+        if (binary->op == Abstract::getBinary(c->type, Abstract::LtS)) {
+          binary->op = Abstract::getBinary(c->type, Abstract::LeS);
+          c->value = c->value.sub(Literal::makeOne(c->type));
+          return;
+        }
+        // (signed)x >= C   ==>   x > C-1
+        if (binary->op == Abstract::getBinary(c->type, Abstract::GeS)) {
+          binary->op = Abstract::getBinary(c->type, Abstract::GtS);
+          c->value = c->value.sub(Literal::makeOne(c->type));
+          return;
+        }
       }
-      // (signed)x <= -1   ==>   x < 0
-      if (binary->op == Abstract::getBinary(c->type, Abstract::LeS) &&
-          c->value.getInteger() == -1LL) {
-        binary->op = Abstract::getBinary(c->type, Abstract::LtS);
-        c->value = Literal::makeZero(c->type);
-        return;
-      }
-      // (signed)x < 1   ==>   x <= 0
-      if (binary->op == Abstract::getBinary(c->type, Abstract::LtS) &&
-          c->value.getInteger() == 1LL) {
-        binary->op = Abstract::getBinary(c->type, Abstract::LeS);
-        c->value = Literal::makeZero(c->type);
-        return;
-      }
-      // (signed)x >= 1   ==>   x > 0
-      if (binary->op == Abstract::getBinary(c->type, Abstract::GeS) &&
-          c->value.getInteger() == 1LL) {
-        binary->op = Abstract::getBinary(c->type, Abstract::GtS);
-        c->value = Literal::makeZero(c->type);
-        return;
-      }
-      // (unsigned)x < 1   ==>   x == 0
+      // (unsigned)x < C   ==>   x <= C-1
       if (binary->op == Abstract::getBinary(c->type, Abstract::LtU) &&
-          c->value.getInteger() == 1LL) {
-        binary->op = Abstract::getBinary(c->type, Abstract::Eq);
-        c->value = Literal::makeZero(c->type);
+          c->value.getInteger() != 0) {
+        binary->op = Abstract::getBinary(c->type, Abstract::LeU);
+        c->value = c->value.sub(Literal::makeOne(c->type));
         return;
       }
-      // (unsigned)x >= 1   ==>   x != 0
+      // (unsigned)x >= C   ==>   x > C-1
       if (binary->op == Abstract::getBinary(c->type, Abstract::GeU) &&
-          c->value.getInteger() == 1LL) {
-        binary->op = Abstract::getBinary(c->type, Abstract::Ne);
-        c->value = Literal::makeZero(c->type);
-        return;
-      }
-      // Prefer compare to signed min (s_min) instead of s_min + 1.
-      // (signed)x < s_min + 1   ==>   x == s_min
-      if (binary->op == LtSInt32 && c->value.geti32() == INT32_MIN + 1) {
-        binary->op = EqInt32;
-        c->value = Literal::makeSignedMin(Type::i32);
-        return;
-      }
-      if (binary->op == LtSInt64 && c->value.geti64() == INT64_MIN + 1) {
-        binary->op = EqInt64;
-        c->value = Literal::makeSignedMin(Type::i64);
-        return;
-      }
-      // (signed)x >= s_min + 1   ==>   x != s_min
-      if (binary->op == GeSInt32 && c->value.geti32() == INT32_MIN + 1) {
-        binary->op = NeInt32;
-        c->value = Literal::makeSignedMin(Type::i32);
-        return;
-      }
-      if (binary->op == GeSInt64 && c->value.geti64() == INT64_MIN + 1) {
-        binary->op = NeInt64;
-        c->value = Literal::makeSignedMin(Type::i64);
-        return;
-      }
-      // Prefer compare to signed max (s_max) instead of s_max - 1.
-      // (signed)x > s_max - 1   ==>   x == s_max
-      if (binary->op == GtSInt32 && c->value.geti32() == INT32_MAX - 1) {
-        binary->op = EqInt32;
-        c->value = Literal::makeSignedMax(Type::i32);
-        return;
-      }
-      if (binary->op == GtSInt64 && c->value.geti64() == INT64_MAX - 1) {
-        binary->op = EqInt64;
-        c->value = Literal::makeSignedMax(Type::i64);
-        return;
-      }
-      // (signed)x <= s_max - 1   ==>   x != s_max
-      if (binary->op == LeSInt32 && c->value.geti32() == INT32_MAX - 1) {
-        binary->op = NeInt32;
-        c->value = Literal::makeSignedMax(Type::i32);
-        return;
-      }
-      if (binary->op == LeSInt64 && c->value.geti64() == INT64_MAX - 1) {
-        binary->op = NeInt64;
-        c->value = Literal::makeSignedMax(Type::i64);
-        return;
-      }
-      // Prefer compare to unsigned max (u_max) instead of u_max - 1.
-      // (unsigned)x <= u_max - 1   ==>   x != u_max
-      if (binary->op == Abstract::getBinary(c->type, Abstract::LeU) &&
-          c->value.getInteger() == (int64_t)(UINT64_MAX - 1)) {
-        binary->op = Abstract::getBinary(c->type, Abstract::Ne);
-        c->value = Literal::makeUnsignedMax(c->type);
-        return;
-      }
-      // (unsigned)x > u_max - 1   ==>   x == u_max
-      if (binary->op == Abstract::getBinary(c->type, Abstract::GtU) &&
-          c->value.getInteger() == (int64_t)(UINT64_MAX - 1)) {
-        binary->op = Abstract::getBinary(c->type, Abstract::Eq);
-        c->value = Literal::makeUnsignedMax(c->type);
+          c->value.getInteger() != 0) {
+        binary->op = Abstract::getBinary(c->type, Abstract::GtU);
+        c->value = c->value.sub(Literal::makeOne(c->type));
         return;
       }
       return;
@@ -3569,7 +3513,8 @@ private:
     }
     // x + C1 > C2   ==>  x > (C2-C1)      if no overflowing, C2 >= C1
     // x + C1 > C2   ==>  x + (C1-C2) > 0  if no overflowing, C2 <  C1
-    // And similarly for other relational operations on integers.
+    // And similarly for other relational operations on integers, with a "+" on
+    // the left side.
     if (curr->isRelational()) {
       Binary* add;
       Const* c1;

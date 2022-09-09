@@ -1515,9 +1515,9 @@
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:   (loop $label$8
  ;; CHECK-NEXT:    (if
- ;; CHECK-NEXT:     (i32.ge_u
+ ;; CHECK-NEXT:     (i32.gt_u
  ;; CHECK-NEXT:      (local.get $1)
- ;; CHECK-NEXT:      (i32.const 32)
+ ;; CHECK-NEXT:      (i32.const 31)
  ;; CHECK-NEXT:     )
  ;; CHECK-NEXT:     (block
  ;; CHECK-NEXT:      (i64.store

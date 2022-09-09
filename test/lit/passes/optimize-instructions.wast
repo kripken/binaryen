@@ -166,9 +166,8 @@
     )
   )
   ;; CHECK:      (func $eqz-ge_s (result i32)
-  ;; CHECK-NEXT:  (i32.lt_u
-  ;; CHECK-NEXT:   (i32.const 1)
-  ;; CHECK-NEXT:   (i32.const 2)
+  ;; CHECK-NEXT:  (i32.eqz
+  ;; CHECK-NEXT:   (i32.const 0)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $eqz-ge_s (result i32)
@@ -180,9 +179,8 @@
     )
   )
   ;; CHECK:      (func $eqz-lt_s (result i32)
-  ;; CHECK-NEXT:  (i32.ge_u
+  ;; CHECK-NEXT:  (i32.eqz
   ;; CHECK-NEXT:   (i32.const 1)
-  ;; CHECK-NEXT:   (i32.const 2)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $eqz-lt_s (result i32)
@@ -222,9 +220,8 @@
     )
   )
   ;; CHECK:      (func $eqz-ge_u (result i32)
-  ;; CHECK-NEXT:  (i32.lt_u
-  ;; CHECK-NEXT:   (i32.const 1)
-  ;; CHECK-NEXT:   (i32.const 2)
+  ;; CHECK-NEXT:  (i32.eqz
+  ;; CHECK-NEXT:   (i32.const 0)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $eqz-ge_u (result i32)
@@ -236,9 +233,8 @@
     )
   )
   ;; CHECK:      (func $eqz-lt_u (result i32)
-  ;; CHECK-NEXT:  (i32.ge_u
+  ;; CHECK-NEXT:  (i32.eqz
   ;; CHECK-NEXT:   (i32.const 1)
-  ;; CHECK-NEXT:   (i32.const 2)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $eqz-lt_u (result i32)
@@ -899,9 +895,9 @@
   ;; CHECK-NEXT:    (local.get $y)
   ;; CHECK-NEXT:    (i32.const 1337)
   ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (i32.ge_u
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const 20)
+  ;; CHECK-NEXT:    (i32.const 19)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -1385,9 +1381,9 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.lt_u
+  ;; CHECK-NEXT:   (i32.le_u
   ;; CHECK-NEXT:    (i32.const 2000)
-  ;; CHECK-NEXT:    (i32.const 3000)
+  ;; CHECK-NEXT:    (i32.const 2999)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -1774,75 +1770,75 @@
   )
   ;; CHECK:      (func $canonicalize-cmp-near-min-max (param $x i32) (param $y i64)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.eq
+  ;; CHECK-NEXT:   (i32.lt_s
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -2147483648)
+  ;; CHECK-NEXT:    (i32.const -2147483647)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.eq
+  ;; CHECK-NEXT:   (i64.lt_s
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const -9223372036854775808)
+  ;; CHECK-NEXT:    (i64.const -9223372036854775807)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ne
+  ;; CHECK-NEXT:   (i32.ge_s
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -2147483648)
+  ;; CHECK-NEXT:    (i32.const -2147483647)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.ne
+  ;; CHECK-NEXT:   (i64.ge_s
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const -9223372036854775808)
+  ;; CHECK-NEXT:    (i64.const -9223372036854775807)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.eq
+  ;; CHECK-NEXT:   (i32.gt_s
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const 2147483647)
+  ;; CHECK-NEXT:    (i32.const 2147483646)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.eq
+  ;; CHECK-NEXT:   (i64.gt_s
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const 9223372036854775807)
+  ;; CHECK-NEXT:    (i64.const 9223372036854775806)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ne
+  ;; CHECK-NEXT:   (i32.le_s
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const 2147483647)
+  ;; CHECK-NEXT:    (i32.const 2147483646)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.ne
+  ;; CHECK-NEXT:   (i64.le_s
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const 9223372036854775807)
+  ;; CHECK-NEXT:    (i64.const 9223372036854775806)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ne
+  ;; CHECK-NEXT:   (i32.le_u
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -1)
+  ;; CHECK-NEXT:    (i32.const -2)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.ne
+  ;; CHECK-NEXT:   (i64.le_u
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const -1)
+  ;; CHECK-NEXT:    (i64.const -2)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.eq
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -1)
+  ;; CHECK-NEXT:    (i32.const -2)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.eq
+  ;; CHECK-NEXT:   (i64.gt_u
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const -1)
+  ;; CHECK-NEXT:    (i64.const -2)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -10501,27 +10497,27 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.eq
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -1)
+  ;; CHECK-NEXT:    (i32.const -2)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.eq
+  ;; CHECK-NEXT:   (i64.gt_u
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const -1)
+  ;; CHECK-NEXT:    (i64.const -2)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ne
+  ;; CHECK-NEXT:   (i32.le_u
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -1)
+  ;; CHECK-NEXT:    (i32.const -2)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.ne
+  ;; CHECK-NEXT:   (i64.le_u
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const -1)
+  ;; CHECK-NEXT:    (i64.const -2)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
@@ -10679,9 +10675,9 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ge_u
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -2)
+  ;; CHECK-NEXT:    (i32.const -3)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
@@ -10691,9 +10687,9 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ge_u
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -2147483647)
+  ;; CHECK-NEXT:    (i32.const -2147483648)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
@@ -10775,51 +10771,51 @@
   ;; CHECK-NEXT:   (i32.const 0)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ne
+  ;; CHECK-NEXT:   (i32.le_s
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const 2147483647)
+  ;; CHECK-NEXT:    (i32.const 2147483646)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.ne
+  ;; CHECK-NEXT:   (i64.le_s
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const 9223372036854775807)
+  ;; CHECK-NEXT:    (i64.const 9223372036854775806)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ne
+  ;; CHECK-NEXT:   (i32.ge_s
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -2147483648)
+  ;; CHECK-NEXT:    (i32.const -2147483647)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.ne
+  ;; CHECK-NEXT:   (i64.ge_s
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const -9223372036854775808)
+  ;; CHECK-NEXT:    (i64.const -9223372036854775807)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.eq
+  ;; CHECK-NEXT:   (i32.lt_s
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const -2147483648)
+  ;; CHECK-NEXT:    (i32.const -2147483647)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.eq
+  ;; CHECK-NEXT:   (i64.lt_s
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const -9223372036854775808)
+  ;; CHECK-NEXT:    (i64.const -9223372036854775807)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.eq
+  ;; CHECK-NEXT:   (i32.gt_s
   ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:    (i32.const 2147483647)
+  ;; CHECK-NEXT:    (i32.const 2147483646)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i64.eq
+  ;; CHECK-NEXT:   (i64.gt_s
   ;; CHECK-NEXT:    (local.get $y)
-  ;; CHECK-NEXT:    (i64.const 9223372036854775807)
+  ;; CHECK-NEXT:    (i64.const 9223372036854775806)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
@@ -12565,12 +12561,12 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ge_u
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (i32.and
   ;; CHECK-NEXT:     (local.get $x)
   ;; CHECK-NEXT:     (i32.const 2147483647)
   ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 7)
+  ;; CHECK-NEXT:    (i32.const 6)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
@@ -15261,19 +15257,31 @@
 
   ;; CHECK:      (func $ge_u-added-constant (param $x i32)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ge_u
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (i32.shr_u
   ;; CHECK-NEXT:     (local.get $x)
   ;; CHECK-NEXT:     (i32.const 1)
   ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 6)
+  ;; CHECK-NEXT:    (i32.const 5)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.const 1)
+  ;; CHECK-NEXT:   (i32.ne
+  ;; CHECK-NEXT:    (i32.shr_u
+  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:     (i32.const 1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const -1)
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.const 1)
+  ;; CHECK-NEXT:   (i32.ne
+  ;; CHECK-NEXT:    (i32.shr_u
+  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:     (i32.const 1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const -2)
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $ge_u-added-constant (param $x i32)
@@ -15318,16 +15326,16 @@
 
   ;; CHECK:      (func $ge_u-added-constant-no (param $x i32)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ge_u
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (i32.add
   ;; CHECK-NEXT:     (local.get $x)
   ;; CHECK-NEXT:     (i32.const 5)
   ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 11)
+  ;; CHECK-NEXT:    (i32.const 10)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ge_u
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (i32.sub
   ;; CHECK-NEXT:     (i32.shr_u
   ;; CHECK-NEXT:      (local.get $x)
@@ -15335,11 +15343,11 @@
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:     (i32.const -2147483648)
   ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 11)
+  ;; CHECK-NEXT:    (i32.const 10)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.ge_u
+  ;; CHECK-NEXT:   (i32.gt_u
   ;; CHECK-NEXT:    (i32.sub
   ;; CHECK-NEXT:     (i32.shr_u
   ;; CHECK-NEXT:      (local.get $x)
@@ -15347,7 +15355,7 @@
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:     (i32.const 1)
   ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 11)
+  ;; CHECK-NEXT:    (i32.const 10)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -15444,12 +15452,12 @@
 
   ;; CHECK:      (func $lt-added-constant (param $x i32)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.lt_u
+  ;; CHECK-NEXT:   (i32.le_u
   ;; CHECK-NEXT:    (i32.shr_u
   ;; CHECK-NEXT:     (local.get $x)
   ;; CHECK-NEXT:     (i32.const 1)
   ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 6)
+  ;; CHECK-NEXT:    (i32.const 5)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )

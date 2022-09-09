@@ -520,7 +520,7 @@
   ;; CHECK-NEXT:  (if
   ;; CHECK-NEXT:   (i32.eqz
   ;; CHECK-NEXT:    (i32.and
-  ;; CHECK-NEXT:     (i32.lt_u
+  ;; CHECK-NEXT:     (i32.le_u
   ;; CHECK-NEXT:      (i32.and
   ;; CHECK-NEXT:       (i32.extend8_s
   ;; CHECK-NEXT:        (i32.sub
@@ -530,7 +530,7 @@
   ;; CHECK-NEXT:       )
   ;; CHECK-NEXT:       (i32.const 255)
   ;; CHECK-NEXT:      )
-  ;; CHECK-NEXT:      (i32.const 3)
+  ;; CHECK-NEXT:      (i32.const 2)
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:     (i32.ne
   ;; CHECK-NEXT:      (local.tee $1
@@ -587,7 +587,7 @@
   ;; CHECK-NEXT:     (local.tee $1
   ;; CHECK-NEXT:      (i32.const 0)
   ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (i32.lt_u
+  ;; CHECK-NEXT:     (i32.le_u
   ;; CHECK-NEXT:      (i32.and
   ;; CHECK-NEXT:       (i32.extend8_s
   ;; CHECK-NEXT:        (i32.sub
@@ -597,7 +597,7 @@
   ;; CHECK-NEXT:       )
   ;; CHECK-NEXT:       (i32.const 255)
   ;; CHECK-NEXT:      )
-  ;; CHECK-NEXT:      (i32.const 3)
+  ;; CHECK-NEXT:      (i32.const 2)
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:     (i32.const 0)
   ;; CHECK-NEXT:    )
