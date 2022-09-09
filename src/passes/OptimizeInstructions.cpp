@@ -2115,48 +2115,69 @@ private:
         binary->op = Abstract::getBinary(c->type, Abstract::Add);
         return;
       }
+
       // Prefer to compare to smaller absolute numbers, e.g., compare to 0
       // instead of to -1 or 1.
-      if (c->value.getInteger() < 0) {
+      auto cValue = c->value.getInteger();
+      if (cValue == 0) {
+        // Already zero, nothing to do.
+        return;
+      }
+
+      auto addOne = [&]() {
+        c->value = c->value.add(Literal::makeOne(c->type));
+      };
+      auto subOne = [&]() {
+        c->value = c->value.sub(Literal::makeOne(c->type));
+      };
+
+      if (cValue < 0) {
         // (signed)x > -C   ==>   x >= -C+1
         if (binary->op == Abstract::getBinary(c->type, Abstract::GtS)) {
           binary->op = Abstract::getBinary(c->type, Abstract::GeS);
-          c->value = c->value.add(Literal::makeOne(c->type));
+          addOne();
           return;
         }
         // (signed)x <= -C   ==>   x < -C+1
         if (binary->op == Abstract::getBinary(c->type, Abstract::LeS)) {
           binary->op = Abstract::getBinary(c->type, Abstract::LtS);
-          c->value = c->value.add(Literal::makeOne(c->type));
+          addOne();
           return;
         }
-      } else if (c->value.getInteger() > 0) {
+      } else if (cValue > 0) {
         // (signed)x < C   ==>   x <= C-1
         if (binary->op == Abstract::getBinary(c->type, Abstract::LtS)) {
           binary->op = Abstract::getBinary(c->type, Abstract::LeS);
-          c->value = c->value.sub(Literal::makeOne(c->type));
+          subOne();
           return;
         }
         // (signed)x >= C   ==>   x > C-1
         if (binary->op == Abstract::getBinary(c->type, Abstract::GeS)) {
           binary->op = Abstract::getBinary(c->type, Abstract::GtS);
-          c->value = c->value.sub(Literal::makeOne(c->type));
+          subOne();
           return;
         }
       }
-      // (unsigned)x < C   ==>   x <= C-1
-      if (binary->op == Abstract::getBinary(c->type, Abstract::LtU) &&
-          c->value.getInteger() != 0) {
-        binary->op = Abstract::getBinary(c->type, Abstract::LeU);
-        c->value = c->value.sub(Literal::makeOne(c->type));
-        return;
-      }
-      // (unsigned)x >= C   ==>   x > C-1
-      if (binary->op == Abstract::getBinary(c->type, Abstract::GeU) &&
-          c->value.getInteger() != 0) {
-        binary->op = Abstract::getBinary(c->type, Abstract::GtU);
-        c->value = c->value.sub(Literal::makeOne(c->type));
-        return;
+
+      // We could in principle handle the positive and negative ranges
+      // differently, that is, increase values that are negative as signed
+      // values, and decrease values that are positive as signed values. That
+      // would fit the LEB encoding in wasm better, but it is slightly less
+      // simple/consistent, and has no size benefit. So we handle unsigned
+      // comparisons as if the number were unsigned.
+      if (cValue != 0) {
+        // (unsigned)x >= C   ==>   x > C-1
+        if (binary->op == Abstract::getBinary(c->type, Abstract::GeU)) {
+          binary->op = Abstract::getBinary(c->type, Abstract::GtU);
+          subOne();
+          return;
+        }
+        // (unsigned)x < C   ==>   x <= C-1
+        if (binary->op == Abstract::getBinary(c->type, Abstract::LtU)) {
+          binary->op = Abstract::getBinary(c->type, Abstract::LeU);
+          subOne();
+          return;
+        }
       }
       return;
     }
