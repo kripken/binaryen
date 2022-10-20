@@ -324,6 +324,16 @@ struct ImportNames {
   Name nm;
 };
 
+struct Limits {
+  uint64_t initial;
+  uint64_t max;
+};
+
+struct MemType {
+  Type type;
+  Limits limits;
+};
+
 // RAII utility for temporarily changing the parsing position of a parsing
 // context.
 template<typename Ctx> struct WithPosition {
@@ -342,8 +352,7 @@ template<typename Ctx> WithPosition(Ctx& ctx, Index) -> WithPosition<Ctx>;
 
 using IndexMap = std::unordered_map<Name, Index>;
 
-void applyImportNames(Importable& item,
-                      const std::optional<ImportNames>& names) {
+void applyImportNames(Importable& item, ImportNames* names) {
   if (names) {
     item.module = names->mod;
     item.base = names->nm;
@@ -417,9 +426,12 @@ struct NullTypeParserCtx {
   using FieldsT = Ok;
   using StructT = Ok;
   using ArrayT = Ok;
+  using LimitsT = Ok;
+  using MemTypeT = Ok;
   using GlobalTypeT = Ok;
   using TypeUseT = Ok;
   using LocalsT = Ok;
+  using DataStringT = Ok;
 
   HeapTypeT makeFunc() { return Ok{}; }
   HeapTypeT makeAny() { return Ok{}; }
@@ -464,6 +476,15 @@ struct NullTypeParserCtx {
 
   Result<Index> getTypeIndex(Name) { return 1; }
   Result<HeapTypeT> getHeapTypeFromIdx(Index) { return Ok{}; }
+
+  DataStringT makeDataString() { return Ok{}; }
+  void appendDataString(DataStringT&, std::string_view) {}
+
+  LimitsT makeLimits(uint64_t, std::optional<uint64_t>) { return Ok{}; }
+  LimitsT getLimitsFromData(DataStringT) { return Ok{}; }
+
+  MemTypeT makeMemType32(LimitsT) { return Ok{}; }
+  MemTypeT makeMemType64(LimitsT) { return Ok{}; }
 };
 
 template<typename Ctx> struct TypeParserCtx {
@@ -478,7 +499,10 @@ template<typename Ctx> struct TypeParserCtx {
   using FieldsT = std::pair<std::vector<Name>, std::vector<Field>>;
   using StructT = std::pair<std::vector<Name>, Struct>;
   using ArrayT = Array;
+  using LimitsT = Limits;
+  using MemTypeT = MemType;
   using LocalsT = std::vector<NameType>;
+  using DataStringT = std::vector<char>;
 
   // Map heap type names to their indices.
   const IndexMap& typeIndices;
@@ -562,6 +586,22 @@ template<typename Ctx> struct TypeParserCtx {
     }
     return it->second;
   }
+
+  std::vector<char> makeDataString() { return {}; }
+  void appendDataString(std::vector<char>& data, std::string_view str) {
+    data.insert(data.end(), str.begin(), str.end());
+  }
+
+  Limits makeLimits(uint64_t n, std::optional<uint64_t> m) {
+    return m ? Limits{n, *m} : Limits{n, Memory::kUnlimitedSize};
+  }
+  Limits getLimitsFromData(const std::vector<char>& data) {
+    uint64_t size = (data.size() + Memory::kPageSize - 1) / Memory::kPageSize;
+    return {size, size};
+  }
+
+  MemType makeMemType32(Limits limits) { return {Type::i32, limits}; }
+  MemType makeMemType64(Limits limits) { return {Type::i64, limits}; }
 };
 
 struct NullInstrParserCtx {
@@ -571,6 +611,7 @@ struct NullInstrParserCtx {
 
   using LocalT = Ok;
   using GlobalT = Ok;
+  using MemoryT = Ok;
 
   InstrsT makeInstrs() { return Ok{}; }
   void appendInstr(InstrsT&, InstrT) {}
@@ -582,6 +623,8 @@ struct NullInstrParserCtx {
   LocalT getLocalFromName(Name) { return Ok{}; }
   GlobalT getGlobalFromIdx(uint32_t) { return Ok{}; }
   GlobalT getGlobalFromName(Name) { return Ok{}; }
+  MemoryT getMemoryFromIdx(uint32_t) { return Ok{}; }
+  MemoryT getMemoryFromName(Name) { return Ok{}; }
 
   InstrT makeUnreachable(Index) { return Ok{}; }
   InstrT makeNop(Index) { return Ok{}; }
@@ -591,21 +634,24 @@ struct NullInstrParserCtx {
     return Ok{};
   }
   InstrT makeDrop(Index) { return Ok{}; }
+  InstrT makeMemorySize(Index, MemoryT*) { return Ok{}; }
+  InstrT makeMemoryGrow(Index, MemoryT*) { return Ok{}; }
+  InstrT makeLocalGet(Index, LocalT) { return Ok{}; }
+  InstrT makeLocalTee(Index, LocalT) { return Ok{}; }
+  InstrT makeLocalSet(Index, LocalT) { return Ok{}; }
+  InstrT makeGlobalGet(Index, GlobalT) { return Ok{}; }
+  InstrT makeGlobalSet(Index, GlobalT) { return Ok{}; }
 
   InstrT makeI32Const(Index, uint32_t) { return Ok{}; }
   InstrT makeI64Const(Index, uint64_t) { return Ok{}; }
   InstrT makeF32Const(Index, float) { return Ok{}; }
   InstrT makeF64Const(Index, double) { return Ok{}; }
 
-  InstrT makeLocalGet(Index, LocalT) { return Ok{}; }
-  InstrT makeLocalTee(Index, LocalT) { return Ok{}; }
-  InstrT makeLocalSet(Index, LocalT) { return Ok{}; }
-
-  InstrT makeGlobalGet(Index, GlobalT) { return Ok{}; }
-  InstrT makeGlobalSet(Index, GlobalT) { return Ok{}; }
   InstrT makeSIMDExtract(Index, SIMDExtractOp, uint8_t) { return Ok{}; }
   InstrT makeSIMDReplace(Index, SIMDReplaceOp, uint8_t) { return Ok{}; }
   InstrT makeSIMDShuffle(Index, const std::array<uint8_t, 16>&) { return Ok{}; }
+  InstrT makeSIMDTernary(Index, SIMDTernaryOp) { return Ok{}; }
+  InstrT makeSIMDShift(Index, SIMDShiftOp) { return Ok{}; }
 
   template<typename HeapTypeT> InstrT makeRefNull(Index, HeapTypeT) {
     return {};
@@ -621,6 +667,7 @@ template<typename Ctx> struct InstrParserCtx : TypeParserCtx<Ctx> {
 
   using LocalT = Index;
   using GlobalT = Name;
+  using MemoryT = Name;
 
   Builder builder;
 
@@ -783,6 +830,18 @@ template<typename Ctx> struct InstrParserCtx : TypeParserCtx<Ctx> {
     CHECK_ERR(val);
     return push(pos, builder.makeDrop(*val));
   }
+  Result<> makeMemorySize(Index pos, Name* mem) {
+    auto m = self().getMemory(pos, mem);
+    CHECK_ERR(m);
+    return push(pos, builder.makeMemorySize(*m));
+  }
+  Result<> makeMemoryGrow(Index pos, Name* mem) {
+    auto m = self().getMemory(pos, mem);
+    CHECK_ERR(m);
+    auto val = pop(pos);
+    CHECK_ERR(val);
+    return push(pos, builder.makeMemoryGrow(*val, *m));
+  }
 
   Result<> makeI32Const(Index pos, uint32_t c) {
     return push(pos, builder.makeConst(Literal(c)));
@@ -818,14 +877,16 @@ struct ParseDeclsCtx : NullTypeParserCtx, NullInstrParserCtx {
   std::vector<DefPos> typeDefs;
   std::vector<DefPos> subtypeDefs;
   std::vector<DefPos> funcDefs;
+  std::vector<DefPos> memoryDefs;
   std::vector<DefPos> globalDefs;
 
   // Positions of typeuses that might implicitly define new types.
   std::vector<Index> implicitTypeDefs;
 
   // Counters used for generating names for module elements.
-  int globalCounter = 0;
   int funcCounter = 0;
+  int memoryCounter = 0;
+  int globalCounter = 0;
 
   // Used to verify that all imports come before all non-imports.
   bool hasNonImport = false;
@@ -851,16 +912,14 @@ struct ParseDeclsCtx : NullTypeParserCtx, NullInstrParserCtx {
     return Ok{};
   }
 
-  Result<Function*> addFuncDecl(ParseInput& in,
-                                Name name,
-                                std::optional<ImportNames> importNames) {
+  Result<Function*>
+  addFuncDecl(Index pos, Name name, ImportNames* importNames) {
     auto f = std::make_unique<Function>();
     if (name.is()) {
       if (wasm.getFunctionOrNull(name)) {
         // TDOO: if the existing function is not explicitly named, fix its name
         // and continue.
-        // TODO: Fix error location to point to name.
-        return in.err("repeated function name");
+        return in.err(pos, "repeated function name");
       }
       f->setExplicitName(name);
     } else {
@@ -882,24 +941,55 @@ struct ParseDeclsCtx : NullTypeParserCtx, NullInstrParserCtx {
     if (import && hasNonImport) {
       return in.err("import after non-import");
     }
-    auto imp = import ? std::make_optional(*import) : std::nullopt;
-    auto f = addFuncDecl(in, name, imp);
+    auto f = addFuncDecl(pos, name, import);
     CHECK_ERR(f);
     CHECK_ERR(addExports(in, wasm, *f, exports, ExternalKind::Function));
     funcDefs.push_back({name, pos});
     return Ok{};
   }
 
-  Result<Global*> addGlobalDecl(ParseInput& in,
-                                Name name,
-                                std::optional<ImportNames> importNames) {
+  Result<Memory*>
+  addMemoryDecl(Index pos, Name name, ImportNames* importNames) {
+    auto m = std::make_unique<Memory>();
+    if (name) {
+      // TODO: if the existing memory is not explicitly named, fix its name
+      // and continue.
+      if (wasm.getMemoryOrNull(name)) {
+        return in.err(pos, "repeated memory name");
+      }
+      m->setExplicitName(name);
+    } else {
+      name = (importNames ? "mimport$" : "") + std::to_string(memoryCounter++);
+      name = Names::getValidMemoryName(wasm, name);
+      m->name = name;
+    }
+    applyImportNames(*m, importNames);
+    return wasm.addMemory(std::move(m));
+  }
+
+  Result<> addMemory(Name name,
+                     const std::vector<Name>& exports,
+                     ImportNames* import,
+                     MemTypeT,
+                     Index pos) {
+    if (import && hasNonImport) {
+      return in.err(pos, "import after non-import");
+    }
+    auto m = addMemoryDecl(pos, name, import);
+    CHECK_ERR(m);
+    CHECK_ERR(addExports(in, wasm, *m, exports, ExternalKind::Memory));
+    memoryDefs.push_back({name, pos});
+    return Ok{};
+  }
+
+  Result<Global*>
+  addGlobalDecl(Index pos, Name name, ImportNames* importNames) {
     auto g = std::make_unique<Global>();
-    if (name.is()) {
+    if (name) {
       if (wasm.getGlobalOrNull(name)) {
         // TODO: if the existing global is not explicitly named, fix its name
         // and continue.
-        // TODO: Fix error location to point to name.
-        return in.err("repeated global name");
+        return in.err(pos, "repeated global name");
       }
       g->setExplicitName(name);
     } else {
@@ -920,8 +1010,7 @@ struct ParseDeclsCtx : NullTypeParserCtx, NullInstrParserCtx {
     if (import && hasNonImport) {
       return in.err(pos, "import after non-import");
     }
-    auto imp = import ? std::make_optional(*import) : std::nullopt;
-    auto g = addGlobalDecl(in, name, imp);
+    auto g = addGlobalDecl(pos, name, import);
     CHECK_ERR(g);
     CHECK_ERR(addExports(in, wasm, *g, exports, ExternalKind::Global));
     globalDefs.push_back({name, pos});
@@ -1121,7 +1210,7 @@ struct ParseModuleTypesCtx : TypeParserCtx<ParseModuleTypesCtx>,
   Result<> addFunc(Name name,
                    const std::vector<Name>&,
                    ImportNames*,
-                   TypeUseT type,
+                   TypeUse type,
                    std::optional<LocalsT> locals,
                    std::optional<InstrsT>,
                    Index) {
@@ -1140,10 +1229,21 @@ struct ParseModuleTypesCtx : TypeParserCtx<ParseModuleTypesCtx>,
     return Ok{};
   }
 
+  Result<> addMemory(
+    Name, const std::vector<Name>&, ImportNames*, MemType type, Index pos) {
+    auto& m = wasm.memories[index];
+    m->indexType = type.type;
+    m->initial = type.limits.initial;
+    m->max = type.limits.max;
+    // TODO: shared memories.
+    m->shared = false;
+    return Ok{};
+  }
+
   Result<> addGlobal(Name,
                      const std::vector<Name>&,
                      ImportNames*,
-                     GlobalTypeT type,
+                     GlobalType type,
                      std::optional<ExprT>,
                      Index) {
     auto& g = wasm.globals[index];
@@ -1219,6 +1319,20 @@ struct ParseDefsCtx : InstrParserCtx<ParseDefsCtx> {
   Result<Name> getGlobalFromName(Name name) {
     if (!wasm.getGlobalOrNull(name)) {
       return in.err("global $" + name.toString() + " does not exist");
+    }
+    return name;
+  }
+
+  Result<Name> getMemoryFromIdx(uint32_t idx) {
+    if (idx >= wasm.memories.size()) {
+      return in.err("memory index out of bounds");
+    }
+    return wasm.memories[idx]->name;
+  }
+
+  Result<Name> getMemoryFromName(Name name) {
+    if (!wasm.getMemoryOrNull(name)) {
+      return in.err("memory $" + name.toString() + " does not exist");
     }
     return name;
   }
@@ -1302,6 +1416,16 @@ struct ParseDefsCtx : InstrParserCtx<ParseDefsCtx> {
     return Builder::addVar(func, name, type);
   }
 
+  Result<Name> getMemory(Index pos, Name* mem) {
+    if (mem) {
+      return *mem;
+    }
+    if (wasm.memories.empty()) {
+      return in.err(pos, "memory required, but there is no memory");
+    }
+    return wasm.memories[0]->name;
+  }
+
   Result<> makeLocalGet(Index pos, Index local) {
     if (!func) {
       return in.err(pos, "local.get must be inside a function");
@@ -1365,6 +1489,24 @@ struct ParseDefsCtx : InstrParserCtx<ParseDefsCtx> {
     CHECK_ERR(lhs);
     return push(pos, builder.makeSIMDShuffle(*lhs, *rhs, lanes));
   }
+
+  Result<> makeSIMDTernary(Index pos, SIMDTernaryOp op) {
+    auto c = pop(pos);
+    CHECK_ERR(c);
+    auto b = pop(pos);
+    CHECK_ERR(b);
+    auto a = pop(pos);
+    CHECK_ERR(a);
+    return push(pos, builder.makeSIMDTernary(op, *a, *b, *c));
+  }
+
+  Result<> makeSIMDShift(Index pos, SIMDShiftOp op) {
+    auto shift = pop(pos);
+    CHECK_ERR(shift);
+    auto vec = pop(pos);
+    CHECK_ERR(vec);
+    return push(pos, builder.makeSIMDShift(op, *vec, *shift));
+  }
 };
 
 // ================
@@ -1383,6 +1525,9 @@ template<typename Ctx> Result<typename Ctx::FieldT> fieldtype(Ctx&);
 template<typename Ctx> Result<typename Ctx::FieldsT> fields(Ctx&);
 template<typename Ctx> MaybeResult<typename Ctx::StructT> structtype(Ctx&);
 template<typename Ctx> MaybeResult<typename Ctx::ArrayT> arraytype(Ctx&);
+template<typename Ctx> Result<typename Ctx::LimitsT> limits32(Ctx&);
+template<typename Ctx> Result<typename Ctx::LimitsT> limits64(Ctx&);
+template<typename Ctx> Result<typename Ctx::MemTypeT> memtype(Ctx&);
 template<typename Ctx> Result<typename Ctx::GlobalTypeT> globaltype(Ctx&);
 
 // Instructions
@@ -1410,17 +1555,17 @@ template<typename Ctx> Result<typename Ctx::InstrT> makeThenOrElse(Ctx&, Index);
 template<typename Ctx>
 Result<typename Ctx::InstrT> makeConst(Ctx&, Index, Type type);
 template<typename Ctx>
-Result<typename Ctx::InstrT> makeLoad(Ctx&, Index, Type type, bool isAtomic);
-template<typename Ctx>
-Result<typename Ctx::InstrT> makeStore(Ctx&, Index, Type type, bool isAtomic);
-template<typename Ctx>
-Result<typename Ctx::InstrT> makeAtomicRMWOrCmpxchg(Ctx&, Index, Type type);
+Result<typename Ctx::InstrT>
+makeLoad(Ctx&, Index, Type type, bool signed_, int bytes, bool isAtomic);
 template<typename Ctx>
 Result<typename Ctx::InstrT>
-makeAtomicRMW(Ctx&, Index, Type type, uint8_t bytes, const char* extra);
+makeStore(Ctx&, Index, Type type, int bytes, bool isAtomic);
 template<typename Ctx>
 Result<typename Ctx::InstrT>
-makeAtomicCmpxchg(Ctx&, Index, Type type, uint8_t bytes, const char* extra);
+makeAtomicRMW(Ctx&, Index, AtomicRMWOp op, Type type, uint8_t bytes);
+template<typename Ctx>
+Result<typename Ctx::InstrT>
+makeAtomicCmpxchg(Ctx&, Index, Type type, uint8_t bytes);
 template<typename Ctx>
 Result<typename Ctx::InstrT> makeAtomicWait(Ctx&, Index, Type type);
 template<typename Ctx>
@@ -1448,7 +1593,6 @@ template<typename Ctx> Result<typename Ctx::InstrT> makeMemoryInit(Ctx&, Index);
 template<typename Ctx> Result<typename Ctx::InstrT> makeDataDrop(Ctx&, Index);
 template<typename Ctx> Result<typename Ctx::InstrT> makeMemoryCopy(Ctx&, Index);
 template<typename Ctx> Result<typename Ctx::InstrT> makeMemoryFill(Ctx&, Index);
-template<typename Ctx> Result<typename Ctx::InstrT> makePush(Ctx&, Index);
 template<typename Ctx> Result<typename Ctx::InstrT> makePop(Ctx&, Index);
 template<typename Ctx> Result<typename Ctx::InstrT> makeIf(Ctx&, Index);
 template<typename Ctx>
@@ -1543,6 +1687,8 @@ Result<typename Ctx::InstrT> makeStringSliceIter(Ctx&, Index);
 // Modules
 template<typename Ctx> MaybeResult<Index> maybeTypeidx(Ctx& ctx);
 template<typename Ctx> Result<typename Ctx::HeapTypeT> typeidx(Ctx&);
+template<typename Ctx> MaybeResult<typename Ctx::MemoryT> maybeMemidx(Ctx&);
+template<typename Ctx> Result<typename Ctx::MemoryT> memidx(Ctx&);
 template<typename Ctx> Result<typename Ctx::GlobalT> globalidx(Ctx&);
 template<typename Ctx> Result<typename Ctx::LocalT> localidx(Ctx&);
 template<typename Ctx> Result<typename Ctx::TypeUseT> typeuse(Ctx&);
@@ -1553,7 +1699,9 @@ template<typename Ctx> MaybeResult<typename Ctx::ModuleNameT> subtype(Ctx&);
 template<typename Ctx> MaybeResult<> deftype(Ctx&);
 template<typename Ctx> MaybeResult<typename Ctx::LocalsT> locals(Ctx&);
 template<typename Ctx> MaybeResult<> func(Ctx&);
+template<typename Ctx> MaybeResult<> memory(Ctx&);
 template<typename Ctx> MaybeResult<> global(Ctx&);
+template<typename Ctx> Result<typename Ctx::DataStringT> datastring(Ctx&);
 MaybeResult<> modulefield(ParseDeclsCtx&);
 Result<> module(ParseDeclsCtx&);
 
@@ -1832,6 +1980,39 @@ template<typename Ctx> MaybeResult<typename Ctx::ArrayT> arraytype(Ctx& ctx) {
   return ctx.in.err("expected exactly one field in array definition");
 }
 
+// limits32 ::= n:u32 m:u32?
+template<typename Ctx> Result<typename Ctx::LimitsT> limits32(Ctx& ctx) {
+  auto n = ctx.in.takeU32();
+  if (!n) {
+    return ctx.in.err("expected initial size");
+  }
+  std::optional<uint64_t> m = ctx.in.takeU32();
+  return ctx.makeLimits(uint64_t(*n), m);
+}
+
+// limits64 ::= n:u64 m:u64?
+template<typename Ctx> Result<typename Ctx::LimitsT> limits64(Ctx& ctx) {
+  auto n = ctx.in.takeU64();
+  if (!n) {
+    return ctx.in.err("expected initial size");
+  }
+  std::optional<uint64_t> m = ctx.in.takeU64();
+  return ctx.makeLimits(uint64_t(*n), m);
+}
+
+// memtype ::= limits32 | 'i32' limits32 | 'i64' limit64
+template<typename Ctx> Result<typename Ctx::MemTypeT> memtype(Ctx& ctx) {
+  if (ctx.in.takeKeyword("i64"sv)) {
+    auto limits = limits64(ctx);
+    CHECK_ERR(limits);
+    return ctx.makeMemType64(*limits);
+  }
+  ctx.in.takeKeyword("i32"sv);
+  auto limits = limits32(ctx);
+  CHECK_ERR(limits);
+  return ctx.makeMemType32(*limits);
+}
+
 // globaltype ::= t:valtype               => const t
 //              | '(' 'mut' t:valtype ')' => var t
 template<typename Ctx> Result<typename Ctx::GlobalTypeT> globaltype(Ctx& ctx) {
@@ -1972,12 +2153,16 @@ Result<typename Ctx::InstrT> makeDrop(Ctx& ctx, Index pos) {
 
 template<typename Ctx>
 Result<typename Ctx::InstrT> makeMemorySize(Ctx& ctx, Index pos) {
-  return ctx.in.err("unimplemented instruction");
+  auto mem = maybeMemidx(ctx);
+  CHECK_ERR(mem);
+  return ctx.makeMemorySize(pos, mem.getPtr());
 }
 
 template<typename Ctx>
 Result<typename Ctx::InstrT> makeMemoryGrow(Ctx& ctx, Index pos) {
-  return ctx.in.err("unimplemented instruction");
+  auto mem = maybeMemidx(ctx);
+  CHECK_ERR(mem);
+  return ctx.makeMemoryGrow(pos, mem.getPtr());
 }
 
 template<typename Ctx>
@@ -2059,32 +2244,26 @@ Result<typename Ctx::InstrT> makeConst(Ctx& ctx, Index pos, Type type) {
 }
 
 template<typename Ctx>
-Result<typename Ctx::InstrT>
-makeLoad(Ctx& ctx, Index pos, Type type, bool isAtomic) {
+Result<typename Ctx::InstrT> makeLoad(
+  Ctx& ctx, Index pos, Type type, bool signed_, int bytes, bool isAtomic) {
   return ctx.in.err("unimplemented instruction");
 }
 
 template<typename Ctx>
 Result<typename Ctx::InstrT>
-makeStore(Ctx& ctx, Index pos, Type type, bool isAtomic) {
+makeStore(Ctx& ctx, Index pos, Type type, int bytes, bool isAtomic) {
   return ctx.in.err("unimplemented instruction");
 }
 
 template<typename Ctx>
 Result<typename Ctx::InstrT>
-makeAtomicRMWOrCmpxchg(Ctx& ctx, Index pos, Type type) {
+makeAtomicRMW(Ctx& ctx, Index pos, AtomicRMWOp op, Type type, uint8_t bytes) {
   return ctx.in.err("unimplemented instruction");
 }
 
 template<typename Ctx>
-Result<typename Ctx::InstrT> makeAtomicRMW(
-  Ctx& ctx, Index pos, Type type, uint8_t bytes, const char* extra) {
-  return ctx.in.err("unimplemented instruction");
-}
-
-template<typename Ctx>
-Result<typename Ctx::InstrT> makeAtomicCmpxchg(
-  Ctx& ctx, Index pos, Type type, uint8_t bytes, const char* extra) {
+Result<typename Ctx::InstrT>
+makeAtomicCmpxchg(Ctx& ctx, Index pos, Type type, uint8_t bytes) {
   return ctx.in.err("unimplemented instruction");
 }
 
@@ -2139,13 +2318,13 @@ Result<typename Ctx::InstrT> makeSIMDShuffle(Ctx& ctx, Index pos) {
 template<typename Ctx>
 Result<typename Ctx::InstrT>
 makeSIMDTernary(Ctx& ctx, Index pos, SIMDTernaryOp op) {
-  return ctx.in.err("unimplemented instruction");
+  return ctx.makeSIMDTernary(pos, op);
 }
 
 template<typename Ctx>
 Result<typename Ctx::InstrT>
 makeSIMDShift(Ctx& ctx, Index pos, SIMDShiftOp op) {
-  return ctx.in.err("unimplemented instruction");
+  return ctx.makeSIMDShift(pos, op);
 }
 
 template<typename Ctx>
@@ -2176,11 +2355,6 @@ Result<typename Ctx::InstrT> makeMemoryCopy(Ctx& ctx, Index pos) {
 
 template<typename Ctx>
 Result<typename Ctx::InstrT> makeMemoryFill(Ctx& ctx, Index pos) {
-  return ctx.in.err("unimplemented instruction");
-}
-
-template<typename Ctx>
-Result<typename Ctx::InstrT> makePush(Ctx& ctx, Index pos) {
   return ctx.in.err("unimplemented instruction");
 }
 
@@ -2503,6 +2677,27 @@ template<typename Ctx> Result<typename Ctx::HeapTypeT> typeidx(Ctx& ctx) {
   return ctx.in.err("expected type index or identifier");
 }
 
+// memidx ::= x:u32 => x
+//          | v:id  => x (if memories[x] = v)
+template<typename Ctx>
+MaybeResult<typename Ctx::MemoryT> maybeMemidx(Ctx& ctx) {
+  if (auto x = ctx.in.takeU32()) {
+    return ctx.getMemoryFromIdx(*x);
+  }
+  if (auto id = ctx.in.takeID()) {
+    return ctx.getMemoryFromName(*id);
+  }
+  return {};
+}
+
+template<typename Ctx> Result<typename Ctx::MemoryT> memidx(Ctx& ctx) {
+  if (auto idx = maybeMemidx(ctx)) {
+    CHECK_ERR(idx);
+    return *idx;
+  }
+  return ctx.in.err("expected memory index or identifier");
+}
+
 // globalidx ::= x:u32 => x
 //             | v:id  => x (if globals[x] = v)
 template<typename Ctx> Result<typename Ctx::GlobalT> globalidx(Ctx& ctx) {
@@ -2711,7 +2906,7 @@ template<typename Ctx> MaybeResult<typename Ctx::LocalsT> locals(Ctx& ctx) {
 // func ::= '(' 'func' id? ('(' 'export' name ')')*
 //              x,I:typeuse t*:vec(local) (in:instr)* ')'
 //        | '(' 'func' id? ('(' 'export' name ')')*
-//              '(' 'import' mode:name nm:name ')' typeuse ')'
+//              '(' 'import' mod:name nm:name ')' typeuse ')'
 template<typename Ctx> MaybeResult<> func(Ctx& ctx) {
   auto pos = ctx.in.getPos();
   if (!ctx.in.takeSExprStart("func"sv)) {
@@ -2757,6 +2952,54 @@ template<typename Ctx> MaybeResult<> func(Ctx& ctx) {
   return Ok{};
 }
 
+// mem ::= '(' 'memory' id? ('(' 'export' name ')')*
+//             ('(' 'data' b:datastring ')' | memtype) ')'
+//       | '(' 'memory' id? ('(' 'export' name ')')*
+//             '(' 'import' mod:name nm:name ')' memtype ')'
+template<typename Ctx> MaybeResult<> memory(Ctx& ctx) {
+  auto pos = ctx.in.getPos();
+  if (!ctx.in.takeSExprStart("memory"sv)) {
+    return {};
+  }
+
+  Name name;
+  if (auto id = ctx.in.takeID()) {
+    name = *id;
+  }
+
+  auto exports = inlineExports(ctx.in);
+  CHECK_ERR(exports);
+
+  auto import = inlineImport(ctx.in);
+  CHECK_ERR(import);
+
+  std::optional<typename Ctx::MemTypeT> mtype;
+
+  if (ctx.in.takeSExprStart("data"sv)) {
+    if (import) {
+      return ctx.in.err("imported memories cannot have inline data");
+    }
+    auto data = datastring(ctx);
+    CHECK_ERR(data);
+    if (!ctx.in.takeRParen()) {
+      return ctx.in.err("expected end of inline data");
+    }
+    mtype = ctx.makeMemType32(ctx.getLimitsFromData(*data));
+    // TODO: addDataSegment as well.
+  } else {
+    auto type = memtype(ctx);
+    CHECK_ERR(type);
+    mtype = *type;
+  }
+
+  if (!ctx.in.takeRParen()) {
+    return ctx.in.err("expected end of memory declaration");
+  }
+
+  CHECK_ERR(ctx.addMemory(name, *exports, import.getPtr(), *mtype, pos));
+  return Ok{};
+}
+
 // global ::= '(' 'global' id? ('(' 'export' name ')')* gt:globaltype e:expr ')'
 //          | '(' 'global' id? ('(' 'export' name ')')*
 //                '(' 'import' mod:name nm:name ')' gt:globaltype ')'
@@ -2795,11 +3038,20 @@ template<typename Ctx> MaybeResult<> global(Ctx& ctx) {
   return Ok{};
 }
 
+// datastring ::= (b:string)* => concat(b*)
+template<typename Ctx> Result<typename Ctx::DataStringT> datastring(Ctx& ctx) {
+  auto data = ctx.makeDataString();
+  while (auto str = ctx.in.takeString()) {
+    ctx.appendDataString(data, *str);
+  }
+  return data;
+}
+
 // modulefield ::= deftype
 //               | import
 //               | func
 //               | table
-//               | mem
+//               | memory
 //               | global
 //               | export
 //               | start
@@ -2814,6 +3066,10 @@ MaybeResult<> modulefield(ParseDeclsCtx& ctx) {
     return Ok{};
   }
   if (auto res = func(ctx)) {
+    CHECK_ERR(res);
+    return Ok{};
+  }
+  if (auto res = memory(ctx)) {
     CHECK_ERR(res);
     return Ok{};
   }
@@ -2898,8 +3154,9 @@ Result<> parseModule(Module& wasm, std::string_view input) {
   {
     // Parse module-level types.
     ParseModuleTypesCtx ctx(input, wasm, types, implicitTypes, *typeIndices);
-    CHECK_ERR(parseDefs(ctx, decls.globalDefs, global));
     CHECK_ERR(parseDefs(ctx, decls.funcDefs, func));
+    CHECK_ERR(parseDefs(ctx, decls.memoryDefs, memory));
+    CHECK_ERR(parseDefs(ctx, decls.globalDefs, global));
     // TODO: Parse types of other module elements.
   }
   {
