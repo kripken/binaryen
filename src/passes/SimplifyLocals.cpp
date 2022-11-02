@@ -1019,7 +1019,7 @@ struct SimplifyLocals
         return equivalentPairs.count({x, y});
       }
 
-      EquivalentOptimizer(Function* func) {
+      void computeEquivalentPairs(Function* func) {
         LocalGraph localGraph(func);
 
         // TODO: this can be quite slow
@@ -1090,7 +1090,7 @@ struct SimplifyLocals
         auto* value =
           Properties::getFallthrough(curr->value, passOptions, *module);
         if (auto* get = value->template dynCast<LocalGet>()) {
-          if (equivalences.check(curr->index, get->index)) {
+          if (equivalences.check(curr->index, get->index) || areEquivalent(curr, get)) {
             // This is an unnecessary copy!
             if (removeEquivalentSets) {
               if (curr->isTee()) {
@@ -1185,11 +1185,12 @@ struct SimplifyLocals
       }
     };
 
-    EquivalentOptimizer eqOpter(func);
+    EquivalentOptimizer eqOpter;
     eqOpter.module = this->getModule();
     eqOpter.passOptions = this->getPassOptions();
     eqOpter.numLocalGets = &getCounter.num;
     eqOpter.removeEquivalentSets = allowStructure;
+    eqOpter.computeEquivalentPairs(func);
     eqOpter.walkFunction(func);
     if (eqOpter.refinalize) {
       ReFinalize().walkFunctionInModule(func, this->getModule());

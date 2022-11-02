@@ -493,36 +493,44 @@
   )
 
   ;; CHECK:      (func $pick-casted (param $any anyref) (result anyref)
-  ;; CHECK-NEXT:  (local $nn-any (ref any))
-  ;; CHECK-NEXT:  (nop)
-  ;; CHECK-NEXT:  (call $use-any
-  ;; CHECK-NEXT:   (local.tee $nn-any
-  ;; CHECK-NEXT:    (ref.as_non_null
-  ;; CHECK-NEXT:     (local.get $any)
-  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:  (local $nn-any anyref)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.as_non_null
+  ;; CHECK-NEXT:    (local.get $any)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call $use-any
+  ;; CHECK-NEXT:   (local.get $any)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (call $use-nn-any
-  ;; CHECK-NEXT:   (local.get $nn-any)
+  ;; CHECK-NEXT:   (ref.as_non_null
+  ;; CHECK-NEXT:    (local.get $nn-any)
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (nop)
-  ;; CHECK-NEXT:  (local.get $nn-any)
+  ;; CHECK-NEXT:  (ref.as_non_null
+  ;; CHECK-NEXT:   (local.get $nn-any)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   ;; NOMNL:      (func $pick-casted (type $anyref_=>_anyref) (param $any anyref) (result anyref)
-  ;; NOMNL-NEXT:  (local $nn-any (ref any))
-  ;; NOMNL-NEXT:  (nop)
-  ;; NOMNL-NEXT:  (call $use-any
-  ;; NOMNL-NEXT:   (local.tee $nn-any
-  ;; NOMNL-NEXT:    (ref.as_non_null
-  ;; NOMNL-NEXT:     (local.get $any)
-  ;; NOMNL-NEXT:    )
+  ;; NOMNL-NEXT:  (local $nn-any anyref)
+  ;; NOMNL-NEXT:  (drop
+  ;; NOMNL-NEXT:   (ref.as_non_null
+  ;; NOMNL-NEXT:    (local.get $any)
   ;; NOMNL-NEXT:   )
   ;; NOMNL-NEXT:  )
+  ;; NOMNL-NEXT:  (call $use-any
+  ;; NOMNL-NEXT:   (local.get $any)
+  ;; NOMNL-NEXT:  )
   ;; NOMNL-NEXT:  (call $use-nn-any
-  ;; NOMNL-NEXT:   (local.get $nn-any)
+  ;; NOMNL-NEXT:   (ref.as_non_null
+  ;; NOMNL-NEXT:    (local.get $nn-any)
+  ;; NOMNL-NEXT:   )
   ;; NOMNL-NEXT:  )
   ;; NOMNL-NEXT:  (nop)
-  ;; NOMNL-NEXT:  (local.get $nn-any)
+  ;; NOMNL-NEXT:  (ref.as_non_null
+  ;; NOMNL-NEXT:   (local.get $nn-any)
+  ;; NOMNL-NEXT:  )
   ;; NOMNL-NEXT: )
   (func $pick-casted (param $any anyref) (result anyref)
     (local $nn-any (ref any))

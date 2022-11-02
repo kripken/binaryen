@@ -16,7 +16,6 @@
  (global $global$0 (mut i32) (i32.const 10))
  ;; CHECK:      (func $0 (result i32)
  ;; CHECK-NEXT:  (local $0 i32)
- ;; CHECK-NEXT:  (local $1 i32)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (if (result f32)
  ;; CHECK-NEXT:    (local.tee $0
@@ -28,12 +27,6 @@
  ;; CHECK-NEXT:      (return
  ;; CHECK-NEXT:       (local.get $0)
  ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:     (local.set $0
- ;; CHECK-NEXT:      (local.get $1)
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:     (local.set $1
- ;; CHECK-NEXT:      (i32.const 0)
  ;; CHECK-NEXT:     )
  ;; CHECK-NEXT:     (br_if $label$2
  ;; CHECK-NEXT:      (local.get $0)
