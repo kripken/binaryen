@@ -56,6 +56,7 @@ Pass* createGenerateStackIRPass();
 Pass* createGlobalRefiningPass();
 Pass* createGlobalStructInferencePass();
 Pass* createGlobalTypeOptimizationPass();
+Pass* createGlobalTypeOptimizationNoPrunePass();
 Pass* createGUFAPass();
 Pass* createGUFAOptimizingPass();
 Pass* createHeap2LocalPass();

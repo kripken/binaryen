@@ -178,6 +178,9 @@
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --gto                                         globally optimize GC types
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --gto-noprune                                 globally optimize GC types
+;; CHECK-NEXT:                                                 (without pruning)
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --gufa                                        Grand Unified Flow Analysis:
 ;; CHECK-NEXT:                                                 optimize the entire program
 ;; CHECK-NEXT:                                                 using information about what

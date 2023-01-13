@@ -179,6 +179,8 @@ void PassRegistry::registerPasses() {
     "gsi", "globally optimize struct values", createGlobalStructInferencePass);
   registerPass(
     "gto", "globally optimize GC types", createGlobalTypeOptimizationPass);
+  registerPass(
+    "gto-noprune", "globally optimize GC types (without pruning)", createGlobalTypeOptimizationNoPrunePass);
   registerPass("gufa",
                "Grand Unified Flow Analysis: optimize the entire program using "
                "information about what content can actually appear in each "

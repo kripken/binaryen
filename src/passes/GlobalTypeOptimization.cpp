@@ -19,7 +19,9 @@
 // types defined in the module.
 //
 //  * Immutability: If a field has no struct.set, it can become immutable.
-//  * Fields that are never read from can be removed entirely.
+//  * Fields that are never read from can be pruned.
+//
+// Variations of the pass are provided that focus on only some of the tasks.
 //
 
 #include "ir/effects.h"
@@ -95,6 +97,9 @@ struct FieldInfoScanner
 };
 
 struct GlobalTypeOptimization : public Pass {
+  // Whether to prune fields.
+  bool prune = true;
+
   StructUtils::StructValuesMap<FieldInfo> combinedSetGetInfos;
 
   // Maps types to a vector of booleans that indicate whether a field can
@@ -193,7 +198,11 @@ struct GlobalTypeOptimization : public Pass {
         vec[i] = true;
       }
 
-      // Process removability. We check separately for the ability to
+      if (!prune) {
+        continue;
+      }
+
+      // Process removability (pruning). We check separately for the ability to
       // remove in a general way based on sub+super-propagated info (that is,
       // fields that are not used in sub- or super-types, and so we can
       // definitely remove them from all the relevant types) and also in the
@@ -448,6 +457,12 @@ struct GlobalTypeOptimization : public Pass {
 
 Pass* createGlobalTypeOptimizationPass() {
   return new GlobalTypeOptimization();
+}
+
+Pass* createGlobalTypeOptimizationNoPrunePass() {
+  auto* ret = new GlobalTypeOptimization();
+  ret->prune = false;
+  return ret;
 }
 
 } // namespace wasm
