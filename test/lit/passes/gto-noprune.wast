@@ -4,7 +4,8 @@
 ;; RUN: wasm-opt %s -all --gto-noprune -S --closed-world -o - | filecheck %s --check-prefix NOPRUNE
 
 ;; The struct here has two fields that can become immutable, and one of them
-;; can be pruned. In --gto-noprune we will not prune.
+;; can be pruned. In --gto-noprune we will not prune. In both of them we will
+;; turn the field(s) to be immutable.
 
 (module
   ;; PRUNE:      (rec
