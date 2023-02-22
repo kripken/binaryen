@@ -379,8 +379,9 @@ struct CtorEvalExternalInterface : EvallingModuleRunner::ExternalInterface {
   void store64(Address addr, int64_t value, Name memoryName) override {
     doStore<int64_t>(addr, value, memoryName);
   }
-  void
-  store128(Address addr, const std::array<uint8_t, 16>& value, Name memoryName) override {
+  void store128(Address addr,
+                const std::array<uint8_t, 16>& value,
+                Name memoryName) override {
     doStore<std::array<uint8_t, 16>>(addr, value, memoryName);
   }
 
@@ -984,9 +985,7 @@ int main(int argc, const char* argv[]) {
          "Do not emit verbose logging about the eval process",
          WasmCtorEvalOption,
          Options::Arguments::Zero,
-         [&](Options* o, const std::string& argument) {
-           quiet = true;
-         })
+         [&](Options* o, const std::string& argument) { quiet = true; })
     .add_positional("INFILE",
                     Options::Arguments::One,
                     [](Options* o, const std::string& argument) {
