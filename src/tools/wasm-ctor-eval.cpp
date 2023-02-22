@@ -631,6 +631,9 @@ public:
   }
 };
 
+// Whether to emit informative logging to stdout about the eval process.
+static bool quiet = false;
+
 // The outcome of evalling a ctor is one of three states:
 //
 // 1. We failed to eval it completely (but perhaps we succeeded partially). In
@@ -655,8 +658,10 @@ EvalCtorOutcome evalCtor(EvallingModuleRunner& instance,
   // We don't know the values of parameters, so give up if there are any, unless
   // we are ignoring them.
   if (func->getNumParams() > 0 && !ignoreExternalInput) {
-    std::cout << "  ...stopping due to params\n";
-    std::cout << RECOMMENDATION "consider --ignore-external-input";
+    if (!quiet) {
+      std::cout << "  ...stopping due to params\n";
+      std::cout << RECOMMENDATION "consider --ignore-external-input";
+    }
     return EvalCtorOutcome();
   }
 
@@ -670,7 +675,9 @@ EvalCtorOutcome evalCtor(EvallingModuleRunner& instance,
   for (Index i = 0; i < func->getNumParams(); i++) {
     auto type = func->getLocalType(i);
     if (!LiteralUtils::canMakeZero(type)) {
-      std::cout << "  ...stopping due to non-zeroable param\n";
+      if (!quiet) {
+        std::cout << "  ...stopping due to non-zeroable param\n";
+      }
       return EvalCtorOutcome();
     }
     params.push_back(Literal::makeZero(type));
@@ -714,13 +721,15 @@ EvalCtorOutcome evalCtor(EvallingModuleRunner& instance,
       try {
         flow = instance.visit(curr);
       } catch (FailToEvalException& fail) {
-        if (successes == 0) {
-          std::cout << "  ...stopping (in block) since could not eval: "
-                    << fail.why << "\n";
-        } else {
-          std::cout << "  ...partial evalling successful, but stopping since "
-                       "could not eval: "
-                    << fail.why << "\n";
+        if (!quiet) {
+          if (successes == 0) {
+            std::cout << "  ...stopping (in block) since could not eval: "
+                      << fail.why << "\n";
+          } else {
+            std::cout << "  ...partial evalling successful, but stopping since "
+                         "could not eval: "
+                      << fail.why << "\n";
+          }
         }
         break;
       }
@@ -738,7 +747,9 @@ EvalCtorOutcome evalCtor(EvallingModuleRunner& instance,
         // We are returning out of the function (either via a return, or via a
         // break to |block|, which has the same outcome. That means we don't
         // need to execute any more lines, and can consider them to be executed.
-        std::cout << "  ...stopping in block due to break\n";
+        if (!quiet) {
+          std::cout << "  ...stopping in block due to break\n";
+        }
 
         // Mark us as having succeeded on the entire block, since we have: we
         // are skipping the rest, which means there is no problem there. We must
@@ -808,7 +819,9 @@ EvalCtorOutcome evalCtor(EvallingModuleRunner& instance,
   try {
     results = instance.callFunction(funcName, params);
   } catch (FailToEvalException& fail) {
-    std::cout << "  ...stopping since could not eval: " << fail.why << "\n";
+    if (!quiet) {
+      std::cout << "  ...stopping since could not eval: " << fail.why << "\n";
+    }
     return EvalCtorOutcome();
   }
 
@@ -840,7 +853,9 @@ void evalCtors(Module& wasm,
     // go one by one, in order, until we fail
     // TODO: if we knew priorities, we could reorder?
     for (auto& ctor : ctors) {
-      std::cout << "trying to eval " << ctor << '\n';
+      if (!quiet) {
+        std::cout << "trying to eval " << ctor << '\n';
+      }
       Export* ex = wasm.getExportOrNull(ctor);
       if (!ex) {
         Fatal() << "export not found: " << ctor;
@@ -848,12 +863,16 @@ void evalCtors(Module& wasm,
       auto funcName = ex->value;
       auto outcome = evalCtor(instance, interface, funcName, ctor);
       if (!outcome) {
-        std::cout << "  ...stopping\n";
+        if (!quiet) {
+          std::cout << "  ...stopping\n";
+        }
         return;
       }
 
       // Success! And we can continue to try more.
-      std::cout << "  ...success on " << ctor << ".\n";
+      if (!quiet) {
+        std::cout << "  ...success on " << ctor << ".\n";
+      }
 
       // Remove the export if we should.
       auto* exp = wasm.getExport(ctor);
@@ -875,8 +894,10 @@ void evalCtors(Module& wasm,
     }
   } catch (FailToEvalException& fail) {
     // that's it, we failed to even create the instance
-    std::cout << "  ...stopping since could not create module instance: "
-              << fail.why << "\n";
+    if (!quiet) {
+      std::cout << "  ...stopping since could not create module instance: "
+                << fail.why << "\n";
+    }
     return;
   }
 }
@@ -885,7 +906,9 @@ static bool canEval(Module& wasm) {
   // Check if we can flatten memory. We need to do so currently because of how
   // we assume memory is simple and flat. TODO
   if (!MemoryUtils::flatten(wasm)) {
-    std::cout << "  ...stopping since could not flatten memory\n";
+    if (!quiet) {
+      std::cout << "  ...stopping since could not flatten memory\n";
+    }
     return false;
   }
   return true;
@@ -955,6 +978,14 @@ int main(int argc, const char* argv[]) {
          Options::Arguments::Zero,
          [&](Options* o, const std::string& argument) {
            ignoreExternalInput = true;
+         })
+    .add("--quiet",
+         "-q",
+         "Do not emit verbose logging about the eval process",
+         WasmCtorEvalOption,
+         Options::Arguments::Zero,
+         [&](Options* o, const std::string& argument) {
+           quiet = true;
          })
     .add_positional("INFILE",
                     Options::Arguments::One,
