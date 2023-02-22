@@ -426,26 +426,6 @@ void TranslateToFuzzReader::addHangLimitSupport() {
                                  builder.makeConst(int32_t(HANG_LIMIT)),
                                  Builder::Mutable);
   wasm.addGlobal(std::move(glob));
-
-  Name exportName = "hangLimitInitializer";
-  auto funcName = Names::getValidFunctionName(wasm, exportName);
-  auto* func = new Function;
-  func->name = funcName;
-  func->type = Signature(Type::none, Type::none);
-  func->body = builder.makeGlobalSet(HANG_LIMIT_GLOBAL,
-                                     builder.makeConst(int32_t(HANG_LIMIT)));
-  wasm.addFunction(func);
-
-  if (wasm.getExportOrNull(exportName)) {
-    // We must export our actual hang limit function - remove anything
-    // previously existing.
-    wasm.removeExport(exportName);
-  }
-  auto* export_ = new Export;
-  export_->name = exportName;
-  export_->value = func->name;
-  export_->kind = ExternalKind::Function;
-  wasm.addExport(export_);
 }
 
 void TranslateToFuzzReader::addImportLoggingSupport() {
