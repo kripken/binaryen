@@ -463,7 +463,7 @@ Expression* TranslateToFuzzReader::makeHangLimitCheck() {
       builder.makeSequence(
         builder.makeGlobalSet(
           HANG_LIMIT_GLOBAL, builder.makeConst(int32_t(HANG_LIMIT))),
-        makeTrivial(Type::unreachable)
+        builder.makeUnreachable()
       )
     ),
     builder.makeGlobalSet(
