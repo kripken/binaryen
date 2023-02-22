@@ -379,6 +379,10 @@ struct CtorEvalExternalInterface : EvallingModuleRunner::ExternalInterface {
   void store64(Address addr, int64_t value, Name memoryName) override {
     doStore<int64_t>(addr, value, memoryName);
   }
+  void
+  store128(Address addr, const std::array<uint8_t, 16>& value, Name memoryName) override {
+    doStore<std::array<uint8_t, 16>>(addr, value, memoryName);
+  }
 
   bool growMemory(Name memoryName,
                   Address /*oldSize*/,
