@@ -366,6 +366,9 @@ struct CtorEvalExternalInterface : EvallingModuleRunner::ExternalInterface {
   uint64_t load64u(Address addr, Name memoryName) override {
     return doLoad<uint64_t>(addr, memoryName);
   }
+  std::array<uint8_t, 16> load128(Address addr, Name memoryName) override {
+    return doLoad<std::array<uint8_t, 16>>(addr, memoryName);
+  }
 
   void store8(Address addr, int8_t value, Name memoryName) override {
     doStore<int8_t>(addr, value, memoryName);
