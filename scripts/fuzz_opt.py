@@ -1160,6 +1160,8 @@ class CtorEval(TestCaseHandler):
           if m:
               export = m[1]
               exports.append(export)
+        if not exports:
+            return
         ctors = ','.join(exports)
 
         # eval the wasm.

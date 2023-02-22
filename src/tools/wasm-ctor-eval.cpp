@@ -613,6 +613,15 @@ public:
 
   Expression* getSerialization(const Literals& values,
                                Name possibleDefiningGlobal = Name()) {
+    if (values.size() > 1) {
+      // We do not support multivalues in defining globals, which store GC refs.
+      assert(possibleDefiningGlobal.isNull());
+      std::vector<Expression*> children;
+      for (const auto& value : values) {
+        children.push_back(getSerialization(value));
+      }
+      return Builder(*wasm).makeTupleMake(children);
+    }
     assert(values.size() == 1);
     return getSerialization(values[0], possibleDefiningGlobal);
   }
