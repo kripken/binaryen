@@ -31,7 +31,7 @@ inline std::string generateSpecWrapper(Module& wasm) {
     if (!func) {
       continue; // something exported other than a function
     }
-    ret += std::string("(invoke \"hangLimitInitializer\") (invoke \"") +
+    ret += std::string("(invoke \"") +
            exp->name.toString() + "\" ";
     for (const auto& param : func->getParams()) {
       // zeros in arguments TODO more?
