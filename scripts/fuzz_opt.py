@@ -1160,9 +1160,7 @@ class CtorEval(TestCaseHandler):
           if m:
               export = m[1]
               exports.append(export)
-              
         ctors = ','.join(exports)
-        print(ctors)
 
         # eval the wasm.
         # we can use --ignore-external-input because the fuzzer passes in 0 to
