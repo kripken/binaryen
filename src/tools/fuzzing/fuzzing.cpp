@@ -473,11 +473,19 @@ TranslateToFuzzReader::FunctionCreationContext::~FunctionCreationContext() {
 }
 
 Expression* TranslateToFuzzReader::makeHangLimitCheck() {
+  // If the hang limit global reaches 0 then we trap and reset it. That allows
+  // calls to other exports to proceed, with hang checking, after the trap halts
+  // the currently called export.
   return builder.makeSequence(
     builder.makeIf(
       builder.makeUnary(UnaryOp::EqZInt32,
                         builder.makeGlobalGet(HANG_LIMIT_GLOBAL, Type::i32)),
-      makeTrivial(Type::unreachable)),
+      builder.makeSequence(
+        builder.makeGlobalSet(
+          HANG_LIMIT_GLOBAL, builder.makeConst(int32_t(HANG_LIMIT))),
+        makeTrivial(Type::unreachable)
+      )
+    ),
     builder.makeGlobalSet(
       HANG_LIMIT_GLOBAL,
       builder.makeBinary(BinaryOp::SubInt32,

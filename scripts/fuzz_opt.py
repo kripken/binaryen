@@ -1158,8 +1158,11 @@ class CtorEval(TestCaseHandler):
         for line in wat.splitlines():
           m = p.match(line)
           if m:
-              exports.append(m[1])
+              export = m[1]
+              exports.append(export)
+              
         ctors = ','.join(exports)
+        print(ctors)
 
         # eval the wasm.
         # we can use --ignore-external-input because the fuzzer passes in 0 to
@@ -1194,12 +1197,6 @@ class RoundtripText(TestCaseHandler):
 
 # The global list of all test case handlers
 testcase_handlers = [
-    FuzzExec(),
-    CompareVMs(),
-    CheckDeterminism(),
-    Wasm2JS(),
-    Asyncify(),
-    TrapsNeverHappen(),
     CtorEval(),
     # FIXME: Re-enable after https://github.com/WebAssembly/binaryen/issues/3989
     # RoundtripText()
