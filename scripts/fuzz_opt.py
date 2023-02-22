@@ -1197,6 +1197,12 @@ class RoundtripText(TestCaseHandler):
 
 # The global list of all test case handlers
 testcase_handlers = [
+    FuzzExec(),
+    CompareVMs(),
+    CheckDeterminism(),
+    Wasm2JS(),
+    Asyncify(),
+    TrapsNeverHappen(),
     CtorEval(),
     # FIXME: Re-enable after https://github.com/WebAssembly/binaryen/issues/3989
     # RoundtripText()
