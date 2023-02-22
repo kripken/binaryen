@@ -1179,7 +1179,7 @@ class CtorEval(TestCaseHandler):
            return
         evalled_wasm_exec = run_bynterp(evalled_wasm, ['--fuzz-exec-before'])
 
-        compare_between_vms(wasm_exec, evalled_wasm_exec, 'CtorEval')
+        compare_between_vms(fix_output(wasm_exec), fix_output(evalled_wasm_exec), 'CtorEval')
 
 
 # Check that the text format round-trips without error.
