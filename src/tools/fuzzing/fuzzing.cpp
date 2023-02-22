@@ -461,11 +461,9 @@ Expression* TranslateToFuzzReader::makeHangLimitCheck() {
       builder.makeUnary(UnaryOp::EqZInt32,
                         builder.makeGlobalGet(HANG_LIMIT_GLOBAL, Type::i32)),
       builder.makeSequence(
-        builder.makeGlobalSet(
-          HANG_LIMIT_GLOBAL, builder.makeConst(int32_t(HANG_LIMIT))),
-        builder.makeUnreachable()
-      )
-    ),
+        builder.makeGlobalSet(HANG_LIMIT_GLOBAL,
+                              builder.makeConst(int32_t(HANG_LIMIT))),
+        builder.makeUnreachable())),
     builder.makeGlobalSet(
       HANG_LIMIT_GLOBAL,
       builder.makeBinary(BinaryOp::SubInt32,
