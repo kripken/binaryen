@@ -901,7 +901,7 @@ void TranslateToFuzzReader::addInvocations(Function* func) {
     // over functions). Don't do this all the time to avoid having all invokes
     // look the same, which might end up missing coverage somehow.
     body->list.push_back(
-      builder.makeGlobalSet(HANG_LIMIT_GLOBAL, builder.makeConst(int32_t(1))));
+      builder.makeGlobalSet(HANG_LIMIT_GLOBAL, builder.makeConst(int32_t(HANG_LIMIT))));
   }
   FunctionCreationContext context(*this, invoker.get());
   while (oneIn(2) && !random.finished()) {
