@@ -924,7 +924,6 @@ void TranslateToFuzzReader::addInvocations(Function* func) {
   if (body->list.empty()) {
     return;
   }
-  body->list.set(body->list);
   wasm.addFunction(std::move(invoker));
   wasm.addExport(builder.makeExport(name, name, ExternalKind::Function));
 }
