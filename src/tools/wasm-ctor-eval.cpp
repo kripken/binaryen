@@ -154,6 +154,13 @@ struct CtorEvalExternalInterface : EvallingModuleRunner::ExternalInterface {
   // A representation of the contents of wasm memory as we execute.
   std::unordered_map<Name, std::vector<char>> memories;
 
+  // All the names of globals we've seen in the module. We cannot reuse these.
+  // We must track these manually as we will be adding more, and as we do so we
+  // also reorder them, so we remove and re-add globals, which means the module
+  // itself is not aware of all the globals that belong to it (those that have
+  // not yet been re-added are a blind spot for it).
+  std::unordered_set<Name> usedGlobalNames;
+
   CtorEvalExternalInterface(
     std::map<Name, std::shared_ptr<EvallingModuleRunner>> linkedInstances_ =
       {}) {
@@ -181,6 +188,10 @@ struct CtorEvalExternalInterface : EvallingModuleRunner::ExternalInterface {
         std::vector<char> data;
         memories[memory->name] = data;
       }
+    }
+
+    for (auto& global : wasm->globals) {
+      usedGlobalNames.insert(global->name);
     }
   }
 
@@ -622,7 +633,8 @@ public:
       }
 
       // Allocate a new defining global.
-      auto name = Names::getValidGlobalName(*wasm, "ctor-eval$global");
+      auto name = Names::getValidNameGivenExisting("ctor-eval$global", usedGlobalNames);
+      usedGlobalNames.insert(name);
       wasm->addGlobal(builder.makeGlobal(name, type, init, Builder::Immutable));
       definingGlobal = name;
     }
