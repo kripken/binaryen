@@ -537,7 +537,7 @@ private:
       Name name;
       if (!oldGlobal->mutable_ && oldGlobal->type == oldGlobal->init->type) {
         // This has the properties we need of a defining global - immutable and
-        // of the precise type - so use it.
+        // of the precise type - so use it as such.
         name = oldGlobal->name;
       }
 
