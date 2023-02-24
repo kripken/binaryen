@@ -541,21 +541,16 @@ private:
         name = oldGlobal->name;
       }
 
-      // If there is a value here to serialize, do so. (If there is no value,
-      // then this global was added after the interpreter initialized the
-      // module, which means it is a new global we've added since; we don't need
-      // to do anything for such a global - if it is needed it will show up as a
-      // dependency of something, and be emitted at the right time and place.)
+      // If the instance has an evalled value here, compute the serialization
+      // for it. (If there is no value, then this is a new global we've added
+      // during execution, for whom we've already set up a proper serialized
+      // value when we created it.)
       auto iter = instance->globals.find(oldGlobal->name);
       if (iter != instance->globals.end()) {
         oldGlobal->init = getSerialization(iter->second, name);
       }
 
-      // Add the global back to the module (either with the new serialization we
-      // just computed, or with the previously computed value from work we did
-      // earlier; we do not need to modify that work in any way - we assume we
-      // created it properly for serialization already, when we created a new
-      // defining global - so the init stays the same).
+      // Add the global back to the module.
       wasm->addGlobal(std::move(oldGlobal));
     }
   }
