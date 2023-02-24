@@ -32,8 +32,9 @@ bool flatten(Module& wasm) {
       if (func->imported()) {
         return;
       }
-      noticesSegmentIdentity = FindAll<MemoryInit>(func->body).list.size() > 0 ||
-                               FindAll<DataDrop>(func->body).list.size() > 0;
+      noticesSegmentIdentity =
+        FindAll<MemoryInit>(func->body).list.size() > 0 ||
+        FindAll<DataDrop>(func->body).list.size() > 0;
     });
 
   for (auto& [func, noticesSegmentIdentity] : analysis.map) {
