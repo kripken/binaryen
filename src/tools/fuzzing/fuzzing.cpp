@@ -586,10 +586,12 @@ Function* TranslateToFuzzReader::addFunction() {
           funcContext->localGetTypeLocals[super].push_back(index);
         }
       }
-      // TODO: this does not emit basic types
-      for (auto sub : subTypes->getAllSubTypes(type)) {
-        if (sub != type) {
-          funcContext->localSetTypeLocals[sub].push_back(index);
+      // TODO: this API does not support basic types
+      if (!type.getHeapType().isBasic()) {
+        for (auto sub : subTypes->getAllSubTypes(type)) {
+          if (sub != type) {
+            funcContext->localSetTypeLocals[sub].push_back(index);
+          }
         }
       }
     }
@@ -1058,6 +1060,7 @@ Expression* TranslateToFuzzReader::make(Type type) {
     ret = _makeunreachable();
   }
   // We should create the right type of thing.
+std::cout << "maek " << type << " => " << *ret << " of type " << ret->type << '\n';
   assert(Type::isSubType(ret->type, type));
   nesting--;
   return ret;
@@ -1482,7 +1485,9 @@ Expression* TranslateToFuzzReader::makeLocalGet(Type type) {
   if (locals.empty()) {
     return makeConst(type);
   }
-  return builder.makeLocalGet(pick(locals), type);
+  // Get the type from the function, as we may be using a subtype here.
+  auto index = pick(locals);
+  return builder.makeLocalGet(index, funcContext->func->getLocalType(index));
 }
 
 Expression* TranslateToFuzzReader::makeLocalSet(Type type) {
@@ -1497,11 +1502,16 @@ Expression* TranslateToFuzzReader::makeLocalSet(Type type) {
   if (locals.empty()) {
     return makeTrivial(type);
   }
+  auto index = pick(locals);
   auto* value = make(valueType);
+    auto localType = funcContext->func->getLocalType(index);
+    std::cout << "want " << type << " and got a local of type " << localType << '\n'; // XXX tee must be an exact type. only set can be a supertype
   if (tee) {
-    return builder.makeLocalTee(pick(locals), value, valueType);
+    // Get the type from the function, as we may be using a subtype here.
+    auto localType = funcContext->func->getLocalType(index);
+    return builder.makeLocalTee(index, value, localType);
   } else {
-    return builder.makeLocalSet(pick(locals), value);
+    return builder.makeLocalSet(index, value);
   }
 }
 

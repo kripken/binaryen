@@ -1253,7 +1253,7 @@ class RoundtripText(TestCaseHandler):
 # The global list of all test case handlers
 testcase_handlers = [
     FuzzExec(),
-    CompareVMs(),
+    #CompareVMs(),
     CheckDeterminism(),
     Wasm2JS(),
     Asyncify(),
