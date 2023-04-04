@@ -70,6 +70,17 @@ struct SubTypes {
     return ret;
   }
 
+  std::vector<Type> getAllSubTypes(Type type) {
+    std::vector<Type> ret;
+    for (auto sub : getAllSubTypes(type.getHeapType())) {
+      ret.push_back(Type(sub, NonNullable));
+      if (type.isNullable()) {
+        ret.push_back(Type(sub, Nullable));
+      }
+    }
+    return ret;
+  }
+
   // A topological sort that visits subtypes first.
   auto getSubTypesFirstSort() const {
     struct SubTypesFirstSort : TopologicalSort<HeapType, SubTypesFirstSort> {

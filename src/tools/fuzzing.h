@@ -36,6 +36,7 @@ high chance for set at start of loop
 #include <ir/literal-utils.h>
 #include <ir/manipulation.h>
 #include <ir/names.h>
+#include <ir/subtypes.h>
 #include <ir/utils.h>
 #include <support/file.h>
 #include <tools/optimization-options.h>
@@ -130,8 +131,15 @@ private:
     // which we try to minimize the risk of
     std::vector<Expression*> hangStack;
 
-    // type => list of locals with that type
-    std::unordered_map<Type, std::vector<Index>> typeLocals;
+    // Type => list of locals that local.get can use for that type. That
+    // includes all locals of that type, or a subtype. That is, when we want to
+    // make a local.get returning type T, we can read from any local of that
+    // type, or any local of any subtype.
+    std::unordered_map<Type, std::vector<Index>> localGetTypeLocals;
+
+    // Type => list of locals that local.set can use for that type. That
+    // includes all locals of that type, or a supertype.
+    std::unordered_map<Type, std::vector<Index>> localSetTypeLocals;
 
     FunctionCreationContext(TranslateToFuzzReader& parent, Function* func)
       : parent(parent), func(func) {
@@ -154,6 +162,8 @@ public:
     }
     ~AutoNester() { parent.nesting--; }
   };
+
+  std::optional<SubTypes> subTypes;
 
 private:
   // Generating random data is common enough that it's worth having helpers that

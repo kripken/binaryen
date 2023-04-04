@@ -16,7 +16,7 @@
 
 #include "tools/fuzzing.h"
 #include "ir/module-utils.h"
-#include "ir/subtypes.h"
+#include "ir/supertypes.h"
 #include "ir/type-updating.h"
 #include "tools/fuzzing/heap-types.h"
 #include "tools/fuzzing/parameters.h"
@@ -275,9 +275,9 @@ void TranslateToFuzzReader::setupHeapTypes() {
 
   // Compute subtypes ahead of time. It is more efficient to do this all at once
   // now, rather than lazily later.
-  SubTypes subTypes(interestingHeapTypes);
+  subTypes = SubTypes(interestingHeapTypes);
   for (auto type : interestingHeapTypes) {
-    for (auto subType : subTypes.getStrictSubTypes(type)) {
+    for (auto subType : subTypes->getStrictSubTypes(type)) {
       interestingHeapSubTypes[type].push_back(subType);
     }
     // Basic types must be handled directly, since subTypes doesn't look at
@@ -574,13 +574,33 @@ Function* TranslateToFuzzReader::addFunction() {
   auto* func = new Function;
   func->name = Names::getValidFunctionName(wasm, "func");
   FunctionCreationContext context(*this, func);
-  assert(funcContext->typeLocals.empty());
+  assert(funcContext->localGetTypeLocals.empty());
+  assert(funcContext->localSetTypeLocals.empty());
+
+  auto addToTypeLocals = [&](Type type, Index index) {
+    funcContext->localGetTypeLocals[type].push_back(index);
+    funcContext->localSetTypeLocals[type].push_back(index);
+    if (type.isRef()) {
+      for (auto super : SuperTypes::getSuperTypes(type)) {
+        if (super != type) {
+          funcContext->localGetTypeLocals[super].push_back(index);
+        }
+      }
+      // TODO: this does not emit basic types
+      for (auto sub : subTypes->getAllSubTypes(type)) {
+        if (sub != type) {
+          funcContext->localSetTypeLocals[sub].push_back(index);
+        }
+      }
+    }
+  };
+
   Index numParams = upToSquared(MAX_PARAMS);
   std::vector<Type> params;
   params.reserve(numParams);
   for (Index i = 0; i < numParams; i++) {
     auto type = getSingleConcreteType();
-    funcContext->typeLocals[type].push_back(params.size());
+    addToTypeLocals(type, params.size());
     params.push_back(type);
   }
   auto paramType = Type(params);
@@ -594,7 +614,7 @@ Function* TranslateToFuzzReader::addFunction() {
       // initialized to some default value.
       continue;
     }
-    funcContext->typeLocals[type].push_back(params.size() + func->vars.size());
+    addToTypeLocals(type, params.size() + func->vars.size());
     func->vars.push_back(type);
   }
   // with small chance, make the body unreachable
@@ -1458,7 +1478,7 @@ Expression* TranslateToFuzzReader::makeCallRef(Type type) {
 }
 
 Expression* TranslateToFuzzReader::makeLocalGet(Type type) {
-  auto& locals = funcContext->typeLocals[type];
+  auto& locals = funcContext->localGetTypeLocals[type];
   if (locals.empty()) {
     return makeConst(type);
   }
@@ -1473,7 +1493,7 @@ Expression* TranslateToFuzzReader::makeLocalSet(Type type) {
   } else {
     valueType = getConcreteType();
   }
-  auto& locals = funcContext->typeLocals[valueType];
+  auto& locals = funcContext->localSetTypeLocals[valueType];
   if (locals.empty()) {
     return makeTrivial(type);
   }
