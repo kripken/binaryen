@@ -1506,6 +1506,7 @@ Expression* TranslateToFuzzReader::makeLocalSet(Type type) {
   auto* value = make(valueType);
     auto localType = funcContext->func->getLocalType(index);
     std::cout << "want " << type << " and got a local of type " << localType << '\n'; // XXX tee must be an exact type. only set can be a supertype
+    // XXX maybe just pick a supertype here and that's that. or ust pick a supertpye in make()
   if (tee) {
     // Get the type from the function, as we may be using a subtype here.
     auto localType = funcContext->func->getLocalType(index);
