@@ -1064,6 +1064,16 @@
   )
  )
 
+ ;; CHECK:      (func $unreachable-set.2 (type $ref|func|_=>_none) (param $param (ref func))
+ ;; CHECK-NEXT:  (local $x (ref func))
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT:  (local.set $x
+ ;; CHECK-NEXT:   (local.get $param)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (drop
+ ;; CHECK-NEXT:   (local.get $x)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $unreachable-set.2 (param $param (ref func))
   ;; As above, but now the set is unreachable as it is after an unreachable
   ;; instruction. Even though the set itself is reachable, we should not let it
@@ -1078,6 +1088,18 @@
   )
  )
 
+ ;; CHECK:      (func $unreachable-set.3 (type $ref|func|_=>_none) (param $param (ref func))
+ ;; CHECK-NEXT:  (local $x (ref func))
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:   (local.set $x
+ ;; CHECK-NEXT:    (local.get $param)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (drop
+ ;; CHECK-NEXT:   (local.get $x)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $unreachable-set.3 (param $param (ref func))
   ;; As above, but now the set is in a block. We should still fix up the type.
   (local $x (ref func))
