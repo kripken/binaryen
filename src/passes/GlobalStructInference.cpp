@@ -60,9 +60,6 @@ namespace wasm {
 namespace {
 
 struct GlobalStructInference : public Pass {
-  // Only modifies struct.get operations.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   // Maps optimizable struct types to the globals whose init is a struct.new of
   // them.
   //

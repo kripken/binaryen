@@ -118,9 +118,6 @@ struct TypeMerging : public Pass {
   using Partition = std::vector<DFA::State<HeapType>>;
   using Partitions = std::list<Partition>;
 
-  // Only modifies types.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   Module* module;
 
   // All private original types.

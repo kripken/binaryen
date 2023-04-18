@@ -34,9 +34,6 @@ struct DuplicateFunctionElimination : public Pass {
   // FIXME Merge DWARF info
   bool invalidatesDWARF() override { return true; }
 
-  // This pass merges functions but does not alter their contents.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   void run(Module* module) override {
     // Multiple iterations may be necessary: A and B may be identical only after
     // we see the functions C1 and C2 that they call are in fact identical.

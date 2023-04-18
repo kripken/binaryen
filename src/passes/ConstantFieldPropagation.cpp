@@ -54,9 +54,6 @@ using PCVFunctionStructValuesMap =
 struct FunctionOptimizer : public WalkerPass<PostWalker<FunctionOptimizer>> {
   bool isFunctionParallel() override { return true; }
 
-  // Only modifies struct.get operations.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   std::unique_ptr<Pass> create() override {
     return std::make_unique<FunctionOptimizer>(infos);
   }
@@ -191,9 +188,6 @@ struct PCVScanner
 };
 
 struct ConstantFieldPropagation : public Pass {
-  // Only modifies struct.get operations.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   void run(Module* module) override {
     if (!module->features.hasGC()) {
       return;

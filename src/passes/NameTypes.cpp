@@ -28,8 +28,6 @@ namespace wasm {
 static const size_t NameLenLimit = 20;
 
 struct NameTypes : public Pass {
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   void run(Module* module) override {
     // Find all the types.
     std::vector<HeapType> types = ModuleUtils::collectHeapTypes(*module);

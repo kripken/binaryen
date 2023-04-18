@@ -873,10 +873,6 @@ struct InstrumentedProxy : public Pass {
 
   bool invalidatesDWARF() override { return pass->invalidatesDWARF(); }
 
-  bool requiresNonNullableLocalFixups() override {
-    return pass->requiresNonNullableLocalFixups();
-  }
-
 private:
   ModuleAnalyzer* analyzer;
   std::unique_ptr<Pass> pass;

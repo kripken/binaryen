@@ -119,10 +119,6 @@ struct ReFinalize
   : public WalkerPass<PostWalker<ReFinalize, OverriddenVisitor<ReFinalize>>> {
   bool isFunctionParallel() override { return true; }
 
-  // Re-running finalize() does not change the types of locals, so validation is
-  // preserved.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   std::unique_ptr<Pass> create() override {
     return std::make_unique<ReFinalize>();
   }

@@ -72,9 +72,6 @@ struct NewFinder : public PostWalker<NewFinder> {
 };
 
 struct TypeSSA : public Pass {
-  // Only modifies struct/array.new types.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   Module* module;
 
   void run(Module* module_) override {

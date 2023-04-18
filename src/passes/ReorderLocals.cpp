@@ -32,9 +32,6 @@ namespace wasm {
 struct ReorderLocals : public WalkerPass<PostWalker<ReorderLocals>> {
   bool isFunctionParallel() override { return true; }
 
-  // Sorting and removing unused locals cannot affect validation.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   std::unique_ptr<Pass> create() override {
     return std::make_unique<ReorderLocals>();
   }

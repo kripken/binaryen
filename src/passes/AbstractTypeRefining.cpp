@@ -62,11 +62,6 @@ struct NewFinder : public PostWalker<NewFinder> {
 };
 
 struct AbstractTypeRefining : public Pass {
-  // Changes types by refining them. We never add new non-nullable locals here
-  // (even if we refine a type to a bottom type, we only change the heap type
-  // there, not nullability).
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   // The types that are created (have a struct.new).
   Types createdTypes;
 

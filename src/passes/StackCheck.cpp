@@ -67,9 +67,6 @@ struct EnforceStackLimits : public WalkerPass<PostWalker<EnforceStackLimits>> {
 
   bool isFunctionParallel() override { return true; }
 
-  // Only affects linear memory operations.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   std::unique_ptr<Pass> create() override {
     return std::make_unique<EnforceStackLimits>(
       stackPointer, stackBase, stackLimit, builder, handler);

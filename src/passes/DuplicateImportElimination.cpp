@@ -28,9 +28,6 @@
 namespace wasm {
 
 struct DuplicateImportElimination : public Pass {
-  // This pass does not alter function contents.
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   void run(Module* module) override {
     ImportInfo imports(*module);
     std::map<Name, Name> replacements;

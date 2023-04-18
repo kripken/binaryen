@@ -652,11 +652,6 @@ struct Analyzer {
 };
 
 struct RemoveUnusedModuleElements : public Pass {
-  // This pass only removes module elements, it never modifies function
-  // contents (except to replace an entire body with unreachable, which does not
-  // cause any need for local fixups).
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   bool rootAllFunctions;
 
   RemoveUnusedModuleElements(bool rootAllFunctions)

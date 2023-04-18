@@ -19,8 +19,6 @@
 namespace wasm {
 
 struct StripTargetFeatures : public Pass {
-  bool requiresNonNullableLocalFixups() override { return false; }
-
   bool isStripped = false;
   StripTargetFeatures(bool isStripped) : isStripped(isStripped) {}
   void run(Module* module) override {

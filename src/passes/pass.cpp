@@ -1049,9 +1049,13 @@ void PassRunner::handleAfterEffects(Pass* pass, Function* func) {
   // be out of sync in a potentially dangerous way.
   func->stackIR.reset(nullptr);
 
-  if (pass->requiresNonNullableLocalFixups()) {
-    TypeUpdating::handleNonDefaultableLocals(func, *wasm);
-  }
+  // TODO: We might avoid this in some cases. Marking specific passes as not
+  //       needing this is difficult, however, since even running ReFinalize can
+  //       make such fixups necessary (it can turn a set unreachable, and
+  //       unreachability affects validation, see LocalStructuralDominance).
+  //       However, if we know we will run DCE later in a sequence of passes
+  //       then we don't need to do any fixups until then, for example.
+  TypeUpdating::handleNonDefaultableLocals(func, *wasm);
 }
 
 int PassRunner::getPassDebug() {
