@@ -1063,4 +1063,32 @@
    (local.get $x)
   )
  )
+
+ (func $unreachable-set.2 (param $param (ref func))
+  ;; As above, but now the set is unreachable as it is after an unreachable
+  ;; instruction. Even though the set itself is reachable, we should not let it
+  ;; help the get validate as non-nullable, and the local's type should change.
+  (local $x (ref func))
+  (unreachable)
+  (local.set $x
+   (local.get $param)
+  )
+  (drop
+   (local.get $x)
+  )
+ )
+
+ (func $unreachable-set.3 (param $param (ref func))
+  ;; As above, but now the set is in a block. We should still fix up the type.
+  (local $x (ref func))
+  (block
+   (unreachable)
+   (local.set $x
+    (local.get $param)
+   )
+  )
+  (drop
+   (local.get $x)
+  )
+ )
 )

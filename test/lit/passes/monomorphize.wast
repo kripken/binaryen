@@ -588,3 +588,86 @@
     )
   )
 )
+
+(module
+  ;; ALWAYS:      (type $ref|func|_=>_none (func (param (ref func))))
+
+  ;; ALWAYS:      (type $none_=>_none (func))
+
+  ;; ALWAYS:      (type $ref|ref|func|_->_none|_=>_none (func (param (ref $ref|func|_=>_none))))
+
+  ;; ALWAYS:      (elem declare func $1)
+
+  ;; ALWAYS:      (func $0 (type $none_=>_none)
+  ;; ALWAYS-NEXT:  (call $1_2
+  ;; ALWAYS-NEXT:   (ref.func $1)
+  ;; ALWAYS-NEXT:  )
+  ;; ALWAYS-NEXT: )
+  ;; CAREFUL:      (type $none_=>_none (func))
+
+  ;; CAREFUL:      (type $ref|func|_=>_none (func (param (ref func))))
+
+  ;; CAREFUL:      (elem declare func $1)
+
+  ;; CAREFUL:      (func $0 (type $none_=>_none)
+  ;; CAREFUL-NEXT:  (call $1
+  ;; CAREFUL-NEXT:   (ref.func $1)
+  ;; CAREFUL-NEXT:  )
+  ;; CAREFUL-NEXT: )
+  (func $0
+    (call $1
+      (ref.func $1)
+    )
+  )
+
+  ;; ALWAYS:      (func $1 (type $ref|func|_=>_none) (param $0 (ref func))
+  ;; ALWAYS-NEXT:  (local $3 (ref any))
+  ;; ALWAYS-NEXT:  (local.set $3
+  ;; ALWAYS-NEXT:   (block (result (ref any))
+  ;; ALWAYS-NEXT:    (unreachable)
+  ;; ALWAYS-NEXT:   )
+  ;; ALWAYS-NEXT:  )
+  ;; ALWAYS-NEXT:  (loop $loop-in
+  ;; ALWAYS-NEXT:   (local.set $3
+  ;; ALWAYS-NEXT:    (local.get $3)
+  ;; ALWAYS-NEXT:   )
+  ;; ALWAYS-NEXT:  )
+  ;; ALWAYS-NEXT: )
+  ;; CAREFUL:      (func $1 (type $ref|func|_=>_none) (param $0 (ref func))
+  ;; CAREFUL-NEXT:  (unreachable)
+  ;; CAREFUL-NEXT: )
+  (func $1 (param $0 (ref func))
+    (local $3 (ref any))
+    ;; When we optimize after monomorphizing the control flow structures can be
+    ;; removed. The code should still validate as we optimize, even though the
+    ;; non-nullable local's set will be in unreachable code. (At the end, DCE
+    ;; will remove everything here.)
+    (block
+      (local.set $3
+        (block (result (ref any))
+          (unreachable)
+        )
+      )
+      (loop
+        (local.set $3
+          (local.get $3)
+        )
+      )
+    )
+  )
+)
+;; ALWAYS:      (func $1_2 (type $ref|ref|func|_->_none|_=>_none) (param $0 (ref $ref|func|_=>_none))
+;; ALWAYS-NEXT:  (local $3 anyref)
+;; ALWAYS-NEXT:  (local.tee $3
+;; ALWAYS-NEXT:   (block
+;; ALWAYS-NEXT:    (unreachable)
+;; ALWAYS-NEXT:   )
+;; ALWAYS-NEXT:  )
+;; ALWAYS-NEXT:  (loop $loop-in
+;; ALWAYS-NEXT:   (local.set $3
+;; ALWAYS-NEXT:    (ref.as_non_null
+;; ALWAYS-NEXT:     (local.get $3)
+;; ALWAYS-NEXT:    )
+;; ALWAYS-NEXT:   )
+;; ALWAYS-NEXT:  )
+;; ALWAYS-NEXT: )

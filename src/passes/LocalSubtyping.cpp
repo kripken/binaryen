@@ -146,7 +146,14 @@ struct LocalSubtyping : public WalkerPass<PostWalker<LocalSubtyping>> {
         // Remove non-nullability if we disallow that in locals.
         if (newType.isNonNullable()) {
           if (cannotBeNonNullable.count(i)) {
-            newType = Type(newType.getHeapType(), Nullable);
+            if (oldType.isNonNullable()) {
+              // This began as non-nullable but we detected it cannot remain so,
+              // which means validation fixes that happen later will fix it up.
+              // We should ignore it and continue.
+              continue;
+            } else {
+              newType = Type(newType.getHeapType(), Nullable);
+            }
           }
         } else if (!newType.isDefaultable()) {
           // Aside from the case we just handled of allowed non-nullability, we
