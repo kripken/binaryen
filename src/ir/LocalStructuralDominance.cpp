@@ -103,7 +103,13 @@ LocalStructuralDominance::LocalStructuralDominance(Function* func,
     }
 
     static void doLocalSet(Scanner* self, Expression** currp) {
-      auto index = (*currp)->cast<LocalSet>()->index;
+      auto* curr = *currp;
+      if (curr->type == Type::unreachable) {
+        // Unreachable sets are not emitted in the binary format, so we do not
+        // count them as helping local.gets validate.
+        return;
+      }
+      auto index = curr->cast<LocalSet>()->index;
       if (!self->localsSet[index]) {
         // This local is now set until the end of this scope.
         self->localsSet[index] = true;
