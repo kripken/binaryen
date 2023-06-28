@@ -186,12 +186,13 @@ struct MetaDCEGraph {
         }
       }
     }
-    // Add initializer dependencies
-    // if we provide a parent DCE name, that is who can reach what we see
-    // if none is provided, then it is something we must root
+    // Add initializer dependencies. The provided parent name is who can reach
+    // what we see.
     struct InitScanner : public PostWalker<InitScanner> {
       InitScanner(MetaDCEGraph* parent, Name parentDceName)
-        : parent(parent), parentDceName(parentDceName) {}
+        : parent(parent), parentDceName(parentDceName) {
+        assert(parentDceName.is());
+      }
 
       void visitGlobalGet(GlobalGet* curr) { handleGlobal(curr->name); }
       void visitGlobalSet(GlobalSet* curr) { handleGlobal(curr->name); }
@@ -203,15 +204,13 @@ struct MetaDCEGraph {
       void handleGlobal(Name name) {
         Name dceName;
         if (!getModule()->getGlobal(name)->imported()) {
-          // its a defined global
+          // it's a defined global
           dceName = parent->globalToDCENode[name];
         } else {
           // it's an import.
           dceName = parent->importIdToDCENode[parent->getGlobalImportId(name)];
         }
-        if (!parentDceName.isNull()) {
-          parent->nodes[parentDceName].reaches.push_back(dceName);
-        }
+        parent->nodes[parentDceName].reaches.push_back(dceName);
       }
     };
     ModuleUtils::iterDefinedGlobals(wasm, [&](Global* global) {
@@ -220,8 +219,6 @@ struct MetaDCEGraph {
       scanner.walk(global->init);
     });
     // we can't remove segments, so root what they need
-    InitScanner rooter(this, Name());
-    rooter.setModule(&wasm);
     ModuleUtils::iterActiveElementSegments(wasm, [&](ElementSegment* segment) {
       // TODO: currently, all functions in the table are roots, but we
       //       should add an option to refine that
@@ -233,10 +230,7 @@ struct MetaDCEGraph {
             roots.insert(importIdToDCENode[getFunctionImportId(name)]);
           }
         });
-      rooter.walk(segment->offset);
     });
-    ModuleUtils::iterActiveDataSegments(
-      wasm, [&](DataSegment* segment) { rooter.walk(segment->offset); });
 
     // A parallel scanner for function bodies
     struct Scanner : public WalkerPass<PostWalker<Scanner>> {
