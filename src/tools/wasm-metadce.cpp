@@ -165,12 +165,7 @@ struct MetaDCEGraph {
       // we can also link the export to the thing being exported
       auto& node = nodes[exportToDCENode[exp->name]];
       if (exp->kind == ExternalKind::Function) {
-        if (!wasm.getFunction(exp->value)->imported()) {
-          node.reaches.push_back(functionToDCENode[exp->value]);
-        } else {
-          node.reaches.push_back(
-            importIdToDCENode[getFunctionImportId(exp->value)]);
-        }
+        node.reaches.push_back(getFunctionDCEName(exp->value));
       } else if (exp->kind == ExternalKind::Global) {
         if (!wasm.getGlobal(exp->value)->imported()) {
           node.reaches.push_back(globalToDCENode[exp->value]);
@@ -196,6 +191,11 @@ struct MetaDCEGraph {
 
       void visitGlobalGet(GlobalGet* curr) { handleGlobal(curr->name); }
       void visitGlobalSet(GlobalSet* curr) { handleGlobal(curr->name); }
+      void visitRefFunc(RefFunc* curr) {
+        assert(!parentDceName.isNull());
+        parent->nodes[parentDceName].reaches.push_back(
+          parent->getFunctionDCEName(curr->func));
+      }
 
     private:
       MetaDCEGraph* parent;
@@ -223,13 +223,8 @@ struct MetaDCEGraph {
       // TODO: currently, all functions in the table are roots, but we
       //       should add an option to refine that
       ElementUtils::iterElementSegmentFunctionNames(
-        segment, [&](Name name, Index) {
-          if (!wasm.getFunction(name)->imported()) {
-            roots.insert(functionToDCENode[name]);
-          } else {
-            roots.insert(importIdToDCENode[getFunctionImportId(name)]);
-          }
-        });
+        segment,
+        [&](Name name, Index) { roots.insert(getFunctionDCEName(name)); });
     });
 
     // A parallel scanner for function bodies
@@ -242,18 +237,8 @@ struct MetaDCEGraph {
         return std::make_unique<Scanner>(parent);
       }
 
-      void visitCall(Call* curr) {
-        if (!getModule()->getFunction(curr->target)->imported()) {
-          parent->nodes[parent->functionToDCENode[getFunction()->name]]
-            .reaches.push_back(parent->functionToDCENode[curr->target]);
-        } else {
-          assert(parent->functionToDCENode.count(getFunction()->name) > 0);
-          parent->nodes[parent->functionToDCENode[getFunction()->name]]
-            .reaches.push_back(
-              parent
-                ->importIdToDCENode[parent->getFunctionImportId(curr->target)]);
-        }
-      }
+      void visitCall(Call* curr) { handleFunction(curr->target); }
+      void visitRefFunc(RefFunc* curr) { handleFunction(curr->func); }
       void visitGlobalGet(GlobalGet* curr) { handleGlobal(curr->name); }
       void visitGlobalSet(GlobalSet* curr) { handleGlobal(curr->name); }
       void visitThrow(Throw* curr) { handleTag(curr->tag); }
@@ -265,6 +250,11 @@ struct MetaDCEGraph {
 
     private:
       MetaDCEGraph* parent;
+
+      void handleFunction(Name name) {
+        parent->nodes[parent->functionToDCENode[getFunction()->name]]
+          .reaches.push_back(parent->getFunctionDCEName(name));
+      }
 
       void handleGlobal(Name name) {
         if (!getFunction()) {
@@ -296,6 +286,14 @@ struct MetaDCEGraph {
 
     PassRunner runner(&wasm);
     Scanner(this).run(&runner, &wasm);
+  }
+
+  Name getFunctionDCEName(Name name) {
+    if (!wasm.getFunction(name)->imported()) {
+      return functionToDCENode[name];
+    } else {
+      return importIdToDCENode[getFunctionImportId(name)];
+    }
   }
 
 private:
