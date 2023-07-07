@@ -111,6 +111,7 @@ std::cout << "note source " << sourceType << " into " << targetType << '\n';
       return;
     }
 
+// XXX locals don;t work because we use localgraph!!1
     typeLUBs[sourceType].note(targetType);
   }
 
