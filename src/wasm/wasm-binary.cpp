@@ -1252,8 +1252,8 @@ void WasmBinaryWriter::writeFeaturesSection() {
         return BinaryConsts::CustomSections::ExtendedConstFeature;
       case FeatureSet::Strings:
         return BinaryConsts::CustomSections::StringsFeature;
-      case FeatureSet::MultiMemories:
-        return BinaryConsts::CustomSections::MultiMemoriesFeature;
+      case FeatureSet::MultiMemory:
+        return BinaryConsts::CustomSections::MultiMemoryFeature;
       default:
         WASM_UNREACHABLE("unexpected feature flag");
     }
@@ -3685,8 +3685,8 @@ void WasmBinaryReader::readFeatures(size_t payloadLen) {
       feature = FeatureSet::ExtendedConst;
     } else if (name == BinaryConsts::CustomSections::StringsFeature) {
       feature = FeatureSet::Strings;
-    } else if (name == BinaryConsts::CustomSections::MultiMemoriesFeature) {
-      feature = FeatureSet::MultiMemories;
+    } else if (name == BinaryConsts::CustomSections::MultiMemoryFeature) {
+      feature = FeatureSet::MultiMemory;
     } else {
       // Silently ignore unknown features (this may be and old binaryen running
       // on a new wasm).
@@ -6936,7 +6936,10 @@ void WasmBinaryReader::visitCallRef(CallRef* curr) {
   for (size_t i = 0; i < num; i++) {
     curr->operands[num - i - 1] = popNonVoidExpression();
   }
-  curr->finalize(sig.results);
+  // If the target has bottom type, we won't be able to infer the correct type
+  // from it, so set the type manually to be safe.
+  curr->type = sig.results;
+  curr->finalize();
 }
 
 bool WasmBinaryReader::maybeVisitI31New(Expression*& out, uint32_t code) {
@@ -7028,6 +7031,9 @@ bool WasmBinaryReader::maybeVisitBrOn(Expression*& out, uint32_t code) {
     auto castHeapType = getHeapType();
     castType = Type(castHeapType, castNullability);
     auto inputType = Type(inputHeapType, inputNullability);
+    if (!Type::isSubType(castType, inputType)) {
+      throwError("br_on_cast* cast type must be subtype of input type");
+    }
     if (!Type::isSubType(ref->type, inputType)) {
       throwError(std::string("Invalid reference type for ") +
                  ((op == BrOnCast) ? "br_on_cast" : "br_on_cast_fail"));

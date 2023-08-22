@@ -584,7 +584,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:   (block (result (ref none))
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (ref.cast i31
   ;; CHECK-NEXT:      (local.get $x)
@@ -1088,7 +1088,7 @@
 
   ;; CHECK:      (func $incompatible-cast-of-non-null (type $ref|$struct|_=>_none) (param $struct (ref $struct))
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:   (block (result (ref none))
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (local.get $struct)
   ;; CHECK-NEXT:    )
@@ -1988,7 +1988,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:   (block (result (ref none))
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (ref.cast $array
   ;; CHECK-NEXT:      (local.get $x)
@@ -1998,7 +1998,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:   (block (result (ref none))
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (ref.cast $array
   ;; CHECK-NEXT:      (local.get $x)
@@ -2008,7 +2008,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:   (block (result (ref none))
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (ref.cast $array
   ;; CHECK-NEXT:      (local.get $x)
@@ -2320,7 +2320,7 @@
 
   ;; CHECK:      (func $ref-cast-heap-type-incompatible (type $ref?|$B|_ref|$B|_=>_none) (param $null-b (ref null $B)) (param $b (ref $B))
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:   (block (result (ref none))
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (local.get $b)
   ;; CHECK-NEXT:    )
@@ -2328,7 +2328,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:   (block (result (ref none))
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (local.get $null-b)
   ;; CHECK-NEXT:    )
@@ -2336,7 +2336,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:   (block (result (ref none))
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (local.get $b)
   ;; CHECK-NEXT:    )
@@ -2600,8 +2600,8 @@
   ;; CHECK-NEXT:  (block $outer (result (ref any))
   ;; CHECK-NEXT:   (block
   ;; CHECK-NEXT:    (drop
-  ;; CHECK-NEXT:     (block (result i31ref)
-  ;; CHECK-NEXT:      (br_on_cast_fail $outer structref i31ref
+  ;; CHECK-NEXT:     (block (result nullref)
+  ;; CHECK-NEXT:      (br_on_cast_fail $outer structref nullref
   ;; CHECK-NEXT:       (block (result structref)
   ;; CHECK-NEXT:        (br_on_cast_fail $outer anyref structref
   ;; CHECK-NEXT:         (local.get $anyref)
@@ -2635,8 +2635,8 @@
   ;; CHECK:      (func $incompatible-cast-heap-types-nullable (type $anyref_=>_anyref) (param $anyref anyref) (result anyref)
   ;; CHECK-NEXT:  (block $outer (result anyref)
   ;; CHECK-NEXT:   (ref.cast null none
-  ;; CHECK-NEXT:    (block (result i31ref)
-  ;; CHECK-NEXT:     (br_on_cast_fail $outer structref i31ref
+  ;; CHECK-NEXT:    (block (result nullref)
+  ;; CHECK-NEXT:     (br_on_cast_fail $outer structref nullref
   ;; CHECK-NEXT:      (block (result structref)
   ;; CHECK-NEXT:       (br_on_cast_fail $outer anyref structref
   ;; CHECK-NEXT:        (local.get $anyref)
@@ -2668,8 +2668,8 @@
   ;; CHECK-NEXT:  (block $outer (result anyref)
   ;; CHECK-NEXT:   (block
   ;; CHECK-NEXT:    (drop
-  ;; CHECK-NEXT:     (block (result (ref i31))
-  ;; CHECK-NEXT:      (br_on_cast_fail $outer structref (ref i31)
+  ;; CHECK-NEXT:     (block (result (ref none))
+  ;; CHECK-NEXT:      (br_on_cast_fail $outer structref (ref none)
   ;; CHECK-NEXT:       (block (result structref)
   ;; CHECK-NEXT:        (br_on_cast_fail $outer anyref structref
   ;; CHECK-NEXT:         (local.get $anyref)

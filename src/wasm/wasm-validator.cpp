@@ -2583,6 +2583,11 @@ void FunctionValidator::visitBrOn(BrOn* curr) {
       curr->ref->type.getHeapType().getBottom(),
       curr,
       "br_on_cast* target type and ref type must have a common supertype");
+    shouldBeSubType(
+      curr->castType,
+      curr->ref->type,
+      curr,
+      "br_on_cast* target type must be a subtype of its input type");
   } else {
     shouldBeEqual(curr->castType,
                   Type(Type::none),
@@ -3480,9 +3485,9 @@ static void validateGlobals(Module& module, ValidationInfo& info) {
 static void validateMemories(Module& module, ValidationInfo& info) {
   if (module.memories.size() > 1) {
     info.shouldBeTrue(
-      module.features.hasMultiMemories(),
+      module.features.hasMultiMemory(),
       "memory",
-      "multiple memories require multi-memories [--enable-multi-memories]");
+      "multiple memories require multimemory [--enable-multimemory]");
   }
   for (auto& memory : module.memories) {
     if (memory->hasMax()) {
