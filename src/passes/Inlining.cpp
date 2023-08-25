@@ -271,7 +271,9 @@ struct Updater : public PostWalker<Updater> {
   Updater(PassOptions& options) : options(options) {}
 
   void visitReturn(Return* curr) {
-    replaceCurrent(builder->makeBreak(returnName, curr->value));
+    auto* br = builder->makeBreak(returnName, curr->value);
+    debug::scavengeDebugInfo(br, curr, getFunction());
+    replaceCurrent(br);
   }
   // Return calls in inlined functions should only break out of the scope of
   // the inlined code, not the entire function they are being inlined into. To
@@ -397,6 +399,7 @@ static Expression* doInlining(Module* module,
   updater.returnName = block->name;
   updater.isReturn = call->isReturn;
   updater.builder = &builder;
+  updater.setFunction(into);
   // Set up a locals mapping
   for (Index i = 0; i < from->getNumLocals(); i++) {
     updater.localMapping[i] = builder.addVar(into, from->getLocalType(i));
