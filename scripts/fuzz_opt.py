@@ -1421,15 +1421,50 @@ def test_one(random_input, given_wasm):
     else:
         # emit the target features section so that reduction can work later,
         # without needing to specify the features
-        generate_command = [in_bin('wasm-opt'), random_input, '-ttf', '-o', abspath('a.wasm')] + FUZZ_OPTS + FEATURE_OPTS
-        if INITIAL_CONTENTS:
-            generate_command += ['--initial-fuzz=' + INITIAL_CONTENTS]
-        if PRINT_WATS:
-            printed = run(generate_command + ['--print'])
-            with open('a.printed.wast', 'w') as f:
-                f.write(printed)
-        else:
-            run(generate_command)
+        #generate_command = [in_bin('wasm-opt'), random_input, '-ttf', '-o', abspath('a.wasm')] + FUZZ_OPTS + FEATURE_OPTS
+        #if INITIAL_CONTENTS:
+        #    generate_command += ['--initial-fuzz=' + INITIAL_CONTENTS]
+        #if PRINT_WATS:
+        #    printed = run(generate_command + ['--print'])
+        #    with open('a.printed.wast', 'w') as f:
+        #        f.write(printed)
+        #else:
+        #    run(generate_command)
+        cmd = [
+            '/home/azakai/Downloads/wasm-tools-1.0.54-x86_64-linux/wasm-tools',
+            'smith',
+            random_input,
+            '-o', abspath('a.wasm'),
+            '--ensure-termination',
+            '--max-imports', '0', # TODO add our own imports for logging
+        ]
+        if not NANS:
+            cmd += '--canonicalize-nans'
+        for feature in [
+            'bulk-memory',
+            'reference-types',
+            'tail-call',
+            'simd',
+            'relaxed-simd',
+            'exception-handling',
+            'memory64',
+            ('multivalue', 'multi-value'),
+            ('sign-ext', 'sign-extension-ops'),
+            ('nontrapping-float-to-int', 'saturating-float-to-int'),
+            'threads',
+        ]:
+            # If we have just one name, the feature has the same name in both
+            # binaryen and wasm-tools. Otherwise, the two names are given.
+            if type(feature) is tuple:
+                feature, wasm_tools_feature = feature
+            else:
+                wasm_tools_feature = feature
+            if ('--disable-' + feature) in FEATURE_OPTS:
+                cmd += ['--' + wasm_tools_feature, 'false']
+        print(cmd)
+        run(cmd)
+        # XXX mutable globals is not an option in wasm-tools, must skip wasm-tools then
+
     wasm_size = os.stat('a.wasm').st_size
     bytes = wasm_size
     print('pre wasm size:', wasm_size)
