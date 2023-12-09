@@ -338,7 +338,7 @@ def generate_wasm_tools_wasm():
         '--max-imports', '0',
     ]
     if not NANS:
-        cmd += '--canonicalize-nans'
+        cmd += ['--canonicalize-nans', 'true']
     for feature in [
         'bulk-memory',
         'reference-types',
@@ -360,6 +360,10 @@ def generate_wasm_tools_wasm():
             wasm_tools_feature = feature
         if ('--disable-' + feature) in FEATURE_OPTS:
             cmd += ['--' + wasm_tools_feature, 'false']
+    # Always disable bulk memory since we do not support elem.drop yet here.
+    # Sadly this does not work :( https://github.com/bytecodealliance/wasm-tools/issues/1324
+    cmd += ['--bulk-memory', 'false']
+
     print(cmd)
     run(cmd)
     return filename
