@@ -318,10 +318,61 @@ INITIAL_CONTENTS_IGNORE = [
 ]
 
 
+def generate_wasm_tools_wasm():
+    # mutable globals is not an option in wasm-tools, that is, it is always on,
+    # so enable it for us (otherwise we fail to validate if we didn't happen to
+    # enable the feature)
+    global FEATURE_OPTS
+    FEATURE_OPTS += ['--enable-mutable-globals']
+
+    filename = abspath('smith.wasm')
+    cmd = [
+        '/home/azakai/Downloads/wasm-tools-1.0.54-x86_64-linux/wasm-tools',
+        'smith',
+        # use the same random bytes as our own fuzzer
+        # TODO this does correlate the two in each run...
+        'input.dat',
+        '-o', filename,
+        '--ensure-termination', # XXX not needed since we do this
+        # Out mutation of the testcase will add our own imports for logging etc.
+        '--max-imports', '0',
+    ]
+    if not NANS:
+        cmd += '--canonicalize-nans'
+    for feature in [
+        'bulk-memory',
+        'reference-types',
+        'tail-call',
+        'simd',
+        'relaxed-simd',
+        'exception-handling',
+        'memory64',
+        ('multivalue', 'multi-value'),
+        ('sign-ext', 'sign-extension-ops'),
+        ('nontrapping-float-to-int', 'saturating-float-to-int'),
+        'threads',
+    ]:
+        # If we have just one name, the feature has the same name in both
+        # binaryen and wasm-tools. Otherwise, the two names are given.
+        if type(feature) is tuple:
+            feature, wasm_tools_feature = feature
+        else:
+            wasm_tools_feature = feature
+        if ('--disable-' + feature) in FEATURE_OPTS:
+            cmd += ['--' + wasm_tools_feature, 'false']
+    print(cmd)
+    run(cmd)
+    return filename
+
 def pick_initial_contents():
     # if we use an initial wasm file's contents as the basis for the
     # fuzzing, then that filename, or None if we start entirely from scratch
     global INITIAL_CONTENTS
+
+    # XXX use wasm-tools here
+    INITIAL_CONTENTS = generate_wasm_tools_wasm()
+    return
+    # XXX
 
     INITIAL_CONTENTS = None
     # half the time don't use any initial contents
@@ -1421,49 +1472,15 @@ def test_one(random_input, given_wasm):
     else:
         # emit the target features section so that reduction can work later,
         # without needing to specify the features
-        #generate_command = [in_bin('wasm-opt'), random_input, '-ttf', '-o', abspath('a.wasm')] + FUZZ_OPTS + FEATURE_OPTS
-        #if INITIAL_CONTENTS:
-        #    generate_command += ['--initial-fuzz=' + INITIAL_CONTENTS]
-        #if PRINT_WATS:
-        #    printed = run(generate_command + ['--print'])
-        #    with open('a.printed.wast', 'w') as f:
-        #        f.write(printed)
-        #else:
-        #    run(generate_command)
-        cmd = [
-            '/home/azakai/Downloads/wasm-tools-1.0.54-x86_64-linux/wasm-tools',
-            'smith',
-            random_input,
-            '-o', abspath('a.wasm'),
-            '--ensure-termination',
-            '--max-imports', '0', # TODO add our own imports for logging
-        ]
-        if not NANS:
-            cmd += '--canonicalize-nans'
-        for feature in [
-            'bulk-memory',
-            'reference-types',
-            'tail-call',
-            'simd',
-            'relaxed-simd',
-            'exception-handling',
-            'memory64',
-            ('multivalue', 'multi-value'),
-            ('sign-ext', 'sign-extension-ops'),
-            ('nontrapping-float-to-int', 'saturating-float-to-int'),
-            'threads',
-        ]:
-            # If we have just one name, the feature has the same name in both
-            # binaryen and wasm-tools. Otherwise, the two names are given.
-            if type(feature) is tuple:
-                feature, wasm_tools_feature = feature
-            else:
-                wasm_tools_feature = feature
-            if ('--disable-' + feature) in FEATURE_OPTS:
-                cmd += ['--' + wasm_tools_feature, 'false']
-        print(cmd)
-        run(cmd)
-        # XXX mutable globals is not an option in wasm-tools, must skip wasm-tools then
+        generate_command = [in_bin('wasm-opt'), random_input, '-ttf', '-o', abspath('a.wasm')] + FUZZ_OPTS + FEATURE_OPTS
+        if INITIAL_CONTENTS:
+            generate_command += ['--initial-fuzz=' + INITIAL_CONTENTS]
+        if PRINT_WATS:
+            printed = run(generate_command + ['--print'])
+            with open('a.printed.wast', 'w') as f:
+                f.write(printed)
+        else:
+            run(generate_command)
 
     wasm_size = os.stat('a.wasm').st_size
     bytes = wasm_size
