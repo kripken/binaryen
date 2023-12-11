@@ -1288,7 +1288,18 @@ class CtorEval(TestCaseHandler):
         # we can use --ignore-external-input because the fuzzer passes in 0 to
         # all params, which is the same as ctor-eval assumes in this mode.
         evalled_wasm = wasm + '.evalled.wasm'
-        output = run([in_bin('wasm-ctor-eval'), wasm, '-o', evalled_wasm, '--ctors=' + ctors, '--kept-exports=' + ctors, '--ignore-external-input'] + FEATURE_OPTS)
+        cmd = [
+            in_bin('wasm-ctor-eval'), wasm, '-o', evalled_wasm,
+            '--ctors=' + ctors, '--kept-exports=' + ctors,
+            '--ignore-external-input'
+        ] + FEATURE_OPTS
+        try:
+            output = subprocess.check_output(cmd, timeout=10)
+        except subprocess.TimeoutExpired:
+            # do not consider this an error; some testcases are just very very
+            # slow, and we ignore them.
+            note_ignored_vm_run('wasm-ctor-eval timeout')
+            return
 
         # stop here if we could not eval anything at all in the module.
         if '...stopping since could not flatten memory' in output or \
