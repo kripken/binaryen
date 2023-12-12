@@ -362,6 +362,7 @@ def generate_wasm_tools_wasm():
             cmd += ['--' + wasm_tools_feature, 'false']
     # Always disable bulk memory since we do not support elem.drop yet here.
     # Sadly this does not work :( https://github.com/bytecodealliance/wasm-tools/issues/1324
+    # Wait for 1.0.55 to be released
     cmd += ['--bulk-memory', 'false']
 
     print(cmd)
