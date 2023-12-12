@@ -447,7 +447,7 @@ def pick_initial_contents():
         #    (struct.new $other)
         #    (struct.new $other)
         #    (tuple.extract 1
-        #     (tuple.make
+        #     (tuple.make 2
         #      (i32.const 0)
         #      (i32.const 0)
         #     )
