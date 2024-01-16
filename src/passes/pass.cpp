@@ -412,6 +412,8 @@ void PassRegistry::registerPasses() {
                createReReloopPass);
   registerPass(
     "rse", "remove redundant local.sets", createRedundantSetEliminationPass);
+  registerPass(
+    "rsse", "remove redundant struct.sets", createRedundantStructSetEliminationPass);
   registerPass("roundtrip",
                "write the module to binary, then read it",
                createRoundTripPass);
@@ -646,6 +648,9 @@ void PassRunner::addDefaultFunctionOptimizationPasses() {
   if (options.optimizeLevel >= 2 || options.shrinkLevel >= 1) {
     addIfNoDWARFIssues(
       "rse"); // after all coalesce-locals, and before a final vacuum
+  }
+  if (options.optimizeLevel >= 2 && wasm->features.hasGC()) {
+    addIfNoDWARFIssues("rsse");
   }
   addIfNoDWARFIssues("vacuum"); // just to be safe
 }
