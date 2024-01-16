@@ -16,17 +16,12 @@
             (i32.const 1) ;; the struct's field begins at 1
           )
         )
-        ;; This if will set the field to 0, but *not* if it branches. If we
-        ;; merged the struct.set with the tee and the new then we would break
-        ;; things.
-        (if (result i32)
-          (i32.const 1)
-          (then
-            (br $out)
-          )
-          (else
-            (i32.const 0)
-          )
+        ;; This branch skips the struct.set, but the struct.new and tee should
+        ;; have executed. (The typed block prevents it from being trivially
+        ;; eliminated as unreachable code; we could also have an if here that
+        ;; only branches some of the time, etc.)
+        (block (result i32)
+          (br $out)
         )
       )
     )
@@ -45,17 +40,10 @@
               (i32.const 1) ;; the struct's field begins at 1
             )
           )
-          ;; This if will set the field to 0, but *not* if it throws. If we
-          ;; merged the struct.set with the tee and the new then we would break
-          ;; things.
-          (if (result i32)
-            (i32.const 1)
-            (then
-              (throw $tag)
-            )
-            (else
-              (i32.const 0)
-            )
+          ;; This throw skips the struct.set, but the struct.new and tee should
+          ;; have executed.
+          (block (result i32)
+            (throw $tag)
           )
         )
       )
