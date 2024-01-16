@@ -78,7 +78,7 @@ struct RedundantStructSetElimination
 
   // CFG traversal work: We track the exact expressions we care about, as
   // mentioned above: struct.sets and blocks, on which we optimize, and
-  // local.gets and sets, which we need to check for control flow issues.
+  // local operations, which we need to check for control flow issues.
 
   void note(Expression** currp) {
     if (currBasicBlock) {
@@ -100,6 +100,8 @@ struct RedundantStructSetElimination
   }
   static void doVisitLocalSet(RedundantStructSetElimination* self,
                               Expression** currp) {
+    // We don't strictly need to track local.set, but it does let us stop
+    // scanning a path for a local.get. XXX
     self->note(currp);
   }
 
@@ -127,6 +129,12 @@ struct RedundantStructSetElimination
     }
   }
 
+  // Optimize a tee'd new in a struct.set:
+  //
+  //  (struct.set (local.tee $x (struct.new X Y Z)) X')
+  // =>
+  //  (local.set $x (struct.new X' Y Z))
+  //
   void optimizeStructSet(StructSet* set, Expression** currp) {
     if (auto* tee = set->ref->dynCast<LocalSet>()) {
       if (auto* new_ = tee->value->dynCast<StructNew>()) {
@@ -155,6 +163,7 @@ struct RedundantStructSetElimination
   void optimizeBlock(Block* block) {
     auto& list = block->list;
     for (Index i = 0; i < list.size(); i++) {
+      // First, find a local.set of a struct.new.
       auto* localSet = list[i]->dynCast<LocalSet>();
       if (!localSet) {
         continue;
@@ -249,10 +258,46 @@ struct RedundantStructSetElimination
       }
     }
 
-    Builder builder(*getModule());
+    // Finally, consider CFG issues. We need to avoid a situation where the
+    // struct.set's value can branch in a way that lets the reference be used
+    // without the struct.set being applied (as we want to apply it
+    // unconditionally), like here:
+    //
+    //  (try
+    //    (do
+    //      (local.set $x
+    //        (struct.new X)
+    //      )
+    //      (struct.set
+    //        (local.get $x)
+    //        (call $throw)
+    //      )
+    //    )
+    //    (catch)
+    //  )
+    //  ;; This read will get X, the value before the struct.set, if we threw.
+    //  (struct.get
+    //    (local.get $x)
+    //  )
+    //
+    // To detect this, we consider the basic blocks of the local.set and the
+    // struct.set. The only code that executes in between those, aside from the
+    // struct.set's value, is a local.get which does not branch. So any blocks
+    // we observe are due to the struct.set's value, and we can follow those to
+    // see if they lead to local.gets. If so, the situation is dangerous. Note
+    // that the situation is analogous with a local.tee as well:
+    //
+    //  (struct.set
+    //    (local.tee $x (struct.new X Y Z))
+    //    ..value..
+    //  )
+    //
+    // Once more, between the local.set/tee and the struct.set all that can
+    // branch (in fact, all that can execute) is the struct.set's value.
 
-    // See if we need to keep the old value.
+    // See if we need to keep the old value. TODO use existing helper here
     if (effects(operands[index]).hasUnremovableSideEffects()) {
+      Builder builder(*getModule());
       operands[index] =
         builder.makeSequence(builder.makeDrop(operands[index]), set->value);
     } else {
