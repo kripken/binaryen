@@ -1917,24 +1917,6 @@ struct OptimizeInstructions
       return false;
     }
 
-    // If the set's value might transfer control flow out then we might not
-    // reach the set, but that is dangerous, for example:
-    //
-    //  (struct.set
-    //    (local.tee $x (struct.new X Y Z))
-    //    (br $out)
-    //  )
-    // =>
-    //  (local.set $x (struct.new (br $out) Y Z))
-    //
-    // After the transform we branch out before performing the struct.new or the
-    // local.set.
-    //
-    // XXX this regresses too much, so find a more refined way
-    if (setValueEffects.transfersControlFlow()) {
-      //return false;
-    }
-
     // We must move the set's value past indexes greater than it (Y and Z in
     // the example in the comment on this function).
     // TODO When this function is called repeatedly in a sequence this can

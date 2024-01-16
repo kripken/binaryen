@@ -6,7 +6,6 @@
 ;; breaks to them, and so they have no nonlinear control flow.
 
 (module
-  (tag $tag)
 
   ;; CHECK:      (type $struct (struct (field (mut i32))))
   (type $struct (struct (field (mut i32))))
@@ -16,6 +15,9 @@
 
   ;; CHECK:      (type $struct3 (struct (field (mut i32)) (field (mut i32)) (field (mut i32))))
   (type $struct3 (struct (field (mut i32)) (field (mut i32)) (field (mut i32))))
+
+  ;; CHECK:      (tag $tag)
+  (tag $tag)
 
   ;; CHECK:      (func $tee (type $1)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
@@ -762,56 +764,45 @@
     )
   )
 
-  (func $value-transfers (result i32)
-    (local $ref (ref null $struct))
-    (block $out
-      (struct.set $struct 0
-        (local.tee $ref
-          (struct.new $struct
-            (i32.const 1) ;; the struct's field begins at 1
-          )
-        )
-        ;; This if will set the field to 0, but *not* if it branches. If we
-        ;; merged the struct.set with the tee and the new then we would break
-        ;; things, so do not optimize here.
-        (if (result i32)
-          (i32.const 1)
-          (then
-            (br $out)
-          )
-          (else
-            (i32.const 0)
-          )
-        )
-      )
-    )
-    (struct.get $struct 0
-      (local.get $ref)
-    )
-  )
-
-  ;; CHECK:      (func $helper-i32 (type $4) (param $x i32) (result i32)
+  ;; CHECK:      (func $helper-i32 (type $5) (param $x i32) (result i32)
   ;; CHECK-NEXT:  (i32.const 42)
   ;; CHECK-NEXT: )
   (func $helper-i32 (param $x i32) (result i32)
     (i32.const 42)
   )
 
-  ;; Testcases that require CFG analysis.
-
+  ;; CHECK:      (func $cfg-branch (type $4) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (block $out
+  ;; CHECK-NEXT:   (local.set $ref
+  ;; CHECK-NEXT:    (struct.new $struct
+  ;; CHECK-NEXT:     (block (result i32)
+  ;; CHECK-NEXT:      (br $out)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $ref)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
   (func $cfg-branch (result i32)
     (local $ref (ref null $struct))
+
+    ;; This testcase requires CFG analysis: there is a branch that skips the
+    ;; struct.set, and the reference can be used there. We should not optimize
+    ;; away the struct.set here.
+
     (block $out
       (struct.set $struct 0
         (local.tee $ref
           (struct.new $struct
-            (i32.const 1) ;; the struct's field begins at 1
+            (i32.const 1)
           )
         )
-        ;; This branch skips the struct.set, but the struct.new and tee should
-        ;; have executed. (The typed block prevents it from being trivially
-        ;; eliminated as unreachable code; we could also have an if here that
-        ;; only branches some of the time, etc.)
+        ;; The typed block here prevents it from being trivially eliminated as
+        ;; unreachable code; we could also have an if here that only branches
+        ;; some of the time, etc.
         (block (result i32)
           (br $out)
         )
@@ -822,18 +813,38 @@
     )
   )
 
+  ;; CHECK:      (func $cfg-throw (type $4) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (try
+  ;; CHECK-NEXT:   (do
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (block (result i32)
+  ;; CHECK-NEXT:       (throw $tag)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (catch $tag
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $ref)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
   (func $cfg-throw (result i32)
     (local $ref (ref null $struct))
+    ;; As above but with a call (which might throw). We cannot remove the
+    ;; struct.set here either.
     (try
       (do
         (struct.set $struct 0
           (local.tee $ref
             (struct.new $struct
-              (i32.const 1) ;; the struct's field begins at 1
+              (i32.const 1)
             )
           )
-          ;; This throw skips the struct.set, but the struct.new and tee should
-          ;; have executed.
           (block (result i32)
             (throw $tag)
           )
@@ -844,5 +855,46 @@
     (struct.get $struct 0
       (local.get $ref)
     )
+  )
+
+  ;; CHECK:      (func $cfg-throw-ok (type $4) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (try
+  ;; CHECK-NEXT:   (do
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (block (result i32)
+  ;; CHECK-NEXT:       (throw $tag)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (catch $tag
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (i32.const 2)
+  ;; CHECK-NEXT: )
+  (func $cfg-throw-ok (result i32)
+    (local $ref (ref null $struct))
+    ;; As above but the ref is not used in the throwing path, so we can
+    ;; optimize.
+    (try
+      (do
+        (struct.set $struct 0
+          (local.tee $ref
+            (struct.new $struct
+              (i32.const 1)
+            )
+          )
+          (block (result i32)
+            (throw $tag)
+          )
+        )
+      )
+      (catch $tag)
+    )
+    ;; There used to be a local.get of $ref here.
+    (i32.const 2)
   )
 )
