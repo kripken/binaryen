@@ -819,9 +819,7 @@
   ;; CHECK-NEXT:   (do
   ;; CHECK-NEXT:    (local.set $ref
   ;; CHECK-NEXT:     (struct.new $struct
-  ;; CHECK-NEXT:      (block (result i32)
-  ;; CHECK-NEXT:       (throw $tag)
-  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (call $cfg-throw)
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
@@ -845,9 +843,7 @@
               (i32.const 1)
             )
           )
-          (block (result i32)
-            (throw $tag)
-          )
+          (call $cfg-throw)
         )
       )
       (catch $tag)
@@ -863,9 +859,7 @@
   ;; CHECK-NEXT:   (do
   ;; CHECK-NEXT:    (local.set $ref
   ;; CHECK-NEXT:     (struct.new $struct
-  ;; CHECK-NEXT:      (block (result i32)
-  ;; CHECK-NEXT:       (throw $tag)
-  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (call $cfg-throw-ok)
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
@@ -887,9 +881,7 @@
               (i32.const 1)
             )
           )
-          (block (result i32)
-            (throw $tag)
-          )
+          (call $cfg-throw-ok)
         )
       )
       (catch $tag)

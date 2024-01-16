@@ -15,46 +15,44 @@
  */
 
 //
-// Eliminate redundant local.sets: if a local already has a particular
-// value, we don't need to set it again. A common case here is loops
-// that start at zero, since the default value is initialized to
-// zero anyhow.
+// Eliminate redundant struct.sets by folding them into struct.news: Given a
+// struct.new and a struct.set that occurs right after it, and that applies to
+// the same data, try to apply the set during the new. This can be either with
+// a nested tee:
 //
-// A risk here is that we extend live ranges, e.g. we may use the default
-// value at the very end of a function, keeping that local alive throughout.
-// For that reason it is probably better to run this near the end of
-// optimization, and especially after coalesce-locals. A final vaccum
-// should be done after it, as this pass can leave around drop()s of
-// values no longer necessary.
+//  (struct.set
+//    (local.tee $x (struct.new X Y Z))
+//    X'
+//  )
+// =>
+//  (local.set $x (struct.new X' Y Z))
 //
-// So far this tracks constant values, and for everything else it considers
-// them unique (so each local.set of a non-constant is a unique value, each
-// merge is a unique value, etc.; there is no sophisticated value numbering
-// here).
+// or without:
 //
+//  (local.set $x (struct.new X Y Z))
+//  (struct.set (local.get $x) X')
+// =>
+//  (local.set $x (struct.new X' Y Z))
+//
+// This cannot be a simple peephole optimization because of branching
 
-#include <cfg/cfg-traversal.h>
-#include <ir/literal-utils.h>
-#include <ir/numbering.h>
-#include <ir/properties.h>
-#include <ir/utils.h>
-#include <pass.h>
-#include <support/small_set.h>
-#include <support/unique_deferring_queue.h>
-#include <wasm-builder.h>
-#include <wasm.h>
+
+#include "cfg/cfg-traversal.h"
+#include "ir/literal-utils.h" // ? and others
+#include "ir/properties.h"
+#include "ir/utils.h"
+#include "pass.h"
+#include "support/small_set.h"
+#include "support/unique_deferring_queue.h"
+#include "wasm-builder.h"
+#include "wasm.h"
 
 namespace wasm {
 
-// Map each local index to its current value number (which is computed in
-// ValueNumbering).
-using LocalValues = std::vector<Index>;
-
 namespace {
 
-// information in a basic block
+// We store relevant instructions in each basic block.
 struct Info {
-  LocalValues start, end; // the local values at the start and end of the block
   std::vector<Expression**> items;
 };
 
