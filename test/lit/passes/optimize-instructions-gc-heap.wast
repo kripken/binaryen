@@ -760,6 +760,34 @@
     )
   )
 
+  (func $value-transfers (result i32)
+    (local $ref (ref null $struct))
+    (block $out
+      (struct.set $struct 0
+        (local.tee $ref
+          (struct.new $struct
+            (i32.const 1) ;; the struct's field begins at 1
+          )
+        )
+        ;; This if will set the field to 0, but *not* if it branches. If we
+        ;; merged the struct.set with the tee and the new then we would break
+        ;; things, so do not optimize here.
+        (if (result i32)
+          (i32.const 1)
+          (then
+            (br $out)
+          )
+          (else
+            (i32.const 0)
+          )
+        )
+      )
+    )
+    (struct.get $struct 0
+      (local.get $ref)
+    )
+  )
+
   ;; CHECK:      (func $helper-i32 (type $4) (param $x i32) (result i32)
   ;; CHECK-NEXT:  (i32.const 42)
   ;; CHECK-NEXT: )
