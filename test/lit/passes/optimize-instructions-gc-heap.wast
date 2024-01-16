@@ -1110,8 +1110,14 @@
   ;; CHECK-NEXT:  (block $out
   ;; CHECK-NEXT:   (local.set $ref
   ;; CHECK-NEXT:    (struct.new $struct
-  ;; CHECK-NEXT:     (block (result i32)
-  ;; CHECK-NEXT:      (br $out)
+  ;; CHECK-NEXT:     (if (result i32)
+  ;; CHECK-NEXT:      (i32.const 2)
+  ;; CHECK-NEXT:      (then
+  ;; CHECK-NEXT:       (br $out)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (else
+  ;; CHECK-NEXT:       (i32.const 3)
+  ;; CHECK-NEXT:      )
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
@@ -1123,14 +1129,17 @@
   ;; RSSE_:      (func $cfg-branch (type $4) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (block $out
-  ;; RSSE_-NEXT:   (struct.set $struct 0
-  ;; RSSE_-NEXT:    (local.tee $ref
-  ;; RSSE_-NEXT:     (struct.new $struct
-  ;; RSSE_-NEXT:      (i32.const 1)
+  ;; RSSE_-NEXT:   (local.set $ref
+  ;; RSSE_-NEXT:    (struct.new $struct
+  ;; RSSE_-NEXT:     (if (result i32)
+  ;; RSSE_-NEXT:      (i32.const 2)
+  ;; RSSE_-NEXT:      (then
+  ;; RSSE_-NEXT:       (br $out)
+  ;; RSSE_-NEXT:      )
+  ;; RSSE_-NEXT:      (else
+  ;; RSSE_-NEXT:       (i32.const 3)
+  ;; RSSE_-NEXT:      )
   ;; RSSE_-NEXT:     )
-  ;; RSSE_-NEXT:    )
-  ;; RSSE_-NEXT:    (block (result i32)
-  ;; RSSE_-NEXT:     (br $out)
   ;; RSSE_-NEXT:    )
   ;; RSSE_-NEXT:   )
   ;; RSSE_-NEXT:  )
@@ -1152,11 +1161,16 @@
             (i32.const 1)
           )
         )
-        ;; The typed block here prevents it from being trivially eliminated as
-        ;; unreachable code; we could also have an if here that only branches
-        ;; some of the time, etc.
-        (block (result i32)
-          (br $out)
+        ;; Use an if here so the pass doesn't trivially see unreachable code
+        ;; after us.
+        (if (result i32)
+          (i32.const 2)
+          (then
+            (br $out)
+          )
+          (else
+            (i32.const 3)
+          )
         )
       )
     )

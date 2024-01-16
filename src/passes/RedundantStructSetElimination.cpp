@@ -49,14 +49,9 @@
 //
 
 #include "cfg/cfg-traversal.h"
-#include "ir/literal-utils.h" // ? and others
-#include "ir/properties.h"
-#include "ir/utils.h"
 #include "pass.h"
-#include "support/small_set.h"
-#include "support/unique_deferring_queue.h"
-#include "wasm-builder.h"
 #include "wasm.h"
+#include "wasm-traversal.h"
 
 namespace wasm {
 
