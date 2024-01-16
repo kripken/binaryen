@@ -138,6 +138,7 @@ Pass* createReorderGlobalsAlwaysPass();
 Pass* createReorderLocalsPass();
 Pass* createReReloopPass();
 Pass* createRedundantSetEliminationPass();
+Pass* createRedundantStructSetEliminationPass();
 Pass* createRoundTripPass();
 Pass* createSafeHeapPass();
 Pass* createSetGlobalsPass();
