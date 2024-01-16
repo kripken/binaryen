@@ -1929,8 +1929,10 @@ struct OptimizeInstructions
     //
     // After the transform we branch out before performing the struct.new or the
     // local.set.
+    //
+    // XXX this regresses too much, so find a more refined way
     if (setValueEffects.transfersControlFlow()) {
-      return false;
+      //return false;
     }
 
     // We must move the set's value past indexes greater than it (Y and Z in
