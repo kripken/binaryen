@@ -6,6 +6,8 @@
 ;; breaks to them, and so they have no nonlinear control flow.
 
 (module
+  (tag $tag)
+
   ;; CHECK:      (type $struct (struct (field (mut i32))))
   (type $struct (struct (field (mut i32))))
 
@@ -793,5 +795,54 @@
   ;; CHECK-NEXT: )
   (func $helper-i32 (param $x i32) (result i32)
     (i32.const 42)
+  )
+
+  ;; Testcases that require CFG analysis.
+
+  (func $cfg-branch (result i32)
+    (local $ref (ref null $struct))
+    (block $out
+      (struct.set $struct 0
+        (local.tee $ref
+          (struct.new $struct
+            (i32.const 1) ;; the struct's field begins at 1
+          )
+        )
+        ;; This branch skips the struct.set, but the struct.new and tee should
+        ;; have executed. (The typed block prevents it from being trivially
+        ;; eliminated as unreachable code; we could also have an if here that
+        ;; only branches some of the time, etc.)
+        (block (result i32)
+          (br $out)
+        )
+      )
+    )
+    (struct.get $struct 0
+      (local.get $ref)
+    )
+  )
+
+  (func $cfg-throw (result i32)
+    (local $ref (ref null $struct))
+    (try
+      (do
+        (struct.set $struct 0
+          (local.tee $ref
+            (struct.new $struct
+              (i32.const 1) ;; the struct's field begins at 1
+            )
+          )
+          ;; This throw skips the struct.set, but the struct.new and tee should
+          ;; have executed.
+          (block (result i32)
+            (throw $tag)
+          )
+        )
+      )
+      (catch $tag)
+    )
+    (struct.get $struct 0
+      (local.get $ref)
+    )
   )
 )
