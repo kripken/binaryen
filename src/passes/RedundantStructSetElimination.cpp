@@ -334,66 +334,69 @@ struct RedundantStructSetElimination
   // branch (in fact, all that can execute) is the struct.set's value.
   //
   // We're given structSetBasicBlock and structSetIndexInBasicBlock, the
-  // basic block the struct.set is in, and its index inside that
-  // block. Using that we can find the basic block of the local.set, by going
-  // backwards until we find it. Along the way we collect basic blocks to
-  // scan forward from.
+  // basic block the struct.set is in, and its index inside that block. Using
+  // that we can find the basic block of the local.set, by going backwards until
+  // we find it. Along the way we collect basic blocks to scan forward from.
   bool hasEscapingRefBeforeStructSet(LocalSet* localSet,
                                      BasicBlock* structSetBasicBlock,
                                      Index structSetIndexInBasicBlock) {
-    UniqueDeferredQueue<BasicBlock*> toScan;
-    // Startin from the struct.set's position, we'll go backwards to find the
-    // localSet's.
-    BasicBlock* localSetBasicBlock = structSetBasicBlock;
-    Index localSetIndexInBasicBlock = structSetIndexInBasicBlock;
-    do {
-      // Start the loop iteration by going a little backwards.
-      if (localSetIndexInBasicBlock > 0) {
-        // Keep looking backwards in the current basic block.
-        localSetIndexInBasicBlock--;
-      } else {
-        // Keep looking backwards in the previous basic block. Skip all empty
-        // blocks along the way (for speed, and to keep the later part of this
-        // loop simple, where it can assume localSetIndexInBasicBlock is valid).
-        do {
-          auto& prevs = localSetBasicBlock->in;
-          if (prevs.size() != 1) {
-            // There is no simple predecessor, give up. TODO
-            return true;
-          }
-          localSetBasicBlock = prevs[0];
-          localSetIndexInBasicBlock =
-            localSetBasicBlock->contents.items.size() - 1;
-
-          // This is a predecessor of the struct.set's basic block. If it
-          // branches to a place that uses the reference in a dangerous way,
-          // that is a problem, so note its exits as relevant for scanning
-          // later.
-          toScan.push(localSetBasicBlock);
-        } while (localSetBasicBlock->contents.items.empty()); // XXX iloops!
+    // First, find the basic blocks between the struct.set and local.set.
+    auto& items = structSetBasicBlock->contents.items;
+    for (Index i = 0; i < structSetIndexInBasicBlock; i++) {
+      if (*items[i] == localSet) {
+        // The local.set is in the same block as the struct.set, so escaping is
+        // not possible.
+        return false;
       }
-    } while (*localSetBasicBlock->contents.items[localSetIndexInBasicBlock] !=
-             localSet);
+    }
 
-    // We found the local.set without a problem. Now see if the blocks along the
-    // way go anywhere dangerous. While doing so avoid repeated scanning (to
-    // avoid wasted work and infinite loops), and mark the struct.set's basic
-    // block as already scanned as we know it is safe (we just want to look at
-    // the blocks in between).
+    // There are blocks in between the struct.set and local.set. Find them by
+    // flowing backwards from the struct.set, and stop at the local.set. We'll
+    // add the in-between blocks to a queue for the forward flow later.
+    UniqueNonrepeatingDeferredQueue<BasicBlock*> inBetween;
+
+    // A queue for the backwards flow.
+    UniqueNonrepeatingDeferredQueue<BasicBlock*> queue;
+    for (auto* prev : structSetBasicBlock->in) {
+      queue.push(prev);
+    }
+    while (!queue.empty()) {
+      auto* block = queue.pop();
+
+      // Looping is impossible in the IR structures we are considering.
+      assert(block != structSetBasicBlock);
+
+      // This is a pred of the struct.set's block, which we'll need to scan
+      // later for forward escaping.
+      inBetween.push(block);
+
+      // Look through the block. If we reached the local.set, stop and do not
+      // proceed to our preds.
+      auto stop = false;
+      for (auto** item : block->contents.items) {
+        if (*item == localSet) {
+          stop = true;
+          break;
+        }
+      }
+      if (!stop) {
+        for (auto* prev : block->in) {
+          queue.push(prev);
+        }
+      }
+    }
+
+    // Flow forward from those in-between blocks to find any dangerous uses of
+    // the reference.
     std::unordered_set<BasicBlock*> scanned;
     scanned.insert(structSetBasicBlock);
-    while (!toScan.empty()) {
-      auto* block = toScan.pop();
-      if (scanned.count(block)) {
-        continue;
-      }
-      scanned.insert(block);
+    while (!inBetween.empty()) {
+      auto* block = inBetween.pop();
 
       // We are looking for a local.get of the index that the ref is stored in.
       // If we see that, we fail. If we see a local.set then we can stop looking
       // from that position, as the reference is no longer stored in the local.
       auto overwritten = false;
-
       for (auto** item : block->contents.items) {
         if (auto* get = (*item)->dynCast<LocalGet>()) {
           if (get->index == localSet->index) {
@@ -407,11 +410,10 @@ struct RedundantStructSetElimination
           }
         }
       }
-
       if (!overwritten) {
         // We must look onwards.
         for (auto* succ : block->out) {
-          toScan.push(succ);
+          inBetween.push(succ);
         }
       }
     }
