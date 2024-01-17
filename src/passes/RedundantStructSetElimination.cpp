@@ -119,6 +119,8 @@ struct RedundantStructSetElimination
               Visitor<RedundantStructSetElimination>,
               Info>::doWalkFunction(func);
 
+dump();
+
     // Find things to optimize.
     for (Index i = 0; i < basicBlocks.size(); i++) {
       auto* basicBlock = basicBlocks[i].get();
@@ -153,34 +155,23 @@ struct RedundantStructSetElimination
                          BasicBlock* basicBlock,
                          Index indexInBasicBlock) {
     assert(*currp == set);
+    assert(basicBlock->contents.items[indexInBasicBlock] == currp);
+
+std::cout << "opt struct set " << *getFunction()->body << '\n';
 
     if (auto* tee = set->ref->dynCast<LocalSet>()) {
       if (auto* new_ = tee->value->dynCast<StructNew>()) {
         if (optimizeSubsequentStructSet(
               new_, set, tee, basicBlock, indexInBasicBlock)) {
-          // Success, so we do not need the struct.set any more, and the tee
-          // can just be a set instead of us. Specifically, before we had this:
-          //
-          //  indexInBasicBlock - 1: local.tee
-          //  indexInBasicBlock    : struct.set
-          //
-          // We need to change that to this:
-          //
-          //  indexInBasicBlock - 1: nop
-          //  indexInBasicBlock    : local.set (that was the local.tee)
-          //
-          auto& items = basicBlock->contents.items;
-          assert(indexInBasicBlock > 0);
-          assert(*items[indexInBasicBlock - 1] == tee);
-          assert(items[indexInBasicBlock] == currp);
-
+          // Success! Replace the struct.set with the local.tee, that now
+          // becomes a local.set.
           tee->makeSet();
-
-          items[indexInBasicBlock - 1] = noppp;
-          *items[indexInBasicBlock] = tee;
+          *currp = tee;
+std::cout << "opted struct set " << *getFunction()->body << '\n';
         }
       }
     }
+std::cout << "computer says naaaah\n";
   }
 
   // A canonical nop that we use to replace things in the IR that we remove. All
@@ -234,6 +225,7 @@ struct RedundantStructSetElimination
         assert(structSetBasicBlocks.count(structSet));
 
         auto loc = structSetBasicBlocks[structSet]; // TODO pass this to funcs directly
+std::cout << "OTHER\n";
         if (!optimizeSubsequentStructSet(
               new_, structSet, localSet, loc.first, loc.second)) {
           break;
@@ -434,6 +426,8 @@ struct RedundantStructSetElimination
 //for (auto** item : localSetBasicBlock->contents.items) std::cout << "lsbb content: " << **item << '\n';//std::cout << '\n';
 //for (auto** item : structSetBasicBlock->contents.items) std::cout << "SSBB content: " << **item << '\n';//std::cout << "SS should be at index " << structSetIndexInBasicBlock << " in it\n";
 
+std::cout << "will forward flow " << *getFunction()->body << '\n';
+
     // Flow forward from those in-between blocks to find any dangerous uses of
     // the reference.//std::cout << "will scan\n";
     while (!inBetween.empty()) {
@@ -451,17 +445,24 @@ struct RedundantStructSetElimination
         start++;
       }
 
-      // On paths where the local is overwritten we can stop scanning.
-      auto overwritten = false;
-      for (Index i = start; i < items.size(); i++) {
-        auto* item = *items[i];//std::cout << "scan " << i << " : " << *item << '\n';
+std::cout << "in block at offset " << start << "\n"; for (auto** item : block->contents.items) std::cout << "  block content: " << **item << '\n';
 
-        // We do not need to scan the original local.set, and struct.set, and
+      auto stop = false;
+
+      for (Index i = start; i < items.size(); i++) {
+        auto* item = *items[i];
+std::cout << "scan " << i << " : " << *item << '\n';
+
+        // We do not need to scan the original local.set, and
         // should not.
         assert(item != localSet);
-        assert(item != structSet);
 
-        if (auto* get = item->dynCast<LocalGet>()) {
+        if (item == structSet) {
+          // We reached the struct.set itself that we are optimizing. We don't
+          // need to look any further: the optimization affects nothing past it.
+          stop = true;
+          break;
+        } else if (auto* get = item->dynCast<LocalGet>()) {
           // Check if this is a dangerous get: another get of the same index.
           // Note that we must ignore the struct.set's reference, as in the non-
           // tee form we have
@@ -480,12 +481,12 @@ struct RedundantStructSetElimination
           }
         } else if (auto* set = item->dynCast<LocalSet>()) {
           if (set->index == localSet->index) {
-            overwritten = true;
+            stop = true;
             break;
           }
         }
       }
-      if (!overwritten) {
+      if (!stop) {
         // We must look onwards.
         for (auto* succ : block->out) {
           inBetween.push(succ);
@@ -499,6 +500,29 @@ struct RedundantStructSetElimination
 
   EffectAnalyzer effects(Expression* expr) {
     return EffectAnalyzer(getPassOptions(), *getModule(), expr);
+  }
+
+  // debugging
+
+  void dump(BasicBlock* block) {
+    std::cout << "====\n";
+    if (block) {
+      std::cout << "block: " << block << '\n';
+      for (auto* out : block->out) {
+        std::cout << "  goes to " << out << '\n';
+      }
+    }
+    for (Index i = 0; i < block->contents.items.size(); i++) {
+      std::cout << "  block[" << i << "] = " << **block->contents.items[i]
+                << '\n';
+    }
+    std::cout << "====\n";
+  }
+
+  void dump() {
+    for (auto& block : basicBlocks) {
+      dump(block.get());
+    }
   }
 };
 
