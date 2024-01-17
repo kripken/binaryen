@@ -332,6 +332,7 @@ struct RedundantStructSetElimination
           auto& prevs = localSetBasicBlock->in;
           if (prevs.size() != 1) {
             // There is no simple predecessor, give up. TODO
+std::cout << "SAD0\n";
             return false;
           }
           localSetBasicBlock = prevs[0];
@@ -377,6 +378,7 @@ struct RedundantStructSetElimination
         if (auto* get = (*item)->dynCast<LocalGet>()) {
           if (get->index == refLocalIndex) {
             // We found what we were afraid of.
+std::cout << "SAD1\n";
             return false;
           }
         } else if (auto* set = (*item)->dynCast<LocalSet>()) {
