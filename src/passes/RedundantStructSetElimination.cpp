@@ -277,9 +277,8 @@ struct RedundantStructSetElimination
     }
 
     // Finally, consider CFG issues, which is a more expensive check.
-    if (hasEscapingRefBeforeStructSet(localSet,
-                                      structSetBasicBlock,
-                                      structSetIndexInBasicBlock)) {
+    if (hasEscapingRefBeforeStructSet(
+          localSet, structSetBasicBlock, structSetIndexInBasicBlock)) {
       return false;
     }
 
