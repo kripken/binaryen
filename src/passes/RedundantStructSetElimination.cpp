@@ -144,7 +144,7 @@ struct RedundantStructSetElimination
   void optimizeStructSet(StructSet* set, Expression** currp, BasicBlock* basicBlock, Index indexInBasicBlock) {
     if (auto* tee = set->ref->dynCast<LocalSet>()) {
       if (auto* new_ = tee->value->dynCast<StructNew>()) {
-        if (optimizeSubsequentStructSet(new_, set, tee->index, basicBlock, indexInBasicBlock)) {
+        if (optimizeSubsequentStructSet(new_, set, tee, basicBlock, indexInBasicBlock)) {
           // Success, so we do not need the struct.set any more, and the tee
           // can just be a set instead of us.
           tee->makeSet();
@@ -192,7 +192,7 @@ struct RedundantStructSetElimination
         if (!localGet || localGet->index != localSet->index) {
           break;
         }
-        if (!optimizeSubsequentStructSet(new_, structSet, localGet->index, basicBlock, indexInBasicBlock)) {
+        if (!optimizeSubsequentStructSet(new_, structSet, localSet, basicBlock, indexInBasicBlock)) {
           break;
         } else {
           // Success. Replace the set with a nop, and continue to
@@ -227,7 +227,7 @@ struct RedundantStructSetElimination
   // Returns true if we succeeded.
   bool optimizeSubsequentStructSet(StructNew* new_,
                                    StructSet* set,
-                                   Index refLocalIndex,
+                                   LocalSet* localSet,
                                    BasicBlock* structSetBasicBlock,
                                    Index structSetIndexInBasicBlock) {
     // Leave unreachable code for DCE, to avoid updating types here.
@@ -243,6 +243,7 @@ struct RedundantStructSetElimination
 
     auto index = set->index;
     auto& operands = new_->operands;
+    auto refLocalIndex = localSet->index;
 
     // Check for effects that prevent us moving the struct.set's value (X' in
     // the function comment) into its new position in the struct.new. First, it
@@ -362,12 +363,12 @@ struct RedundantStructSetElimination
       auto overwritten = false;
 
       for (auto** item : block->contents.items) {
-        if (auto* get = item->dynCast<LocalGet>()) {
+        if (auto* get = (*item)->dynCast<LocalGet>()) {
           if (get->index == refLocalIndex) {
             // We found what we were afraid of.
             return false;
           }
-        } else if (auto* set = item->dynCast<LocalSet>()) {
+        } else if (auto* set = (*item)->dynCast<LocalSet>()) {
           if (set->index == refLocalIndex) {
             overwritten = true;
           }
