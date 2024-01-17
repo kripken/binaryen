@@ -115,7 +115,8 @@ struct RedundantStructSetElimination
 
     // Find things to optimize.
     for (Index i = 0; i < basicBlocks.size(); i++) {
-      auto& items = basicBlocks[i]->contents.items;
+      auto* basicBlock = basicBlocks[i].get();
+      auto& items = basicBlock->contents.items;
       for (Index j = 0; j < items.size(); j++) {
         auto** currp = items[j];
         // If this is a struct.set with a nested tee and new (the first
@@ -123,9 +124,9 @@ struct RedundantStructSetElimination
         // a block, handle struct.sets after news (the second situation in the
         // top comment in this file).
         if (auto* set = (*currp)->dynCast<StructSet>()) {
-          optimizeStructSet(set, currp, i, j);
+          optimizeStructSet(set, currp, basicBlock, j);
         } else if (auto* block = (*currp)->dynCast<Block>()) {
-          optimizeBlock(block, i, j);
+          optimizeBlock(block, basicBlock, j);
         }
       }
     }
@@ -323,12 +324,13 @@ struct RedundantStructSetElimination
         // blocks along the way (for speed, and to keep the upper part of this
         // loop simple, where it can assume localSetIndexInBasicBlock is valid).
         do {
-          auto& prevs = block->in;
+          auto& prevs = localSetBasicBlock->in;
           if (prevs.size() != 1) {
             // There is no simple predecessor, give up. TODO
             return false;
           }
           localSetBasicBlock = prevs[0];
+          localSetIndexInBasicBlock = localSetBasicBlock->contents.items.size() - 1;
 
           // This is a predecessor of the struct.set's basic block. If it
           // branches to a place that uses the reference in a dangerous way,
