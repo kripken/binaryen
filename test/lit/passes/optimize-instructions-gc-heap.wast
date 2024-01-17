@@ -1970,5 +1970,3 @@
     )
   )
 )
-
-;; TODO sequence where the first 2 succeed, 3 blocks, 4 would have been ok
