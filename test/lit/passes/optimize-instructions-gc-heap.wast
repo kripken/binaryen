@@ -1701,13 +1701,10 @@
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
-  ;; RSSE_-NEXT:    (struct.set $struct 0
-  ;; RSSE_-NEXT:     (local.tee $ref
-  ;; RSSE_-NEXT:      (struct.new $struct
-  ;; RSSE_-NEXT:       (i32.const 1)
-  ;; RSSE_-NEXT:      )
+  ;; RSSE_-NEXT:    (local.set $ref
+  ;; RSSE_-NEXT:     (struct.new $struct
+  ;; RSSE_-NEXT:      (call $cfg-throw-if)
   ;; RSSE_-NEXT:     )
-  ;; RSSE_-NEXT:     (call $cfg-throw-if)
   ;; RSSE_-NEXT:    )
   ;; RSSE_-NEXT:   )
   ;; RSSE_-NEXT:   (catch $tag
@@ -1733,8 +1730,9 @@
   ;; RSSE_-NEXT: )
   (func $cfg-throw-ok-if-end
     (local $ref (ref null $struct))
-    ;; As above but there is a bunch of extra control flow at the end, some
-    ;; past a local.get. We can optimize here despite all that. XXX
+    ;; As above but there is a bunch of extra control flow at the end, and also
+    ;; a suspicious local.get that is luckily behind a local.set. We can
+    ;; optimize here despite all that.
     (try
       (do
         (struct.set $struct 0
@@ -1766,3 +1764,5 @@
     )
   )
 )
+
+;; TODO sequence where the first 2 succeed, 3 blocks, 4 would have been ok

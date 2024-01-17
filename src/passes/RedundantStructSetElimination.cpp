@@ -351,6 +351,9 @@ struct RedundantStructSetElimination
       }
     }
 
+    // We will note the local.set's block as we work, as we'll need it later.
+    BasicBlock* localSetBlock = nullptr;
+
     // There are blocks in between the struct.set and local.set. Find them by
     // flowing backwards from the struct.set, and stop at the local.set. We'll
     // add the in-between blocks to a queue for the forward flow later.
@@ -376,6 +379,7 @@ struct RedundantStructSetElimination
       auto stop = false;
       for (auto** item : block->contents.items) {
         if (*item == localSet) {
+          localSetBlock = block;
           stop = true;
           break;
         }
@@ -393,13 +397,24 @@ struct RedundantStructSetElimination
     scanned.insert(structSetBasicBlock);
     while (!inBetween.empty()) {
       auto* block = inBetween.pop();
+      auto& items = block->contents.items;
 
-      // We are looking for a local.get of the index that the ref is stored in.
-      // If we see that, we fail. If we see a local.set then we can stop looking
-      // from that position, as the reference is no longer stored in the local.
+      // Process the relevant contents of this block. If this is the block that
+      // has the local.set then we only want to look from right after it, as
+      // anything before is not relevant for us.
+      Index start = 0;
+      if (block == localSetBlock) {
+        while (*items[start] != localSet) {
+          start++;
+        }
+        start++;
+      }
+
+      // On paths where the local is overwritten we can stop scanning.
       auto overwritten = false;
-      for (auto** item : block->contents.items) {
-        if (auto* get = (*item)->dynCast<LocalGet>()) {
+      for (Index i = start; i < items.size(); i++) {
+        auto* item = *items[i];
+        if (auto* get = item->dynCast<LocalGet>()) {
           // Check if this is a dangerous get: another get of the same index.
           // Note that we must ignore the struct.set's reference, as in the non-
           // tee form we have
@@ -416,10 +431,12 @@ struct RedundantStructSetElimination
           if (get->index == localSet->index && get != structSet->ref) {
             return true;
           }
-        } else if (auto* set = (*item)->dynCast<LocalSet>()) {
-          // Be careful to ignore the localSet itself XXX
-          if (set->index == localSet->index && set != localSet) {
+        } else if (auto* set = item->dynCast<LocalSet>()) {
+          // We do not need to scan the original local.set, and should not.
+          assert(set != localSet);
+          if (set->index == localSet->index) {
             overwritten = true;
+            break;
           }
         }
       }
