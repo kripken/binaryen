@@ -50,6 +50,7 @@
 
 #include "cfg/cfg-traversal.h"
 #include "pass.h"
+#include "support/unique_deferring_queue.h"
 #include "wasm.h"
 #include "wasm-traversal.h"
 
@@ -139,10 +140,10 @@ struct RedundantStructSetElimination
   // We are provided the struct.set, the pointer to it (so we can replace it if
   // we optimize) and also the index of our basic block and our index inside
   // that basic block.
-  void optimizeStructSet(StructSet* set, Expression** currp, Index basicBlockIndex, Index indexInBasicBlock) {
+  void optimizeStructSet(StructSet* set, Expression** currp, BasicBlock* basicBlock, Index indexInBasicBlock) {
     if (auto* tee = set->ref->dynCast<LocalSet>()) {
       if (auto* new_ = tee->value->dynCast<StructNew>()) {
-        if (optimizeSubsequentStructSet(new_, set, tee->index, basicBlockIndex, indexInBasicBlock)) {
+        if (optimizeSubsequentStructSet(new_, set, tee->index, basicBlock, indexInBasicBlock)) {
           // Success, so we do not need the struct.set any more, and the tee
           // can just be a set instead of us.
           tee->makeSet();
@@ -164,7 +165,7 @@ struct RedundantStructSetElimination
   // local.set (anything in the middle of this pattern will stop us from
   // optimizing later struct.sets, which might be improved later but would
   // require an analysis of effects TODO).
-  void optimizeBlock(Block* block, Index basicBlockIndex, Index indexInBasicBlock) {
+  void optimizeBlock(Block* block, BasicBlock* basicBlock, Index indexInBasicBlock) {
     auto& list = block->list;
     for (Index i = 0; i < list.size(); i++) {
       // First, find a local.set of a struct.new.
@@ -190,7 +191,7 @@ struct RedundantStructSetElimination
         if (!localGet || localGet->index != localSet->index) {
           break;
         }
-        if (!optimizeSubsequentStructSet(new_, structSet, localGet->index, basicBlockIndex, indexInBasicBlock)) {
+        if (!optimizeSubsequentStructSet(new_, structSet, localGet->index, basicBlock, indexInBasicBlock)) {
           break;
         } else {
           // Success. Replace the set with a nop, and continue to
@@ -226,7 +227,7 @@ struct RedundantStructSetElimination
   bool optimizeSubsequentStructSet(StructNew* new_,
                                    StructSet* set,
                                    Index refLocalIndex,
-                                   Index structSetBasicBlockIndex,
+                                   BasicBlock* structSetBasicBlock,
                                    Index structSetIndexInBasicBlock) {
     // Leave unreachable code for DCE, to avoid updating types here.
     if (new_->type == Type::unreachable || set->type == Type::unreachable) {
@@ -304,36 +305,82 @@ struct RedundantStructSetElimination
     // Once more, between the local.set/tee and the struct.set all that can
     // branch (in fact, all that can execute) is the struct.set's value.
     //
-    // We're given structSetBasicBlockIndex and structSetIndexInBasicBlock, the
-    // index of the basic block the struct.set is in, and its index inside that
+    // We're given structSetBasicBlock and structSetIndexInBasicBlock, the
+    // basic block the struct.set is in, and its index inside that
     // block. Using that we can find the basic block of the local.set, by going
-    // backwards until we find it.
-    Index localSetBasicBlockIndex = structSetBasicBlockIndex,
-          localSetIndexInBasicBlock = structSetIndexInBasicBlock;
-    while (1) {
-      auto& block = basicBlocks[localSetBasicBlockIndex];
-      auto& items = block->contents.items;
-      // If the current basic block is empty, keep looking backwards to the
-      // next basic block, which we'll do later down.
-      if (!items.empty()) {
-        if (items[localSetIndexInBasicBlock] == localSet) {
-          break;
-        }
-      }
-      // We need to keep looking backwards.
+    // backwards until we find it. Along the way we collect basic blocks to
+    // scan forward from.
+    UniqueDeferredQueue<BasicBlock*> toScan;
+    BasicBlock* localSetBasicBlock = structSetBasicBlock;
+    Index localSetIndexInBasicBlock = structSetIndexInBasicBlock;
+    do {
+      // Start the loop iteration by going a little backwards.
       if (localSetIndexInBasicBlock > 0) {
         // Keep looking backwards in the current basic block.
         localSetIndexInBasicBlock--;
       } else {
-        // Keep looking backwards in the previous basic block.
-        auto& prevs = block->in;
-        if (prevs.size() != 1) {
-          // There is no simple predecessor, give up. TODO
-          return false;
+        // Keep looking backwards in the previous basic block. Skip all empty
+        // blocks along the way (for speed, and to keep the upper part of this
+        // loop simple, where it can assume localSetIndexInBasicBlock is valid).
+        do {
+          auto& prevs = block->in;
+          if (prevs.size() != 1) {
+            // There is no simple predecessor, give up. TODO
+            return false;
+          }
+          localSetBasicBlock = prevs[0];
+
+          // This is a predecessor of the struct.set's basic block. If it
+          // branches to a place that uses the reference in a dangerous way,
+          // that is a problem, so note its exits as relevant for scanning
+          // later.
+          toScan.push(localSetBasicBlock);
+        } while (localSetBasicBlock->contents.items.empty()); // XXX iloops!
+      }
+    } while (*localSetBasicBlock->contents.items[localSetIndexInBasicBlock] !=
+             localSet);
+
+    // We found the local.set without a problem. Now see if the blocks along the
+    // way go anywhere dangerous. While doing so avoid repeated scanning (to
+    // avoid wasted work and infinite loops), and mark the struct.set's basic
+    // block as already scanned as we know it is safe (we just want to look at
+    // the blocks in between).
+    std::unordered_set<BasicBlock*> scanned;
+    scanned.insert(structSetBasicBlock);
+    while (!toScan.empty()) {
+      auto* block = toScan.pop();
+
+      if (scanned.count(block)) {
+        continue;
+      }
+
+      // We are looking for a local.get of the index that the ref is stored in.
+      // If we see that, we fail. If we see a local.set then we can stop looking
+      // from that position, as the reference is no longer stored in the local.
+      auto overwritten = false;
+
+      for (auto** item : block->contents.items) {
+        if (auto* get = item->dynCast<LocalGet>()) {
+          if (get->index == refLocalIndex) {
+            // We found what we were afraid of.
+            return false;
+          }
+        } else if (auto* set = item->dynCast<LocalSet>()) {
+          if (set->index == refLocalIndex) {
+            overwritten = true;
+          }
         }
-        auto* prev = prevs[0];
+      }
+
+      if (!overwritten) {
+        // We must look onwards.
+        for (auto* succ : block->out) {
+          toScan.push(succ);
+        }
       }
     }
+
+    // Looks good! We can optimize here.
 
     // See if we need to keep the old value. TODO use existing helper here
     if (effects(operands[index]).hasUnremovableSideEffects()) {
