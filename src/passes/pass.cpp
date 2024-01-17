@@ -412,8 +412,9 @@ void PassRegistry::registerPasses() {
                createReReloopPass);
   registerPass(
     "rse", "remove redundant local.sets", createRedundantSetEliminationPass);
-  registerPass(
-    "rsse", "remove redundant struct.sets", createRedundantStructSetEliminationPass);
+  registerPass("rsse",
+               "remove redundant struct.sets",
+               createRedundantStructSetEliminationPass);
   registerPass("roundtrip",
                "write the module to binary, then read it",
                createRoundTripPass);

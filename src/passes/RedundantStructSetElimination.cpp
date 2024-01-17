@@ -51,8 +51,8 @@
 #include "cfg/cfg-traversal.h"
 #include "pass.h"
 #include "support/unique_deferring_queue.h"
-#include "wasm.h"
 #include "wasm-traversal.h"
+#include "wasm.h"
 
 namespace wasm {
 
@@ -85,14 +85,14 @@ struct RedundantStructSetElimination
     if (currBasicBlock) {
       currBasicBlock->contents.items.push_back(currp);
     }
-  } 
-   
+  }
+
   static void doVisitBlock(RedundantStructSetElimination* self,
-                              Expression** currp) {
+                           Expression** currp) {
     self->note(currp);
   }
   static void doVisitStructSet(RedundantStructSetElimination* self,
-                              Expression** currp) {
+                               Expression** currp) {
     self->note(currp);
   }
   static void doVisitLocalGet(RedundantStructSetElimination* self,
@@ -110,8 +110,9 @@ struct RedundantStructSetElimination
 
   void doWalkFunction(Function* func) {
     // Create the CFG by walking the IR.
-    CFGWalker<RedundantStructSetElimination, Visitor<RedundantStructSetElimination>, Info>::
-      doWalkFunction(func);
+    CFGWalker<RedundantStructSetElimination,
+              Visitor<RedundantStructSetElimination>,
+              Info>::doWalkFunction(func);
 
     // Find things to optimize.
     for (Index i = 0; i < basicBlocks.size(); i++) {
@@ -141,10 +142,14 @@ struct RedundantStructSetElimination
   // We are provided the struct.set, the pointer to it (so we can replace it if
   // we optimize) and also the index of our basic block and our index inside
   // that basic block.
-  void optimizeStructSet(StructSet* set, Expression** currp, BasicBlock* basicBlock, Index indexInBasicBlock) {
+  void optimizeStructSet(StructSet* set,
+                         Expression** currp,
+                         BasicBlock* basicBlock,
+                         Index indexInBasicBlock) {
     if (auto* tee = set->ref->dynCast<LocalSet>()) {
       if (auto* new_ = tee->value->dynCast<StructNew>()) {
-        if (optimizeSubsequentStructSet(new_, set, tee, basicBlock, indexInBasicBlock)) {
+        if (optimizeSubsequentStructSet(
+              new_, set, tee, basicBlock, indexInBasicBlock)) {
           // Success, so we do not need the struct.set any more, and the tee
           // can just be a set instead of us.
           tee->makeSet();
@@ -166,7 +171,8 @@ struct RedundantStructSetElimination
   // local.set (anything in the middle of this pattern will stop us from
   // optimizing later struct.sets, which might be improved later but would
   // require an analysis of effects TODO).
-  void optimizeBlock(Block* block, BasicBlock* basicBlock, Index indexInBasicBlock) {
+  void
+  optimizeBlock(Block* block, BasicBlock* basicBlock, Index indexInBasicBlock) {
     auto& list = block->list;
     for (Index i = 0; i < list.size(); i++) {
       // First, find a local.set of a struct.new.
@@ -192,7 +198,8 @@ struct RedundantStructSetElimination
         if (!localGet || localGet->index != localSet->index) {
           break;
         }
-        if (!optimizeSubsequentStructSet(new_, structSet, localSet, basicBlock, indexInBasicBlock)) {
+        if (!optimizeSubsequentStructSet(
+              new_, structSet, localSet, basicBlock, indexInBasicBlock)) {
           break;
         } else {
           // Success. Replace the set with a nop, and continue to
@@ -331,7 +338,8 @@ struct RedundantStructSetElimination
             return false;
           }
           localSetBasicBlock = prevs[0];
-          localSetIndexInBasicBlock = localSetBasicBlock->contents.items.size() - 1;
+          localSetIndexInBasicBlock =
+            localSetBasicBlock->contents.items.size() - 1;
 
           // This is a predecessor of the struct.set's basic block. If it
           // branches to a place that uses the reference in a dangerous way,
