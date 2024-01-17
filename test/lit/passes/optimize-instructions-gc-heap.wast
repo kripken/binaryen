@@ -1969,4 +1969,41 @@
       (local.get $ref)
     )
   )
+
+  (func $cfg-throw-ok-series-tee (result i32)
+    (local $ref (ref null $struct4))
+    ;; As above but we begin with a tee. Again, we can optimize the first two
+    ;; struct.sets away.
+    (try
+      (do
+        (struct.set $struct4 0
+          (local.tee $ref
+            (struct.new $struct4
+              (i32.const 0)
+              (i32.const 1)
+              (i32.const 2)
+              (i32.const 3)
+            )
+          )
+          (i32.const 10)
+        )
+        (struct.set $struct4 1
+          (local.get $ref)
+          (i32.const 20)
+        )
+        (struct.set $struct4 2
+          (local.get $ref)
+          (call $cfg-throw-ok-series-tee)
+        )
+        (struct.set $struct4 3
+          (local.get $ref)
+          (i32.const 30)
+        )
+      )
+      (catch $tag)
+    )
+    (struct.get $struct4 0
+      (local.get $ref)
+    )
+  )
 )

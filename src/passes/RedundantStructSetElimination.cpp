@@ -152,18 +152,42 @@ struct RedundantStructSetElimination
                          Expression** currp,
                          BasicBlock* basicBlock,
                          Index indexInBasicBlock) {
+    assert(*currp == set);
+
     if (auto* tee = set->ref->dynCast<LocalSet>()) {
       if (auto* new_ = tee->value->dynCast<StructNew>()) {
         if (optimizeSubsequentStructSet(
               new_, set, tee, basicBlock, indexInBasicBlock)) {
           // Success, so we do not need the struct.set any more, and the tee
-          // can just be a set instead of us.
+          // can just be a set instead of us. Specifically, before we had this:
+          //
+          //  indexInBasicBlock - 1: local.tee
+          //  indexInBasicBlock    : struct.set
+          //
+          // We need to change that to this:
+          //
+          //  indexInBasicBlock - 1: nop
+          //  indexInBasicBlock    : local.set (that was the local.tee)
+          //
+          auto& items = basicBlock->contents.items;
+          assert(indexInBasicBlock > 0);
+          assert(*items[indexInBasicBlock - 1] == tee);
+          assert(items[indexInBasicBlock] == currp);
+
           tee->makeSet();
-          *currp = tee;
+
+          items[indexInBasicBlock - 1] = noppp;
+          *items[indexInBasicBlock] = tee;
         }
       }
     }
   }
+
+  // A canonical nop that we use to replace things in the IR that we remove. All
+  // that matters is we don't have nullptr there, and we have no side effects.
+  Nop nop;
+  Expression* nopp = &nop;
+  Expression** noppp = &nopp;
 
   // Handle pairs like this among a block's children:
   //
@@ -395,8 +419,7 @@ struct RedundantStructSetElimination
       auto stop = false;
       for (auto** item : block->contents.items) {
         if (*item == localSet) {
-          localSetBasicBlock = block;
-std::cout << "SSBB: " << structSetBasicBlock << " lsbb: " << localSetBasicBlock << " eq? " << (localSetBasicBlock == structSetBasicBlock) << '\n';
+          localSetBasicBlock = block;//std::cout << "SSBB: " << structSetBasicBlock << " lsbb: " << localSetBasicBlock << " eq? " << (localSetBasicBlock == structSetBasicBlock) << '\n';
           stop = true;
           break;
         }
@@ -407,16 +430,12 @@ std::cout << "SSBB: " << structSetBasicBlock << " lsbb: " << localSetBasicBlock 
         }
       }
     }
-
-std::cout << "SS: " << *structSet << '\n';
-for (auto** item : localSetBasicBlock->contents.items) std::cout << "lsbb content: " << **item << '\n';
-std::cout << '\n';
-for (auto** item : structSetBasicBlock->contents.items) std::cout << "SSBB content: " << **item << '\n';
-std::cout << "SS should be at index " << structSetIndexInBasicBlock << " in it\n";
+//std::cout << "SS: " << *structSet << '\n';
+//for (auto** item : localSetBasicBlock->contents.items) std::cout << "lsbb content: " << **item << '\n';//std::cout << '\n';
+//for (auto** item : structSetBasicBlock->contents.items) std::cout << "SSBB content: " << **item << '\n';//std::cout << "SS should be at index " << structSetIndexInBasicBlock << " in it\n";
 
     // Flow forward from those in-between blocks to find any dangerous uses of
-    // the reference.
-std::cout << "will scan\n";
+    // the reference.//std::cout << "will scan\n";
     while (!inBetween.empty()) {
       auto* block = inBetween.pop();
       auto& items = block->contents.items;
@@ -435,12 +454,12 @@ std::cout << "will scan\n";
       // On paths where the local is overwritten we can stop scanning.
       auto overwritten = false;
       for (Index i = start; i < items.size(); i++) {
-        auto* item = *items[i];
-std::cout << "scan " << i << " : " << *item << '\n';
+        auto* item = *items[i];//std::cout << "scan " << i << " : " << *item << '\n';
 
         // We do not need to scan the original local.set, and struct.set, and
         // should not.
-        assert(item != localSet && item != structSet);
+        assert(item != localSet);
+        assert(item != structSet);
 
         if (auto* get = item->dynCast<LocalGet>()) {
           // Check if this is a dangerous get: another get of the same index.
