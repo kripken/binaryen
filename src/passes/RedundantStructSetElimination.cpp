@@ -315,16 +315,20 @@ struct RedundantStructSetElimination
     UniqueDeferredQueue<BasicBlock*> toScan;
     BasicBlock* localSetBasicBlock = structSetBasicBlock;
     Index localSetIndexInBasicBlock = structSetIndexInBasicBlock;
+//std::cout << "consider1\n";
     do {
+//std::cout << "consider2\n";
       // Start the loop iteration by going a little backwards.
       if (localSetIndexInBasicBlock > 0) {
         // Keep looking backwards in the current basic block.
+//std::cout << "consider2a in same block\n";
         localSetIndexInBasicBlock--;
       } else {
         // Keep looking backwards in the previous basic block. Skip all empty
-        // blocks along the way (for speed, and to keep the upper part of this
+        // blocks along the way (for speed, and to keep the later part of this
         // loop simple, where it can assume localSetIndexInBasicBlock is valid).
         do {
+//std::cout << "consider2b in prev block\n";
           auto& prevs = localSetBasicBlock->in;
           if (prevs.size() != 1) {
             // There is no simple predecessor, give up. TODO
@@ -337,9 +341,13 @@ struct RedundantStructSetElimination
           // branches to a place that uses the reference in a dangerous way,
           // that is a problem, so note its exits as relevant for scanning
           // later.
+//std::cout << "consider3 " << localSetBasicBlock << "\n";
           toScan.push(localSetBasicBlock);
         } while (localSetBasicBlock->contents.items.empty()); // XXX iloops!
       }
+
+//std::cout << "consider 4 " << **localSetBasicBlock->contents.items[localSetIndexInBasicBlock] << '\n';
+
     } while (*localSetBasicBlock->contents.items[localSetIndexInBasicBlock] !=
              localSet);
 
@@ -352,10 +360,12 @@ struct RedundantStructSetElimination
     scanned.insert(structSetBasicBlock);
     while (!toScan.empty()) {
       auto* block = toScan.pop();
+//std::cout << "scan1 " << block << "\n";
 
       if (scanned.count(block)) {
         continue;
       }
+      scanned.insert(block);
 
       // We are looking for a local.get of the index that the ref is stored in.
       // If we see that, we fail. If we see a local.set then we can stop looking
@@ -363,13 +373,15 @@ struct RedundantStructSetElimination
       auto overwritten = false;
 
       for (auto** item : block->contents.items) {
+//std::cout << "scan3 " << **item << "\n";
         if (auto* get = (*item)->dynCast<LocalGet>()) {
           if (get->index == refLocalIndex) {
             // We found what we were afraid of.
             return false;
           }
         } else if (auto* set = (*item)->dynCast<LocalSet>()) {
-          if (set->index == refLocalIndex) {
+          // Be careful to ignore the localSet itself XXX
+          if (set->index == refLocalIndex && set != localSet) {
             overwritten = true;
           }
         }

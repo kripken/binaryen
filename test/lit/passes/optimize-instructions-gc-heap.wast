@@ -1129,16 +1129,19 @@
   ;; RSSE_:      (func $cfg-branch (type $4) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (block $out
-  ;; RSSE_-NEXT:   (local.set $ref
-  ;; RSSE_-NEXT:    (struct.new $struct
-  ;; RSSE_-NEXT:     (if (result i32)
-  ;; RSSE_-NEXT:      (i32.const 2)
-  ;; RSSE_-NEXT:      (then
-  ;; RSSE_-NEXT:       (br $out)
-  ;; RSSE_-NEXT:      )
-  ;; RSSE_-NEXT:      (else
-  ;; RSSE_-NEXT:       (i32.const 3)
-  ;; RSSE_-NEXT:      )
+  ;; RSSE_-NEXT:   (struct.set $struct 0
+  ;; RSSE_-NEXT:    (local.tee $ref
+  ;; RSSE_-NEXT:     (struct.new $struct
+  ;; RSSE_-NEXT:      (i32.const 1)
+  ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (if (result i32)
+  ;; RSSE_-NEXT:     (i32.const 2)
+  ;; RSSE_-NEXT:     (then
+  ;; RSSE_-NEXT:      (br $out)
+  ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:     (else
+  ;; RSSE_-NEXT:      (i32.const 3)
   ;; RSSE_-NEXT:     )
   ;; RSSE_-NEXT:    )
   ;; RSSE_-NEXT:   )
@@ -1201,10 +1204,13 @@
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
-  ;; RSSE_-NEXT:    (local.set $ref
-  ;; RSSE_-NEXT:     (struct.new $struct
-  ;; RSSE_-NEXT:      (call $cfg-throw)
+  ;; RSSE_-NEXT:    (struct.set $struct 0
+  ;; RSSE_-NEXT:     (local.tee $ref
+  ;; RSSE_-NEXT:      (struct.new $struct
+  ;; RSSE_-NEXT:       (i32.const 1)
+  ;; RSSE_-NEXT:      )
   ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:     (call $cfg-throw)
   ;; RSSE_-NEXT:    )
   ;; RSSE_-NEXT:   )
   ;; RSSE_-NEXT:   (catch $tag
