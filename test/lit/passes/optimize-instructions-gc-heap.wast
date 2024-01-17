@@ -1359,4 +1359,58 @@
     ;; There used to be a local.get of $ref here.
     (i32.const 2)
   )
+
+  ;; CHECK:      (func $cfg-throw-ok-notee (type $4) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (try
+  ;; CHECK-NEXT:   (do
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (call $cfg-throw-ok)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (catch $tag
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (i32.const 2)
+  ;; CHECK-NEXT: )
+  ;; RSSE_:      (func $cfg-throw-ok-notee (type $4) (result i32)
+  ;; RSSE_-NEXT:  (local $ref (ref null $struct))
+  ;; RSSE_-NEXT:  (try
+  ;; RSSE_-NEXT:   (do
+  ;; RSSE_-NEXT:    (local.set $ref
+  ;; RSSE_-NEXT:     (struct.new $struct
+  ;; RSSE_-NEXT:      (call $cfg-throw-ok)
+  ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (nop)
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:   (catch $tag
+  ;; RSSE_-NEXT:    (nop)
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT:  (i32.const 2)
+  ;; RSSE_-NEXT: )
+  (func $cfg-throw-ok-notee (result i32)
+    (local $ref (ref null $struct))
+    ;; As above but with a local.set/get rathern than a tee. We can optimize.
+    (try
+      (do
+        (local.set $ref
+          (struct.new $struct
+            (i32.const 1)
+          )
+        )
+        (struct.set $struct 0
+          (local.get $ref)
+          (call $cfg-throw-ok)
+        )
+      )
+      (catch $tag)
+    )
+    (i32.const 2)
+  )
 )

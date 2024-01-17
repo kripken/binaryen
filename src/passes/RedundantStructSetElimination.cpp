@@ -233,7 +233,7 @@ struct RedundantStructSetElimination
   //
   // Returns true if we succeeded.
   bool optimizeSubsequentStructSet(StructNew* new_,
-                                   StructSet* set,
+                                   StructSet* set, // XXX rename
                                    LocalSet* localSet,
                                    BasicBlock* structSetBasicBlock,
                                    Index structSetIndexInBasicBlock) {
@@ -278,7 +278,7 @@ struct RedundantStructSetElimination
 
     // Finally, consider CFG issues, which is a more expensive check.
     if (hasEscapingRefBeforeStructSet(
-          localSet, structSetBasicBlock, structSetIndexInBasicBlock)) {
+          set, localSet, structSetBasicBlock, structSetIndexInBasicBlock)) {
       return false;
     }
 
@@ -337,7 +337,8 @@ struct RedundantStructSetElimination
   // basic block the struct.set is in, and its index inside that block. Using
   // that we can find the basic block of the local.set, by going backwards until
   // we find it. Along the way we collect basic blocks to scan forward from.
-  bool hasEscapingRefBeforeStructSet(LocalSet* localSet,
+  bool hasEscapingRefBeforeStructSet(StructSet* structSet,
+                                     LocalSet* localSet,
                                      BasicBlock* structSetBasicBlock,
                                      Index structSetIndexInBasicBlock) {
     // First, find the basic blocks between the struct.set and local.set.
@@ -399,8 +400,20 @@ struct RedundantStructSetElimination
       auto overwritten = false;
       for (auto** item : block->contents.items) {
         if (auto* get = (*item)->dynCast<LocalGet>()) {
-          if (get->index == localSet->index) {
-            // We found what we were afraid of.
+          // Check if this is a dangerous get: another get of the same index.
+          // Note that we must ignore the struct.set's reference, as in the non-
+          // tee form we have
+          //
+          //      (local.set $x
+          //        (struct.new X)
+          //      )
+          //      (struct.set
+          //        (local.get $x)
+          //        (call $throw)
+          //      )
+          //
+          // We know that particular local.get is safe.
+          if (get->index == localSet->index && get != structSet->ref) {
             return true;
           }
         } else if (auto* set = (*item)->dynCast<LocalSet>()) {
