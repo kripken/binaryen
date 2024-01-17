@@ -1396,7 +1396,7 @@
   ;; RSSE_-NEXT: )
   (func $cfg-throw-ok-notee (result i32)
     (local $ref (ref null $struct))
-    ;; As above but with a local.set/get rathern than a tee. We can optimize.
+    ;; As above but with a local.set/get rather than a tee. We can optimize.
     (try
       (do
         (local.set $ref
