@@ -106,7 +106,12 @@ struct RedundantStructSetElimination
     self->note(currp);
   }
 
-  // main entry point
+  // We note the basic blocks + indexes in them of struct.sets so that we can
+  // easily process the data later down.
+  using BasicBlockAndIndex = std::pair<BasicBlock*, Index>;
+  std::unordered_map<StructSet*, BasicBlockAndIndex> structSetBasicBlocks;
+
+  // Main entry point.
 
   void doWalkFunction(Function* func) {
     // Create the CFG by walking the IR.
@@ -125,9 +130,10 @@ struct RedundantStructSetElimination
         // a block, handle struct.sets after news (the second situation in the
         // top comment in this file).
         if (auto* set = (*currp)->dynCast<StructSet>()) {
+          structSetBasicBlocks[set] = BasicBlockAndIndex{basicBlock, j};
           optimizeStructSet(set, currp, basicBlock, j);
         } else if (auto* block = (*currp)->dynCast<Block>()) {
-          optimizeBlock(block, basicBlock, j);
+          optimizeBlock(block);
         }
       }
     }
@@ -172,7 +178,7 @@ struct RedundantStructSetElimination
   // optimizing later struct.sets, which might be improved later but would
   // require an analysis of effects TODO).
   void
-  optimizeBlock(Block* block, BasicBlock* basicBlock, Index indexInBasicBlock) {
+  optimizeBlock(Block* block) {
     auto& list = block->list;
     for (Index i = 0; i < list.size(); i++) {
       // First, find a local.set of a struct.new.
@@ -198,8 +204,14 @@ struct RedundantStructSetElimination
         if (!localGet || localGet->index != localSet->index) {
           break;
         }
+
+        // Each struct.set we see here must have been visited and mapped
+        // earlier.
+        assert(structSetBasicBlocks.count(structSet));
+
+        auto loc = structSetBasicBlocks[structSet]; // TODO pass this to funcs directly
         if (!optimizeSubsequentStructSet(
-              new_, structSet, localSet, basicBlock, indexInBasicBlock)) {
+              new_, structSet, localSet, loc.first, loc.second)) {
           break;
         } else {
           // Success. Replace the set with a nop, and continue to
@@ -237,6 +249,8 @@ struct RedundantStructSetElimination
                                    LocalSet* localSet,
                                    BasicBlock* structSetBasicBlock,
                                    Index structSetIndexInBasicBlock) {
+    assert(*structSetBasicBlock->contents.items[structSetIndexInBasicBlock] == set);
+
     // Leave unreachable code for DCE, to avoid updating types here.
     if (new_->type == Type::unreachable || set->type == Type::unreachable) {
       return false;
@@ -341,6 +355,8 @@ struct RedundantStructSetElimination
                                      LocalSet* localSet,
                                      BasicBlock* structSetBasicBlock,
                                      Index structSetIndexInBasicBlock) {
+    assert(*structSetBasicBlock->contents.items[structSetIndexInBasicBlock] == structSet);
+
     // First, find the basic blocks between the struct.set and local.set.
     auto& items = structSetBasicBlock->contents.items;
     for (Index i = 0; i < structSetIndexInBasicBlock; i++) {
@@ -352,7 +368,7 @@ struct RedundantStructSetElimination
     }
 
     // We will note the local.set's block as we work, as we'll need it later.
-    BasicBlock* localSetBlock = nullptr;
+    BasicBlock* localSetBasicBlock = nullptr;
 
     // There are blocks in between the struct.set and local.set. Find them by
     // flowing backwards from the struct.set, and stop at the local.set. We'll
@@ -379,7 +395,8 @@ struct RedundantStructSetElimination
       auto stop = false;
       for (auto** item : block->contents.items) {
         if (*item == localSet) {
-          localSetBlock = block;
+          localSetBasicBlock = block;
+std::cout << "SSBB: " << structSetBasicBlock << " lsbb: " << localSetBasicBlock << " eq? " << (localSetBasicBlock == structSetBasicBlock) << '\n';
           stop = true;
           break;
         }
@@ -391,10 +408,15 @@ struct RedundantStructSetElimination
       }
     }
 
+std::cout << "SS: " << *structSet << '\n';
+for (auto** item : localSetBasicBlock->contents.items) std::cout << "lsbb content: " << **item << '\n';
+std::cout << '\n';
+for (auto** item : structSetBasicBlock->contents.items) std::cout << "SSBB content: " << **item << '\n';
+std::cout << "SS should be at index " << structSetIndexInBasicBlock << " in it\n";
+
     // Flow forward from those in-between blocks to find any dangerous uses of
     // the reference.
-    std::unordered_set<BasicBlock*> scanned;
-    scanned.insert(structSetBasicBlock);
+std::cout << "will scan\n";
     while (!inBetween.empty()) {
       auto* block = inBetween.pop();
       auto& items = block->contents.items;
@@ -403,7 +425,7 @@ struct RedundantStructSetElimination
       // has the local.set then we only want to look from right after it, as
       // anything before is not relevant for us.
       Index start = 0;
-      if (block == localSetBlock) {
+      if (block == localSetBasicBlock) {
         while (*items[start] != localSet) {
           start++;
         }
@@ -414,6 +436,12 @@ struct RedundantStructSetElimination
       auto overwritten = false;
       for (Index i = start; i < items.size(); i++) {
         auto* item = *items[i];
+std::cout << "scan " << i << " : " << *item << '\n';
+
+        // We do not need to scan the original local.set, and struct.set, and
+        // should not.
+        assert(item != localSet && item != structSet);
+
         if (auto* get = item->dynCast<LocalGet>()) {
           // Check if this is a dangerous get: another get of the same index.
           // Note that we must ignore the struct.set's reference, as in the non-
@@ -432,8 +460,6 @@ struct RedundantStructSetElimination
             return true;
           }
         } else if (auto* set = item->dynCast<LocalSet>()) {
-          // We do not need to scan the original local.set, and should not.
-          assert(set != localSet);
           if (set->index == localSet->index) {
             overwritten = true;
             break;
