@@ -1392,6 +1392,97 @@
     )
   )
 
+  ;; CHECK:      (func $cfg-throw-if-end (type $4) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (try
+  ;; CHECK-NEXT:   (do
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (call $cfg-throw-if)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (catch $tag
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (if (result (ref null $struct))
+  ;; CHECK-NEXT:    (i32.const 2)
+  ;; CHECK-NEXT:    (then
+  ;; CHECK-NEXT:     (local.get $ref)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (else
+  ;; CHECK-NEXT:     (return
+  ;; CHECK-NEXT:      (i32.const 3)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; RSSE_:      (func $cfg-throw-if-end (type $4) (result i32)
+  ;; RSSE_-NEXT:  (local $ref (ref null $struct))
+  ;; RSSE_-NEXT:  (try
+  ;; RSSE_-NEXT:   (do
+  ;; RSSE_-NEXT:    (struct.set $struct 0
+  ;; RSSE_-NEXT:     (local.tee $ref
+  ;; RSSE_-NEXT:      (struct.new $struct
+  ;; RSSE_-NEXT:       (i32.const 1)
+  ;; RSSE_-NEXT:      )
+  ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:     (call $cfg-throw-if)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:   (catch $tag
+  ;; RSSE_-NEXT:    (nop)
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT:  (struct.get $struct 0
+  ;; RSSE_-NEXT:   (if (result (ref null $struct))
+  ;; RSSE_-NEXT:    (i32.const 2)
+  ;; RSSE_-NEXT:    (then
+  ;; RSSE_-NEXT:     (local.get $ref)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (else
+  ;; RSSE_-NEXT:     (return
+  ;; RSSE_-NEXT:      (i32.const 3)
+  ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT: )
+  (func $cfg-throw-if-end (result i32)
+    (local $ref (ref null $struct))
+    ;; As above but the dangerous local.get later is nested in more control
+    ;; flow, an if. We cannot optimize here.
+    (try
+      (do
+        (struct.set $struct 0
+          (local.tee $ref
+            (struct.new $struct
+              (i32.const 1)
+            )
+          )
+          (call $cfg-throw-if)
+        )
+      )
+      (catch $tag)
+    )
+    (struct.get $struct 0
+      (if (result (ref null $struct))
+        (i32.const 2)
+        (then
+          (local.get $ref)
+        )
+        (else
+          (return
+            (i32.const 3)
+          )
+        )
+      )
+    )
+  )
+
   ;; CHECK:      (func $cfg-throw-ok (type $4) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (try
