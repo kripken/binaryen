@@ -250,7 +250,6 @@ struct RedundantStructSetElimination
 
     auto index = set->index;
     auto& operands = new_->operands;
-    auto refLocalIndex = localSet->index;
 
     // Check for effects that prevent us moving the struct.set's value (X' in
     // the function comment) into its new position in the struct.new. First, it
@@ -259,8 +258,8 @@ struct RedundantStructSetElimination
     // occurred; or, if it writes to that local, then it would cross another
     // write).
     auto setValueEffects = effects(set->value);
-    if (setValueEffects.localsRead.count(refLocalIndex) ||
-        setValueEffects.localsWritten.count(refLocalIndex)) {
+    if (setValueEffects.localsRead.count(localSet->index) ||
+        setValueEffects.localsWritten.count(localSet->index)) {
       return false;
     }
 
@@ -277,49 +276,75 @@ struct RedundantStructSetElimination
       }
     }
 
-    // Finally, consider CFG issues. We need to avoid a situation where the
-    // struct.set's value can branch in a way that lets the reference be used
-    // without the struct.set being applied (as we want to apply it
-    // unconditionally), like here:
-    //
-    //  (try
-    //    (do
-    //      (local.set $x
-    //        (struct.new X)
-    //      )
-    //      (struct.set
-    //        (local.get $x)
-    //        (call $throw)
-    //      )
-    //    )
-    //    (catch)
-    //  )
-    //  ;; This read will get X, the value before the struct.set, if we threw.
-    //  (struct.get
-    //    (local.get $x)
-    //  )
-    //
-    // To detect this, we consider the basic blocks of the local.set and the
-    // struct.set. The only code that executes in between those, aside from the
-    // struct.set's value, is a local.get which does not branch. So any blocks
-    // we observe are due to the struct.set's value, and we can follow those to
-    // see if they lead to local.gets. If so, the situation is dangerous. Note
-    // that the situation is analogous with a local.tee as well:
-    //
-    //  (struct.set
-    //    (local.tee $x (struct.new X Y Z))
-    //    ..value..
-    //  )
-    //
-    // Once more, between the local.set/tee and the struct.set all that can
-    // branch (in fact, all that can execute) is the struct.set's value.
-    //
-    // We're given structSetBasicBlock and structSetIndexInBasicBlock, the
-    // basic block the struct.set is in, and its index inside that
-    // block. Using that we can find the basic block of the local.set, by going
-    // backwards until we find it. Along the way we collect basic blocks to
-    // scan forward from.
+    // Finally, consider CFG issues, which is a more expensive check.
+    if (hasEscapingRefBeforeStructSet(localSet,
+                                      structSetBasicBlock,
+                                      structSetIndexInBasicBlock)) {
+      return false;
+    }
+
+    // Looks good! We can optimize here.
+
+    // See if we need to keep the old value. TODO use existing helper here
+    if (effects(operands[index]).hasUnremovableSideEffects()) {
+      Builder builder(*getModule());
+      operands[index] =
+        builder.makeSequence(builder.makeDrop(operands[index]), set->value);
+    } else {
+      operands[index] = set->value;
+    }
+
+    return true;
+  }
+
+  // We need to avoid a situation where the reference "escapes" before the
+  // struct.set. In that case, the reference might be used without the
+  // struct.set being applied, and we are trying to apply it unconditionally.
+  // For example:
+  //
+  //  (try
+  //    (do
+  //      (local.set $x
+  //        (struct.new X)
+  //      )
+  //      (struct.set
+  //        (local.get $x)
+  //        (call $throw)
+  //      )
+  //    )
+  //    (catch)
+  //  )
+  //  ;; This read will get X, the value before the struct.set, if we threw.
+  //  (struct.get
+  //    (local.get $x)
+  //  )
+  //
+  // To detect this, we consider the basic blocks of the local.set and the
+  // struct.set. The only code that executes in between those, aside from the
+  // struct.set's value, is a local.get which does not branch. So any blocks
+  // we observe are due to the struct.set's value, and we can follow those to
+  // see if they lead to local.gets. If so, the situation is dangerous. Note
+  // that the situation is analogous with a local.tee as well:
+  //
+  //  (struct.set
+  //    (local.tee $x (struct.new X Y Z))
+  //    ..value..
+  //  )
+  //
+  // Once more, between the local.set/tee and the struct.set all that can
+  // branch (in fact, all that can execute) is the struct.set's value.
+  //
+  // We're given structSetBasicBlock and structSetIndexInBasicBlock, the
+  // basic block the struct.set is in, and its index inside that
+  // block. Using that we can find the basic block of the local.set, by going
+  // backwards until we find it. Along the way we collect basic blocks to
+  // scan forward from.
+  bool hasEscapingRefBeforeStructSet(LocalSet* localSet,
+                                     BasicBlock* structSetBasicBlock,
+                                     Index structSetIndexInBasicBlock) {
     UniqueDeferredQueue<BasicBlock*> toScan;
+    // Startin from the struct.set's position, we'll go backwards to find the
+    // localSet's.
     BasicBlock* localSetBasicBlock = structSetBasicBlock;
     Index localSetIndexInBasicBlock = structSetIndexInBasicBlock;
     do {
@@ -335,7 +360,7 @@ struct RedundantStructSetElimination
           auto& prevs = localSetBasicBlock->in;
           if (prevs.size() != 1) {
             // There is no simple predecessor, give up. TODO
-            return false;
+            return true;
           }
           localSetBasicBlock = prevs[0];
           localSetIndexInBasicBlock =
@@ -372,13 +397,13 @@ struct RedundantStructSetElimination
 
       for (auto** item : block->contents.items) {
         if (auto* get = (*item)->dynCast<LocalGet>()) {
-          if (get->index == refLocalIndex) {
+          if (get->index == localSet->index) {
             // We found what we were afraid of.
-            return false;
+            return true;
           }
         } else if (auto* set = (*item)->dynCast<LocalSet>()) {
           // Be careful to ignore the localSet itself XXX
-          if (set->index == refLocalIndex && set != localSet) {
+          if (set->index == localSet->index && set != localSet) {
             overwritten = true;
           }
         }
@@ -392,18 +417,8 @@ struct RedundantStructSetElimination
       }
     }
 
-    // Looks good! We can optimize here.
-
-    // See if we need to keep the old value. TODO use existing helper here
-    if (effects(operands[index]).hasUnremovableSideEffects()) {
-      Builder builder(*getModule());
-      operands[index] =
-        builder.makeSequence(builder.makeDrop(operands[index]), set->value);
-    } else {
-      operands[index] = set->value;
-    }
-
-    return true;
+    // No escaping, no problem.
+    return false;
   }
 
   EffectAnalyzer effects(Expression* expr) {
