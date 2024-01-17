@@ -1557,6 +1557,7 @@ opt_choices = [
     ("--flatten", "--rereloop",),
     ("--roundtrip",),
     ("--rse",),
+    ("--rsse",),
     ("--signature-pruning",),
     ("--signature-refining",),
     ("--simplify-globals",),
