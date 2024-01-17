@@ -1663,7 +1663,106 @@
       )
       (catch $tag)
     )
-    ;; There used to be a local.get of $ref here.
     (i32.const 2)
+  )
+
+  ;; CHECK:      (func $cfg-throw-ok-if-end (type $1)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (try
+  ;; CHECK-NEXT:   (do
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (call $cfg-throw-if)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (catch $tag
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (i32.const 2)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (ref.null none)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (local.get $ref)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (else
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (i32.const 3)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; RSSE_:      (func $cfg-throw-ok-if-end (type $1)
+  ;; RSSE_-NEXT:  (local $ref (ref null $struct))
+  ;; RSSE_-NEXT:  (try
+  ;; RSSE_-NEXT:   (do
+  ;; RSSE_-NEXT:    (struct.set $struct 0
+  ;; RSSE_-NEXT:     (local.tee $ref
+  ;; RSSE_-NEXT:      (struct.new $struct
+  ;; RSSE_-NEXT:       (i32.const 1)
+  ;; RSSE_-NEXT:      )
+  ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:     (call $cfg-throw-if)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:   (catch $tag
+  ;; RSSE_-NEXT:    (nop)
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT:  (if
+  ;; RSSE_-NEXT:   (i32.const 2)
+  ;; RSSE_-NEXT:   (then
+  ;; RSSE_-NEXT:    (local.set $ref
+  ;; RSSE_-NEXT:     (ref.null none)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (drop
+  ;; RSSE_-NEXT:     (local.get $ref)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:   (else
+  ;; RSSE_-NEXT:    (drop
+  ;; RSSE_-NEXT:     (i32.const 3)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT: )
+  (func $cfg-throw-ok-if-end
+    (local $ref (ref null $struct))
+    ;; As above but there is a bunch of extra control flow at the end, some
+    ;; past a local.get. We can optimize here despite all that. XXX
+    (try
+      (do
+        (struct.set $struct 0
+          (local.tee $ref
+            (struct.new $struct
+              (i32.const 1)
+            )
+          )
+          (call $cfg-throw-if)
+        )
+      )
+      (catch $tag)
+    )
+    (if
+      (i32.const 2)
+      (then
+        (local.set $ref
+          (ref.null $struct)
+        )
+        (drop
+          (local.get $ref)
+        )
+      )
+      (else
+        (drop
+          (i32.const 3)
+        )
+      )
+    )
   )
 )
