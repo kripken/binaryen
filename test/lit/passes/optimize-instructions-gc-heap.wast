@@ -19,6 +19,10 @@
   ;; RSSE_:      (type $struct3 (struct (field (mut i32)) (field (mut i32)) (field (mut i32))))
   (type $struct3 (struct (field (mut i32)) (field (mut i32)) (field (mut i32))))
 
+  ;; CHECK:      (type $struct4 (struct (field (mut i32)) (field (mut i32)) (field (mut i32)) (field (mut i32))))
+  ;; RSSE_:      (type $struct4 (struct (field (mut i32)) (field (mut i32)) (field (mut i32)) (field (mut i32))))
+  (type $struct4 (struct (field (mut i32)) (field (mut i32)) (field (mut i32)) (field (mut i32))))
+
   ;; CHECK:      (tag $tag)
   ;; RSSE_:      (tag $tag)
   (tag $tag)
@@ -1095,10 +1099,10 @@
     )
   )
 
-  ;; CHECK:      (func $helper-i32 (type $5) (param $x i32) (result i32)
+  ;; CHECK:      (func $helper-i32 (type $6) (param $x i32) (result i32)
   ;; CHECK-NEXT:  (i32.const 42)
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $helper-i32 (type $5) (param $x i32) (result i32)
+  ;; RSSE_:      (func $helper-i32 (type $6) (param $x i32) (result i32)
   ;; RSSE_-NEXT:  (i32.const 42)
   ;; RSSE_-NEXT: )
   (func $helper-i32 (param $x i32) (result i32)
@@ -1862,6 +1866,107 @@
           (i32.const 3)
         )
       )
+    )
+  )
+
+  ;; CHECK:      (func $cfg-throw-ok-series (type $4) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct4))
+  ;; CHECK-NEXT:  (try
+  ;; CHECK-NEXT:   (do
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new $struct4
+  ;; CHECK-NEXT:      (i32.const 10)
+  ;; CHECK-NEXT:      (i32.const 20)
+  ;; CHECK-NEXT:      (call $cfg-throw-ok-series)
+  ;; CHECK-NEXT:      (i32.const 30)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (catch $tag
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct4 0
+  ;; CHECK-NEXT:   (local.get $ref)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; RSSE_:      (func $cfg-throw-ok-series (type $4) (result i32)
+  ;; RSSE_-NEXT:  (local $ref (ref null $struct4))
+  ;; RSSE_-NEXT:  (try
+  ;; RSSE_-NEXT:   (do
+  ;; RSSE_-NEXT:    (local.set $ref
+  ;; RSSE_-NEXT:     (struct.new $struct4
+  ;; RSSE_-NEXT:      (i32.const 0)
+  ;; RSSE_-NEXT:      (i32.const 1)
+  ;; RSSE_-NEXT:      (i32.const 2)
+  ;; RSSE_-NEXT:      (i32.const 3)
+  ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (struct.set $struct4 0
+  ;; RSSE_-NEXT:     (local.get $ref)
+  ;; RSSE_-NEXT:     (i32.const 10)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (struct.set $struct4 1
+  ;; RSSE_-NEXT:     (local.get $ref)
+  ;; RSSE_-NEXT:     (i32.const 20)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (struct.set $struct4 2
+  ;; RSSE_-NEXT:     (local.get $ref)
+  ;; RSSE_-NEXT:     (call $cfg-throw-ok-series)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (struct.set $struct4 3
+  ;; RSSE_-NEXT:     (local.get $ref)
+  ;; RSSE_-NEXT:     (i32.const 30)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:   (catch $tag
+  ;; RSSE_-NEXT:    (nop)
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT:  (struct.get $struct4 0
+  ;; RSSE_-NEXT:   (local.get $ref)
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT: )
+  (func $cfg-throw-ok-series (result i32)
+    (local $ref (ref null $struct4))
+    ;; A series of struct.sets. We can optimize the first two and are then
+    ;; blocked by the third, which prevents optimizing either itself or the
+    ;; fourth. XXX
+    (try
+      (do
+        (local.set $ref
+          (struct.new $struct4
+            (i32.const 0)
+            (i32.const 1)
+            (i32.const 2)
+            (i32.const 3)
+          )
+        )
+        (struct.set $struct4 0
+          (local.get $ref)
+          (i32.const 10)
+        )
+        (struct.set $struct4 1
+          (local.get $ref)
+          (i32.const 20)
+        )
+        (struct.set $struct4 2
+          (local.get $ref)
+          (call $cfg-throw-ok-series)
+        )
+        (struct.set $struct4 3
+          (local.get $ref)
+          (i32.const 30)
+        )
+      )
+      (catch $tag)
+    )
+    (struct.get $struct4 0
+      (local.get $ref)
     )
   )
 )
