@@ -265,12 +265,22 @@ struct GUFAOptimizer
 
       if (!PossibleContents::haveIntersection(refContents, intendedContents)) {
         optimize(0);
+        return;
       } else if (PossibleContents::isSubContents(refContents,
                                                  intendedContents)) {
         optimize(1);
+        return;
       }
     }
+
+    // Stash all ref.test of struct.get that we see. There is a whole-program
+    // optimization we can try for them later.
+    //if (auto* get = curr->ref->dynCast<StructGet>()) {
+    //  testsOfStructGets.push_back(curr);
+    //}
   }
+
+  //std::vector<RefTest*> testsOfStructGets;
 
   void visitRefCast(RefCast* curr) {
     auto currType = curr->type;
@@ -410,7 +420,76 @@ struct GUFAPass : public Pass {
 
   void run(Module* module) override {
     ContentOracle oracle(*module, getPassOptions());
+
     GUFAOptimizer(oracle, optimizing, castAll).run(getPassRunner(), module);
+
+    // Imagine that we see a test like this:
+    //
+    //  (ref.test $A.vtable
+    //    (struct.get $object $vtable
+    //      (REF)
+    //    )
+    //  )
+    //
+    // Here we read the vtable and then check if it has a specific type. If
+    // vtable types parallel class types, which can be the case for languages
+    // like Java, then we can test the class directly, saving the struct.get:
+    //
+    //  (ref.test $A
+    //    (REF)
+    //  )
+    //
+    // That is, when we find parallel class hierarchies then we can map
+    // operations from one to the other, saving work.
+    //
+    // To see if we have such opportunities, we look for fields (like the vtable
+    // field in the example) whose type parallels the struct it is inside.
+    SubTypes subTypes(*module); // TODO reuse from ContentOracle
+
+    // When we find a heap type and an index that we cannot optimize, we add it
+    // here. In the example above, if we saw that $A's $vtable field could
+    // contain not just $A.vtable but other stuff then we'd mark it here (and in
+    // all supertypes that contain that field, as the lack of precision affects
+    // them as well).
+    std::unordered_set<DataLocation> unoptimizable;
+
+    for (auto type : subTypes.types) {
+      if (!type.isStruct()) {
+        continue;
+      }
+founder
+      auto& fields = type.getStruct().fields;
+      for (Index i = 0; i < fields.size(); i++) {
+        // We only optimize references here.
+        if (!fields[i].type.isRef()) {
+          continue;
+        }
+
+        // We can only reason about exact types: for each type with the field,
+        // we must see a specific type written. In the example above, type $A's
+        // $vtable field must always contain $A.vtable and not a subtype.
+        auto contents = oracle.getContents(DataLocation{type, i});
+        if (!contents.hasExactType()) {
+          // This field is not precise enough for us, in all super types. That
+          // is, we are looking for XXX
+          auto t = type;
+          while (1) {
+            if (!unoptimizable.insert(DataLocation{t, i}).second) {
+              // There was already an entry here, so we don't need to continue
+              // upwards - the parents have been marked.
+              break;
+            }
+            auto super = t.getSuperType();
+            if (!super) {
+              break;
+            }
+            t = *super;
+          }
+        }
+      }
+    }
+
+    // Now we know which fields are optimizable and which are not.
   }
 };
 
