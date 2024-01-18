@@ -107,10 +107,10 @@ struct RedundantStructSetElimination
     self->note(currp);
   }
 
-  // We note the basic blocks + indexes in them of struct.sets so that we can
-  // easily process the data later down.
-  using BasicBlockAndIndex = std::pair<BasicBlock*, Index>;
-  std::unordered_map<StructSet*, BasicBlockAndIndex> structSetBasicBlocks;
+  // We note the locations (basic blocks + indexes) of struct.sets so that we
+  // can easily process the data later down.
+  using Location = std::pair<BasicBlock*, Index>;
+  std::unordered_map<StructSet*, Location> structSetLocations;
 
   // Main entry point.
 
@@ -131,7 +131,7 @@ struct RedundantStructSetElimination
         // a block, handle struct.sets after news (the second situation in the
         // top comment in this file).
         if (auto* set = (*currp)->dynCast<StructSet>()) {
-          structSetBasicBlocks[set] = BasicBlockAndIndex{basicBlock, j};
+          structSetLocations[set] = Location{basicBlock, j};
           optimizeStructSet(set, currp, basicBlock, j);
         } else if (auto* block = (*currp)->dynCast<Block>()) {
           optimizeBlock(block);
@@ -215,9 +215,9 @@ struct RedundantStructSetElimination
 
         // Each struct.set we see here must have been visited and mapped
         // earlier.
-        assert(structSetBasicBlocks.count(structSet));
+        assert(structSetLocations.count(structSet));
 
-        auto loc = structSetBasicBlocks[structSet]; // TODO pass this to funcs directly
+        auto loc = structSetLocations[structSet];
         if (!optimizeSubsequentStructSet(
               new_, structSet, localSet, loc.first, loc.second)) {
           break;
