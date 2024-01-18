@@ -16,11 +16,12 @@
   (type $struct2 (struct (field (mut i32)) (field (mut i32))))
 
   ;; CHECK:      (type $struct3 (struct (field (mut i32)) (field (mut i32)) (field (mut i32))))
+  ;; RSSE_:      (type $struct4 (struct (field (mut i32)) (field (mut i32)) (field (mut i32)) (field (mut i32))))
+
   ;; RSSE_:      (type $struct3 (struct (field (mut i32)) (field (mut i32)) (field (mut i32))))
   (type $struct3 (struct (field (mut i32)) (field (mut i32)) (field (mut i32))))
 
   ;; CHECK:      (type $struct4 (struct (field (mut i32)) (field (mut i32)) (field (mut i32)) (field (mut i32))))
-  ;; RSSE_:      (type $struct4 (struct (field (mut i32)) (field (mut i32)) (field (mut i32)) (field (mut i32))))
   (type $struct4 (struct (field (mut i32)) (field (mut i32)) (field (mut i32)) (field (mut i32))))
 
   ;; CHECK:      (tag $tag)
@@ -1109,7 +1110,7 @@
     (i32.const 42)
   )
 
-  ;; CHECK:      (func $cfg-branch (type $4) (result i32)
+  ;; CHECK:      (func $cfg-branch (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (block $out
   ;; CHECK-NEXT:   (local.set $ref
@@ -1130,7 +1131,7 @@
   ;; CHECK-NEXT:   (local.get $ref)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-branch (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-branch (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (block $out
   ;; RSSE_-NEXT:   (struct.set $struct 0
@@ -1186,7 +1187,7 @@
     )
   )
 
-  ;; CHECK:      (func $cfg-throw (type $4) (result i32)
+  ;; CHECK:      (func $cfg-throw (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (try
   ;; CHECK-NEXT:   (do
@@ -1204,7 +1205,7 @@
   ;; CHECK-NEXT:   (local.get $ref)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-throw (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-throw (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
@@ -1247,7 +1248,7 @@
     )
   )
 
-  ;; CHECK:      (func $cfg-throw-notee (type $4) (result i32)
+  ;; CHECK:      (func $cfg-throw-notee (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (try
   ;; CHECK-NEXT:   (do
@@ -1266,7 +1267,7 @@
   ;; CHECK-NEXT:   (local.get $ref)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-throw-notee (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-throw-notee (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
@@ -1311,7 +1312,7 @@
     )
   )
 
-  ;; CHECK:      (func $cfg-throw-if (type $4) (result i32)
+  ;; CHECK:      (func $cfg-throw-if (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (try
   ;; CHECK-NEXT:   (do
@@ -1337,7 +1338,7 @@
   ;; CHECK-NEXT:   (local.get $ref)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-throw-if (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-throw-if (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
@@ -1396,7 +1397,7 @@
     )
   )
 
-  ;; CHECK:      (func $cfg-throw-if-end (type $4) (result i32)
+  ;; CHECK:      (func $cfg-throw-if-end (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (try
   ;; CHECK-NEXT:   (do
@@ -1424,7 +1425,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-throw-if-end (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-throw-if-end (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
@@ -1487,7 +1488,7 @@
     )
   )
 
-  ;; CHECK:      (func $cfg-throw-ok (type $4) (result i32)
+  ;; CHECK:      (func $cfg-throw-ok (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (try
   ;; CHECK-NEXT:   (do
@@ -1503,7 +1504,7 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (i32.const 2)
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-throw-ok (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-throw-ok (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
@@ -1540,7 +1541,7 @@
     (i32.const 2)
   )
 
-  ;; CHECK:      (func $cfg-throw-ok-notee (type $4) (result i32)
+  ;; CHECK:      (func $cfg-throw-ok-notee (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (try
   ;; CHECK-NEXT:   (do
@@ -1557,7 +1558,7 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (i32.const 2)
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-throw-ok-notee (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-throw-ok-notee (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
@@ -1594,7 +1595,7 @@
     (i32.const 2)
   )
 
-  ;; CHECK:      (func $cfg-throw-ok-if (type $4) (result i32)
+  ;; CHECK:      (func $cfg-throw-ok-if (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (try
   ;; CHECK-NEXT:   (do
@@ -1618,7 +1619,7 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (i32.const 2)
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-throw-ok-if (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-throw-ok-if (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
@@ -1869,7 +1870,7 @@
     )
   )
 
-  ;; CHECK:      (func $cfg-throw-ok-series (type $4) (result i32)
+  ;; CHECK:      (func $cfg-throw-ok-series (type $3) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct4))
   ;; CHECK-NEXT:  (try
   ;; CHECK-NEXT:   (do
@@ -1894,26 +1895,20 @@
   ;; CHECK-NEXT:   (local.get $ref)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  ;; RSSE_:      (func $cfg-throw-ok-series (type $4) (result i32)
+  ;; RSSE_:      (func $cfg-throw-ok-series (type $3) (result i32)
   ;; RSSE_-NEXT:  (local $ref (ref null $struct4))
   ;; RSSE_-NEXT:  (try
   ;; RSSE_-NEXT:   (do
   ;; RSSE_-NEXT:    (local.set $ref
   ;; RSSE_-NEXT:     (struct.new $struct4
-  ;; RSSE_-NEXT:      (i32.const 0)
-  ;; RSSE_-NEXT:      (i32.const 1)
+  ;; RSSE_-NEXT:      (i32.const 10)
+  ;; RSSE_-NEXT:      (i32.const 20)
   ;; RSSE_-NEXT:      (i32.const 2)
   ;; RSSE_-NEXT:      (i32.const 3)
   ;; RSSE_-NEXT:     )
   ;; RSSE_-NEXT:    )
-  ;; RSSE_-NEXT:    (struct.set $struct4 0
-  ;; RSSE_-NEXT:     (local.get $ref)
-  ;; RSSE_-NEXT:     (i32.const 10)
-  ;; RSSE_-NEXT:    )
-  ;; RSSE_-NEXT:    (struct.set $struct4 1
-  ;; RSSE_-NEXT:     (local.get $ref)
-  ;; RSSE_-NEXT:     (i32.const 20)
-  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (nop)
+  ;; RSSE_-NEXT:    (nop)
   ;; RSSE_-NEXT:    (struct.set $struct4 2
   ;; RSSE_-NEXT:     (local.get $ref)
   ;; RSSE_-NEXT:     (call $cfg-throw-ok-series)
@@ -1935,7 +1930,7 @@
     (local $ref (ref null $struct4))
     ;; A series of struct.sets. We can optimize the first two and are then
     ;; blocked by the third, which prevents optimizing either itself or the
-    ;; fourth. XXX
+    ;; fourth.
     (try
       (do
         (local.set $ref
@@ -1970,6 +1965,60 @@
     )
   )
 
+  ;; CHECK:      (func $cfg-throw-ok-series-tee (type $3) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct4))
+  ;; CHECK-NEXT:  (try
+  ;; CHECK-NEXT:   (do
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new $struct4
+  ;; CHECK-NEXT:      (i32.const 10)
+  ;; CHECK-NEXT:      (i32.const 20)
+  ;; CHECK-NEXT:      (call $cfg-throw-ok-series-tee)
+  ;; CHECK-NEXT:      (i32.const 30)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (catch $tag
+  ;; CHECK-NEXT:    (nop)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct4 0
+  ;; CHECK-NEXT:   (local.get $ref)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; RSSE_:      (func $cfg-throw-ok-series-tee (type $3) (result i32)
+  ;; RSSE_-NEXT:  (local $ref (ref null $struct4))
+  ;; RSSE_-NEXT:  (try
+  ;; RSSE_-NEXT:   (do
+  ;; RSSE_-NEXT:    (local.set $ref
+  ;; RSSE_-NEXT:     (struct.new $struct4
+  ;; RSSE_-NEXT:      (i32.const 10)
+  ;; RSSE_-NEXT:      (i32.const 20)
+  ;; RSSE_-NEXT:      (i32.const 2)
+  ;; RSSE_-NEXT:      (i32.const 3)
+  ;; RSSE_-NEXT:     )
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (nop)
+  ;; RSSE_-NEXT:    (struct.set $struct4 2
+  ;; RSSE_-NEXT:     (local.get $ref)
+  ;; RSSE_-NEXT:     (call $cfg-throw-ok-series-tee)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:    (struct.set $struct4 3
+  ;; RSSE_-NEXT:     (local.get $ref)
+  ;; RSSE_-NEXT:     (i32.const 30)
+  ;; RSSE_-NEXT:    )
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:   (catch $tag
+  ;; RSSE_-NEXT:    (nop)
+  ;; RSSE_-NEXT:   )
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT:  (struct.get $struct4 0
+  ;; RSSE_-NEXT:   (local.get $ref)
+  ;; RSSE_-NEXT:  )
+  ;; RSSE_-NEXT: )
   (func $cfg-throw-ok-series-tee (result i32)
     (local $ref (ref null $struct4))
     ;; As above but we begin with a tee. Again, we can optimize the first two
