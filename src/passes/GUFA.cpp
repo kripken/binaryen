@@ -517,7 +517,47 @@ struct GUFAPass : public Pass {
       }
     }
 
-    // Now we know which fields are optimizable and which are not.
+    // Now we know which fields are optimizable and which are not, and can
+    // optimize. TODO p aralelize
+    struct Optimizer : PostWalker<Optimizer> {
+      std::unordered_map<DataLocation, PossibleContents>& locInfoMap;
+
+      Optimizer(std::unordered_map<DataLocation, PossibleContents>& locInfoMap) : locInfoMap(locInfoMap) {}
+
+      void visitRefTest(RefTest* curr) {
+        if (auto* get = curr->ref->dynCast<StructGet>()) {
+          // This is in the shape we are looking for:
+          //
+          //  (ref.test $A.vtable
+          //    (struct.get $object $vtable
+          //      (REF)
+          //    )
+          //  )
+          //
+          // If the field is optimizable, we can do work here.
+          auto field = GCTypeUtils::getField(get->ref->type, get->index);
+          if (!field)
+            return;
+          }
+
+          // The location the get reads from must be in |locInfoMap| as we
+          // computed values for all possible locations ahead of time.
+          auto getLoc = DataLocation{get->ref->type.getHeapType(), get->index};
+          assert(locInfoMap.count(getLoc));
+
+          auto info = locInfoMap[getLoc];
+          if (!info.hasExactType()) {
+            return;
+          }
+
+          // This looks promising: in the example above, $object's field $vtable
+          // can only contain things that have an exact parallel relationship to
+          // the type of the object they are written to.
+          // XXX the map neds to be in reverase
+        }
+      }
+    } optimizer(locInfoMap);
+    optimizer.walk(module);
   }
 };
 
