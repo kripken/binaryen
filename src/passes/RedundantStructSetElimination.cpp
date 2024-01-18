@@ -438,7 +438,12 @@ struct RedundantStructSetElimination
         auto* item = *items[i];
 
         if (item == localSet) {
-          // We can skip the local.set itself.
+          // We can skip the local.set itself. (We skip it above in the loop
+          // that modifies |start|, but if we've optimized a struct.set +
+          // struct.new combination then it moved, but we didn't update the
+          // BasicBlock parent it is in, so it appears in its old position as
+          // well. It would be more work to rewrite the basic block contents, so
+          // just skip it here.)
         } else if (item == structSet) {
           // We reached the struct.set itself that we are optimizing. We don't
           // need to look any further: the optimization affects nothing past it.
@@ -449,13 +454,13 @@ struct RedundantStructSetElimination
           // Note that we must ignore the struct.set's reference, as in the non-
           // tee form we have
           //
-          //      (local.set $x
-          //        (struct.new X)
-          //      )
-          //      (struct.set
-          //        (local.get $x)
-          //        (call $throw)
-          //      )
+          //   (local.set $x
+          //     (struct.new X)
+          //   )
+          //   (struct.set
+          //     (local.get $x)
+          //     (call $throw)
+          //   )
           //
           // We know that particular local.get is safe.
           if (get->index == localSet->index && get != structSet->ref) {
