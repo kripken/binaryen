@@ -450,40 +450,68 @@ struct GUFAPass : public Pass {
     // here. In the example above, if we saw that $A's $vtable field could
     // contain not just $A.vtable but other stuff then we'd mark it here (and in
     // all supertypes that contain that field, as the lack of precision affects
-    // them as well).
-    std::unordered_set<DataLocation> unoptimizable;
+    // them as well). Optimizability information also includes the type we've
+    // seen so far, to rule out two different exact types. That is, each
+    // HeapType+FieldIndex maps to one of the following:
+    //
+    //  * None, if we've seen nothing so far.
+    //  * An ExactType, which is the one type we've seen.
+    //  * Many, indicating we've seen too much.
+    std::unordered_map<DataLocation, PossibleContents> locInfoMap;
 
     for (auto type : subTypes.types) {
       if (!type.isStruct()) {
         continue;
       }
-founder
+
       auto& fields = type.getStruct().fields;
       for (Index i = 0; i < fields.size(); i++) {
-        // We only optimize references here.
-        if (!fields[i].type.isRef()) {
+        // We only optimize immutable references here. (We could perhaps also
+        // handle mutable ones, but it would take more work, and vtables are
+        // normally immutable.)
+        auto field = fields[i];
+        if (!field.type.isRef() || !field.mutability == Immutable) {
           continue;
         }
 
         // We can only reason about exact types: for each type with the field,
         // we must see a specific type written. In the example above, type $A's
         // $vtable field must always contain $A.vtable and not a subtype.
-        auto contents = oracle.getContents(DataLocation{type, i});
+        auto fieldLoc = DataLocation{type, i};
+        auto contents = oracle.getContents(fieldLoc);
+        auto& info = locInfoMap[fieldLoc];
         if (!contents.hasExactType()) {
-          // This field is not precise enough for us, in all super types. That
-          // is, we are looking for XXX
+          // Anything non-exact is bad for us.
+          contents = PossibleContents::many();
+        }
+        if (info.isNone()) {
+          // This is the first content to arrive here.
+          info = contents;
+        } else if (info != contents) {
+          // If this is different than before then we definitely do not have a
+          // single exact type.
+          info = PossibleContents::many();
+        }
+        if (info == PossibleContents::many()) {
+          // We just saw that this field is not precise enough for us. We need
+          // to apply that to all super types, since in the example above, if
+          // $A's $vtable is not always $A.vtable that means that any read from
+          // $object (the supertype of all objects)'s $vtable can result in
+          // something imprecise.
           auto t = type;
           while (1) {
-            if (!unoptimizable.insert(DataLocation{t, i}).second) {
-              // There was already an entry here, so we don't need to continue
-              // upwards - the parents have been marked.
-              break;
-            }
             auto super = t.getSuperType();
             if (!super) {
               break;
             }
             t = *super;
+            auto& superInfo = locInfoMap[DataLocation{t, i}];
+            if (superInfo == PossibleContents::many()) {
+              // We've already marked this and all supers of it as
+              // unoptimizable.
+              break;
+            }
+            superInfo = PossibleContents::many();
           }
         }
       }
