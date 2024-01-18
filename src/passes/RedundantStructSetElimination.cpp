@@ -49,6 +49,7 @@
 //
 
 #include "cfg/cfg-traversal.h"
+#include "ir/manipulation.h"
 #include "pass.h"
 #include "support/unique_deferring_queue.h"
 #include "wasm-traversal.h"
@@ -157,23 +158,19 @@ dump();
     assert(*currp == set);
     assert(basicBlock->contents.items[indexInBasicBlock] == currp);
 
-std::cerr << "opt struct set " << *getFunction()->body << '\n';
-
     if (auto* tee = set->ref->dynCast<LocalSet>()) {
       if (auto* new_ = tee->value->dynCast<StructNew>()) {
         if (optimizeSubsequentStructSet(
               new_, set, tee, basicBlock, indexInBasicBlock)) {
           // Success! Replace the struct.set with the local.tee, that now
-          // becomes a local.set. Also nop the struct.set so the BasicBlock IR
-          // is up to date.
+          // becomes a local.set. Also nop the struct.set to avoid confusion in
+          // debugging.
           tee->makeSet();
           *currp = tee;
           ExpressionManipulator::nop(set);
-std::cerr << "opted struct set " << *getFunction()->body << '\n';
         }
       }
     }
-std::cerr << "computer says naaaah\n";
   }
 
   // A canonical nop that we use to replace things in the IR that we remove. All
@@ -227,7 +224,6 @@ std::cerr << "computer says naaaah\n";
         assert(structSetBasicBlocks.count(structSet));
 
         auto loc = structSetBasicBlocks[structSet]; // TODO pass this to funcs directly
-std::cerr << "OTHER\n";
         if (!optimizeSubsequentStructSet(
               new_, structSet, localSet, loc.first, loc.second)) {
           break;
@@ -413,7 +409,7 @@ std::cerr << "OTHER\n";
       auto stop = false;
       for (auto** item : block->contents.items) {
         if (*item == localSet) {
-          localSetBasicBlock = block;//std::cerr << "SSBB: " << structSetBasicBlock << " lsbb: " << localSetBasicBlock << " eq? " << (localSetBasicBlock == structSetBasicBlock) << '\n';
+          localSetBasicBlock = block;
           stop = true;
           break;
         }
@@ -424,14 +420,9 @@ std::cerr << "OTHER\n";
         }
       }
     }
-//std::cerr << "SS: " << *structSet << '\n';
-//for (auto** item : localSetBasicBlock->contents.items) std::cerr << "lsbb content: " << **item << '\n';//std::cerr << '\n';
-//for (auto** item : structSetBasicBlock->contents.items) std::cerr << "SSBB content: " << **item << '\n';//std::cerr << "SS should be at index " << structSetIndexInBasicBlock << " in it\n";
-
-std::cerr << "will forward flow " << *getFunction()->body << '\n';
 
     // Flow forward from those in-between blocks to find any dangerous uses of
-    // the reference.//std::cerr << "will scan\n";
+    // the reference.
     while (!inBetween.empty()) {
       auto* block = inBetween.pop();
       auto& items = block->contents.items;
@@ -447,20 +438,13 @@ std::cerr << "will forward flow " << *getFunction()->body << '\n';
         start++;
       }
 
-std::cerr << "in block at offset " << start << "\n"; for (auto** item : block->contents.items) std::cerr << "  block content: " << **item << '\n';
-
       auto stop = false;
 
       for (Index i = start; i < items.size(); i++) {
         auto* item = *items[i];
-std::cerr << "scan " << i << " : " << *item << '\n';
-
-        // We do not need to scan the original local.set, and
-        // should not.
-//        assert(item != localSet);
 
         if (item == localSet) {
-          // We can skip it.
+          // We can skip the local.set itself.
         } else if (item == structSet) {
           // We reached the struct.set itself that we are optimizing. We don't
           // need to look any further: the optimization affects nothing past it.
