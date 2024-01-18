@@ -120,8 +120,6 @@ struct RedundantStructSetElimination
               Visitor<RedundantStructSetElimination>,
               Info>::doWalkFunction(func);
 
-dump();
-
     // Find things to optimize.
     for (Index i = 0; i < basicBlocks.size(); i++) {
       auto* basicBlock = basicBlocks[i].get();
