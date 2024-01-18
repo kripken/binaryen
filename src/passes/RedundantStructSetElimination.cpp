@@ -140,7 +140,9 @@ struct RedundantStructSetElimination
     }
   }
 
-  // Optimize a tee'd new in a struct.set:
+  // Optimize a struct.set by itself (without considering instructions following
+  // it, as we do in optimizeBlock). Specifically, optimize a tee'd new in a
+  // struct.set:
   //
   //  (struct.set (local.tee $x (struct.new X Y Z)) X')
   // =>
@@ -149,7 +151,7 @@ struct RedundantStructSetElimination
   // We are provided the struct.set, the pointer to it (so we can replace it if
   // we optimize) and also the index of our basic block and our index inside
   // that basic block.
-  void optimizeStructSet(StructSet* set, // TODO rename to "tee"
+  void optimizeStructSet(StructSet* set,
                          Expression** currp,
                          BasicBlock* basicBlock,
                          Index indexInBasicBlock) {
@@ -170,12 +172,6 @@ struct RedundantStructSetElimination
       }
     }
   }
-
-  // A canonical nop that we use to replace things in the IR that we remove. All
-  // that matters is we don't have nullptr there, and we have no side effects.
-  Nop nop;
-  Expression* nopp = &nop;
-  Expression** noppp = &nopp;
 
   // Handle pairs like this among a block's children:
   //
