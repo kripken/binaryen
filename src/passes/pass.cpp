@@ -325,6 +325,9 @@ void PassRegistry::registerPasses() {
 #ifndef SKIP_OUTLINING
   registerPass("outlining", "outline instructions", createOutliningPass);
 #endif
+  registerPass("pto",
+               "optimize using parallel type hierarchies",
+               createParallelTypeOptimizationPass);
   registerPass("pick-load-signs",
                "pick load signs based on their uses",
                createPickLoadSignsPass);

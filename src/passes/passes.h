@@ -87,6 +87,8 @@ Pass* createMinifyImportsPass();
 Pass* createMinifyImportsAndExportsPass();
 Pass* createMinifyImportsAndExportsAndModulesPass();
 Pass* createMetricsPass();
+Pass* createModAsyncifyAlwaysOnlyUnwindPass();
+Pass* createModAsyncifyNeverUnwindPass();
 Pass* createMonomorphizePass();
 Pass* createMonomorphizeAlwaysPass();
 Pass* createMultiMemoryLoweringPass();
@@ -111,9 +113,8 @@ Pass* createOptimizeStackIRPass();
 #ifndef SKIP_OUTLINING
 Pass* createOutliningPass();
 #endif
+Pass* createParallelTypeOptimizationPass();
 Pass* createPickLoadSignsPass();
-Pass* createModAsyncifyAlwaysOnlyUnwindPass();
-Pass* createModAsyncifyNeverUnwindPass();
 Pass* createPoppifyPass();
 Pass* createPostEmscriptenPass();
 Pass* createPrecomputePass();

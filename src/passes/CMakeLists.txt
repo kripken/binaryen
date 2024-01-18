@@ -76,6 +76,7 @@ set(passes_SOURCES
   OptimizeCasts.cpp
   OptimizeInstructions.cpp
   OptimizeForJS.cpp
+  ParallelTypeOptimization.cpp
   PickLoadSigns.cpp
   Poppify.cpp
   PostEmscripten.cpp
