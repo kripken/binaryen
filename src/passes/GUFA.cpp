@@ -473,6 +473,10 @@ struct GUFAPass : public Pass {
     //  infoMap[$A:$vtable] = { $A.vtable: $A }
     //  infoMap[$B:$vtable] = { $B.vtable: $B }
     //
+    // Note that the direction of the sub-map is to allow optimization later:
+    // when we see a ref.test of $A.vtable, we will see that we can instead do a
+    // test on $A instead (and without reading the vtable).
+    //
     // We also need a way to indicate that we cannot optimize because we cannot
     // build such a sub-map, which we do as follows: InfoMap maps to a
     // std::optional, and if it is nullopt (as it is when we first do
@@ -508,8 +512,8 @@ struct GUFAPass : public Pass {
           continue;
         }
 
-        auto& maybeSubMap = locInfoMap[fieldLoc];
-        if (maybeSubMap && maybeSubMap->size() == 0) {
+        auto& maybeSubMap = infoMap[fieldLoc];
+        if (maybeSubMap && maybeSubMap->empty()) {
           // We found inexact data here earlier, and gave up, so ignore this.
           continue;
         }
@@ -528,35 +532,48 @@ struct GUFAPass : public Pass {
           // Anything non-exact is bad for us.
           contents = PossibleContents::many();
         }
-        auto
-        if (info.isNone()) {
-          // This is the first content to arrive here.
-          info = contents;
-        } else if (info != contents) {
-          // If this is different than before then we definitely do not have a
-          // single exact type.
-          info = PossibleContents::many();
+
+        if (contents != PossibleContents::many()) {
+          // The sub-map entry we would like to make, $A.vtable -> $A in the
+          // example above, is contents.type -> type. See if that fits with what
+          // is already there, as any discrepancy proves the hierarchies are not
+          // parallel.
+          auto contentType = contents.getType();
+          auto& subMapValue = subMap[contentType];
+          if (subMapValue == HeapType()) {
+            // This is the first thing we see here: write it.
+            subMapValue = type;
+          } else if (subMapValue != type) {
+            // This is different, so we found a problem.
+            contents = PossibleContents::many();
+          }
         }
+
         if (info == PossibleContents::many()) {
-          // We just saw that this field is not precise enough for us. We need
-          // to apply that to all super types, since in the example above, if
-          // $A's $vtable is not always $A.vtable that means that any read from
-          // $object (the supertype of all objects)'s $vtable can result in
-          // something imprecise.
-          auto t = type;
+          // We ran into a problem, and so we need to mark this field as
+          // unoptimizable, both in ourselves and in all supertypes, since we
+          // cannot find a proper sub-map to indicate valid optimization in any
+          // of those.
+            auto t = type;
           while (1) {
+            auto fieldLoc = DataLocation{t, i};
+            auto& maybeSubMap = infoMap[fieldLoc];
+            if (maybeSubMap && maybeSubMap->empty()) {
+              // We've already marked this and all supers of it as
+              // unoptimizable.
+              break;
+            }
+            if (!maybeSubMap) {
+              maybeSubMap = SubMap();
+            }
+            // Clear the sub-map to indicate it is invalid.
+            maybeSubMap->clear();
+
             auto super = t.getSuperType();
             if (!super) {
               break;
             }
             t = *super;
-            auto& superInfo = locInfoMap[DataLocation{t, i}];
-            if (superInfo == PossibleContents::many()) {
-              // We've already marked this and all supers of it as
-              // unoptimizable.
-              break;
-            }
-            superInfo = PossibleContents::many();
           }
         }
       }
