@@ -512,69 +512,60 @@ struct GUFAPass : public Pass {
           continue;
         }
 
-        auto& maybeSubMap = infoMap[fieldLoc];
-        if (maybeSubMap && maybeSubMap->empty()) {
-          // We found inexact data here earlier, and gave up, so ignore this.
-          continue;
-        }
-        // Initialize this submap, if it has not been earlier.
-        if (!maybeSubMap) {
-          maybeSubMap = SubMap();
-        }
-        auto& subMap = *maybeSubMap;
-
+        auto typeLoc = DataLocation{type, i};
+        auto typeContents = oracle.getContents(typeLoc);
         // We can only reason about exact types: for each type with the field,
         // we must see a specific type written. In the example above, type $A's
         // $vtable field must always contain $A.vtable and not a subtype.
-        auto fieldLoc = DataLocation{type, i};
-        auto contents = oracle.getContents(fieldLoc);
-        if (!contents.hasExactType()) {
+        if (!typeContents.hasExactType()) {
           // Anything non-exact is bad for us.
-          contents = PossibleContents::many();
+          typeContents = PossibleContents::many();
         }
 
-        if (contents != PossibleContents::many()) {
-          // The sub-map entry we would like to make, $A.vtable -> $A in the
-          // example above, is contents.type -> type. See if that fits with what
-          // is already there, as any discrepancy proves the hierarchies are not
-          // parallel.
-          auto contentType = contents.getType();
-          auto& subMapValue = subMap[contentType];
-          if (subMapValue == HeapType()) {
-            // This is the first thing we see here: write it.
-            subMapValue = type;
-          } else if (subMapValue != type) {
-            // This is different, so we found a problem.
-            contents = PossibleContents::many();
+        // We need to apply the information here to all supertypes: loop on
+        // them.
+        auto t = type;
+        while (1) {
+          auto tLoc = DataLocation{t, i};
+          auto& maybeSubMap = infoMap[tLoc];
+          if (maybeSubMap && maybeSubMap->empty()) {
+            // We found inexact data here earlier, and gave up, so ignore this
+            // (all supers will also be marked so, already).
+            break;
           }
-        }
-// XXX propagate the good case too!
-        if (info == PossibleContents::many()) {
-          // We ran into a problem, and so we need to mark this field as
-          // unoptimizable, both in ourselves and in all supertypes, since we
-          // cannot find a proper sub-map to indicate valid optimization in any
-          // of those.
-            auto t = type;
-          while (1) {
-            auto fieldLoc = DataLocation{t, i};
-            auto& maybeSubMap = infoMap[fieldLoc];
-            if (maybeSubMap && maybeSubMap->empty()) {
-              // We've already marked this and all supers of it as
-              // unoptimizable.
-              break;
-            }
-            if (!maybeSubMap) {
-              maybeSubMap = SubMap();
-            }
-            // Clear the sub-map to indicate it is invalid.
-            maybeSubMap->clear();
+          // Initialize this submap, if it has not been earlier.
+          if (!maybeSubMap) {
+            maybeSubMap = SubMap();
+          }
+          auto& subMap = *maybeSubMap;
 
-            auto super = t.getSuperType();
-            if (!super) {
-              break;
+          // Consider typeContents in combination with this sub-map.
+          auto contents = typeContents;
+          if (contents != PossibleContents::many()) {
+            // The sub-map entry we would like to make, $A.vtable -> $A in the
+            // example above, is contents.type -> type. See if that fits with what
+            // is already there, as any discrepancy proves the hierarchies are not
+            // parallel.
+            auto& subMapValue = subMap[contents.getType()];
+            if (subMapValue == HeapType()) {
+              // This is the first thing we see here: write it.
+              subMapValue = type;
+            } else if (subMapValue != type) {
+              // This is different, so we found a problem.
+              contents = PossibleContents::many();
             }
-            t = *super;
           }
+          if (contents == PossibleContents::many()) {
+            // We ran into a problem. Clear the map to indicate that.
+            maybeSubMap.clear();
+          }
+
+          // Proceed to the super.
+          auto super = t.getSuperType();
+          if (!super) {
+            break;
+          }
+          t = *super;
         }
       }
     }
