@@ -589,7 +589,7 @@ struct GUFAPass : public Pass {
           //
           // See if we have a valid type there to try to optimize with.
           auto field = GCTypeUtils::getField(get->ref->type, get->index);
-          if (!field)
+          if (!field) {
             return;
           }
 
