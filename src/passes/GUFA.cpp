@@ -606,7 +606,7 @@ struct GUFAPass : public Pass {
           // If the sub-map has an entry for us, then we can optimize. (Note
           // that that handles the case of us unable to optimize anything for
           // this field, in which case the sub-map is empty of all entries.)
-          auto iter = subMap.find(curr->castType.getHeapType())
+          auto iter = subMap.find(curr->castType.getHeapType());
           if (iter == subMap.end()) {
             return;
           }
