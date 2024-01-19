@@ -487,17 +487,6 @@ struct GUFAPass : public Pass {
     using InfoMap = std::unordered_map<DataLocation, std::optional<SubMap>>;
     InfoMap infoMap;
 
-    // XXX startWhen we find a heap type and an index that we cannot optimize,
-    // we add it here. In the example above, if we saw that $A's $vtable field
-    // could contain not just $A.vtable but other stuff then we'd mark it here
-    // (and in all supertypes that contain that field, as the lack of precision
-    // affects them as well). Optimizability information also includes the type
-    // we've seen so far, to rule out two different exact types. That is, each
-    // HeapType+FieldIndex maps to one of the following:
-    //
-    //  * None, if we've seen nothing so far.
-    //  * An ExactType, which is the one type we've seen.
-    //  * Many, indicating we've seen too much. XXX end
     for (auto type : subTypes.types) {
       if (!type.isStruct()) {
         continue;
