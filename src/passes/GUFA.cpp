@@ -446,7 +446,7 @@ struct GUFAPass : public Pass {
     // this:
     //
     //       $object           $vtable
-    //        /   \             /   \
+    //        |   |             |   |
     //       $A   $B     $A.vtable $B.vtable
     //
     // And $A,$B are assigned $A.vtable,$B.vtable respectively in their vtable
@@ -497,7 +497,7 @@ struct GUFAPass : public Pass {
         // We only optimize immutable references here. (Subtyping is not
         // possible on mutable ones anyhow; and vtables are normally immutable.)
         auto field = fields[i];
-        if (!field.type.isRef() || !field.mutability == Immutable) {
+        if (!field.type.isRef() || !field.mutable_ == Immutable) {
           continue;
         }
 
@@ -535,7 +535,7 @@ struct GUFAPass : public Pass {
             // example above, is contents.type -> type. See if that fits with
             // what is already there, as any discrepancy proves the hierarchies
             // are not parallel.
-            auto& subMapValue = subMap[contents.getType()];
+            auto& subMapValue = subMap[contents.getType().getHeapType()];
             if (subMapValue == HeapType()) {
               // This is the first thing we see here: write it.
               subMapValue = type;
@@ -546,7 +546,7 @@ struct GUFAPass : public Pass {
           }
           if (contents == PossibleContents::many()) {
             // We ran into a problem. Clear the map to indicate that.
-            maybeSubMap.clear();
+            subMap.clear();
           }
 
           // Proceed to the super.
@@ -577,8 +577,11 @@ struct GUFAPass : public Pass {
           //  )
           //
           // See if we have a valid type there to try to optimize with.
-          auto field = GCTypeUtils::getField(get->ref->type, get->index);
-          if (!field) {
+          if (!get->ref->type.isRef()) {
+            return;
+          }
+          auto heapType = get->ref->type.getHeapType();
+          if (!heapType.isStruct()) {
             return;
           }
 
@@ -586,7 +589,7 @@ struct GUFAPass : public Pass {
           // computed values for all possible locations ahead of time. Each
           // entry in infoMap must exist, and the sub-map must exist as well
           // (but it may be of size zero, if we failed to optimize).
-          auto getLoc = DataLocation{get->ref->type.getHeapType(), get->index};
+          auto getLoc = DataLocation{heapType.getStruct(), get->index};
           assert(infoMap.count(getLoc));
           auto& maybeSubMap = infoMap[getLoc];
           assert(maybeSubMap);
@@ -605,12 +608,12 @@ struct GUFAPass : public Pass {
           // parallel. And the object type is exactly what is in the map. Switch
           // to that, and skip the struct.get.
           // TODO: add RefAsNonNull
-          curr->castType = iter->second;
+          curr->castType = Type(iter->second, curr->castType.getNullability());
           curr->ref = get->ref;
         }
       }
     } optimizer(infoMap);
-    optimizer.walk(module);
+    optimizer.walkModule(module);
   }
 };
 
