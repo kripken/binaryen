@@ -427,8 +427,8 @@ struct GUFAPass : public Pass {
 
     // Imagine that we see a test like this:
     //
-    //  (ref.test $A.vtable
-    //    (struct.get $object $vtable
+    //  (ref.test $specific.vtable
+    //    (struct.get $generic.object $vtable
     //      (REF)
     //    )
     //  )
@@ -445,9 +445,9 @@ struct GUFAPass : public Pass {
     // operations from one to the other, saving work. Such hierarchies look like
     // this:
     //
-    //       $object           $vtable
-    //        |   |             |   |
-    //       $A   $B     $A.vtable $B.vtable
+    //         $X             $vtable
+    //        |  |             |   |
+    //       $A  $B     $A.vtable $B.vtable
     //
     // And $A,$B are assigned $A.vtable,$B.vtable respectively in their vtable
     // field.
@@ -461,8 +461,8 @@ struct GUFAPass : public Pass {
     // relationship of things written there to the parent class. In the example
     // above, we'd find this:
     //
-    //  infoMap[$object:$vtable] = { $A.vtable: $A, $B.vtable: $B }
-    //                             |............sub-map...........|
+    //  infoMap[$X:$vtable] = { $A.vtable: $A, $B.vtable: $B }
+    //                        |............sub-map...........|
     //
     // That indicates that $A.vtable is always written to $A and $B.vtable to
     // $B, in that field. All the subtypes must be present in such a sub-map, or
@@ -642,16 +642,16 @@ struct GUFAPass : public Pass {
     // Now we know which fields are optimizable and which are not, and can
     // optimize. TODO p aralelize
     struct Optimizer : PostWalker<Optimizer> {
-      InfoMap& infoMap;
+      const InfoMap& infoMap;
 
-      Optimizer(InfoMap& infoMap) : infoMap(infoMap) {}
+      Optimizer(const InfoMap& infoMap) : infoMap(infoMap) {}
 
       void visitRefTest(RefTest* curr) {
         if (auto* get = curr->ref->dynCast<StructGet>()) {
           // This is in the shape we are looking for:
           //
           //  (ref.test $A.vtable
-          //    (struct.get $object $vtable
+          //    (struct.get $X $vtable
           //      (REF)
           //    )
           //  )
@@ -670,16 +670,18 @@ struct GUFAPass : public Pass {
           // entry in infoMap must exist, and the sub-map must exist as well
           // (but it may be of size zero, if we failed to optimize).
           auto getLoc = DataLocation{heapType.getStruct(), get->index};
-          assert(infoMap.count(getLoc));
-          auto& maybeSubMap = infoMap[getLoc];
+std::cout << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
+          auto iter = infoMap.find(getLoc);
+          assert(iter != infoMap.end());
+          auto& maybeSubMap = iter->second;
           assert(maybeSubMap);
           auto& subMap = *maybeSubMap;
 
           // If the sub-map has an entry for us, then we can optimize. (Note
           // that that handles the case of us unable to optimize anything for
           // this field, in which case the sub-map is empty of all entries.)
-          auto iter = subMap.find(curr->castType.getHeapType());
-          if (iter == subMap.end()) {
+          auto subIter = subMap.find(curr->castType.getHeapType());
+          if (subIter == subMap.end()) {
             return;
           }
 
@@ -688,7 +690,7 @@ struct GUFAPass : public Pass {
           // parallel. And the object type is exactly what is in the map. Switch
           // to that, and skip the struct.get.
           // TODO: add RefAsNonNull
-          curr->castType = Type(iter->second, curr->castType.getNullability());
+          curr->castType = Type(subIter->second, curr->castType.getNullability());
           curr->ref = get->ref;
         }
       }
