@@ -484,22 +484,22 @@ struct GUFAPass : public Pass {
     // and the map is empty then that means we found invalid data, and so we
     // cleared the map to indicate failure to optimize there.
     using SubMap = std::unordered_map<HeapType, HeapType>;
-    using InfoMap = std::unordered_map<DataLocation, std::optional<SubMap>>;
-    InfoMap infoMap;
-
-    auto dump = [&]() {
-      std::cout << "dumping infoMap\n";
-      for (auto& [loc, maybeSubMap] : infoMap) {
-        std::cout << "  " << module->typeNames[loc.type].name << ":" << loc.index << "\n";
-        if (!maybeSubMap) {
-          std::cout << "    (nullopt)\n";
-          auto& subMap = *maybeSubMap;
-          for (auto& [key, value] : subMap) {
-            std::cout << "    " << module->typeNames[key].name << ": " << module->typeNames[value].name << "\n";
+    struct InfoMap : public std::unordered_map<DataLocation, std::optional<SubMap>> {
+      void dump(Module* module) const {
+        std::cout << "dumping infoMap\n";
+        for (auto& [loc, maybeSubMap] : *this) {
+          std::cout << "  " << module->typeNames[loc.type].name << ":" << loc.index << "\n";
+          if (!maybeSubMap) {
+            std::cout << "    (nullopt)\n";
+            auto& subMap = *maybeSubMap;
+            for (auto& [key, value] : subMap) {
+              std::cout << "    " << module->typeNames[key].name << ": " << module->typeNames[value].name << "\n";
+            }
           }
         }
       }
     };
+    InfoMap infoMap;
 
     for (auto type : subTypes.types) {
       if (!type.isStruct()) {
@@ -637,7 +637,7 @@ struct GUFAPass : public Pass {
       }
     }
 
-    dump();
+    infoMap.dump(module);
 
     // Now we know which fields are optimizable and which are not, and can
     // optimize. TODO p aralelize
@@ -671,6 +671,7 @@ struct GUFAPass : public Pass {
           // (but it may be of size zero, if we failed to optimize).
           auto getLoc = DataLocation{heapType.getStruct(), get->index};
 std::cout << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
+infoMap.dump(getModule());
           auto iter = infoMap.find(getLoc);
           assert(iter != infoMap.end());
           auto& maybeSubMap = iter->second;
