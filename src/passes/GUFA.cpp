@@ -487,6 +487,20 @@ struct GUFAPass : public Pass {
     using InfoMap = std::unordered_map<DataLocation, std::optional<SubMap>>;
     InfoMap infoMap;
 
+    auto dump = [&]() {
+      std::cout << "dumping infoMap\n";
+      for (auto& [loc, maybeSubMap] : infoMap) {
+        std::cout << "  " << module->typeNames[loc.type].name << ":" << loc.index << "\n";
+        if (!maybeSubMap) {
+          std::cout << "    (nullopt)\n";
+          auto& subMap = *maybeSubMap;
+          for (auto& [key, value] : subMap) {
+            std::cout << "    " << module->typeNames[key].name << ": " << module->typeNames[value].name << "\n";
+          }
+        }
+      }
+    };
+
     for (auto type : subTypes.types) {
       if (!type.isStruct()) {
         continue;
@@ -622,6 +636,8 @@ struct GUFAPass : public Pass {
         subMap.clear();
       }
     }
+
+    dump();
 
     // Now we know which fields are optimizable and which are not, and can
     // optimize. TODO p aralelize
