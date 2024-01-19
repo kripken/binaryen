@@ -275,12 +275,12 @@ struct GUFAOptimizer
 
     // Stash all ref.test of struct.get that we see. There is a whole-program
     // optimization we can try for them later.
-    //if (auto* get = curr->ref->dynCast<StructGet>()) {
+    // if (auto* get = curr->ref->dynCast<StructGet>()) {
     //  testsOfStructGets.push_back(curr);
     //}
   }
 
-  //std::vector<RefTest*> testsOfStructGets;
+  // std::vector<RefTest*> testsOfStructGets;
 
   void visitRefCast(RefCast* curr) {
     auto currType = curr->type;
@@ -487,12 +487,12 @@ struct GUFAPass : public Pass {
     using InfoMap = std::unordered_map<DataLocation, std::optional<SubMap>>;
     InfoMap infoMap;
 
-    // XXX startWhen we find a heap type and an index that we cannot optimize, we add it
-    // here. In the example above, if we saw that $A's $vtable field could
-    // contain not just $A.vtable but other stuff then we'd mark it here (and in
-    // all supertypes that contain that field, as the lack of precision affects
-    // them as well). Optimizability information also includes the type we've
-    // seen so far, to rule out two different exact types. That is, each
+    // XXX startWhen we find a heap type and an index that we cannot optimize,
+    // we add it here. In the example above, if we saw that $A's $vtable field
+    // could contain not just $A.vtable but other stuff then we'd mark it here
+    // (and in all supertypes that contain that field, as the lack of precision
+    // affects them as well). Optimizability information also includes the type
+    // we've seen so far, to rule out two different exact types. That is, each
     // HeapType+FieldIndex maps to one of the following:
     //
     //  * None, if we've seen nothing so far.
@@ -543,9 +543,9 @@ struct GUFAPass : public Pass {
           auto contents = typeContents;
           if (contents != PossibleContents::many()) {
             // The sub-map entry we would like to make, $A.vtable -> $A in the
-            // example above, is contents.type -> type. See if that fits with what
-            // is already there, as any discrepancy proves the hierarchies are not
-            // parallel.
+            // example above, is contents.type -> type. See if that fits with
+            // what is already there, as any discrepancy proves the hierarchies
+            // are not parallel.
             auto& subMapValue = subMap[contents.getType()];
             if (subMapValue == HeapType()) {
               // This is the first thing we see here: write it.
