@@ -423,6 +423,8 @@ struct GUFAPass : public Pass {
 
     GUFAOptimizer(oracle, optimizing, castAll).run(getPassRunner(), module);
 
+    // TODO: move this to before GUFAOPpt and pass it in to use in the Walk
+
     // Imagine that we see a test like this:
     //
     //  (ref.test $A.vtable
@@ -440,13 +442,48 @@ struct GUFAPass : public Pass {
     //  )
     //
     // That is, when we find parallel class hierarchies then we can map
-    // operations from one to the other, saving work.
+    // operations from one to the other, saving work. Such hierarchies look like
+    // this:
+    //
+    //       $object           $vtable
+    //        /   \             /   \
+    //       $A   $B     $A.vtable $B.vtable
+    //
+    // And $A,$B are assigned $A.vtable,$B.vtable respectively in their vtable
+    // field.
     //
     // To see if we have such opportunities, we look for fields (like the vtable
     // field in the example) whose type parallels the struct it is inside.
     SubTypes subTypes(*module); // TODO reuse from ContentOracle
 
-    // When we find a heap type and an index that we cannot optimize, we add it
+    // We will build up a map of the information we've found. Specifically, for
+    // each field - that is, for each HeapType+Index - we need a sub-map of the
+    // relationship of things written there to the parent class. In the example
+    // above, we'd find this:
+    //
+    //  infoMap[$object:$vtable] = { $A.vtable: $A, $B.vtable: $B }
+    //                             |............sub-map...........|
+    //
+    // That indicates that $A.vtable is always written to $A and $B.vtable to
+    // $B, in that field. All the subtypes must be present in such a sub-map, or
+    // else a type exists for which the type hierarchies are not parallel and we
+    // cannot optimize. We will also fill out these, though they are not that
+    // useful:
+    //
+    //  infoMap[$A:$vtable] = { $A.vtable: $A }
+    //  infoMap[$B:$vtable] = { $B.vtable: $B }
+    //
+    // We also need a way to indicate that we cannot optimize because we cannot
+    // build such a sub-map, which we do as follows: InfoMap maps to a
+    // std::optional, and if it is nullopt (as it is when we first do
+    // infoMap[loc]) that means we have yet to process it. If it is not nullopt
+    // and the map is empty then that means we found invalid data, and so we
+    // cleared the map to indicate failure to optimize there.
+    using SubMap = std::unordered_map<HeapType, HeapType>;
+    using InfoMap = std::unordered_map<DataLocation, std::optional<SubMap>>;
+    InfoMap infoMap;
+
+    // XXX startWhen we find a heap type and an index that we cannot optimize, we add it
     // here. In the example above, if we saw that $A's $vtable field could
     // contain not just $A.vtable but other stuff then we'd mark it here (and in
     // all supertypes that contain that field, as the lack of precision affects
@@ -456,9 +493,7 @@ struct GUFAPass : public Pass {
     //
     //  * None, if we've seen nothing so far.
     //  * An ExactType, which is the one type we've seen.
-    //  * Many, indicating we've seen too much.
-    std::unordered_map<DataLocation, PossibleContents> locInfoMap;
-
+    //  * Many, indicating we've seen too much. XXX end
     for (auto type : subTypes.types) {
       if (!type.isStruct()) {
         continue;
@@ -466,24 +501,34 @@ struct GUFAPass : public Pass {
 
       auto& fields = type.getStruct().fields;
       for (Index i = 0; i < fields.size(); i++) {
-        // We only optimize immutable references here. (We could perhaps also
-        // handle mutable ones, but it would take more work, and vtables are
-        // normally immutable.)
+        // We only optimize immutable references here. (Subtyping is not
+        // possible on mutable ones anyhow; and vtables are normally immutable.)
         auto field = fields[i];
         if (!field.type.isRef() || !field.mutability == Immutable) {
           continue;
         }
+
+        auto& maybeSubMap = locInfoMap[fieldLoc];
+        if (maybeSubMap && maybeSubMap->size() == 0) {
+          // We found inexact data here earlier, and gave up, so ignore this.
+          continue;
+        }
+        // Initialize this submap, if it has not been earlier.
+        if (!maybeSubMap) {
+          maybeSubMap = SubMap();
+        }
+        auto& subMap = *maybeSubMap;
 
         // We can only reason about exact types: for each type with the field,
         // we must see a specific type written. In the example above, type $A's
         // $vtable field must always contain $A.vtable and not a subtype.
         auto fieldLoc = DataLocation{type, i};
         auto contents = oracle.getContents(fieldLoc);
-        auto& info = locInfoMap[fieldLoc];
         if (!contents.hasExactType()) {
           // Anything non-exact is bad for us.
           contents = PossibleContents::many();
         }
+        auto
         if (info.isNone()) {
           // This is the first content to arrive here.
           info = contents;
