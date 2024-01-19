@@ -5,7 +5,59 @@
 ;; vtables
 
 (module
-  ;; CHECK:      (type $struct (struct ))
-  (type $struct (struct))
+  (rec
+    (type $X.vtable (sub (struct)))
 
+    (type $A.vtable (sub $X.vtable (struct)))
+
+    (type $B.vtable (sub $X.vtable (struct)))
+
+    (type $X (sub (struct (field (ref $X.vtable)))))
+
+    (type $A (sub $X (struct (field (ref $A.vtable)))))
+
+    (type $B (sub $X (struct (field (ref $B.vtable)))))
+  )
+
+  (import "a" "b" (func $import (result anyref)))
+
+  (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
+
+  (global $A.vtable (ref $A.vtable) (struct.new $A.vtable))
+
+  (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
+
+  (func $create
+    (drop
+      (struct.new $X
+        (global.get $X.vtable)
+      )
+    )
+    (drop
+      (struct.new $A
+        (global.get $A.vtable)
+      )
+    )
+    (drop
+      (struct.new $B
+        (global.get $B.vtable)
+      )
+    )
+  )
+
+  (func $test
+    (local $x (ref $X))
+    (local.set $x
+      (ref.cast (ref $X)
+        (call $import)
+      )
+    )
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $X 0
+          (local.get $x)
+        )
+      )
+    )    
+  )
 )
