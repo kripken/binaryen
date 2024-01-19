@@ -545,7 +545,7 @@ struct GUFAPass : public Pass {
             }
           }
           if (contents == PossibleContents::many()) {
-            // We ran into a problem. Clear the map to indicate that.
+            // We ran into a problem. Clear the sub-map to indicate that.
             subMap.clear();
           }
 
@@ -556,6 +556,70 @@ struct GUFAPass : public Pass {
           }
           t = *super;
         }
+      }
+    }
+
+    // We built up the mapping described earlier, which describes when there is
+    // a relationship between the type assigned in a field and the type itself.
+    // We also need to verify that subtyping is isomorphic. That is, given
+    //
+    //         $X             $X.vtable
+    //        |   |            |     |
+    //       $A   $B     $A.vtable $B.vtable
+    //
+    // we've seen that each type $T is always written $T.vtable to its vtable.
+    // We also need $A's and $B's vtable to be a subtype of $X's. Our data
+    // structure looks like this:
+    //
+    //  infoMap[$X:$vtable] = { $X.vtable: $X, $A.vtable: $A, $B.vtable: $B }
+    //  infoMap[$A:$vtable] = { $A.vtable: $A }
+    //  infoMap[$B:$vtable] = { $B.vtable: $B }
+    //
+    // For each submap, we find the immediate subtypes of each entry and check
+    // them.
+    //
+    // TODO: Avoid redundant work here.
+    for (auto& [_, maybeSubMap] : infoMap) {
+      // All submaps should be filled (or else there would be no entry at all).
+      assert(maybeSubMap);
+      auto& subMap = *maybeSubMap;
+
+      auto fail = false;
+
+      // In the example above, iterating on infoMap[$X:$vtable] will start with
+      // key = $X.vtable and value = $X.
+      for (auto [key, value] : subMap) {
+        // Continuing the example, subKey will begin with $A.vtable (the first
+        // immediate subtype of $X.vtable).
+        for (auto subKey : subTypes.getImmediateSubTypes(key)) {
+          auto iter = subMap.find(subKey);
+          if (iter == subMap.end()) {
+            // This subtype is not used and does not pose a problem.
+            continue;
+          }
+
+          // Continuing the example, this is $A (the entry for $A.vtable in the
+          // sub-map).
+          auto expectedSubValue = iter->second;
+
+          // Continuing the example, $A (expectedSubValue) must be an
+          // immediate subtype of $X (value).
+          auto sub = expectedSubValue.getSuperType();
+          if (!sub || *sub != expectedSubValue) {
+            // Unfortunately we found a problem.
+            fail = true;
+            break;
+          }
+        }
+        if (fail) {
+          break;
+        }
+      }
+
+      if (fail) {
+        // We ran into a problem. Clear the sub-map to indicate that.
+        // TODO: Perhaps we could only clear a subset of it?
+        subMap.clear();
       }
     }
 
