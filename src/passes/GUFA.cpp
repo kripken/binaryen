@@ -491,9 +491,14 @@ struct GUFAPass : public Pass {
           std::cout << "  " << module->typeNames[loc.type].name << ":" << loc.index << "\n";
           if (!maybeSubMap) {
             std::cout << "    (nullopt)\n";
+          } else {
             auto& subMap = *maybeSubMap;
-            for (auto& [key, value] : subMap) {
-              std::cout << "    " << module->typeNames[key].name << ": " << module->typeNames[value].name << "\n";
+            if (subMap.empty()) {
+              std::cout << "    (failed to infer parallel hierarchies)\n";
+            } else {
+              for (auto& [key, value] : subMap) {
+                std::cout << "    " << module->typeNames[key].name << ": " << module->typeNames[value].name << "\n";
+              }
             }
           }
         }
@@ -564,7 +569,7 @@ struct GUFAPass : public Pass {
           }
 
           // Proceed to the super.
-          auto super = t.getSuperType();
+          auto super = t.getDeclaredSuperType();
           if (!super) {
             break;
           }
