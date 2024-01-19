@@ -669,9 +669,8 @@ struct GUFAPass : public Pass {
           // computed values for all possible locations ahead of time. Each
           // entry in infoMap must exist, and the sub-map must exist as well
           // (but it may be of size zero, if we failed to optimize).
-          auto getLoc = DataLocation{heapType.getStruct(), get->index};
-std::cout << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
-infoMap.dump(getModule());
+          auto getLoc = DataLocation{heapType, get->index};
+          //std::cout << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
           auto iter = infoMap.find(getLoc);
           assert(iter != infoMap.end());
           auto& maybeSubMap = iter->second;
