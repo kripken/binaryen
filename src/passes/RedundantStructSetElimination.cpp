@@ -214,8 +214,11 @@ struct RedundantStructSetElimination
         }
 
         // Each struct.set we see here must have been visited and mapped
-        // earlier.
-        assert(structSetLocations.count(structSet));
+        // earlier, unless it is in unreachable code. In that case we can
+        // ignore it.
+        if (!structSetLocations.count(structSet)) {
+          break;
+        }
 
         auto loc = structSetLocations[structSet];
         if (!optimizeSubsequentStructSet(
