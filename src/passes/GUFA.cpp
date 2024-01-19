@@ -548,7 +548,7 @@ struct GUFAPass : public Pass {
             contents = PossibleContents::many();
           }
         }
-
+// XXX propagate the good case too!
         if (info == PossibleContents::many()) {
           // We ran into a problem, and so we need to mark this field as
           // unoptimizable, both in ourselves and in all supertypes, since we
@@ -582,9 +582,9 @@ struct GUFAPass : public Pass {
     // Now we know which fields are optimizable and which are not, and can
     // optimize. TODO p aralelize
     struct Optimizer : PostWalker<Optimizer> {
-      std::unordered_map<DataLocation, PossibleContents>& locInfoMap;
+      InfoMap& infoMap;
 
-      Optimizer(std::unordered_map<DataLocation, PossibleContents>& locInfoMap) : locInfoMap(locInfoMap) {}
+      Optimizer(InfoMap& infoMap) : infoMap(infoMap) {}
 
       void visitRefTest(RefTest* curr) {
         if (auto* get = curr->ref->dynCast<StructGet>()) {
@@ -596,29 +596,40 @@ struct GUFAPass : public Pass {
           //    )
           //  )
           //
-          // If the field is optimizable, we can do work here.
+          // See if we have a valid type there to try to optimize with.
           auto field = GCTypeUtils::getField(get->ref->type, get->index);
           if (!field)
             return;
           }
 
-          // The location the get reads from must be in |locInfoMap| as we
-          // computed values for all possible locations ahead of time.
+          // The location the get reads from must be in |infoMap| as we
+          // computed values for all possible locations ahead of time. Each
+          // entry in infoMap must exist, and the sub-map must exist as well
+          // (but it may be of size zero, if we failed to optimize).
           auto getLoc = DataLocation{get->ref->type.getHeapType(), get->index};
-          assert(locInfoMap.count(getLoc));
+          assert(infoMap.count(getLoc));
+          auto& maybeSubMap = infoMap[getLoc];
+          assert(maybeSubMap);
+          auto& subMap = *maybeSubMap;
 
-          auto info = locInfoMap[getLoc];
-          if (!info.hasExactType()) {
+          // If the sub-map has an entry for us, then we can optimize. (Note
+          // that that handles the case of us unable to optimize anything for
+          // this field, in which case the sub-map is empty of all entries.)
+          auto iter = subMap.find(curr->castType.getHeapType())
+          if (iter == subMap.end()) {
             return;
           }
 
-          // This looks promising: in the example above, $object's field $vtable
-          // can only contain things that have an exact parallel relationship to
-          // the type of the object they are written to.
-          // XXX the map neds to be in reverase
+          // We can optimize! We are testing on something like a vtable, and can
+          // instead test on the object, since the type hierarchies are
+          // parallel. And the object type is exactly what is in the map. Switch
+          // to that, and skip the struct.get.
+          // TODO: add RefAsNonNull
+          curr->castType = iter->second;
+          curr->ref = get->ref;
         }
       }
-    } optimizer(locInfoMap);
+    } optimizer(infoMap);
     optimizer.walk(module);
   }
 };
