@@ -6,27 +6,59 @@
 
 (module
   (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $X.vtable (sub (struct )))
     (type $X.vtable (sub (struct)))
 
+    ;; CHECK:       (type $A.vtable (sub $X.vtable (struct )))
     (type $A.vtable (sub $X.vtable (struct)))
 
+    ;; CHECK:       (type $B.vtable (sub $X.vtable (struct )))
     (type $B.vtable (sub $X.vtable (struct)))
 
+    ;; CHECK:       (type $X (sub (struct (field (ref $X.vtable)))))
     (type $X (sub (struct (field (ref $X.vtable)))))
 
+    ;; CHECK:       (type $A (sub $X (struct (field (ref $A.vtable)))))
     (type $A (sub $X (struct (field (ref $A.vtable)))))
 
+    ;; CHECK:       (type $B (sub $X (struct (field (ref $B.vtable)))))
     (type $B (sub $X (struct (field (ref $B.vtable)))))
   )
 
+  ;; CHECK:      (type $6 (func))
+
+  ;; CHECK:      (type $7 (func (result anyref)))
+
+  ;; CHECK:      (import "a" "b" (func $import (type $7) (result anyref)))
   (import "a" "b" (func $import (result anyref)))
 
+  ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
   (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
 
+  ;; CHECK:      (global $A.vtable (ref $A.vtable) (struct.new_default $A.vtable))
   (global $A.vtable (ref $A.vtable) (struct.new $A.vtable))
 
+  ;; CHECK:      (global $B.vtable (ref $B.vtable) (struct.new_default $B.vtable))
   (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
 
+  ;; CHECK:      (func $create (type $6)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $X
+  ;; CHECK-NEXT:    (global.get $X.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $A
+  ;; CHECK-NEXT:    (global.get $A.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $B
+  ;; CHECK-NEXT:    (global.get $B.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
   (func $create
     (drop
       (struct.new $X
@@ -45,6 +77,19 @@
     )
   )
 
+  ;; CHECK:      (func $test (type $6)
+  ;; CHECK-NEXT:  (local $x (ref $X))
+  ;; CHECK-NEXT:  (local.set $x
+  ;; CHECK-NEXT:   (ref.cast (ref $X)
+  ;; CHECK-NEXT:    (call $import)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A)
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
   (func $test
     (local $x (ref $X))
     (local.set $x
@@ -58,6 +103,6 @@
           (local.get $x)
         )
       )
-    )    
+    )
   )
 )
