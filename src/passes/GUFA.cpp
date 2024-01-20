@@ -525,6 +525,16 @@ struct GUFAPass : public Pass {
         // We can only reason about exact types: for each type with the field,
         // we must see a specific type written. In the example above, type $A's
         // $vtable field must always contain $A.vtable and not a subtype.
+          std::cout << "got contents for " << module->typeNames[type].name << ":" << i << " and found " << typeContents << "\n";
+        if (typeContents.isGlobal()) {
+          // The global may have an exact type, use its content (we don't care
+          // about global identity here).
+          auto* global = module->getGlobal(typeContents.getGlobal());
+          if (global->init) {
+            typeContents = oracle.getContents(ExpressionLocation{global->init, 0});
+            std::cout << "  => " << typeContents << "\n";
+          }
+        }
         if (!typeContents.hasExactType()) {
           // Anything non-exact is bad for us.
           typeContents = PossibleContents::many();
@@ -561,9 +571,11 @@ struct GUFAPass : public Pass {
             } else if (subMapValue != type) {
               // This is different, so we found a problem.
               contents = PossibleContents::many();
+              std::cout << "many1\n";
             }
           }
           if (contents == PossibleContents::many()) {
+              std::cout << "many2\n";
             // We ran into a problem. Clear the sub-map to indicate that.
             subMap.clear();
           }
@@ -626,6 +638,7 @@ struct GUFAPass : public Pass {
           auto sub = expectedSubValue.getSuperType();
           if (!sub || *sub != expectedSubValue) {
             // Unfortunately we found a problem.
+              std::cout << "fail1\n";
             fail = true;
             break;
           }
