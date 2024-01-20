@@ -486,18 +486,18 @@ struct GUFAPass : public Pass {
     using SubMap = std::unordered_map<HeapType, HeapType>;
     struct InfoMap : public std::unordered_map<DataLocation, std::optional<SubMap>> {
       void dump(Module* module) const {
-        std::cout << "dumping infoMap\n";
+        std::cerr << "dumping infoMap\n";
         for (auto& [loc, maybeSubMap] : *this) {
-          std::cout << "  " << module->typeNames[loc.type].name << ":" << loc.index << "\n";
+          std::cerr << "  " << module->typeNames[loc.type].name << ":" << loc.index << "\n";
           if (!maybeSubMap) {
-            std::cout << "    (nullopt)\n";
+            std::cerr << "    (nullopt)\n";
           } else {
             auto& subMap = *maybeSubMap;
             if (subMap.empty()) {
-              std::cout << "    (failed to infer parallel hierarchies)\n";
+              std::cerr << "    (failed to infer parallel hierarchies)\n";
             } else {
               for (auto& [key, value] : subMap) {
-                std::cout << "    " << module->typeNames[key].name << ": " << module->typeNames[value].name << "\n";
+                std::cerr << "    " << module->typeNames[key].name << ": " << module->typeNames[value].name << "\n";
               }
             }
           }
@@ -525,14 +525,13 @@ struct GUFAPass : public Pass {
         // We can only reason about exact types: for each type with the field,
         // we must see a specific type written. In the example above, type $A's
         // $vtable field must always contain $A.vtable and not a subtype.
-          std::cout << "got contents for " << module->typeNames[type].name << ":" << i << " and found " << typeContents << "\n";
         if (typeContents.isGlobal()) {
           // The global may have an exact type, use its content (we don't care
           // about global identity here).
           auto* global = module->getGlobal(typeContents.getGlobal());
           if (global->init) {
             typeContents = oracle.getContents(ExpressionLocation{global->init, 0});
-            std::cout << "  => " << typeContents << "\n";
+            std::cerr << "  => " << typeContents << "\n";
           }
         }
         if (!typeContents.hasExactType()) {
@@ -571,11 +570,11 @@ struct GUFAPass : public Pass {
             } else if (subMapValue != type) {
               // This is different, so we found a problem.
               contents = PossibleContents::many();
-              std::cout << "many1\n";
+              std::cerr << "many1\n";
             }
           }
           if (contents == PossibleContents::many()) {
-              std::cout << "many2\n";
+              std::cerr << "many2\n";
             // We ran into a problem. Clear the sub-map to indicate that.
             subMap.clear();
           }
@@ -635,10 +634,16 @@ struct GUFAPass : public Pass {
 
           // Continuing the example, $A (expectedSubValue) must be an
           // immediate subtype of $X (value).
-          auto sub = expectedSubValue.getSuperType();
-          if (!sub || *sub != expectedSubValue) {
+          auto super = expectedSubValue.getSuperType();
+          if (!super || *super != value) {
             // Unfortunately we found a problem.
-              std::cout << "fail1\n";
+              std::cerr << "fail1\n"; // TODO invrestigate this noww
+std::cerr << "key: " << module->typeNames[key].name << '\n';
+std::cerr << "value: " << module->typeNames[value].name << '\n';
+std::cerr << "subkey: " << module->typeNames[subKey].name << '\n';
+std::cerr << "expectedSubValue: " << module->typeNames[expectedSubValue].name << '\n';
+std::cerr << "*super          : " << module->typeNames[*super].name << '\n';
+
             fail = true;
             break;
           }
@@ -688,7 +693,7 @@ struct GUFAPass : public Pass {
           // entry in infoMap must exist, and the sub-map must exist as well
           // (but it may be of size zero, if we failed to optimize).
           auto getLoc = DataLocation{heapType, get->index};
-          //std::cout << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
+          //std::cerr << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
           auto iter = infoMap.find(getLoc);
           assert(iter != infoMap.end());
           auto& maybeSubMap = iter->second;
