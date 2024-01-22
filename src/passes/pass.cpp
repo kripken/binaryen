@@ -651,7 +651,7 @@ void PassRunner::addDefaultFunctionOptimizationPasses() {
       "rse"); // after all coalesce-locals, and before a final vacuum
   }
   if (options.optimizeLevel >= 2 && wasm->features.hasGC()) {
-    addIfNoDWARFIssues("rsse");
+    addIfNoDWARFIssues("rsse"); // XXX perhaps merge rsse into rse? They are similar and could share infra in the future (a future rse+rsse for dead struct.store elim)
   }
   addIfNoDWARFIssues("vacuum"); // just to be safe
 }
