@@ -55,12 +55,316 @@ namespace wasm {
 
 namespace {
 
+// Imagine that we see a test like this:
+//
+//  (ref.test $specific.vtable
+//    (struct.get $generic.object $vtable
+//      (REF)
+//    )
+//  )
+//
+// Here we read the vtable and then check if it has a specific type. If
+// vtable types parallel class types, which can be the case for languages
+// like Java, then we can test the class directly, saving the struct.get:
+//
+//  (ref.test $A
+//    (REF)
+//  )
+//
+// That is, when we find parallel class hierarchies then we can map
+// operations from one to the other, saving work. Such hierarchies look like
+// this:
+//
+//         $X             $vtable
+//        |  |             |   |
+//       $A  $B     $A.vtable $B.vtable
+//
+// And $A,$B are assigned $A.vtable,$B.vtable respectively in their vtable
+// field.
+//
+// To see if we have such opportunities, we look for fields (like the vtable
+// field in the example) whose type parallels the struct it is inside.
+struct ParallelTypeHierarchiesOracle {
+  SubTypes subTypes;
+
+  // The follow infoMap data structure is the key thing that we build up. It is
+  // then used later to decide where to optimize.
+  //
+  // The information we need later is must be enough to decide when we can
+  // optimize things of the form described earlier:
+  //
+  //  (ref.test $specific.vtable
+  //    (struct.get $generic.object $vtable
+  //      (REF)
+  //    )
+  //  )
+  //
+  // We will map each HeapType+Index (here, $generic-object and $vtable) to a
+  // sub-map of $vtable HeapType to object HeapType. In the example above, we'd
+  // find this:
+  //
+  //  infoMap[$X:$vtable] = { $A.vtable: $A, $B.vtable: $B }
+  //                        |............sub-map...........|
+  //
+  // That indicates that $A.vtable is always written to $A and $B.vtable to
+  // $B, in that field. Note how we can then easily optimize a ref.test: we
+  // look up the HeapType+Index of the struct.get and then see what the ref.test
+  // maps to, which in the example above maps $A.vtable to $A, giving us exactly
+  // the right replacement type to test on when we skip the struct.get.
+  //
+  // As we build this up, all the subtypes must be present in such a sub-map, or
+  // else a type exists for which the type hierarchies are not parallel and we
+  // cannot optimize. We will also fill out these, though they are not that
+  // useful:
+  //
+  //  infoMap[$A:$vtable] = { $A.vtable: $A }
+  //  infoMap[$B:$vtable] = { $B.vtable: $B }
+  //
+  // Note that the direction of the sub-map is to allow optimization later:
+  // when we see a ref.test of $A.vtable, we will see that we can instead do a
+  // test on $A instead (and without reading the vtable).
+  //
+  // We also need a way to indicate that we cannot optimize because we cannot
+  // build such a sub-map, which we do as follows: InfoMap maps to a
+  // std::optional, and if it is nullopt (as it is when we first do
+  // infoMap[loc]) that means we have yet to process it. If it is not nullopt
+  // and the map is empty then that means we found invalid data, and so we
+  // cleared the map to indicate failure to optimize there.
+  using SubMap = std::unordered_map<HeapType, HeapType>;
+  struct InfoMap : public std::unordered_map<DataLocation, std::optional<SubMap>> {
+    void dump(Module& wasm) const {
+      std::cerr << "dumping infoMap\n";
+      for (auto& [loc, maybeSubMap] : *this) {
+        std::cerr << "  " << wasm.typeNames[loc.type].name << ":" << loc.index << "\n";
+        if (!maybeSubMap) {
+          std::cerr << "    (nullopt)\n";
+        } else {
+          auto& subMap = *maybeSubMap;
+          if (subMap.empty()) {
+            std::cerr << "    (failed to infer parallel hierarchies)\n";
+          } else {
+            for (auto& [key, value] : subMap) {
+              std::cerr << "    " << wasm.typeNames[key].name << ": " << wasm.typeNames[value].name << "\n";
+            }
+          }
+        }
+      }
+    }
+  };
+  InfoMap infoMap;
+
+  ParallelTypeHierarchiesOracle(Module& wasm) : subTypes(wasm) { // TODO reuse from ContentOracle
+    for (auto type : subTypes.types) {
+      if (!type.isStruct()) {
+        continue;
+      }
+
+      auto& fields = type.getStruct().fields;
+      for (Index i = 0; i < fields.size(); i++) {
+        // We only optimize immutable references here. (Subtyping is not
+        // possible on mutable ones anyhow; and vtables are normally immutable.)
+        auto field = fields[i];
+        if (!field.type.isRef() || !field.mutable_ == Immutable) {
+          continue;
+        }
+
+        auto typeLoc = DataLocation{type, i};
+        auto typeContents = oracle.getContents(typeLoc);
+        // We can only reason about exact types: for each type with the field,
+        // we must see a specific type written. In the example above, type $A's
+        // $vtable field must always contain $A.vtable and not a subtype.
+        if (typeContents.isGlobal()) {
+          // The global may have an exact type, use its content (we don't care
+          // about global identity here).
+          auto* global = wasm.getGlobal(typeContents.getGlobal());
+          if (global->init) {
+            typeContents = oracle.getContents(ExpressionLocation{global->init, 0});
+            std::cerr << "  => " << typeContents << "\n";
+          }
+        }
+        if (!typeContents.hasExactType()) {
+          // Anything non-exact is bad for us.
+          typeContents = PossibleContents::many();
+        }
+
+        // We need to apply the information here to all supertypes: loop on
+        // them.
+        auto t = type;
+        while (1) {
+          auto tLoc = DataLocation{t, i};
+          auto& maybeSubMap = infoMap[tLoc];
+          if (maybeSubMap && maybeSubMap->empty()) {
+            // We found inexact data here earlier, and gave up, so ignore this
+            // (all supers will also be marked so, already).
+            break;
+          }
+          // Initialize this submap, if it has not been earlier.
+          if (!maybeSubMap) {
+            maybeSubMap = SubMap();
+          }
+          auto& subMap = *maybeSubMap;
+
+          // Consider typeContents in combination with this sub-map.
+          auto contents = typeContents;
+          if (contents != PossibleContents::many()) {
+            // The sub-map entry we would like to make, $A.vtable -> $A in the
+            // example above, is contents.type -> type. See if that fits with
+            // what is already there, as any discrepancy proves the hierarchies
+            // are not parallel.
+            auto& subMapValue = subMap[contents.getType().getHeapType()];
+            if (subMapValue == HeapType()) {
+              // This is the first thing we see here: write it.
+              subMapValue = type;
+            } else if (subMapValue != type) {
+              // This is different, so we found a problem.
+              contents = PossibleContents::many();
+              std::cerr << "many1\n";
+            }
+          }
+          if (contents == PossibleContents::many()) {
+              std::cerr << "many2\n";
+            // We ran into a problem. Clear the sub-map to indicate that.
+            subMap.clear();
+          }
+
+          // Proceed to the super.
+          auto super = t.getDeclaredSuperType();
+          if (!super) {
+            break;
+          }
+          t = *super;
+        }
+      }
+    }
+
+    // We built up the mapping described earlier, which describes when there is
+    // a relationship between the type assigned in a field and the type itself.
+    // We also need to verify that subtyping is isomorphic. That is, given
+    //
+    //         $X             $X.vtable
+    //        |   |            |     |
+    //       $A   $B     $A.vtable $B.vtable
+    //
+    // we've seen that each type $T is always written $T.vtable to its vtable.
+    // We also need $A's and $B's vtable to be a subtype of $X's. Our data
+    // structure looks like this:
+    //
+    //  infoMap[$X:$vtable] = { $X.vtable: $X, $A.vtable: $A, $B.vtable: $B }
+    //  infoMap[$A:$vtable] = { $A.vtable: $A }
+    //  infoMap[$B:$vtable] = { $B.vtable: $B }
+    //
+    // For each submap, we find the immediate subtypes of each entry and check
+    // them.
+    //
+    // TODO: Avoid redundant work here.
+    for (auto& [_, maybeSubMap] : infoMap) {
+      // All submaps should be filled (or else there would be no entry at all).
+      assert(maybeSubMap);
+      auto& subMap = *maybeSubMap;
+
+      auto fail = false;
+
+      // In the example above, iterating on infoMap[$X:$vtable] will start with
+      // key = $X.vtable and value = $X.
+      for (auto [key, value] : subMap) {
+        // Continuing the example, subKey will begin with $A.vtable (the first
+        // immediate subtype of $X.vtable).
+        for (auto subKey : subTypes.getImmediateSubTypes(key)) {
+          auto iter = subMap.find(subKey);
+          if (iter == subMap.end()) {
+            // This subtype is not used and does not pose a problem.
+            continue;
+          }
+
+          // Continuing the example, this is $A (the entry for $A.vtable in the
+          // sub-map).
+          auto expectedSubValue = iter->second;
+
+          // Continuing the example, $A (expectedSubValue) must be an
+          // immediate subtype of $X (value).
+          auto super = expectedSubValue.getSuperType();
+          if (!super || *super != value) {
+            // Unfortunately we found a problem.
+              std::cerr << "fail1\n"; // TODO invrestigate this noww
+std::cerr << "key: " << wasm.typeNames[key].name << '\n';
+std::cerr << "value: " << wasm.typeNames[value].name << '\n';
+std::cerr << "subkey: " << wasm.typeNames[subKey].name << '\n';
+std::cerr << "expectedSubValue: " << wasm.typeNames[expectedSubValue].name << '\n';
+std::cerr << "*super          : " << wasm.typeNames[*super].name << '\n';
+
+            fail = true;
+            break;
+          }
+        }
+        if (fail) {
+          break;
+        }
+      }
+
+      if (fail) {
+        // We ran into a problem. Clear the sub-map to indicate that.
+        // TODO: Perhaps we could only clear a subset of it?
+        subMap.clear();
+      }
+    }
+  }
+
+  // Given a ref.test of a struct.get, see if we can replace the test with a
+  // test of the class itself, skipping the struct.get.
+  std::optional<HeapType> getTestTypeSkippingGet(RefTest* refTest) {
+    auto* get = curr->ref->dynCast<StructGet>();
+    if (!get) {
+      return {};
+    }
+    // This is in the shape we are looking for:
+    //
+    //  (ref.test $A.vtable
+    //    (struct.get $X $vtable
+    //      (REF)
+    //    )
+    //  )
+    //
+    // See if we have a valid type there to try to optimize with.
+    if (!get->ref->type.isRef()) {
+      return {};
+    }
+    auto heapType = get->ref->type.getHeapType();
+    if (!heapType.isStruct()) {
+      return {};
+    }
+
+    // The location the get reads from must be in |infoMap| as we
+    // computed values for all possible locations ahead of time. Each
+    // entry in infoMap must exist, and the sub-map must exist as well
+    // (but it may be of size zero, if we failed to optimize).
+    auto getLoc = DataLocation{heapType, get->index};
+    //std::cerr << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
+    auto iter = infoMap.find(getLoc);
+    assert(iter != infoMap.end());
+    auto& maybeSubMap = iter->second;
+    assert(maybeSubMap);
+    auto& subMap = *maybeSubMap;
+
+    // If the sub-map has an entry for us, then we can optimize. (Note
+    // that that handles the case of us unable to optimize anything for
+    // this field, in which case the sub-map is empty of all entries.)
+    auto subIter = subMap.find(curr->castType.getHeapType());
+    if (subIter == subMap.end()) {
+      return {};
+    } else {
+      // Success! We can use this type to optimize.
+      return subIter->second;
+    }
+  }
+};
+
 struct GUFAOptimizer
   : public WalkerPass<
       PostWalker<GUFAOptimizer, UnifiedExpressionVisitor<GUFAOptimizer>>> {
   bool isFunctionParallel() override { return true; }
 
   ContentOracle& oracle;
+  ParallelTypeHierarchiesOracle& pthOracle;
 
   // Whether to run further optimizations in functions we modify.
   bool optimizing;
@@ -77,8 +381,8 @@ struct GUFAOptimizer
   //       before.
   bool castAll;
 
-  GUFAOptimizer(ContentOracle& oracle, bool optimizing, bool castAll)
-    : oracle(oracle), optimizing(optimizing), castAll(castAll) {}
+  GUFAOptimizer(ContentOracle& oracle, ParallelTypeHierarchiesOracle& pthOracle, bool optimizing, bool castAll)
+    : oracle(oracle), pthOracle(pthOracle), optimizing(optimizing), castAll(castAll) {}
 
   std::unique_ptr<Pass> create() override {
     return std::make_unique<GUFAOptimizer>(oracle, optimizing, castAll);
@@ -273,14 +577,13 @@ struct GUFAOptimizer
       }
     }
 
-    // Stash all ref.test of struct.get that we see. There is a whole-program
-    // optimization we can try for them later.
-    // if (auto* get = curr->ref->dynCast<StructGet>()) {
-    //  testsOfStructGets.push_back(curr);
-    //}
+    if (auto newTestType = pthOracle.getTestTypeSkippingGet(curr)) {
+      // Skip the get.
+      // TODO: add RefAsNonNull
+      curr->castType = Type(*newTestType, curr->castType.getNullability());
+      curr->ref = get->ref;
+    }
   }
-
-  // std::vector<RefTest*> testsOfStructGets;
 
   void visitRefCast(RefCast* curr) {
     auto currType = curr->type;
@@ -420,305 +723,9 @@ struct GUFAPass : public Pass {
 
   void run(Module* module) override {
     ContentOracle oracle(*module, getPassOptions());
+    ParallelTypeHierarchiesOracle pthOracle(*module)
 
-    GUFAOptimizer(oracle, optimizing, castAll).run(getPassRunner(), module);
-
-    // TODO: move this to before GUFAOPpt and pass it in to use in the Walk
-
-    // Imagine that we see a test like this:
-    //
-    //  (ref.test $specific.vtable
-    //    (struct.get $generic.object $vtable
-    //      (REF)
-    //    )
-    //  )
-    //
-    // Here we read the vtable and then check if it has a specific type. If
-    // vtable types parallel class types, which can be the case for languages
-    // like Java, then we can test the class directly, saving the struct.get:
-    //
-    //  (ref.test $A
-    //    (REF)
-    //  )
-    //
-    // That is, when we find parallel class hierarchies then we can map
-    // operations from one to the other, saving work. Such hierarchies look like
-    // this:
-    //
-    //         $X             $vtable
-    //        |  |             |   |
-    //       $A  $B     $A.vtable $B.vtable
-    //
-    // And $A,$B are assigned $A.vtable,$B.vtable respectively in their vtable
-    // field.
-    //
-    // To see if we have such opportunities, we look for fields (like the vtable
-    // field in the example) whose type parallels the struct it is inside.
-    SubTypes subTypes(*module); // TODO reuse from ContentOracle
-
-    // We will build up a map of the information we've found. Specifically, for
-    // each field - that is, for each HeapType+Index - we need a sub-map of the
-    // relationship of things written there to the parent class. In the example
-    // above, we'd find this:
-    //
-    //  infoMap[$X:$vtable] = { $A.vtable: $A, $B.vtable: $B }
-    //                        |............sub-map...........|
-    //
-    // That indicates that $A.vtable is always written to $A and $B.vtable to
-    // $B, in that field. All the subtypes must be present in such a sub-map, or
-    // else a type exists for which the type hierarchies are not parallel and we
-    // cannot optimize. We will also fill out these, though they are not that
-    // useful:
-    //
-    //  infoMap[$A:$vtable] = { $A.vtable: $A }
-    //  infoMap[$B:$vtable] = { $B.vtable: $B }
-    //
-    // Note that the direction of the sub-map is to allow optimization later:
-    // when we see a ref.test of $A.vtable, we will see that we can instead do a
-    // test on $A instead (and without reading the vtable).
-    //
-    // We also need a way to indicate that we cannot optimize because we cannot
-    // build such a sub-map, which we do as follows: InfoMap maps to a
-    // std::optional, and if it is nullopt (as it is when we first do
-    // infoMap[loc]) that means we have yet to process it. If it is not nullopt
-    // and the map is empty then that means we found invalid data, and so we
-    // cleared the map to indicate failure to optimize there.
-    using SubMap = std::unordered_map<HeapType, HeapType>;
-    struct InfoMap : public std::unordered_map<DataLocation, std::optional<SubMap>> {
-      void dump(Module* module) const {
-        std::cerr << "dumping infoMap\n";
-        for (auto& [loc, maybeSubMap] : *this) {
-          std::cerr << "  " << module->typeNames[loc.type].name << ":" << loc.index << "\n";
-          if (!maybeSubMap) {
-            std::cerr << "    (nullopt)\n";
-          } else {
-            auto& subMap = *maybeSubMap;
-            if (subMap.empty()) {
-              std::cerr << "    (failed to infer parallel hierarchies)\n";
-            } else {
-              for (auto& [key, value] : subMap) {
-                std::cerr << "    " << module->typeNames[key].name << ": " << module->typeNames[value].name << "\n";
-              }
-            }
-          }
-        }
-      }
-    };
-    InfoMap infoMap;
-
-    for (auto type : subTypes.types) {
-      if (!type.isStruct()) {
-        continue;
-      }
-
-      auto& fields = type.getStruct().fields;
-      for (Index i = 0; i < fields.size(); i++) {
-        // We only optimize immutable references here. (Subtyping is not
-        // possible on mutable ones anyhow; and vtables are normally immutable.)
-        auto field = fields[i];
-        if (!field.type.isRef() || !field.mutable_ == Immutable) {
-          continue;
-        }
-
-        auto typeLoc = DataLocation{type, i};
-        auto typeContents = oracle.getContents(typeLoc);
-        // We can only reason about exact types: for each type with the field,
-        // we must see a specific type written. In the example above, type $A's
-        // $vtable field must always contain $A.vtable and not a subtype.
-        if (typeContents.isGlobal()) {
-          // The global may have an exact type, use its content (we don't care
-          // about global identity here).
-          auto* global = module->getGlobal(typeContents.getGlobal());
-          if (global->init) {
-            typeContents = oracle.getContents(ExpressionLocation{global->init, 0});
-            std::cerr << "  => " << typeContents << "\n";
-          }
-        }
-        if (!typeContents.hasExactType()) {
-          // Anything non-exact is bad for us.
-          typeContents = PossibleContents::many();
-        }
-
-        // We need to apply the information here to all supertypes: loop on
-        // them.
-        auto t = type;
-        while (1) {
-          auto tLoc = DataLocation{t, i};
-          auto& maybeSubMap = infoMap[tLoc];
-          if (maybeSubMap && maybeSubMap->empty()) {
-            // We found inexact data here earlier, and gave up, so ignore this
-            // (all supers will also be marked so, already).
-            break;
-          }
-          // Initialize this submap, if it has not been earlier.
-          if (!maybeSubMap) {
-            maybeSubMap = SubMap();
-          }
-          auto& subMap = *maybeSubMap;
-
-          // Consider typeContents in combination with this sub-map.
-          auto contents = typeContents;
-          if (contents != PossibleContents::many()) {
-            // The sub-map entry we would like to make, $A.vtable -> $A in the
-            // example above, is contents.type -> type. See if that fits with
-            // what is already there, as any discrepancy proves the hierarchies
-            // are not parallel.
-            auto& subMapValue = subMap[contents.getType().getHeapType()];
-            if (subMapValue == HeapType()) {
-              // This is the first thing we see here: write it.
-              subMapValue = type;
-            } else if (subMapValue != type) {
-              // This is different, so we found a problem.
-              contents = PossibleContents::many();
-              std::cerr << "many1\n";
-            }
-          }
-          if (contents == PossibleContents::many()) {
-              std::cerr << "many2\n";
-            // We ran into a problem. Clear the sub-map to indicate that.
-            subMap.clear();
-          }
-
-          // Proceed to the super.
-          auto super = t.getDeclaredSuperType();
-          if (!super) {
-            break;
-          }
-          t = *super;
-        }
-      }
-    }
-
-    // We built up the mapping described earlier, which describes when there is
-    // a relationship between the type assigned in a field and the type itself.
-    // We also need to verify that subtyping is isomorphic. That is, given
-    //
-    //         $X             $X.vtable
-    //        |   |            |     |
-    //       $A   $B     $A.vtable $B.vtable
-    //
-    // we've seen that each type $T is always written $T.vtable to its vtable.
-    // We also need $A's and $B's vtable to be a subtype of $X's. Our data
-    // structure looks like this:
-    //
-    //  infoMap[$X:$vtable] = { $X.vtable: $X, $A.vtable: $A, $B.vtable: $B }
-    //  infoMap[$A:$vtable] = { $A.vtable: $A }
-    //  infoMap[$B:$vtable] = { $B.vtable: $B }
-    //
-    // For each submap, we find the immediate subtypes of each entry and check
-    // them.
-    //
-    // TODO: Avoid redundant work here.
-    for (auto& [_, maybeSubMap] : infoMap) {
-      // All submaps should be filled (or else there would be no entry at all).
-      assert(maybeSubMap);
-      auto& subMap = *maybeSubMap;
-
-      auto fail = false;
-
-      // In the example above, iterating on infoMap[$X:$vtable] will start with
-      // key = $X.vtable and value = $X.
-      for (auto [key, value] : subMap) {
-        // Continuing the example, subKey will begin with $A.vtable (the first
-        // immediate subtype of $X.vtable).
-        for (auto subKey : subTypes.getImmediateSubTypes(key)) {
-          auto iter = subMap.find(subKey);
-          if (iter == subMap.end()) {
-            // This subtype is not used and does not pose a problem.
-            continue;
-          }
-
-          // Continuing the example, this is $A (the entry for $A.vtable in the
-          // sub-map).
-          auto expectedSubValue = iter->second;
-
-          // Continuing the example, $A (expectedSubValue) must be an
-          // immediate subtype of $X (value).
-          auto super = expectedSubValue.getSuperType();
-          if (!super || *super != value) {
-            // Unfortunately we found a problem.
-              std::cerr << "fail1\n"; // TODO invrestigate this noww
-std::cerr << "key: " << module->typeNames[key].name << '\n';
-std::cerr << "value: " << module->typeNames[value].name << '\n';
-std::cerr << "subkey: " << module->typeNames[subKey].name << '\n';
-std::cerr << "expectedSubValue: " << module->typeNames[expectedSubValue].name << '\n';
-std::cerr << "*super          : " << module->typeNames[*super].name << '\n';
-
-            fail = true;
-            break;
-          }
-        }
-        if (fail) {
-          break;
-        }
-      }
-
-      if (fail) {
-        // We ran into a problem. Clear the sub-map to indicate that.
-        // TODO: Perhaps we could only clear a subset of it?
-        subMap.clear();
-      }
-    }
-
-    infoMap.dump(module);
-
-    // Now we know which fields are optimizable and which are not, and can
-    // optimize. TODO p aralelize
-    struct Optimizer : PostWalker<Optimizer> {
-      const InfoMap& infoMap;
-
-      Optimizer(const InfoMap& infoMap) : infoMap(infoMap) {}
-
-      void visitRefTest(RefTest* curr) {
-        if (auto* get = curr->ref->dynCast<StructGet>()) {
-          // This is in the shape we are looking for:
-          //
-          //  (ref.test $A.vtable
-          //    (struct.get $X $vtable
-          //      (REF)
-          //    )
-          //  )
-          //
-          // See if we have a valid type there to try to optimize with.
-          if (!get->ref->type.isRef()) {
-            return;
-          }
-          auto heapType = get->ref->type.getHeapType();
-          if (!heapType.isStruct()) {
-            return;
-          }
-
-          // The location the get reads from must be in |infoMap| as we
-          // computed values for all possible locations ahead of time. Each
-          // entry in infoMap must exist, and the sub-map must exist as well
-          // (but it may be of size zero, if we failed to optimize).
-          auto getLoc = DataLocation{heapType, get->index};
-          //std::cerr << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
-          auto iter = infoMap.find(getLoc);
-          assert(iter != infoMap.end());
-          auto& maybeSubMap = iter->second;
-          assert(maybeSubMap);
-          auto& subMap = *maybeSubMap;
-
-          // If the sub-map has an entry for us, then we can optimize. (Note
-          // that that handles the case of us unable to optimize anything for
-          // this field, in which case the sub-map is empty of all entries.)
-          auto subIter = subMap.find(curr->castType.getHeapType());
-          if (subIter == subMap.end()) {
-            return;
-          }
-
-          // We can optimize! We are testing on something like a vtable, and can
-          // instead test on the object, since the type hierarchies are
-          // parallel. And the object type is exactly what is in the map. Switch
-          // to that, and skip the struct.get.
-          // TODO: add RefAsNonNull
-          curr->castType = Type(subIter->second, curr->castType.getNullability());
-          curr->ref = get->ref;
-        }
-      }
-    } optimizer(infoMap);
-    optimizer.walkModule(module);
+    GUFAOptimizer(oracle, pthOracle, optimizing, castAll).run(getPassRunner(), module);
   }
 };
 
