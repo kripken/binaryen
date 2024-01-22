@@ -264,21 +264,6 @@
   ;; CHECK-NEXT:    (i32.const 1)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block (result i32)
-  ;; CHECK-NEXT:    (drop
-  ;; CHECK-NEXT:     (block (result (ref $X.vtable))
-  ;; CHECK-NEXT:      (drop
-  ;; CHECK-NEXT:       (struct.get $X 0
-  ;; CHECK-NEXT:        (call $import)
-  ;; CHECK-NEXT:       )
-  ;; CHECK-NEXT:      )
-  ;; CHECK-NEXT:      (global.get $X.vtable)
-  ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 1)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
     ;; The vtable field is mutable so there is nothing interesting to optimize
@@ -288,6 +273,180 @@
         (struct.get $X 0
           (call $import)
         )
+      )
+    )
+  )
+)
+
+;; Three fields: one optimizable, one not, and one that isn't even a ref (so it
+;; definitely is not optimizable).
+;;
+;; Specifically, the first field has $A.vtable in both subtypes (so there is no
+;; 1:1 of object to vtable); the second has $B.vtable for $A and vice versa, so
+;; it is "flipped" compared to the first testcase, but that is fine; the third
+;; is an i32.
+(module
+  (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $X.vtable (sub (struct )))
+    (type $X.vtable (sub (struct)))
+
+    ;; CHECK:       (type $A.vtable (sub $X.vtable (struct )))
+    (type $A.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $B.vtable (sub $X.vtable (struct )))
+    (type $B.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $X (sub (struct (field (ref $X.vtable)) (field (ref $X.vtable)) (field i32))))
+    (type $X (sub (struct (field (ref $X.vtable)) (field (ref $X.vtable)) (field i32))))
+
+    ;; CHECK:       (type $A (sub $X (struct (field (ref $A.vtable)) (field (ref $B.vtable)) (field i32))))
+    (type $A (sub $X (struct (field (ref $A.vtable)) (field (ref $B.vtable)) (field i32))))
+
+    ;; CHECK:       (type $B (sub $X (struct (field (ref $A.vtable)) (field (ref $A.vtable)) (field i32))))
+    (type $B (sub $X (struct (field (ref $A.vtable)) (field (ref $A.vtable)) (field i32))))
+  )
+
+  ;; CHECK:      (type $6 (func))
+
+  ;; CHECK:      (type $7 (func (result (ref $X))))
+
+  ;; CHECK:      (import "a" "b" (func $import (type $7) (result (ref $X))))
+  (import "a" "b" (func $import (result (ref $X))))
+
+  ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
+  (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
+
+  ;; CHECK:      (global $A.vtable (ref $A.vtable) (struct.new_default $A.vtable))
+  (global $A.vtable (ref $A.vtable) (struct.new $A.vtable))
+
+  ;; CHECK:      (global $B.vtable (ref $B.vtable) (struct.new_default $B.vtable))
+  (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
+
+  ;; CHECK:      (func $create (type $6)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $X
+  ;; CHECK-NEXT:    (global.get $X.vtable)
+  ;; CHECK-NEXT:    (global.get $X.vtable)
+  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $A
+  ;; CHECK-NEXT:    (global.get $A.vtable)
+  ;; CHECK-NEXT:    (global.get $B.vtable)
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $B
+  ;; CHECK-NEXT:    (global.get $A.vtable)
+  ;; CHECK-NEXT:    (global.get $A.vtable)
+  ;; CHECK-NEXT:    (i32.const 2)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $create
+    (drop
+      (struct.new $X
+        (global.get $X.vtable)
+        (global.get $X.vtable)
+        (i32.const 0)
+      )
+    )
+    (drop
+      (struct.new $A
+        (global.get $A.vtable)
+        (global.get $B.vtable)
+        (i32.const 1)
+      )
+    )
+    (drop
+      (struct.new $B
+        (global.get $A.vtable)
+        (global.get $A.vtable)
+        (i32.const 2)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $test (type $6)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B)
+  ;; CHECK-NEXT:    (call $import)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A)
+  ;; CHECK-NEXT:    (call $import)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.get $X 2
+  ;; CHECK-NEXT:    (call $import)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.get $X 2
+  ;; CHECK-NEXT:    (call $import)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    ;; We fail to optimize the first field.
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+    ;; We succeed on the second. Note that we test $B for $A.vtable and vice
+    ;; versa.
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $X 1
+          (call $import)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $X 1
+          (call $import)
+        )
+      )
+    )
+    ;; Nothing to even test on the third.
+    (drop
+      (struct.get $X 2
+        (call $import)
+      )
+    )
+    (drop
+      (struct.get $X 2
+        (call $import)
       )
     )
   )
