@@ -177,6 +177,98 @@
   )
 )
 
+;; As above, but now $X is an abstract type - we never create it. We can still
+;; optimize.
+(module
+  (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $X.vtable (sub (struct )))
+    (type $X.vtable (sub (struct)))
+
+    ;; CHECK:       (type $A.vtable (sub $X.vtable (struct )))
+    (type $A.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $B.vtable (sub $X.vtable (struct )))
+    (type $B.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $X (sub (struct (field (ref $X.vtable)))))
+    (type $X (sub (struct (field (ref $X.vtable)))))
+
+    ;; CHECK:       (type $A (sub $X (struct (field (ref $A.vtable)))))
+    (type $A (sub $X (struct (field (ref $A.vtable)))))
+
+    ;; CHECK:       (type $B (sub $X (struct (field (ref $B.vtable)))))
+    (type $B (sub $X (struct (field (ref $B.vtable)))))
+  )
+
+  ;; CHECK:      (type $6 (func))
+
+  ;; CHECK:      (type $7 (func (result (ref null $X))))
+
+  ;; CHECK:      (type $8 (func (result (ref $X))))
+
+  ;; CHECK:      (import "a" "b" (func $import (type $7) (result (ref null $X))))
+  (import "a" "b" (func $import (result (ref null $X))))
+
+  ;; CHECK:      (import "a" "b" (func $import-nonnull (type $8) (result (ref $X))))
+  (import "a" "b" (func $import-nonnull (result (ref $X))))
+
+  ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
+  (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
+
+  ;; CHECK:      (global $A.vtable (ref $A.vtable) (struct.new_default $A.vtable))
+  (global $A.vtable (ref $A.vtable) (struct.new $A.vtable))
+
+  ;; CHECK:      (global $B.vtable (ref $B.vtable) (struct.new_default $B.vtable))
+  (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
+
+  ;; CHECK:      (func $create (type $6)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $A
+  ;; CHECK-NEXT:    (global.get $A.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $B
+  ;; CHECK-NEXT:    (global.get $B.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $create
+    ;; The struct.new of $X was removed here.
+    (drop
+      (struct.new $A
+        (global.get $A.vtable)
+      )
+    )
+    (drop
+      (struct.new $B
+        (global.get $B.vtable)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $test (type $6)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    ;; We can optimize here.
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+  )
+)
+
 ;; As above but now the vtable field is mutable (which also prevents vtable
 ;; subtyping). We do not optimize here.
 (module
@@ -535,7 +627,6 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $create
-    ;; Never create $X, which does not pose a problem for optimizing children.
     (drop
       (struct.new $A
         (struct.new $A.vtable)
