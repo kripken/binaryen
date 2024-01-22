@@ -183,6 +183,10 @@ struct ParallelTypeHierarchiesOracle {
             std::cerr << "  => " << typeContents << "\n";
           }
         }
+        if (typeContents.isNone()) {
+          // Nothing is written here.
+          continue;
+        }
         if (!typeContents.hasExactType()) {
           // Anything non-exact is bad for us.
           typeContents = PossibleContents::many();
@@ -237,6 +241,9 @@ struct ParallelTypeHierarchiesOracle {
         }
       }
     }
+
+std::cout << "map1\n";
+infoMap.dump(wasm);
 
     // We built up the mapping described earlier, which describes when there is
     // a relationship between the type assigned in a field and the type itself.
@@ -308,6 +315,9 @@ std::cerr << "*super          : " << wasm.typeNames[*super].name << '\n';
         subMap.clear();
       }
     }
+
+std::cout << "map2\n";
+infoMap.dump(wasm);
   }
 
   // Given a ref.test of a struct.get, see if we can replace the test with a

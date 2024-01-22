@@ -203,15 +203,10 @@
 
   ;; CHECK:      (type $6 (func))
 
-  ;; CHECK:      (type $7 (func (result (ref null $X))))
+  ;; CHECK:      (type $7 (func (result (ref $X))))
 
-  ;; CHECK:      (type $8 (func (result (ref $X))))
-
-  ;; CHECK:      (import "a" "b" (func $import (type $7) (result (ref null $X))))
-  (import "a" "b" (func $import (result (ref null $X))))
-
-  ;; CHECK:      (import "a" "b" (func $import-nonnull (type $8) (result (ref $X))))
-  (import "a" "b" (func $import-nonnull (result (ref $X))))
+  ;; CHECK:      (import "a" "b" (func $import (type $7) (result (ref $X))))
+  (import "a" "b" (func $import (result (ref $X))))
 
   ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
   (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
@@ -250,10 +245,8 @@
 
   ;; CHECK:      (func $test (type $6)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
-  ;; CHECK-NEXT:    (struct.get $X 0
-  ;; CHECK-NEXT:     (call $import)
-  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   (ref.test (ref $A)
+  ;; CHECK-NEXT:    (call $import)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
