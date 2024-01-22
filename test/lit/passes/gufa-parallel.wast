@@ -89,6 +89,24 @@
   ;; CHECK-NEXT:    (local.get $x)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B)
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A)
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B)
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
     (local $x (ref $X))
@@ -97,11 +115,39 @@
         (call $import)
       )
     )
+    ;; The import contains an unknown value. Testing if it is an object with
+    ;; $A's vtable can be replaced by testing if it is $A, directly.
     (drop
       (ref.test (ref $A.vtable)
         (struct.get $X 0
           (local.get $x)
         )
+      )
+    )
+    ;; Ditto, with $B.
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $X 0
+          (local.get $x)
+        )
+      )
+    )
+    ;; For completion, tests of the other types, which are unoptimizable.
+    (drop
+      (ref.test (ref $X)
+        (struct.get $X 0
+          (local.get $x)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $A)
+        (local.get $x)
+      )
+    )
+    (drop
+      (ref.test (ref $B)
+        (local.get $x)
       )
     )
   )
