@@ -30,8 +30,13 @@
 
   ;; CHECK:      (type $7 (func (result (ref null $X))))
 
+  ;; CHECK:      (type $8 (func (result (ref $X))))
+
   ;; CHECK:      (import "a" "b" (func $import (type $7) (result (ref null $X))))
   (import "a" "b" (func $import (result (ref null $X))))
+
+  ;; CHECK:      (import "a" "b" (func $import-nonnull (type $8) (result (ref $X))))
+  (import "a" "b" (func $import-nonnull (result (ref $X))))
 
   ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
   (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
@@ -89,6 +94,11 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B)
+  ;; CHECK-NEXT:    (call $import-nonnull)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (block (result i32)
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (struct.get $X 0
@@ -124,6 +134,15 @@
       (ref.test (ref $B.vtable)
         (struct.get $X 0
           (call $import)
+        )
+      )
+    )
+    ;; Ditto, with a non-nullable result from the import (which does not matter
+    ;; to us).
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $X 0
+          (call $import-nonnull)
         )
       )
     )
