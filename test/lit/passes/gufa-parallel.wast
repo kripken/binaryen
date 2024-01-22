@@ -331,7 +331,9 @@
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (struct.new $A
   ;; CHECK-NEXT:    (struct.new_default $A.vtable)
-  ;; CHECK-NEXT:    (struct.new_default $B.vtable)
+  ;; CHECK-NEXT:    (block (result (ref $B.vtable))
+  ;; CHECK-NEXT:     (struct.new_default $B.vtable)
+  ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:    (i32.const 1)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
@@ -355,7 +357,9 @@
       (struct.new $A
         ;; For more coverage, test using something other than global.gets here.
         (struct.new $A.vtable)
-        (struct.new $B.vtable)
+        (block (result (ref $B.vtable))
+          (struct.new $B.vtable)
+        )
         (i32.const 1)
       )
     )
