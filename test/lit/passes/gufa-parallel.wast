@@ -28,10 +28,10 @@
 
   ;; CHECK:      (type $6 (func))
 
-  ;; CHECK:      (type $7 (func (result anyref)))
+  ;; CHECK:      (type $7 (func (result (ref null $X))))
 
-  ;; CHECK:      (import "a" "b" (func $import (type $7) (result anyref)))
-  (import "a" "b" (func $import (result anyref)))
+  ;; CHECK:      (import "a" "b" (func $import (type $7) (result (ref null $X))))
+  (import "a" "b" (func $import (result (ref null $X))))
 
   ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
   (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
@@ -78,49 +78,44 @@
   )
 
   ;; CHECK:      (func $test (type $6)
-  ;; CHECK-NEXT:  (local $x (ref $X))
-  ;; CHECK-NEXT:  (local.set $x
-  ;; CHECK-NEXT:   (ref.cast (ref $X)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A)
   ;; CHECK-NEXT:    (call $import)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B)
+  ;; CHECK-NEXT:    (call $import)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (struct.get $X 0
+  ;; CHECK-NEXT:      (call $import)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (ref.test (ref $A)
-  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:    (call $import)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (ref.test (ref $B)
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.const 0)
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $A)
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $B)
-  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:    (call $import)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
-    (local $x (ref $X))
-    (local.set $x
-      (ref.cast (ref $X)
-        (call $import)
-      )
-    )
     ;; The import contains an unknown value. Testing if it is an object with
     ;; $A's vtable can be replaced by testing if it is $A, directly.
     (drop
       (ref.test (ref $A.vtable)
         (struct.get $X 0
-          (local.get $x)
+          (call $import)
         )
       )
     )
@@ -128,26 +123,28 @@
     (drop
       (ref.test (ref $B.vtable)
         (struct.get $X 0
-          (local.get $x)
+          (call $import)
         )
       )
     )
-    ;; For completion, tests of the other types, which are unoptimizable.
+    ;; For completion, tests of the other types, which are unoptimizable using
+    ;; parallel type hierarchies (but the first is, separately, optimizable to
+    ;; zero since the test is of an incompatible type).
     (drop
       (ref.test (ref $X)
         (struct.get $X 0
-          (local.get $x)
+          (call $import)
         )
       )
     )
     (drop
       (ref.test (ref $A)
-        (local.get $x)
+        (call $import)
       )
     )
     (drop
       (ref.test (ref $B)
-        (local.get $x)
+        (call $import)
       )
     )
   )
