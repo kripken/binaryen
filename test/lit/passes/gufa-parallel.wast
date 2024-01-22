@@ -320,9 +320,6 @@
   ;; CHECK:      (global $A.vtable (ref $A.vtable) (struct.new_default $A.vtable))
   (global $A.vtable (ref $A.vtable) (struct.new $A.vtable))
 
-  ;; CHECK:      (global $B.vtable (ref $B.vtable) (struct.new_default $B.vtable))
-  (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
-
   ;; CHECK:      (func $create (type $6)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (struct.new $X
@@ -333,8 +330,8 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (struct.new $A
-  ;; CHECK-NEXT:    (global.get $A.vtable)
-  ;; CHECK-NEXT:    (global.get $B.vtable)
+  ;; CHECK-NEXT:    (struct.new_default $A.vtable)
+  ;; CHECK-NEXT:    (struct.new_default $B.vtable)
   ;; CHECK-NEXT:    (i32.const 1)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
@@ -356,8 +353,9 @@
     )
     (drop
       (struct.new $A
-        (global.get $A.vtable)
-        (global.get $B.vtable)
+        ;; For more coverage, test using something other than global.gets here.
+        (struct.new $A.vtable)
+        (struct.new $B.vtable)
         (i32.const 1)
       )
     )
