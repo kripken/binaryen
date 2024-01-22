@@ -85,12 +85,16 @@
   ;; CHECK:      (func $test (type $6)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (ref.test (ref $A)
-  ;; CHECK-NEXT:    (call $import)
+  ;; CHECK-NEXT:    (ref.as_non_null
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (ref.test (ref $B)
-  ;; CHECK-NEXT:    (call $import)
+  ;; CHECK-NEXT:    (ref.as_non_null
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
@@ -137,8 +141,9 @@
         )
       )
     )
-    ;; Ditto, with a non-nullable result from the import (which does not matter
-    ;; to us).
+    ;; Ditto, with a non-nullable result from the import. That lets us skip
+    ;; adding a cast to non-null ourselves (which normally we need, as the
+    ;; struct.get that we remove would trap on null).
     (drop
       (ref.test (ref $B.vtable)
         (struct.get $X 0

@@ -579,10 +579,13 @@ struct GUFAOptimizer
     }
 
     if (auto newTestType = pthOracle.findTestThatSkipsGet(curr)) {
-      // Skip the get.
-      // TODO: add RefAsNonNull
+      // Skip the get. Note we need to trap on null, as the struct.get that we
+      // are skipping would do that.
       curr->castType = Type(*newTestType, curr->castType.getNullability());
       curr->ref = curr->ref->cast<StructGet>()->ref;
+      if (curr->ref->type.isNullable()) {
+        curr->ref = Builder(*getModule()).makeRefAs(RefAsNonNull, curr->ref);
+      }
     }
   }
 
