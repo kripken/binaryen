@@ -262,6 +262,125 @@
   )
 )
 
+;; As above, but there is a "skip" in the hierarchy: a type in between $X and
+;; $A, which is *not* reflected in the vtable:
+;;
+;;         $X             $X.vtable
+;;        /   \            /     \
+;;       $M   $B     $A.vtable  $B.vtable
+;;        |
+;;       $A
+(module
+  (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $X.vtable (sub (struct )))
+    (type $X.vtable (sub (struct)))
+
+    ;; CHECK:       (type $A.vtable (sub $X.vtable (struct )))
+    (type $A.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $B.vtable (sub $X.vtable (struct )))
+    (type $B.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $X (sub (struct (field (ref $X.vtable)))))
+    (type $X (sub (struct (field (ref $X.vtable)))))
+
+    ;; CHECK:       (type $M (sub $X (struct (field (ref $X.vtable)))))
+    (type $M (sub $X (struct (field (ref $X.vtable)))))
+
+    ;; CHECK:       (type $B (sub $X (struct (field (ref $B.vtable)))))
+    (type $B (sub $X (struct (field (ref $B.vtable)))))
+
+    ;; CHECK:       (type $A (sub $M (struct (field (ref $A.vtable)))))
+    (type $A (sub $M (struct (field (ref $A.vtable)))))
+  )
+
+  ;; CHECK:      (type $7 (func))
+
+  ;; CHECK:      (type $8 (func (result (ref $X))))
+
+  ;; CHECK:      (import "a" "b" (func $import (type $8) (result (ref $X))))
+  (import "a" "b" (func $import (result (ref $X))))
+
+  ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
+  (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
+
+  ;; CHECK:      (global $A.vtable (ref $A.vtable) (struct.new_default $A.vtable))
+  (global $A.vtable (ref $A.vtable) (struct.new $A.vtable))
+
+  ;; CHECK:      (global $B.vtable (ref $B.vtable) (struct.new_default $B.vtable))
+  (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
+
+  ;; CHECK:      (func $create (type $7)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $X
+  ;; CHECK-NEXT:    (global.get $X.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $A
+  ;; CHECK-NEXT:    (global.get $A.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $B
+  ;; CHECK-NEXT:    (global.get $B.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $create
+    (drop
+      (struct.new $X
+        (global.get $X.vtable)
+      )
+    )
+    (drop
+      (struct.new $A
+        (global.get $A.vtable)
+      )
+    )
+    (drop
+      (struct.new $B
+        (global.get $B.vtable)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $test (type $7)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    ;; We cannot optimize here.
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+  )
+)
+
 ;; As above but now the vtable field is mutable (which also prevents vtable
 ;; subtyping). We do not optimize here.
 (module
