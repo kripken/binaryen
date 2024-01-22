@@ -85,7 +85,8 @@ namespace {
 // To see if we have such opportunities, we look for fields (like the vtable
 // field in the example) whose type parallels the struct it is inside.
 struct ParallelTypeHierarchiesOracle {
-  SubTypes subTypes;
+  SubTypes subTypes; // TODO use from oracle
+  ContentOracle& oracle;
 
   // The follow infoMap data structure is the key thing that we build up. It is
   // then used later to decide where to optimize.
@@ -153,7 +154,7 @@ struct ParallelTypeHierarchiesOracle {
   };
   InfoMap infoMap;
 
-  ParallelTypeHierarchiesOracle(Module& wasm) : subTypes(wasm) { // TODO reuse from ContentOracle
+  ParallelTypeHierarchiesOracle(Module& wasm, ContentOracle& oracle) : subTypes(wasm), oracle(oracle) {
     for (auto type : subTypes.types) {
       if (!type.isStruct()) {
         continue;
@@ -311,8 +312,8 @@ std::cerr << "*super          : " << wasm.typeNames[*super].name << '\n';
 
   // Given a ref.test of a struct.get, see if we can replace the test with a
   // test of the class itself, skipping the struct.get.
-  std::optional<HeapType> getTestTypeSkippingGet(RefTest* refTest) {
-    auto* get = curr->ref->dynCast<StructGet>();
+  std::optional<HeapType> findTestThatSkipsGet(RefTest* test) {
+    auto* get = test->ref->dynCast<StructGet>();
     if (!get) {
       return {};
     }
@@ -348,7 +349,7 @@ std::cerr << "*super          : " << wasm.typeNames[*super].name << '\n';
     // If the sub-map has an entry for us, then we can optimize. (Note
     // that that handles the case of us unable to optimize anything for
     // this field, in which case the sub-map is empty of all entries.)
-    auto subIter = subMap.find(curr->castType.getHeapType());
+    auto subIter = subMap.find(test->castType.getHeapType());
     if (subIter == subMap.end()) {
       return {};
     } else {
@@ -385,7 +386,7 @@ struct GUFAOptimizer
     : oracle(oracle), pthOracle(pthOracle), optimizing(optimizing), castAll(castAll) {}
 
   std::unique_ptr<Pass> create() override {
-    return std::make_unique<GUFAOptimizer>(oracle, optimizing, castAll);
+    return std::make_unique<GUFAOptimizer>(oracle, pthOracle, optimizing, castAll);
   }
 
   bool optimized = false;
@@ -577,11 +578,11 @@ struct GUFAOptimizer
       }
     }
 
-    if (auto newTestType = pthOracle.getTestTypeSkippingGet(curr)) {
+    if (auto newTestType = pthOracle.findTestThatSkipsGet(curr)) {
       // Skip the get.
       // TODO: add RefAsNonNull
       curr->castType = Type(*newTestType, curr->castType.getNullability());
-      curr->ref = get->ref;
+      curr->ref = curr->ref->cast<StructGet>()->ref;
     }
   }
 
@@ -723,7 +724,7 @@ struct GUFAPass : public Pass {
 
   void run(Module* module) override {
     ContentOracle oracle(*module, getPassOptions());
-    ParallelTypeHierarchiesOracle pthOracle(*module)
+    ParallelTypeHierarchiesOracle pthOracle(*module, oracle);
 
     GUFAOptimizer(oracle, pthOracle, optimizing, castAll).run(getPassRunner(), module);
   }
