@@ -4,6 +4,9 @@
 ;; Test optimizations for parallel type hierarchies (like objects and their
 ;; vtables
 
+;;         $X             $X.vtable
+;;        /   \            /     \
+;;       $A   $B     $A.vtable  $B.vtable
 (module
   (rec
     ;; CHECK:      (rec
@@ -449,6 +452,238 @@
     (drop
       (struct.get $X 2
         (call $import)
+      )
+    )
+  )
+)
+
+;; Deeper hierarchies:
+;;
+;;         $X             $X.vtable
+;;        /   \            /     \
+;;       $A   $B     $A.vtable  $B.vtable
+;;        |    |          |
+;;       $C   $D     $C.vtable  (note $B.vtable has no subtype; $D uses $B's)
+(module
+  (rec
+    ;; CHECK:      (type $0 (func))
+
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $X.vtable (sub (struct )))
+    (type $X.vtable (sub (struct)))
+
+    ;; CHECK:       (type $A.vtable (sub $X.vtable (struct )))
+    (type $A.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $B.vtable (sub $X.vtable (struct )))
+    (type $B.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $C.vtable (sub $A.vtable (struct )))
+    (type $C.vtable (sub $A.vtable (struct)))
+
+    ;; CHECK:       (type $X (sub (struct (field (ref $X.vtable)))))
+    (type $X (sub (struct (field (ref $X.vtable)))))
+
+    ;; CHECK:       (type $A (sub $X (struct (field (ref $A.vtable)))))
+    (type $A (sub $X (struct (field (ref $A.vtable)))))
+
+    ;; CHECK:       (type $B (sub $X (struct (field (ref $B.vtable)))))
+    (type $B (sub $X (struct (field (ref $B.vtable)))))
+
+    ;; CHECK:       (type $C (sub $A (struct (field (ref $C.vtable)))))
+    (type $C (sub $A (struct (field (ref $C.vtable)))))
+
+    ;; CHECK:       (type $D (sub $B (struct (field (ref $B.vtable)))))
+    (type $D (sub $B (struct (field (ref $B.vtable)))))
+  )
+
+  ;; CHECK:      (type $10 (func (result (ref $X))))
+
+  ;; CHECK:      (type $11 (func (result (ref $A))))
+
+  ;; CHECK:      (type $12 (func (result (ref $B))))
+
+  ;; CHECK:      (import "a" "b" (func $import (type $10) (result (ref $X))))
+  (import "a" "b" (func $import (result (ref $X))))
+
+  ;; CHECK:      (import "a" "c" (func $import-A (type $11) (result (ref $A))))
+  (import "a" "c" (func $import-A (result (ref $A))))
+
+  ;; CHECK:      (import "a" "d" (func $import-B (type $12) (result (ref $B))))
+  (import "a" "d" (func $import-B (result (ref $B))))
+
+  ;; CHECK:      (func $create (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $A
+  ;; CHECK-NEXT:    (struct.new_default $A.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $B
+  ;; CHECK-NEXT:    (struct.new_default $B.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $C
+  ;; CHECK-NEXT:    (struct.new_default $C.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $D
+  ;; CHECK-NEXT:    (struct.new_default $B.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $create
+    ;; Never create $X, which does not pose a problem for optimizing children.
+    (drop
+      (struct.new $A
+        (struct.new $A.vtable)
+      )
+    )
+    (drop
+      (struct.new $B
+        (struct.new $B.vtable)
+      )
+    )
+    (drop
+      (struct.new $C
+        (struct.new $C.vtable)
+      )
+    )
+    (drop
+      (struct.new $D
+        (struct.new $B.vtable) ;; As mentioned before, $D uses a $B.vtable.
+      )
+    )
+  )
+
+  ;; CHECK:      (func $test.X (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $C.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test.X
+    ;; Loads from $X. We do not optimize anything here because $D does not have
+    ;; its own vtable, as mentioned before. We could in principle optimize in
+    ;; certain cases even so TODO
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $C.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+  )
+
+  ;; CHECK:      (func $test.A (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (struct.get $A 0
+  ;; CHECK-NEXT:      (call $import-A)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $C)
+  ;; CHECK-NEXT:    (call $import-A)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test.A
+    ;; Loads from $A. The first must always succeed, while the second is an
+    ;; interesting case to optimize as it shows we can optimize into a branch of
+    ;; the subtype tree that is not polluted by $D using $B's vtable (indeed,
+    ;; testing on $C.vtable is find since it can only be $C's or $A's, and
+    ;; nothing else - the pollution does not reach here).
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $A 0
+          (call $import-A)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $C.vtable)
+        (struct.get $A 0
+          (call $import-A)
+        )
+      )
+    )
+  )
+
+  ;; CHECK:      (func $test.B (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (struct.get $B 0
+  ;; CHECK-NEXT:      (call $import-B)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (struct.get $B 0
+  ;; CHECK-NEXT:      (call $import-B)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test.B
+    ;; Loads from $B. $B and $D use the same vtable so these are all trivially
+    ;; 1 anyhow.
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $B 0
+          (call $import-B)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $B 0
+          (call $import-B)
+        )
       )
     )
   )
