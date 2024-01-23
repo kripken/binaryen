@@ -273,89 +273,63 @@ infoMap.dump(wasm);
     //  infoMap[..] = { $A.vtable: $A, $B.vtable: $A }
     //                              ^              ^
     // The same type $A cannot appear as a value more than once.
-    //
-    // That entry means that $A's $vtable field was written exactly an $A.vtable
-    // and nothing else. That proves part of a 1:1 mapping between the object
-    // and vtable types, and we need to prove it is truly 1:1, which requires us
-    // to also verify that we don't have this:
-    //
-    //  .. = { $A.vtable: $A, $B.vtable: $A }
+    for (auto& [loc, maybeSubMap] : infoMap) {
+      // All submaps should be filled (or else there would be no entry at all).
+      assert(maybeSubMap);
+      auto& subMap = *maybeSubMap;
 
-    // we want to infer something in situations like this:
+      std::unordered_map<HeapType> values;
+
+      for (auto [_, value] : subMap) {
+        values.insert(value);
+      }
+
+      if (values.size() != subMap.size()) {
+        // There are too few values, so we have duplication in this sub-map.
+        // Give up on it.
+        // TODO: Perhaps we could only clear a subset of it?
+        subMap.clear();
+      }
+    }
+
+    // We have built up our map of entries like this:
+    //
+    //  infoMap[$X:$vtable] = { $A.vtable: $A, $B.vtable: $B }
+    //
+    // And we verified the values are unique in each sub-map on the right. That
+    // proves a 1:1 mapping between "object" and "vtable" types in each sub-map.
+    // It seems like we still have something left to prove in order for an
+    // optimization like this to be valid:
     //
     //  (ref.test $A.vtable
     //    (struct.get $X $vtable
     //      (REF)
     //    )
     //  )
+    // =>
+    //  (ref.test $A  ;; test object rather than load+test vtable
+    //    (REF)
+    //  )
     //
-    // We would like to be able to test REF on $A rather than read the vtable
-    // and test that. That transformation is valid when the tests return true in
-    // exactly the same situations, which we can verify by simply going through
-    // all the subtypes of $X, that is all the possible things that can appear
-    // in REF.
+    // But the wasm type system does the rest of the work for us, thanks to the
+    // requirements for subtyping. To see that, consider when that optimization
+    // is valid: the test must, for all REF, return the same result with or
+    // without the optimization. Let's look at all the possible objects here:
     //
-    // TODO: Avoid redundant work here.
-    for (auto& [loc, maybeSubMap] : infoMap) {
-      // In the example above, loc.type is $X and loc.index is $vtable.
-
-std::cerr << "DL: " << wasm.typeNames[_.type].name << " : " << _.index << '\n';
-      // All submaps should be filled (or else there would be no entry at all).
-      assert(maybeSubMap);
-      auto& subMap = *maybeSubMap;
-
-      auto fail = false;
-
-      for (auto [key, value] : subMap) {
-      ...
-      subTypes.iterSubTypes(loc.type, [&](HeapType subType) {
-        auto iter = subMap.find(
-        // Check if a test of this subtype behaves the same 
-      });
-
-
-      // In the example above, iterating on infoMap[$X:$vtable] will start with
-      // key = $X.vtable and value = $X.
-      for (auto [key, value] : subMap) {
-std::cerr << "  key: " << wasm.typeNames[key].name << '\n';
-std::cerr << "  value: " << wasm.typeNames[value].name << '\n';
-        // Continuing the example, subKey will begin with $A.vtable (the first
-        // immediate subtype of $X.vtable).
-        for (auto subKey : subTypes.getImmediateSubTypes(key)) {
-std::cerr << "    subkey: " << wasm.typeNames[subKey].name << '\n';
-          auto iter = subMap.find(subKey);
-          if (iter == subMap.end()) {
-            // This subtype is not used and does not pose a problem.
-            continue;
-          }
-
-          // Continuing the example, this is $A (the entry for $A.vtable in the
-          // sub-map).
-          auto expectedSubValue = iter->second;
-std::cerr << "      expectedSubValue: " << wasm.typeNames[expectedSubValue].name << '\n';
-
-          // Continuing the example, $A (expectedSubValue) must be an
-          // immediate subtype of $X (value).
-          auto super = expectedSubValue.getSuperType();
-if (super) std::cerr << "      *super          : " << wasm.typeNames[*super].name << '\n';
-          if (!super || *super != value) {
-            // Unfortunately we found a problem.
-              std::cerr << "fail1\n"; // TODO invrestigate this noww
-            fail = true;
-            break;
-          }
-        }
-        if (fail) {
-          break;
-        }
-      }
-
-      if (fail) {
-        // We ran into a problem. Clear the sub-map to indicate that.
-        // TODO: Perhaps we could only clear a subset of it?
-        subMap.clear();
-      }
-    }
+    //  $A{ .vtable = $A.vtable }  // either it is an $A with $A.vtable, or
+    //  $B{ .vtable = $B.vtable }  // $B with $B.vtable
+    //
+    // If those are all the types then this clearly must be true because of the
+    // 1:1 relationship: the vtable is $A.vtable exactly when the object is $A.
+    // However, things get more interesting if we have another type:
+    //
+    //  $C{ .vtable = $C.vtable }
+    //
+    // Imagine that $A :> $C. Then, by the wasm type system's requirements on
+    // fields of subtypes, $A.vtable :> $C.vtable. Thus, the subtypes of $A and
+    // of $A.vtable are isomorphic. Note that they may not be identical in
+    // shape: there may be more types on one side, abstract types in the middle,
+    // etc., but those do not interfere with this optimization.
 
 std::cout << "map2\n";
 infoMap.dump(wasm);
