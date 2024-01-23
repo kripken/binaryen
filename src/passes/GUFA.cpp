@@ -298,57 +298,8 @@ infoMap.dump(wasm);
     //
     // And we verified the values are unique in each sub-map on the right. That
     // proves a 1:1 mapping between "object" and "vtable" types in each sub-map.
-    // It seems like we still have something left to prove in order for an
-    // optimization like this to be valid:
-    //
-    //  (ref.test $A.vtable
-    //    (struct.get $X $vtable
-    //      (REF)
-    //    )
-    //  )
-    // =>
-    //  (ref.test $A  ;; test object rather than load+test vtable
-    //    (REF)
-    //  )
-    //
-    // But the wasm type system does the rest of the work for us, thanks to the
-    // requirements for subtyping. To see that, consider when that optimization
-    // is valid: the test must, for all REF, return the same result with or
-    // without the optimization. Let's look at all the possible objects here:
-    //
-    //  $A{ .vtable = $A.vtable }  // either it is an $A with $A.vtable, or
-    //  $B{ .vtable = $B.vtable }  // $B with $B.vtable
-    //
-    // If those are all the types then this clearly must be true because of the
-    // 1:1 relationship: the vtable is $A.vtable exactly when the object is $A.
-    // However, things get more interesting if we have another type:
-    //
-    //  $C{ .vtable = $C.vtable }
-    //
-    // Imagine that $A :> $C. Then, by the wasm type system's requirements on
-    // fields of subtypes, $A.vtable :> $C.vtable. Thus, the subtypes of $A and
-    // of $A.vtable are isomorphic. Note that they may not be identical in
-    // shape: there may be more types on one side, abstract types in the middle,
-    // etc., but those do not interfere with this optimization. To see that,
-    // imagine that we have a case where the optimization fails:
-    //
-    //  (ref.test $A.vtable
-    //    (struct.get $X $vtable
-    //      (REF)
-    //    )
-    //  )
-    //
-    // is true while this is false:
-    //
-    //  (ref.test $A
-    //    (REF)
-    //  )
-    //
-    // The latter being false implies that while REF is a subtype of $X, it is
-    // not $A or a subtype of $A. The former being true implies that REF's
-    // vtable is $A.vtable or a subtype. This can happen with $B ($A's sibling
-    // type) if $A.vtable :> $B.vtable:
-    //
+    // That is almost all we need, but not quite, as we need subtyping to be in
+    // the right shape. Consider this:
     //
     //         $X             $vtable
     //        |  |             |
@@ -356,8 +307,55 @@ infoMap.dump(wasm);
     //                         |
     //                  $B.vtable
     //
-    // yikes
+    // This is almost right, but $B's vtable is a subtype of $A's, so the shapes
+    // of the subtype trees are not isomorphic. That is a problem as if we do
+    // this:
+    //
+    //  (ref.test $A.vtable
+    //    (struct.get $X $vtable
+    //      (REF)
+    //    )
+    //  )
+    //
+    // then we'd get "1" for an input of $B, but the optimized form we want to
+    // emit would return "0":
+    //
+    //  (ref.test $A
+    //    (REF)
+    //  )
+    //
+    // We do not need an exact isomorphism, however, as e.g. abstract classes in
+    // the middle do not pose a problem. All we actually require is that
+    //
+    //   [ $A :> $B ] if and only if [ $A.vtable :> $B.vtable ]
+    //
+    // for all types $A,$B in our sub-maps.
+    for (auto& [loc, maybeSubMap] : infoMap) {
+      auto& subMap = *maybeSubMap;
 
+      // TODO: optimize and avoid redundant work among locs. Even just
+      //       memoizing might be enough
+      auto fail = false;
+      for (auto [vtable, object] : subMap) {
+        for (auto [vtable2, object2] : subMap) {
+          if (HeapType::isSubType(vtable, vtable2) !=
+              HeapType::isSubType(object, object2) ||
+              HeapType::isSubType(vtable2, vtable) !=
+              HeapType::isSubType(object2, object)) {
+            fail = true;
+            break;
+          }
+        }
+        if (fail) {
+          break;
+        }
+      }
+      if (fail) {
+        // Give up on this sub-map.
+        // TODO: Perhaps we could only clear a subset of it?
+        subMap.clear();
+      }
+    }
 std::cout << "map2\n";
 infoMap.dump(wasm);
   }
