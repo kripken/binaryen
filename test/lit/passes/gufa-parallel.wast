@@ -639,7 +639,6 @@
 )
 
 ;; As the last testcase but now $M.vtable is instantiated.
-;; waka
 (module
   (rec
     ;; CHECK:      (rec
@@ -758,6 +757,300 @@
     )
     ;; We still cannot optimize a test of $M.vtable, as there is no $M at
     ;; all to test against.
+    (drop
+      (ref.test (ref $M.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+  )
+)
+
+;; As the last testcase but now $M and $M.vtable exist:
+;;
+;;
+;;         $X             $X.vtable
+;;        /   \            /     \
+;;       $M   $B     $A.vtable  $M.vtable
+;;        |                       |
+;;       $A                     $B.vtable
+;;
+(module
+  (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $X.vtable (sub (struct )))
+    (type $X.vtable (sub (struct)))
+
+    ;; CHECK:       (type $A.vtable (sub $X.vtable (struct )))
+    (type $A.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $M.vtable (sub $X.vtable (struct )))
+    (type $M.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $B.vtable (sub $M.vtable (struct )))
+    (type $B.vtable (sub $M.vtable (struct)))
+
+    ;; CHECK:       (type $X (sub (struct (field (ref $X.vtable)))))
+    (type $X (sub (struct (field (ref $X.vtable)))))
+
+    ;; CHECK:       (type $M (sub $X (struct (field (ref $X.vtable)))))
+    (type $M (sub $X (struct (field (ref $X.vtable)))))
+
+    ;; CHECK:       (type $B (sub $X (struct (field (ref $B.vtable)))))
+    (type $B (sub $X (struct (field (ref $B.vtable)))))
+
+    ;; CHECK:       (type $A (sub $M (struct (field (ref $A.vtable)))))
+    (type $A (sub $M (struct (field (ref $A.vtable)))))
+  )
+
+  ;; CHECK:      (type $8 (func))
+
+  ;; CHECK:      (type $9 (func (result (ref $X))))
+
+  ;; CHECK:      (import "a" "b" (func $import (type $9) (result (ref $X))))
+  (import "a" "b" (func $import (result (ref $X))))
+
+  ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
+  (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
+
+  ;; CHECK:      (global $A.vtable (ref $A.vtable) (struct.new_default $A.vtable))
+  (global $A.vtable (ref $A.vtable) (struct.new $A.vtable))
+
+  ;; CHECK:      (global $B.vtable (ref $B.vtable) (struct.new_default $B.vtable))
+  (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
+
+  ;; CHECK:      (global $M.vtable (ref $X.vtable) (struct.new_default $X.vtable))
+  (global $M.vtable (ref $X.vtable) (struct.new $X.vtable))
+
+  ;; CHECK:      (func $create (type $8)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $X
+  ;; CHECK-NEXT:    (global.get $X.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $A
+  ;; CHECK-NEXT:    (global.get $A.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $B
+  ;; CHECK-NEXT:    (global.get $B.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $M
+  ;; CHECK-NEXT:    (global.get $M.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $create
+    (drop
+      (struct.new $X
+        (global.get $X.vtable)
+      )
+    )
+    (drop
+      (struct.new $A
+        (global.get $A.vtable)
+      )
+    )
+    (drop
+      (struct.new $B
+        (global.get $B.vtable)
+      )
+    )
+    (drop
+      (struct.new $M
+        (global.get $M.vtable)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $test (type $8)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $M.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    ;; We cannot optimize here: $M is the parent of $A while $M.vtable is the
+    ;; parent of $B.vtable, so the object and vtable hierarchies are not
+    ;; parallel.
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $M.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+  )
+)
+
+;; As above but move $M.table to the right place, as parent of $A.vtable.
+(module
+  (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $X.vtable (sub (struct )))
+    (type $X.vtable (sub (struct)))
+
+    ;; CHECK:       (type $M.vtable (sub $X.vtable (struct )))
+    (type $M.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $A.vtable (sub $M.vtable (struct )))
+    (type $A.vtable (sub $M.vtable (struct)))
+
+    ;; CHECK:       (type $B.vtable (sub $X.vtable (struct )))
+    (type $B.vtable (sub $X.vtable (struct)))
+
+    ;; CHECK:       (type $X (sub (struct (field (ref $X.vtable)))))
+    (type $X (sub (struct (field (ref $X.vtable)))))
+
+    ;; CHECK:       (type $M (sub $X (struct (field (ref $X.vtable)))))
+    (type $M (sub $X (struct (field (ref $X.vtable)))))
+
+    ;; CHECK:       (type $A (sub $M (struct (field (ref $A.vtable)))))
+    (type $A (sub $M (struct (field (ref $A.vtable)))))
+
+    ;; CHECK:       (type $B (sub $X (struct (field (ref $B.vtable)))))
+    (type $B (sub $X (struct (field (ref $B.vtable)))))
+  )
+
+  ;; CHECK:      (type $8 (func))
+
+  ;; CHECK:      (type $9 (func (result (ref $X))))
+
+  ;; CHECK:      (import "a" "b" (func $import (type $9) (result (ref $X))))
+  (import "a" "b" (func $import (result (ref $X))))
+
+  ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
+  (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
+
+  ;; CHECK:      (global $A.vtable (ref $A.vtable) (struct.new_default $A.vtable))
+  (global $A.vtable (ref $A.vtable) (struct.new $A.vtable))
+
+  ;; CHECK:      (global $B.vtable (ref $B.vtable) (struct.new_default $B.vtable))
+  (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
+
+  ;; CHECK:      (global $M.vtable (ref $X.vtable) (struct.new_default $X.vtable))
+  (global $M.vtable (ref $X.vtable) (struct.new $X.vtable))
+
+  ;; CHECK:      (func $create (type $8)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $X
+  ;; CHECK-NEXT:    (global.get $X.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $A
+  ;; CHECK-NEXT:    (global.get $A.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $B
+  ;; CHECK-NEXT:    (global.get $B.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $M
+  ;; CHECK-NEXT:    (global.get $M.vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $create
+    (drop
+      (struct.new $X
+        (global.get $X.vtable)
+      )
+    )
+    (drop
+      (struct.new $A
+        (global.get $A.vtable)
+      )
+    )
+    (drop
+      (struct.new $B
+        (global.get $B.vtable)
+      )
+    )
+    (drop
+      (struct.new $M
+        (global.get $M.vtable)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $test (type $8)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $B.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $M.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    ;; waka
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $X 0
+          (call $import)
+        )
+      )
+    )
     (drop
       (ref.test (ref $M.vtable)
         (struct.get $X 0
