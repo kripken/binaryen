@@ -266,6 +266,7 @@ infoMap.dump(wasm);
     //
     // TODO: Avoid redundant work here.
     for (auto& [_, maybeSubMap] : infoMap) {
+std::cerr << "DL: " << wasm.typeNames[_.type].name << " : " << _.index << '\n';
       // All submaps should be filled (or else there would be no entry at all).
       assert(maybeSubMap);
       auto& subMap = *maybeSubMap;
@@ -275,12 +276,12 @@ infoMap.dump(wasm);
       // In the example above, iterating on infoMap[$X:$vtable] will start with
       // key = $X.vtable and value = $X.
       for (auto [key, value] : subMap) {
-std::cerr << "key: " << wasm.typeNames[key].name << '\n';
-std::cerr << "value: " << wasm.typeNames[value].name << '\n';
+std::cerr << "  key: " << wasm.typeNames[key].name << '\n';
+std::cerr << "  value: " << wasm.typeNames[value].name << '\n';
         // Continuing the example, subKey will begin with $A.vtable (the first
         // immediate subtype of $X.vtable).
         for (auto subKey : subTypes.getImmediateSubTypes(key)) {
-std::cerr << "subkey: " << wasm.typeNames[subKey].name << '\n';
+std::cerr << "    subkey: " << wasm.typeNames[subKey].name << '\n';
           auto iter = subMap.find(subKey);
           if (iter == subMap.end()) {
             // This subtype is not used and does not pose a problem.
@@ -290,12 +291,12 @@ std::cerr << "subkey: " << wasm.typeNames[subKey].name << '\n';
           // Continuing the example, this is $A (the entry for $A.vtable in the
           // sub-map).
           auto expectedSubValue = iter->second;
-std::cerr << "expectedSubValue: " << wasm.typeNames[expectedSubValue].name << '\n';
+std::cerr << "      expectedSubValue: " << wasm.typeNames[expectedSubValue].name << '\n';
 
           // Continuing the example, $A (expectedSubValue) must be an
           // immediate subtype of $X (value).
           auto super = expectedSubValue.getSuperType();
-if (super) std::cerr << "*super          : " << wasm.typeNames[*super].name << '\n';
+if (super) std::cerr << "      *super          : " << wasm.typeNames[*super].name << '\n';
           if (!super || *super != value) {
             // Unfortunately we found a problem.
               std::cerr << "fail1\n"; // TODO invrestigate this noww
