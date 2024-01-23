@@ -488,7 +488,7 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
-    ;; We can optimize here. XXX
+    ;; We can optimize here.
     (drop
       (ref.test (ref $A.vtable)
         (struct.get $X 0
