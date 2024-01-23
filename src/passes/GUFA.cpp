@@ -155,6 +155,28 @@ struct ParallelTypeHierarchiesOracle {
   InfoMap infoMap;
 
   ParallelTypeHierarchiesOracle(Module& wasm, ContentOracle& oracle) : subTypes(wasm), oracle(oracle) {
+    // In the first phase of our analysis we see what types are written to
+    // fields, and propagate that up, thereby building the structure described
+    // earlier:
+    //
+    //  infoMap[$X:$vtable] = { $A.vtable: $A, $B.vtable: $B }
+    //
+    // For each HeapType+field, the sub-map connects written types to their
+    // object types of all subtypes. So here we see $A, a subtype of $X, appears
+    // as "$A.vtable: $A" which maps the type written into $A's field to $A.
+    // That is, "objects" of type $A always have "vtables" of type $A.vtable
+    // written to that field.
+    //
+    // Note that this mapping proves a crucial 1:1 relationship between objects
+    // and vtables: we cannot have both $A and $B with $A.vtable in that field,
+    // since the sub-map only connects $A.vtable (the key in the sub-map) to a
+    // single type (the value in the sub-map). The other requirement for there
+    // to a 1:1 relationship is that we do not have things like
+    //
+    //  { $A.vtable: $A, $B.vtable: $A }
+    //
+    // That is, $A must not appear as two separate values in the sub-map. We'll
+    // verify that later.
     for (auto type : subTypes.types) {
       if (!type.isStruct()) {
         continue;
@@ -245,33 +267,52 @@ struct ParallelTypeHierarchiesOracle {
 std::cout << "map1\n";
 infoMap.dump(wasm);
 
-    // We built up the mapping described earlier, which describes when there is
-    // a relationship between the type assigned in a field and the type itself.
-    // We also need to verify that subtyping is isomorphic. That is, given
+    // We built up the mapping described earlier, and have one thing left to do
+    // as mentioned earlier: verify there are no cases like this:
     //
-    //         $X             $X.vtable
-    //        |   |            |     |
-    //       $A   $B     $A.vtable $B.vtable
+    //  infoMap[..] = { $A.vtable: $A, $B.vtable: $A }
+    //                              ^              ^
+    // The same type $A cannot appear as a value more than once.
     //
-    // we've seen that each type $T is always written $T.vtable to its vtable.
-    // We also need $A's and $B's vtable to be a subtype of $X's. Our data
-    // structure looks like this:
+    // That entry means that $A's $vtable field was written exactly an $A.vtable
+    // and nothing else. That proves part of a 1:1 mapping between the object
+    // and vtable types, and we need to prove it is truly 1:1, which requires us
+    // to also verify that we don't have this:
     //
-    //  infoMap[$X:$vtable] = { $X.vtable: $X, $A.vtable: $A, $B.vtable: $B }
-    //  infoMap[$A:$vtable] = { $A.vtable: $A }
-    //  infoMap[$B:$vtable] = { $B.vtable: $B }
+    //  .. = { $A.vtable: $A, $B.vtable: $A }
+
+    // we want to infer something in situations like this:
     //
-    // For each submap, we find the immediate subtypes of each entry and check
-    // them.
+    //  (ref.test $A.vtable
+    //    (struct.get $X $vtable
+    //      (REF)
+    //    )
+    //  )
+    //
+    // We would like to be able to test REF on $A rather than read the vtable
+    // and test that. That transformation is valid when the tests return true in
+    // exactly the same situations, which we can verify by simply going through
+    // all the subtypes of $X, that is all the possible things that can appear
+    // in REF.
     //
     // TODO: Avoid redundant work here.
-    for (auto& [_, maybeSubMap] : infoMap) {
+    for (auto& [loc, maybeSubMap] : infoMap) {
+      // In the example above, loc.type is $X and loc.index is $vtable.
+
 std::cerr << "DL: " << wasm.typeNames[_.type].name << " : " << _.index << '\n';
       // All submaps should be filled (or else there would be no entry at all).
       assert(maybeSubMap);
       auto& subMap = *maybeSubMap;
 
       auto fail = false;
+
+      for (auto [key, value] : subMap) {
+      ...
+      subTypes.iterSubTypes(loc.type, [&](HeapType subType) {
+        auto iter = subMap.find(
+        // Check if a test of this subtype behaves the same 
+      });
+
 
       // In the example above, iterating on infoMap[$X:$vtable] will start with
       // key = $X.vtable and value = $X.
