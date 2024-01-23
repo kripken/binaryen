@@ -278,7 +278,7 @@ infoMap.dump(wasm);
       assert(maybeSubMap);
       auto& subMap = *maybeSubMap;
 
-      std::unordered_map<HeapType> values;
+      std::unordered_set<HeapType> values;
 
       for (auto [_, value] : subMap) {
         values.insert(value);

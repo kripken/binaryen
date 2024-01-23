@@ -270,6 +270,9 @@
 ;;       $M   $B     $A.vtable  $B.vtable
 ;;        |
 ;;       $A
+;;
+;; The extra type $M in the middle is never created and so it does not pose a
+;; problem.
 (module
   (rec
     ;; CHECK:      (rec
@@ -348,22 +351,18 @@
 
   ;; CHECK:      (func $test (type $7)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
-  ;; CHECK-NEXT:    (struct.get $X 0
-  ;; CHECK-NEXT:     (call $import)
-  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   (ref.test (ref $A)
+  ;; CHECK-NEXT:    (call $import)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $B.vtable)
-  ;; CHECK-NEXT:    (struct.get $X 0
-  ;; CHECK-NEXT:     (call $import)
-  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   (ref.test (ref $B)
+  ;; CHECK-NEXT:    (call $import)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
-    ;; We cannot optimize here.
+    ;; We can optimize here.
     (drop
       (ref.test (ref $A.vtable)
         (struct.get $X 0
@@ -389,6 +388,9 @@
 ;;       $A   $B     $A.vtable  $M.vtable
 ;;                                |
 ;;                              $B.vtable
+;;
+;; Again, we can optimize here.
+;; TODO: testcases where they *are* instantiated
 (module
   (rec
     ;; CHECK:      (rec
@@ -477,9 +479,16 @@
   ;; CHECK-NEXT:    (call $import)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $M.vtable)
+  ;; CHECK-NEXT:    (struct.get $X 0
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
-    ;; We cannot optimize here. XXX
+    ;; We can optimize here. XXX
     (drop
       (ref.test (ref $A.vtable)
         (struct.get $X 0
