@@ -329,7 +329,34 @@ infoMap.dump(wasm);
     // fields of subtypes, $A.vtable :> $C.vtable. Thus, the subtypes of $A and
     // of $A.vtable are isomorphic. Note that they may not be identical in
     // shape: there may be more types on one side, abstract types in the middle,
-    // etc., but those do not interfere with this optimization.
+    // etc., but those do not interfere with this optimization. To see that,
+    // imagine that we have a case where the optimization fails:
+    //
+    //  (ref.test $A.vtable
+    //    (struct.get $X $vtable
+    //      (REF)
+    //    )
+    //  )
+    //
+    // is true while this is false:
+    //
+    //  (ref.test $A
+    //    (REF)
+    //  )
+    //
+    // The latter being false implies that while REF is a subtype of $X, it is
+    // not $A or a subtype of $A. The former being true implies that REF's
+    // vtable is $A.vtable or a subtype. This can happen with $B ($A's sibling
+    // type) if $A.vtable :> $B.vtable:
+    //
+    //
+    //         $X             $vtable
+    //        |  |             |
+    //       $A  $B     $A.vtable
+    //                         |
+    //                  $B.vtable
+    //
+    // yikes
 
 std::cout << "map2\n";
 infoMap.dump(wasm);
