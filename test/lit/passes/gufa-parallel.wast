@@ -938,8 +938,8 @@
     ;; CHECK:       (type $X (sub (struct (field (ref $X.vtable)))))
     (type $X (sub (struct (field (ref $X.vtable)))))
 
-    ;; CHECK:       (type $M (sub $X (struct (field (ref $X.vtable)))))
-    (type $M (sub $X (struct (field (ref $X.vtable)))))
+    ;; CHECK:       (type $M (sub $X (struct (field (ref $M.vtable)))))
+    (type $M (sub $X (struct (field (ref $M.vtable)))))
 
     ;; CHECK:       (type $A (sub $M (struct (field (ref $A.vtable)))))
     (type $A (sub $M (struct (field (ref $A.vtable)))))
@@ -952,8 +952,13 @@
 
   ;; CHECK:      (type $9 (func (result (ref $X))))
 
-  ;; CHECK:      (import "a" "b" (func $import (type $9) (result (ref $X))))
-  (import "a" "b" (func $import (result (ref $X))))
+  ;; CHECK:      (type $10 (func (result (ref $M))))
+
+  ;; CHECK:      (import "a" "b" (func $import-X (type $9) (result (ref $X))))
+  (import "a" "b" (func $import-X (result (ref $X))))
+
+  ;; CHECK:      (import "a" "c" (func $import-M (type $10) (result (ref $M))))
+  (import "a" "c" (func $import-M (result (ref $M))))
 
   ;; CHECK:      (global $X.vtable (ref $X.vtable) (struct.new_default $X.vtable))
   (global $X.vtable (ref $X.vtable) (struct.new $X.vtable))
@@ -964,8 +969,8 @@
   ;; CHECK:      (global $B.vtable (ref $B.vtable) (struct.new_default $B.vtable))
   (global $B.vtable (ref $B.vtable) (struct.new $B.vtable))
 
-  ;; CHECK:      (global $M.vtable (ref $X.vtable) (struct.new_default $X.vtable))
-  (global $M.vtable (ref $X.vtable) (struct.new $X.vtable))
+  ;; CHECK:      (global $M.vtable (ref $M.vtable) (struct.new_default $M.vtable))
+  (global $M.vtable (ref $M.vtable) (struct.new $M.vtable))
 
   ;; CHECK:      (func $create (type $8)
   ;; CHECK-NEXT:  (drop
@@ -1014,47 +1019,89 @@
 
   ;; CHECK:      (func $test (type $8)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $A.vtable)
-  ;; CHECK-NEXT:    (struct.get $X 0
-  ;; CHECK-NEXT:     (call $import)
-  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   (ref.test (ref $A)
+  ;; CHECK-NEXT:    (call $import-X)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $B.vtable)
-  ;; CHECK-NEXT:    (struct.get $X 0
-  ;; CHECK-NEXT:     (call $import)
-  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   (ref.test (ref $B)
+  ;; CHECK-NEXT:    (call $import-X)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $M.vtable)
-  ;; CHECK-NEXT:    (struct.get $X 0
-  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:   (ref.test (ref $M)
+  ;; CHECK-NEXT:    (call $import-X)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $A)
+  ;; CHECK-NEXT:    (call $import-M)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (struct.get $M 0
+  ;; CHECK-NEXT:      (call $import-M)
+  ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (struct.get $M 0
+  ;; CHECK-NEXT:      (call $import-M)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 1)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
-    ;; waka
+    ;; We can optimize here.
     (drop
       (ref.test (ref $A.vtable)
         (struct.get $X 0
-          (call $import)
+          (call $import-X)
         )
       )
     )
     (drop
       (ref.test (ref $B.vtable)
         (struct.get $X 0
-          (call $import)
+          (call $import-X)
         )
       )
     )
     (drop
       (ref.test (ref $M.vtable)
         (struct.get $X 0
-          (call $import)
+          (call $import-X)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $A.vtable)
+        (struct.get $M 0
+          (call $import-M)
+        )
+      )
+    )
+    ;; These last two can be trivially optimized even without parallel type
+    ;; hierarchy analysis.
+    (drop
+      (ref.test (ref $B.vtable)
+        (struct.get $M 0
+          (call $import-M)
+        )
+      )
+    )
+    (drop
+      (ref.test (ref $M.vtable)
+        (struct.get $M 0
+          (call $import-M)
         )
       )
     )
