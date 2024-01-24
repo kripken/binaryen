@@ -1806,13 +1806,8 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block (result i32)
-  ;; CHECK-NEXT:    (drop
-  ;; CHECK-NEXT:     (struct.get $B 0
-  ;; CHECK-NEXT:      (call $import-B)
-  ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   (ref.test (ref $D)
+  ;; CHECK-NEXT:    (call $import-B)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -1826,7 +1821,7 @@
       )
     )
     (drop
-      (ref.test (ref $B.vtable)
+      (ref.test (ref $D.vtable)
         (struct.get $B 0
           (call $import-B)
         )
