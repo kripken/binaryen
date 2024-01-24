@@ -132,11 +132,13 @@ struct ParallelTypeHierarchiesOracle {
   // and the map is empty then that means we found invalid data, and so we
   // cleared the map to indicate failure to optimize there.
   using SubMap = std::unordered_map<HeapType, HeapType>;
-  struct InfoMap : public std::unordered_map<DataLocation, std::optional<SubMap>> {
+  struct InfoMap
+    : public std::unordered_map<DataLocation, std::optional<SubMap>> {
     void dump(Module& wasm) const {
       std::cerr << "dumping infoMap\n";
       for (auto& [loc, maybeSubMap] : *this) {
-        std::cerr << "  " << wasm.typeNames[loc.type].name << ":" << loc.index << "\n";
+        std::cerr << "  " << wasm.typeNames[loc.type].name << ":" << loc.index
+                  << "\n";
         if (!maybeSubMap) {
           std::cerr << "    (nullopt)\n";
         } else {
@@ -145,7 +147,8 @@ struct ParallelTypeHierarchiesOracle {
             std::cerr << "    (failed to infer parallel hierarchies)\n";
           } else {
             for (auto& [key, value] : subMap) {
-              std::cerr << "    " << wasm.typeNames[key].name << ": " << wasm.typeNames[value].name << "\n";
+              std::cerr << "    " << wasm.typeNames[key].name << ": "
+                        << wasm.typeNames[value].name << "\n";
             }
           }
         }
@@ -154,7 +157,8 @@ struct ParallelTypeHierarchiesOracle {
   };
   InfoMap infoMap;
 
-  ParallelTypeHierarchiesOracle(Module& wasm, ContentOracle& oracle) : subTypes(wasm), oracle(oracle) {
+  ParallelTypeHierarchiesOracle(Module& wasm, ContentOracle& oracle)
+    : subTypes(wasm), oracle(oracle) {
     // In the first phase of our analysis we see what types are written to
     // fields, and propagate that up, thereby building the structure described
     // earlier:
@@ -201,7 +205,8 @@ struct ParallelTypeHierarchiesOracle {
           // about global identity here).
           auto* global = wasm.getGlobal(typeContents.getGlobal());
           if (global->init) {
-            typeContents = oracle.getContents(ExpressionLocation{global->init, 0});
+            typeContents =
+              oracle.getContents(ExpressionLocation{global->init, 0});
           }
         }
         if (typeContents.isNone()) {
@@ -333,9 +338,9 @@ struct ParallelTypeHierarchiesOracle {
       for (auto [vtable, object] : subMap) {
         for (auto [vtable2, object2] : subMap) {
           if (HeapType::isSubType(vtable, vtable2) !=
-              HeapType::isSubType(object, object2) ||
+                HeapType::isSubType(object, object2) ||
               HeapType::isSubType(vtable2, vtable) !=
-              HeapType::isSubType(object2, object)) {
+                HeapType::isSubType(object2, object)) {
             fail = true;
             break;
           }
@@ -423,11 +428,16 @@ struct GUFAOptimizer
   //       before.
   bool castAll;
 
-  GUFAOptimizer(ContentOracle& oracle, ParallelTypeHierarchiesOracle& pthOracle, bool optimizing, bool castAll)
-    : oracle(oracle), pthOracle(pthOracle), optimizing(optimizing), castAll(castAll) {}
+  GUFAOptimizer(ContentOracle& oracle,
+                ParallelTypeHierarchiesOracle& pthOracle,
+                bool optimizing,
+                bool castAll)
+    : oracle(oracle), pthOracle(pthOracle), optimizing(optimizing),
+      castAll(castAll) {}
 
   std::unique_ptr<Pass> create() override {
-    return std::make_unique<GUFAOptimizer>(oracle, pthOracle, optimizing, castAll);
+    return std::make_unique<GUFAOptimizer>(
+      oracle, pthOracle, optimizing, castAll);
   }
 
   bool optimized = false;
@@ -770,7 +780,8 @@ struct GUFAPass : public Pass {
     ContentOracle oracle(*module, getPassOptions());
     ParallelTypeHierarchiesOracle pthOracle(*module, oracle);
 
-    GUFAOptimizer(oracle, pthOracle, optimizing, castAll).run(getPassRunner(), module);
+    GUFAOptimizer(oracle, pthOracle, optimizing, castAll)
+      .run(getPassRunner(), module);
   }
 };
 
