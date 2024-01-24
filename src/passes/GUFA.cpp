@@ -159,6 +159,10 @@ struct ParallelTypeHierarchiesOracle {
 
   ParallelTypeHierarchiesOracle(Module& wasm, ContentOracle& oracle)
     : subTypes(wasm), oracle(oracle) {
+    if (!wasm.features.hasGC()) {
+      return;
+    }
+
     // In the first phase of our analysis we see what types are written to
     // fields, and propagate that up, thereby building the structure described
     // earlier:
