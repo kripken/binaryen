@@ -202,7 +202,6 @@ struct ParallelTypeHierarchiesOracle {
           auto* global = wasm.getGlobal(typeContents.getGlobal());
           if (global->init) {
             typeContents = oracle.getContents(ExpressionLocation{global->init, 0});
-            std::cerr << "  => " << typeContents << "\n";
           }
         }
         if (typeContents.isNone()) {
@@ -245,11 +244,9 @@ struct ParallelTypeHierarchiesOracle {
             } else if (subMapValue != type) {
               // This is different, so we found a problem.
               contents = PossibleContents::many();
-              std::cerr << "many1\n";
             }
           }
           if (contents == PossibleContents::many()) {
-              std::cerr << "many2\n";
             // We ran into a problem. Clear the sub-map to indicate that.
             subMap.clear();
           }
@@ -263,9 +260,6 @@ struct ParallelTypeHierarchiesOracle {
         }
       }
     }
-
-std::cout << "map1\n";
-infoMap.dump(wasm);
 
     // We built up the mapping described earlier, and have one thing left to do
     // as mentioned earlier: verify there are no cases like this:
@@ -356,8 +350,6 @@ infoMap.dump(wasm);
         subMap.clear();
       }
     }
-std::cout << "map2\n";
-infoMap.dump(wasm);
   }
 
   // Given a ref.test of a struct.get, see if we can replace the test with a
@@ -389,7 +381,6 @@ infoMap.dump(wasm);
     // entry in infoMap must exist, and the sub-map must exist as well
     // (but it may be of size zero, if we failed to optimize).
     auto getLoc = DataLocation{heapType, get->index};
-    //std::cerr << "getLoc for " << getModule()->typeNames[heapType].name << ":" << get->index << '\n';
     auto iter = infoMap.find(getLoc);
     assert(iter != infoMap.end());
     auto& maybeSubMap = iter->second;
