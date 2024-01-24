@@ -381,13 +381,13 @@ struct ParallelTypeHierarchiesOracle {
       return {};
     }
 
-    // The location the get reads from must be in |infoMap| as we
-    // computed values for all possible locations ahead of time. Each
-    // entry in infoMap must exist, and the sub-map must exist as well
-    // (but it may be of size zero, if we failed to optimize).
     auto getLoc = DataLocation{heapType, get->index};
     auto iter = infoMap.find(getLoc);
-    assert(iter != infoMap.end());
+    if (iter == infoMap.end()) {
+      // This type was never instantiated or only done so in unreachable code;
+      // we have no info about it.
+      return {};
+    }
     auto& maybeSubMap = iter->second;
     assert(maybeSubMap);
     auto& subMap = *maybeSubMap;
