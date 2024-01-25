@@ -1829,3 +1829,76 @@
     )
   )
 )
+
+;; A nullable vtable, which makes things trickier.
+(module
+  ;; CHECK:      (type $vtable (sub (struct )))
+  (type $vtable (sub (struct)))
+
+  ;; CHECK:      (type $object (sub (struct (field (ref null $vtable)))))
+  (type $object (sub (struct (field (ref null $vtable)))))
+
+  ;; CHECK:      (type $2 (func (result (ref null $object))))
+
+  ;; CHECK:      (type $3 (func))
+
+  ;; CHECK:      (import "a" "b" (func $import (type $2) (result (ref null $object))))
+  (import "a" "b" (func $import (result (ref null $object))))
+
+  ;; CHECK:      (func $test (type $3)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new_default $object)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (struct.new $object
+  ;; CHECK-NEXT:    (struct.new_default $vtable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.test (ref $object)
+  ;; CHECK-NEXT:    (ref.as_non_null
+  ;; CHECK-NEXT:     (call $import)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (struct.get $object 0
+  ;; CHECK-NEXT:      (call $import)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    ;; The object is constructed with a null vtable sometimes.
+    (drop
+      (struct.new_default $object)
+    )
+    (drop
+      (struct.new $object
+        (struct.new $vtable)
+      )
+    )
+    ;; A non-nullable test of $vtable. The heap type is correct, that much we
+    ;; know, but it might be null, and that would make this check fail, so we
+    ;; cannot infer here.
+    (drop
+      (ref.test (ref $vtable)
+        (struct.get $object 0
+          (call $import)
+        )
+      )
+    )
+    ;; A nullable test. This must succeed either way. XXX subtype add
+    (drop
+      (ref.test (ref null $vtable)
+        (struct.get $object 0
+          (call $import)
+        )
+      )
+    )
+  )
+)
