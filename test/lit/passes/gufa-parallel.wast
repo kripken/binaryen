@@ -1855,8 +1855,8 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.test (ref $object)
-  ;; CHECK-NEXT:    (ref.as_non_null
+  ;; CHECK-NEXT:   (ref.test (ref $vtable)
+  ;; CHECK-NEXT:    (struct.get $object 0
   ;; CHECK-NEXT:     (call $import)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
@@ -1892,7 +1892,8 @@
         )
       )
     )
-    ;; A nullable test. This must succeed either way. XXX subtype add
+    ;; A nullable test. This must succeed either way, in this case, and we
+    ;; optimize it to 1.
     (drop
       (ref.test (ref null $vtable)
         (struct.get $object 0

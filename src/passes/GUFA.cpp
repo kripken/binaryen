@@ -192,10 +192,15 @@ struct ParallelTypeHierarchiesOracle {
 
       auto& fields = type.getStruct().fields;
       for (Index i = 0; i < fields.size(); i++) {
-        // We only optimize immutable references here. (Subtyping is not
-        // possible on mutable ones anyhow; and vtables are normally immutable.)
+        // We only optimize immutable non-nullable references here:
+        //   * Subtyping is not possible on mutable ones anyhow.
+        //   * Nullable fields add complexity because we need to consider not
+        //     just the heap type but the nullability as well.
+        // In practice $vtable fields are immutable and non-nullable, so we
+        // focus on that case.
         auto field = fields[i];
-        if (!field.type.isRef() || !field.mutable_ == Immutable) {
+        if (!field.type.isRef() || field.type.isNullable() ||
+            field.mutable_ != Immutable) {
           continue;
         }
 
