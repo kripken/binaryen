@@ -293,8 +293,24 @@ struct Precompute
     }
     if (flow.breaking()) {
       if (flow.breakTo == NONCONSTANT_FLOW) {
-        // This cannot be turned into a constant, but perhaps we can partially
-        // precompute it.
+        // This cannot be replaced with a constant, but perhaps we can compute
+        // its value without replacing it, which might increase size but can
+        // still be useful. Note that we must check for proper subtyping here as
+        // the value may fail to precompute (none) and also even if it does
+        // precompute then something may fall through which will not validate
+        // (see details in propagateLocals's call to precomputeValue).
+        // XXX pass options?
+        auto values = precomputeValue(curr);
+        if (values.getType().isConcrete() && canEmitConstantFor(values) &&
+            Type::isSubType(values.getType(), curr->type)) {
+          Builder builder(*getModule());
+          replaceCurrent(builder.makeSequence(
+            builder.makeDrop(curr),
+            builder.makeConstantExpression(values)
+          ));
+          return;
+        }
+        // Perhaps we can partially precompute it.
         considerPartiallyPrecomputing(curr);
         return;
       }
