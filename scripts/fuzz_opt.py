@@ -10,6 +10,10 @@ Usage:
 
 That will run forever or until it finds a problem.
 
+You can put files in the local directory 'fuzz' (under the top level of the
+binaryen repo) and the fuzzer will treat them as important content to fuzz
+with high frequency.
+
 Setup: Some tools are optional, like emcc and wasm2c. The v8 shell (d8),
 however, is used in various sub-fuzzers and so it is mandatory.
 
@@ -122,16 +126,27 @@ def no_pass_debug():
 def randomize_feature_opts():
     global FEATURE_OPTS
     FEATURE_OPTS = CONSTANT_FEATURE_OPTS[:]
-    # 1/3 the time apply all the possible opts, 1/3 none of them, to maximize
-    # coverage both ways, and 1/3 pick each one randomly
-    if random.random() < 0.33333:
-        FEATURE_OPTS += POSSIBLE_FEATURE_OPTS
-    elif random.random() < 0.5:
-        for possible in POSSIBLE_FEATURE_OPTS:
+
+    if random.random() < 0.1:
+        # 10% of the time disable all features, i.e., fuzz the MVP featureset.
+        # Fuzzing that is less and less important as more features get enabled
+        # by default, but we don't want to lose all coverage for it entirely
+        # (and the odds of randomly not selecting any feature, below, is too
+        # small - at 17 features it is far less than 1%).
+        FEATURE_OPTS += FEATURE_DISABLE_FLAGS
+    elif random.random() < 0.333:
+        # 1/3 of the remaining 90% pick each feature randomly.
+        for possible in FEATURE_DISABLE_FLAGS:
             if random.random() < 0.5:
                 FEATURE_OPTS.append(possible)
                 if possible in IMPLIED_FEATURE_OPTS:
                     FEATURE_OPTS.extend(IMPLIED_FEATURE_OPTS[possible])
+    else:
+        # 2/3 of the remaining 90% use them all. This is useful to maximize
+        # coverage, as enabling more features enables more optimizations and
+        # code paths, and also allows all initial contents to run.
+        pass
+
     print('randomized feature opts:', '\n  ' + '\n  '.join(FEATURE_OPTS))
 
     # Pick closed or open with equal probability as both matter.
@@ -159,8 +174,13 @@ def update_feature_opts(wasm):
 
 
 def randomize_fuzz_settings():
+    # a list of the arguments to pass to wasm-opt -ttf when generating the wasm
+    global GEN_ARGS
+    GEN_ARGS = []
+
     # a list of the optimizations to run on the wasm
     global FUZZ_OPTS
+    FUZZ_OPTS = []
 
     # a boolean whether NaN values are allowed, or we de-NaN them
     global NANS
@@ -171,20 +191,19 @@ def randomize_fuzz_settings():
     # a boolean whether we legalize the wasm for JS
     global LEGALIZE
 
-    FUZZ_OPTS = []
     if random.random() < 0.5:
         NANS = True
     else:
         NANS = False
-        FUZZ_OPTS += ['--denan']
+        GEN_ARGS += ['--denan']
     if random.random() < 0.5:
         OOB = True
     else:
         OOB = False
-        FUZZ_OPTS += ['--no-fuzz-oob']
+        GEN_ARGS += ['--no-fuzz-oob']
     if random.random() < 0.5:
         LEGALIZE = True
-        FUZZ_OPTS += ['--legalize-js-interface']
+        GEN_ARGS += ['--legalize-and-prune-js-interface']
     else:
         LEGALIZE = False
 
@@ -194,30 +213,23 @@ def randomize_fuzz_settings():
     #   https://github.com/WebAssembly/binaryen/pull/5665
     #   https://github.com/WebAssembly/binaryen/issues/5599
     if '--disable-gc' not in FEATURE_OPTS:
+        GEN_ARGS += ['--dce']
+
+        # Add --dce not only when generating the original wasm but to the
+        # optimizations we use to create any other wasm file.
         FUZZ_OPTS += ['--dce']
 
     print('randomized settings (NaNs, OOB, legalize):', NANS, OOB, LEGALIZE)
 
 
 def init_important_initial_contents():
-    FIXED_IMPORTANT_INITIAL_CONTENTS = [
-        # Perenially-important passes
-        os.path.join('lit', 'passes', 'optimize-instructions-mvp.wast'),
-        os.path.join('passes', 'optimize-instructions_fuzz-exec.wast'),
-    ]
-    MANUAL_RECENT_INITIAL_CONTENTS = [
-        # Recently-added or modified passes. These can be added to and pruned
-        # frequently.
-        os.path.join('lit', 'passes', 'once-reduction.wast'),
-        os.path.join('passes', 'remove-unused-brs_enable-multivalue.wast'),
-        os.path.join('lit', 'passes', 'optimize-instructions-bulk-memory.wast'),
-        os.path.join('lit', 'passes', 'optimize-instructions-ignore-traps.wast'),
-        os.path.join('lit', 'passes', 'optimize-instructions-gc.wast'),
-        os.path.join('lit', 'passes', 'optimize-instructions-gc-iit.wast'),
-        os.path.join('lit', 'passes', 'optimize-instructions-call_ref.wast'),
-        os.path.join('lit', 'passes', 'inlining_splitting.wast'),
-        os.path.join('heap-types.wast'),
-    ]
+    # Fuzz dir contents are always important to us.
+    fuzz_dir = os.path.join(shared.options.binaryen_root, 'fuzz')
+    fuzz_cases = shared.get_tests(fuzz_dir, test_suffixes, recursive=True)
+    FIXED_IMPORTANT_INITIAL_CONTENTS = fuzz_cases
+
+    # If auto_initial_contents is set we'll also grab all test files that are
+    # recent.
     RECENT_DAYS = 30
 
     # Returns the list of test wast/wat files added or modified within the
@@ -258,7 +270,7 @@ def init_important_initial_contents():
               'so not automatically selecting initial contents.')
         shared.options.auto_initial_contents = False
 
-    print('- Perenially-important initial contents:')
+    print('- Important provided initial contents:')
     for test in FIXED_IMPORTANT_INITIAL_CONTENTS:
         print('  ' + test)
     print()
@@ -268,9 +280,6 @@ def init_important_initial_contents():
     if shared.options.auto_initial_contents:
         print(f'(automatically selected: within last {RECENT_DAYS} days):')
         recent_contents += auto_select_recent_initial_contents()
-    else:
-        print('(manually selected):')
-        recent_contents = MANUAL_RECENT_INITIAL_CONTENTS
     for test in recent_contents:
         print('  ' + test)
     print()
@@ -317,10 +326,13 @@ INITIAL_CONTENTS_IGNORE = [
     # the fuzzer does not support typed continuations
     'typed_continuations.wast',
     'typed_continuations_resume.wast',
+    'typed_continuations_contnew.wast',
     # New EH implementation is in progress
     'exception-handling.wast',
     'translate-eh-old-to-new.wast',
     'rse-eh.wast',
+    # Non-UTF8 strings trap in V8
+    'string-lowering.wast',
 ]
 
 
@@ -335,7 +347,7 @@ def pick_initial_contents():
         return
     # some of the time use initial contents that are known to be especially
     # important
-    if random.random() < 0.5:
+    if IMPORTANT_INITIAL_CONTENTS and random.random() < 0.5:
         test_name = random.choice(IMPORTANT_INITIAL_CONTENTS)
     else:
         test_name = random.choice(all_tests)
@@ -458,6 +470,13 @@ FUZZ_EXEC_CALL_PREFIX = '[fuzz-exec] calling'
 # --fuzz-exec reports a stack limit using this notation
 STACK_LIMIT = '[trap stack limit]'
 
+# V8 reports this error in rare cases due to limitations in our handling of non-
+# nullable locals in unreachable code, see
+#   https://github.com/WebAssembly/binaryen/pull/5665
+#   https://github.com/WebAssembly/binaryen/issues/5599
+# and also see the --dce workaround below that also links to those issues.
+V8_UNINITIALIZED_NONDEF_LOCAL = 'uninitialized non-defaultable local'
+
 
 # given a call line that includes FUZZ_EXEC_CALL_PREFIX, return the export that
 # is called
@@ -571,6 +590,10 @@ def fix_output(out):
     # change that index, so ignore it
     out = re.sub(r'funcref\([\d\w$+-_:]+\)', 'funcref()', out)
 
+    # JS prints i31 as just a number, so change "i31ref(N)" (which C++ emits)
+    # to "N".
+    out = re.sub(r'i31ref\((-?\d+)\)', r'\1', out)
+
     lines = out.splitlines()
     for i in range(len(lines)):
         line = lines[i]
@@ -627,6 +650,8 @@ def run_vm(cmd):
             # strings in this list for known issues (to which more need to be
             # added as necessary).
             HOST_LIMIT_PREFIX,
+            # see comment above on this constant
+            V8_UNINITIALIZED_NONDEF_LOCAL,
         ]
         for issue in known_issues:
             if issue in output:
@@ -662,7 +687,7 @@ V8_LIFTOFF_ARGS = ['--liftoff', '--no-wasm-tier-up']
 
 
 # default to running with liftoff enabled, because we need to pick either
-# liftoff or turbofan for consistency (otherwise running the same command twice
+# liftoff or turbo* for consistency (otherwise running the same command twice
 # may have different results due to NaN nondeterminism), and liftoff is faster
 # for small things
 def run_d8_js(js, args=[], liftoff=True):
@@ -675,8 +700,11 @@ def run_d8_js(js, args=[], liftoff=True):
     return run_vm(cmd)
 
 
+FUZZ_SHELL_JS = in_binaryen('scripts', 'fuzz_shell.js')
+
+
 def run_d8_wasm(wasm, liftoff=True):
-    return run_d8_js(in_binaryen('scripts', 'fuzz_shell.js'), [wasm], liftoff=liftoff)
+    return run_d8_js(FUZZ_SHELL_JS, [wasm], liftoff=liftoff)
 
 
 def all_disallowed(features):
@@ -756,14 +784,10 @@ class CompareVMs(TestCaseHandler):
             name = 'd8'
 
             def run(self, wasm, extra_d8_flags=[]):
-                run([in_bin('wasm-opt'), wasm, '--emit-js-wrapper=' + wasm + '.js'] + FEATURE_OPTS)
-                return run_vm([shared.V8, wasm + '.js'] + shared.V8_OPTS + extra_d8_flags + ['--', wasm])
+                return run_vm([shared.V8, FUZZ_SHELL_JS] + shared.V8_OPTS + extra_d8_flags + ['--', wasm])
 
             def can_run(self, wasm):
-                # INITIAL_CONTENT is disallowed because some initial spec testcases
-                # have names that require mangling, see
-                # https://github.com/WebAssembly/binaryen/pull/3216
-                return not INITIAL_CONTENTS
+                return True
 
             def can_compare_to_self(self):
                 # With nans, VM differences can confuse us, so only very simple VMs
@@ -780,6 +804,12 @@ class CompareVMs(TestCaseHandler):
 
             def run(self, wasm):
                 return super(D8Liftoff, self).run(wasm, extra_d8_flags=V8_LIFTOFF_ARGS)
+
+        class D8Turboshaft(D8):
+            name = 'd8_turboshaft'
+
+            def run(self, wasm):
+                return super(D8Turboshaft, self).run(wasm, extra_d8_flags=['--no-liftoff', '--turboshaft-wasm', '--turboshaft-wasm-instruction-selection-staged'])
 
         class D8TurboFan(D8):
             name = 'd8_turbofan'
@@ -884,6 +914,7 @@ class CompareVMs(TestCaseHandler):
         self.vms = [self.bynterpreter,
                     D8(),
                     D8Liftoff(),
+                    D8Turboshaft(),
                     D8TurboFan(),
                     # FIXME: Temprorary disable. See issue #4741 for more details
                     # Wasm2C(),
@@ -933,9 +964,6 @@ class CompareVMs(TestCaseHandler):
             if vm in after and vm.can_compare_to_self():
                 compare(before[vm], after[vm], 'CompareVMs between before and after: ' + vm.name)
 
-    def can_run_on_feature_opts(self, feature_opts):
-        return all_disallowed(['simd', 'multivalue', 'multimemory'])
-
 
 # Check for determinism - the same command must have the same output.
 class CheckDeterminism(TestCaseHandler):
@@ -965,7 +993,7 @@ class Wasm2JS(TestCaseHandler):
         # later make sense (if we don't do this, the wasm may have i64 exports).
         # after applying other necessary fixes, we'll recreate the after wasm
         # from scratch.
-        run([in_bin('wasm-opt'), before_wasm, '--legalize-js-interface', '-o', before_wasm_temp] + FEATURE_OPTS)
+        run([in_bin('wasm-opt'), before_wasm, '--legalize-and-prune-js-interface', '-o', before_wasm_temp] + FEATURE_OPTS)
         compare_before_to_after = random.random() < 0.5
         compare_to_interpreter = compare_before_to_after and random.random() < 0.5
         if compare_before_to_after:
@@ -1046,7 +1074,8 @@ class Wasm2JS(TestCaseHandler):
                 compare_between_vms(before, interpreter, 'Wasm2JS (vs interpreter)')
 
     def run(self, wasm):
-        wrapper = run([in_bin('wasm-opt'), wasm, '--emit-js-wrapper=/dev/stdout'] + FEATURE_OPTS)
+        with open(FUZZ_SHELL_JS) as f:
+            wrapper = f.read()
         cmd = [in_bin('wasm2js'), wasm, '--emscripten']
         # avoid optimizations if we have nans, as we don't handle them with
         # full precision and optimizations can change things
@@ -1079,76 +1108,6 @@ class Wasm2JS(TestCaseHandler):
         if INITIAL_CONTENTS:
             return False
         return all_disallowed(['exception-handling', 'simd', 'threads', 'bulk-memory', 'nontrapping-float-to-int', 'tail-call', 'sign-ext', 'reference-types', 'multivalue', 'gc', 'multimemory'])
-
-
-class Asyncify(TestCaseHandler):
-    frequency = 0.1
-
-    def handle_pair(self, input, before_wasm, after_wasm, opts):
-        # we must legalize in order to run in JS
-        async_before_wasm = abspath('async.' + os.path.basename(before_wasm))
-        async_after_wasm = abspath('async.' + os.path.basename(after_wasm))
-        run([in_bin('wasm-opt'), before_wasm, '--legalize-js-interface', '-o', async_before_wasm] + FEATURE_OPTS)
-        run([in_bin('wasm-opt'), after_wasm, '--legalize-js-interface', '-o', async_after_wasm] + FEATURE_OPTS)
-        before_wasm = async_before_wasm
-        after_wasm = async_after_wasm
-        before = fix_output(run_d8_wasm(before_wasm))
-        after = fix_output(run_d8_wasm(after_wasm))
-
-        if STACK_LIMIT in run_bynterp(before_wasm, ['--fuzz-exec-before']):
-            # Running out of stack in infinite recursion can be a problem here
-            # as we compare a wasm before and after asyncify, and asyncify can
-            # add a lot of locals, which could mean the host limit can be
-            # reached earlier, and alter the output (less logging before we
-            # reach the host limit and trap).
-            # TODO This is not quite enough, as if we are just under the limit
-            #      then we may only hit the limit after running asyncify. But
-            #      then we'd also need to detect differences in the limit in
-            #      the JS VM's output (which can differ from Binaryen's). For
-            #      now, this rules out infinite recursion at least.
-            print('ignoring due to stack limit being hit')
-            return
-
-        try:
-            compare(before, after, 'Asyncify (before/after)')
-        except Exception:
-            # if we failed to just compare the builds before asyncify even runs,
-            # then it may use NaNs or be sensitive to legalization; ignore it
-            print('ignoring due to pre-asyncify difference')
-            return
-
-        def do_asyncify(wasm):
-            cmd = [in_bin('wasm-opt'), wasm, '--asyncify', '-o', abspath('async.t.wasm')]
-            # if we allow NaNs, running binaryen optimizations and then
-            # executing in d8 may lead to different results due to NaN
-            # nondeterminism between VMs.
-            if not NANS:
-                if random.random() < 0.5:
-                    cmd += ['--optimize-level=%d' % random.randint(1, 3)]
-                if random.random() < 0.5:
-                    cmd += ['--shrink-level=%d' % random.randint(1, 2)]
-            cmd += FEATURE_OPTS
-            run(cmd)
-            out = run_d8_wasm(abspath('async.t.wasm'))
-            # ignore the output from the new asyncify API calls - the ones with asserts will trap, too
-            for ignore in ['[fuzz-exec] calling asyncify_start_unwind\nexception!\n',
-                           '[fuzz-exec] calling asyncify_start_unwind\n',
-                           '[fuzz-exec] calling asyncify_start_rewind\nexception!\n',
-                           '[fuzz-exec] calling asyncify_start_rewind\n',
-                           '[fuzz-exec] calling asyncify_stop_rewind\n',
-                           '[fuzz-exec] calling asyncify_stop_unwind\n']:
-                out = out.replace(ignore, '')
-            out = '\n'.join([l for l in out.splitlines() if 'asyncify: ' not in l])
-            return fix_output(out)
-
-        before_asyncify = do_asyncify(before_wasm)
-        after_asyncify = do_asyncify(after_wasm)
-
-        compare(before, before_asyncify, 'Asyncify (before/before_asyncify)')
-        compare(before, after_asyncify, 'Asyncify (before/after_asyncify)')
-
-    def can_run_on_feature_opts(self, feature_opts):
-        return all_disallowed(['exception-handling', 'simd', 'tail-call', 'reference-types', 'multivalue', 'gc', 'multimemory'])
 
 
 # given a wasm and a list of exports we want to keep, remove all other exports.
@@ -1323,7 +1282,7 @@ class Merge(TestCaseHandler):
         second_input = abspath('second_input.dat')
         make_random_input(second_size, second_input)
         second_wasm = abspath('second.wasm')
-        run([in_bin('wasm-opt'), second_input, '-ttf', '-o', second_wasm] + FUZZ_OPTS + FEATURE_OPTS)
+        run([in_bin('wasm-opt'), second_input, '-ttf', '-o', second_wasm] + GEN_ARGS + FEATURE_OPTS)
 
         # sometimes also optimize the second module
         if random.random() < 0.5:
@@ -1383,7 +1342,6 @@ testcase_handlers = [
     CompareVMs(),
     CheckDeterminism(),
     Wasm2JS(),
-    Asyncify(),
     TrapsNeverHappen(),
     CtorEval(),
     Merge(),
@@ -1393,6 +1351,7 @@ testcase_handlers = [
 
 
 test_suffixes = ['*.wasm', '*.wast', '*.wat']
+
 core_tests = shared.get_tests(shared.get_test_dir('.'), test_suffixes)
 passes_tests = shared.get_tests(shared.get_test_dir('passes'), test_suffixes)
 spec_tests = shared.get_tests(shared.get_test_dir('spec'), test_suffixes)
@@ -1420,14 +1379,14 @@ def test_one(random_input, given_wasm):
         # wasm had applied. that is, we need to preserve properties like not
         # having nans through reduction.
         try:
-            run([in_bin('wasm-opt'), given_wasm, '-o', abspath('a.wasm')] + FUZZ_OPTS + FEATURE_OPTS)
+            run([in_bin('wasm-opt'), given_wasm, '-o', abspath('a.wasm')] + GEN_ARGS + FEATURE_OPTS)
         except Exception as e:
             print("Internal error in fuzzer! Could not run given wasm")
             raise e
     else:
         # emit the target features section so that reduction can work later,
         # without needing to specify the features
-        generate_command = [in_bin('wasm-opt'), random_input, '-ttf', '-o', abspath('a.wasm')] + FUZZ_OPTS + FEATURE_OPTS
+        generate_command = [in_bin('wasm-opt'), random_input, '-ttf', '-o', abspath('a.wasm')] + GEN_ARGS + FEATURE_OPTS
         if INITIAL_CONTENTS:
             generate_command += ['--initial-fuzz=' + INITIAL_CONTENTS]
         if PRINT_WATS:
@@ -1441,7 +1400,7 @@ def test_one(random_input, given_wasm):
     print('pre wasm size:', wasm_size)
     update_feature_opts('a.wasm')
 
-    # create a second wasm for handlers that want to look at pairs.
+    # create a second (optimized) wasm for handlers that want to look at pairs.
     generate_command = [in_bin('wasm-opt'), abspath('a.wasm'), '-o', abspath('b.wasm')] + opts + FUZZ_OPTS + FEATURE_OPTS
     if PRINT_WATS:
         printed = run(generate_command + ['--print'])
@@ -1665,11 +1624,10 @@ def get_random_opts():
 
 # main
 
-# possible feature options that are sometimes passed to the tools. this
-# contains the list of all possible feature flags we can disable (after
-# we enable all before that in the constant options)
-POSSIBLE_FEATURE_OPTS = run([in_bin('wasm-opt'), '--print-features', in_binaryen('test', 'hello_world.wat')] + CONSTANT_FEATURE_OPTS).replace('--enable', '--disable').strip().split('\n')
-print('POSSIBLE_FEATURE_OPTS:', POSSIBLE_FEATURE_OPTS)
+# list of all the flags to disable all the features. if all of these are added
+# then we target the MVP.
+FEATURE_DISABLE_FLAGS = run([in_bin('wasm-opt'), '--print-features', in_binaryen('test', 'hello_world.wat')] + CONSTANT_FEATURE_OPTS).replace('--enable', '--disable').strip().split('\n')
+print('FEATURE_DISABLE_FLAGS:', FEATURE_DISABLE_FLAGS)
 
 # some features depend on other features, so if a required feature is
 # disabled, its dependent features need to be disabled as well.

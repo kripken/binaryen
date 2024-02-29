@@ -567,6 +567,7 @@ instructions = [
     ("call_ref",             "makeCallRef(s, /*isReturn=*/false)"),
     ("return_call_ref",      "makeCallRef(s, /*isReturn=*/true)"),
     # Typed continuations instructions
+    ("cont.new",             "makeContNew(s)"),
     ("resume",               "makeResume(s)"),
     # GC
     ("i31.new",              "makeRefI31(s)"),  # deprecated
@@ -738,8 +739,8 @@ def instruction_parser(new_parser=False):
 
     def print_leaf(expr, inst):
         if new_parser:
-            expr = expr.replace("()", "(ctx, pos)")
-            expr = expr.replace("(s", "(ctx, pos")
+            expr = expr.replace("()", "(ctx, pos, annotations)")
+            expr = expr.replace("(s", "(ctx, pos, annotations")
             printer.print_line("if (op == \"{inst}\"sv) {{".format(inst=inst))
             with printer.indent():
                 printer.print_line("CHECK_ERR({expr});".format(expr=expr))

@@ -2379,6 +2379,11 @@ struct PrintExpressionContents
     printMedium(o, "stringview_iter.slice");
   }
 
+  void visitContNew(ContNew* curr) {
+    printMedium(o, "cont.new ");
+    printHeapType(curr->contType);
+  }
+
   void visitResume(Resume* curr) {
     printMedium(o, "resume");
 
@@ -2781,7 +2786,8 @@ void PrintSExpression::maybePrintUnreachableReplacement(Expression* curr,
   // Emit a block with drops of the children.
   o << "(block";
   if (!minify) {
-    o << " ;; (replaces something unreachable we can't emit)";
+    o << " ;; (replaces unreachable " << getExpressionName(curr)
+      << " we can't emit)";
   }
   incIndent();
   for (auto* child : ChildIterator(curr)) {
