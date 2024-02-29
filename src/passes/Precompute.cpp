@@ -317,6 +317,7 @@ struct Precompute
         //     (i32.const 10)
         //   )
         //
+        // XXX don't do this to a dropped value, to avoid repeated workk
         if (!curr->is<Block>()) {
           auto values = precomputeValue(curr);
           if (values.getType().isConcrete() && canEmitConstantFor(values) &&
