@@ -300,15 +300,34 @@ struct Precompute
         // precompute then something may fall through which will not validate
         // (see details in propagateLocals's call to precomputeValue).
         // XXX pass options?
-        auto values = precomputeValue(curr);
-        if (values.getType().isConcrete() && canEmitConstantFor(values) &&
-            Type::isSubType(values.getType(), curr->type)) {
-          Builder builder(*getModule());
-          replaceCurrent(builder.makeSequence(
-            builder.makeDrop(curr),
-            builder.makeConstantExpression(values)
-          ));
-          return;
+        // Don't do this on a block as then we'd end up optimizing things like
+        //
+        //   (block
+        //     ..
+        //     (i32.const 10)
+        //   )
+        //
+        // into
+        //
+        //   (block
+        //     (block
+        //       ..
+        //       (i32.const 10)
+        //     )
+        //     (i32.const 10)
+        //   )
+        //
+        if (!curr->is<Block>()) {
+          auto values = precomputeValue(curr);
+          if (values.getType().isConcrete() && canEmitConstantFor(values) &&
+              Type::isSubType(values.getType(), curr->type)) {
+            Builder builder(*getModule());
+            replaceCurrent(builder.makeSequence(
+              builder.makeDrop(curr),
+              builder.makeConstantExpression(values)
+            ));
+            return;
+          }
         }
         // Perhaps we can partially precompute it.
         considerPartiallyPrecomputing(curr);

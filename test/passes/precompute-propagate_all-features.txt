@@ -1,8 +1,8 @@
 (module
  (type $0 (func (param i32)))
- (type $1 (func (result i32 i64)))
- (type $2 (func (param i32) (result i32)))
- (type $3 (func (param i32 i32) (result i32)))
+ (type $1 (func (param i32) (result i32)))
+ (type $2 (func (param i32 i32) (result i32)))
+ (type $3 (func (result i32 i64)))
  (type $4 (func (param i32 i32 i32) (result i32)))
  (type $5 (func (result v128)))
  (memory $0 10 10)
@@ -127,113 +127,68 @@
    (i32.const 39)
   )
  )
- (func $later2 (type $2) (param $p i32) (result i32)
+ (func $later2 (type $1) (param $p i32) (result i32)
   (local $x i32)
-  (drop
-   (block (result i32)
-    (drop
-     (block (result i32)
-      (drop
-       (block (result i32)
-        (local.set $x
-         (i32.const 10)
-        )
-        (local.set $x
-         (i32.const 20)
-        )
-        (i32.const 20)
-       )
-      )
-      (i32.const 20)
-     )
-    )
-    (i32.const 20)
-   )
+  (local.set $x
+   (i32.const 10)
+  )
+  (local.set $x
+   (i32.const 20)
   )
   (i32.const 20)
  )
- (func $two-ways-but-identical (type $2) (param $p i32) (result i32)
+ (func $two-ways-but-identical (type $1) (param $p i32) (result i32)
   (local $x i32)
   (local $y i32)
-  (drop
-   (block (result i32)
-    (drop
-     (block (result i32)
-      (drop
-       (block (result i32)
-        (local.set $x
-         (i32.const 10)
-        )
-        (if
-         (i32.const 1)
-         (then
-          (local.set $y
-           (i32.const 11)
-          )
-         )
-         (else
-          (local.set $y
-           (i32.const 11)
-          )
-         )
-        )
-        (local.set $y
-         (i32.const 21)
-        )
-        (i32.const 21)
-       )
-      )
-      (i32.const 21)
-     )
+  (local.set $x
+   (i32.const 10)
+  )
+  (if
+   (i32.const 1)
+   (then
+    (local.set $y
+     (i32.const 11)
     )
-    (i32.const 21)
    )
+   (else
+    (local.set $y
+     (i32.const 11)
+    )
+   )
+  )
+  (local.set $y
+   (i32.const 21)
   )
   (i32.const 21)
  )
- (func $two-ways-but-almost-identical (type $2) (param $p i32) (result i32)
+ (func $two-ways-but-almost-identical (type $1) (param $p i32) (result i32)
   (local $x i32)
   (local $y i32)
-  (drop
-   (block (result i32)
-    (drop
-     (block (result i32)
-      (drop
-       (block (result i32)
-        (local.set $x
-         (i32.const 10)
-        )
-        (if
-         (i32.const 1)
-         (then
-          (local.set $y
-           (i32.const 12)
-          )
-         )
-         (else
-          (local.set $y
-           (i32.const 11)
-          )
-         )
-        )
-        (local.set $y
-         (i32.add
-          (i32.const 10)
-          (local.get $y)
-         )
-        )
-        (local.get $y)
-       )
-      )
-      (i32.const 22)
-     )
+  (local.set $x
+   (i32.const 10)
+  )
+  (if
+   (i32.const 1)
+   (then
+    (local.set $y
+     (i32.const 12)
     )
-    (i32.const 22)
+   )
+   (else
+    (local.set $y
+     (i32.const 11)
+    )
    )
   )
-  (i32.const 22)
+  (local.set $y
+   (i32.add
+    (i32.const 10)
+    (local.get $y)
+   )
+  )
+  (local.get $y)
  )
- (func $deadloop (type $2) (param $p i32) (result i32)
+ (func $deadloop (type $1) (param $p i32) (result i32)
   (local $x i32)
   (local $y i32)
   (loop $loop
@@ -284,18 +239,13 @@
    (br $loop)
   )
  )
- (func $through-tee (type $3) (param $x i32) (param $y i32) (result i32)
+ (func $through-tee (type $2) (param $x i32) (param $y i32) (result i32)
   (local.set $x
    (block (result i32)
     (drop
      (block (result i32)
       (drop
-       (block (result i32)
-        (drop
-         (local.tee $y
-          (i32.const 7)
-         )
-        )
+       (local.tee $y
         (i32.const 7)
        )
       )
@@ -309,36 +259,26 @@
    (i32.const 14)
   )
  )
- (func $through-tee-more (type $3) (param $x i32) (param $y i32) (result i32)
+ (func $through-tee-more (type $2) (param $x i32) (param $y i32) (result i32)
   (local.set $x
    (block (result i32)
     (drop
      (block (result i32)
       (drop
-       (block (result i32)
-        (drop
-         (i32.eqz
+       (i32.eqz
+        (block (result i32)
+         (drop
           (block (result i32)
            (drop
-            (block (result i32)
-             (drop
-              (block (result i32)
-               (drop
-                (local.tee $y
-                 (i32.const 7)
-                )
-               )
-               (i32.const 7)
-              )
-             )
+            (local.tee $y
              (i32.const 7)
             )
            )
            (i32.const 7)
           )
          )
+         (i32.const 7)
         )
-        (i32.const 0)
        )
       )
       (i32.const 0)
@@ -364,43 +304,23 @@
   )
   (local.get $2)
  )
- (func $through-fallthrough (type $3) (param $x i32) (param $y i32) (result i32)
+ (func $through-fallthrough (type $2) (param $x i32) (param $y i32) (result i32)
   (local.set $x
    (block (result i32)
-    (drop
-     (block (result i32)
-      (drop
-       (block (result i32)
-        (drop
-         (block (result i32)
-          (nop)
-          (block (result i32)
-           (drop
-            (block (result i32)
-             (drop
-              (block (result i32)
-               (drop
-                (local.tee $y
-                 (i32.const 7)
-                )
-               )
-               (i32.const 7)
-              )
-             )
-             (i32.const 7)
-            )
-           )
-           (i32.const 7)
-          )
-         )
+    (nop)
+    (block (result i32)
+     (drop
+      (block (result i32)
+       (drop
+        (local.tee $y
+         (i32.const 7)
         )
-        (i32.const 7)
        )
+       (i32.const 7)
       )
-      (i32.const 7)
      )
+     (i32.const 7)
     )
-    (i32.const 7)
    )
   )
   (return
@@ -416,43 +336,19 @@
   )
   (local.get $x)
  )
- (func $tuple-local (type $1) (result i32 i64)
+ (func $tuple-local (type $3) (result i32 i64)
   (local $i32s (tuple i32 i32))
   (local $i64s (tuple i64 i64))
-  (tuple.drop 2
-   (block (type $1) (result i32 i64)
-    (tuple.drop 2
-     (block (type $1) (result i32 i64)
-      (tuple.drop 2
-       (block (type $1) (result i32 i64)
-        (local.set $i32s
-         (tuple.make 2
-          (i32.const 42)
-          (i32.const 0)
-         )
-        )
-        (local.set $i64s
-         (tuple.make 2
-          (i64.const 42)
-          (i64.const 0)
-         )
-        )
-        (tuple.make 2
-         (i32.const 42)
-         (i64.const 0)
-        )
-       )
-      )
-      (tuple.make 2
-       (i32.const 42)
-       (i64.const 0)
-      )
-     )
-    )
-    (tuple.make 2
-     (i32.const 42)
-     (i64.const 0)
-    )
+  (local.set $i32s
+   (tuple.make 2
+    (i32.const 42)
+    (i32.const 0)
+   )
+  )
+  (local.set $i64s
+   (tuple.make 2
+    (i64.const 42)
+    (i64.const 0)
    )
   )
   (tuple.make 2

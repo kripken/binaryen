@@ -177,29 +177,24 @@
  )
  (func $refinalize-two-breaks-one-unreachable (type $0)
   (drop
-   (block (result i64)
-    (drop
-     (block $label$0 (result i64)
+   (block $label$0 (result i64)
+    (block
+     (select
+      (i64.const 1)
       (block
-       (select
-        (i64.const 1)
-        (block
-         (global.set $global-mut
-          (i32.const 1)
-         )
-         (br $label$0
-          (i64.const -22)
-         )
-        )
-        (i32.const 0)
-       )
-       (drop
+       (global.set $global-mut
         (i32.const 1)
        )
+       (br $label$0
+        (i64.const -22)
+       )
       )
+      (i32.const 0)
+     )
+     (drop
+      (i32.const 1)
      )
     )
-    (i64.const -22)
    )
   )
  )
@@ -276,63 +271,48 @@
  )
  (func $br_reuse_node (type $0)
   (drop
-   (block (result f32)
+   (block $l0 (result f32)
     (drop
-     (block $l0 (result f32)
-      (drop
-       (block $l1
-        (global.set $global-mut
-         (i32.const 1)
-        )
-        (br $l0
-         (f32.const 3.5)
-        )
-       )
+     (block $l1
+      (global.set $global-mut
+       (i32.const 1)
       )
-      (f32.const 0)
+      (br $l0
+       (f32.const 3.5)
+      )
      )
     )
-    (f32.const 3.5)
+    (f32.const 0)
    )
   )
   (drop
-   (block (result nullexternref)
+   (block $l2 (result nullexternref)
     (drop
-     (block $l2 (result nullexternref)
-      (drop
-       (block $l3
-        (global.set $global-mut
-         (i32.const 1)
-        )
-        (br $l2
-         (ref.null noextern)
-        )
-       )
+     (block $l3
+      (global.set $global-mut
+       (i32.const 1)
       )
-      (ref.null noextern)
+      (br $l2
+       (ref.null noextern)
+      )
      )
     )
     (ref.null noextern)
    )
   )
   (drop
-   (block (result (ref $0))
+   (block $l4 (result (ref null $0))
     (drop
-     (block $l4 (result (ref null $0))
-      (drop
-       (block $l5
-        (global.set $global-mut
-         (i32.const 1)
-        )
-        (br $l4
-         (ref.func $dummy)
-        )
-       )
+     (block $l5
+      (global.set $global-mut
+       (i32.const 1)
       )
-      (ref.null nofunc)
+      (br $l4
+       (ref.func $dummy)
+      )
      )
     )
-    (ref.func $dummy)
+    (ref.null nofunc)
    )
   )
  )

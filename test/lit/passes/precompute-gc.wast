@@ -297,31 +297,16 @@
  ;; CHECK-NEXT:  (local $x (ref null $struct))
  ;; CHECK-NEXT:  (local $y (ref null $struct))
  ;; CHECK-NEXT:  (local $tempresult i32)
- ;; CHECK-NEXT:  (drop
- ;; CHECK-NEXT:   (block (result i32)
- ;; CHECK-NEXT:    (drop
- ;; CHECK-NEXT:     (block (result i32)
- ;; CHECK-NEXT:      (drop
- ;; CHECK-NEXT:       (block (result i32)
- ;; CHECK-NEXT:        (local.set $x
- ;; CHECK-NEXT:         (struct.new $struct
- ;; CHECK-NEXT:          (i32.const 1)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:        (local.set $y
- ;; CHECK-NEXT:         (local.get $x)
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:        (local.set $tempresult
- ;; CHECK-NEXT:         (i32.const 1)
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:        (i32.const 1)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:      (i32.const 1)
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:  (local.set $x
+ ;; CHECK-NEXT:   (struct.new $struct
  ;; CHECK-NEXT:    (i32.const 1)
  ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (local.set $y
+ ;; CHECK-NEXT:   (local.get $x)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (local.set $tempresult
+ ;; CHECK-NEXT:   (i32.const 1)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT:  (i32.const 1)
  ;; CHECK-NEXT: )
@@ -351,36 +336,16 @@
  ;; CHECK:      (func $propagate-equal (type $func-return-i32) (result i32)
  ;; CHECK-NEXT:  (local $tempresult i32)
  ;; CHECK-NEXT:  (local $tempref (ref null $empty))
- ;; CHECK-NEXT:  (drop
+ ;; CHECK-NEXT:  (local.set $tempresult
  ;; CHECK-NEXT:   (block (result i32)
  ;; CHECK-NEXT:    (drop
  ;; CHECK-NEXT:     (block (result i32)
  ;; CHECK-NEXT:      (drop
- ;; CHECK-NEXT:       (block (result i32)
- ;; CHECK-NEXT:        (local.set $tempresult
- ;; CHECK-NEXT:         (block (result i32)
- ;; CHECK-NEXT:          (drop
- ;; CHECK-NEXT:           (block (result i32)
- ;; CHECK-NEXT:            (drop
- ;; CHECK-NEXT:             (block (result i32)
- ;; CHECK-NEXT:              (drop
- ;; CHECK-NEXT:               (ref.eq
- ;; CHECK-NEXT:                (local.tee $tempref
- ;; CHECK-NEXT:                 (struct.new_default $empty)
- ;; CHECK-NEXT:                )
- ;; CHECK-NEXT:                (local.get $tempref)
- ;; CHECK-NEXT:               )
- ;; CHECK-NEXT:              )
- ;; CHECK-NEXT:              (i32.const 1)
- ;; CHECK-NEXT:             )
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (i32.const 1)
- ;; CHECK-NEXT:           )
- ;; CHECK-NEXT:          )
- ;; CHECK-NEXT:          (i32.const 1)
- ;; CHECK-NEXT:         )
+ ;; CHECK-NEXT:       (ref.eq
+ ;; CHECK-NEXT:        (local.tee $tempref
+ ;; CHECK-NEXT:         (struct.new_default $empty)
  ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:        (i32.const 1)
+ ;; CHECK-NEXT:        (local.get $tempref)
  ;; CHECK-NEXT:       )
  ;; CHECK-NEXT:      )
  ;; CHECK-NEXT:      (i32.const 1)
@@ -411,23 +376,8 @@
  ;; CHECK:      (func $propagate-unequal (type $func-return-i32) (result i32)
  ;; CHECK-NEXT:  (local $tempresult i32)
  ;; CHECK-NEXT:  (local $tempref (ref null $empty))
- ;; CHECK-NEXT:  (drop
- ;; CHECK-NEXT:   (block (result i32)
- ;; CHECK-NEXT:    (drop
- ;; CHECK-NEXT:     (block (result i32)
- ;; CHECK-NEXT:      (drop
- ;; CHECK-NEXT:       (block (result i32)
- ;; CHECK-NEXT:        (local.set $tempresult
- ;; CHECK-NEXT:         (i32.const 0)
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:        (i32.const 0)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:      (i32.const 0)
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (i32.const 0)
- ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  (local.set $tempresult
+ ;; CHECK-NEXT:   (i32.const 0)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT:  (i32.const 0)
  ;; CHECK-NEXT: )
