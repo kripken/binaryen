@@ -286,7 +286,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block ;; (replaces something unreachable we can't emit)
+  ;; CHECK-NEXT:   (block ;; (replaces unreachable RefCast we can't emit)
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (unreachable)
   ;; CHECK-NEXT:    )
@@ -1931,7 +1931,7 @@
       ;; However, we do not remove it, as it may be necessary for validation,
       ;; and we hope other opts help out here.
       (ref.cast (ref null $B)
-        (block (result (eqref))
+        (block (result eqref)
           (call $ref-cast-static-fallthrough-remaining-child
             (local.get $x)
           )
@@ -2773,7 +2773,7 @@
 
   ;; CHECK:      (func $struct.set.null.fallthrough (type $5)
   ;; CHECK-NEXT:  (local $temp (ref null $struct))
-  ;; CHECK-NEXT:  (block ;; (replaces something unreachable we can't emit)
+  ;; CHECK-NEXT:  (block ;; (replaces unreachable StructSet we can't emit)
   ;; CHECK-NEXT:   (drop
   ;; CHECK-NEXT:    (local.tee $temp
   ;; CHECK-NEXT:     (unreachable)
@@ -2802,7 +2802,7 @@
 
   ;; CHECK:      (func $set.array.null (type $5)
   ;; CHECK-NEXT:  (local $temp (ref none))
-  ;; CHECK-NEXT:  (block ;; (replaces something unreachable we can't emit)
+  ;; CHECK-NEXT:  (block ;; (replaces unreachable ArraySet we can't emit)
   ;; CHECK-NEXT:   (drop
   ;; CHECK-NEXT:    (local.tee $temp
   ;; CHECK-NEXT:     (unreachable)

@@ -24,7 +24,18 @@ effective**:
    wasm [minification], similar to minification for JavaScript, CSS, etc., all
    of which are language-specific.
 
-Compilers using Binaryen include:
+Toolchains using Binaryen as a **component** (typically running `wasm-opt`) include:
+
+  * [`Emscripten`](http://emscripten.org) (C/C++)
+  * [`wasm-pack`](https://github.com/rustwasm/wasm-pack) (Rust)
+  * [`J2CL`](https://j2cl.io/) (Java; [`J2Wasm`](https://github.com/google/j2cl/tree/master/samples/wasm))
+  * [`Kotlin`](https://kotl.in/wasmgc) (Kotlin/Wasm)
+  * [`Dart`](https://flutter.dev/wasm) (Flutter)
+
+For more on how some of those work, see the toolchain architecture parts of
+the [V8 WasmGC porting blogpost](https://v8.dev/blog/wasm-gc-porting).
+
+Compilers using Binaryen as a **library** include:
 
  * [`AssemblyScript`](https://github.com/AssemblyScript/assemblyscript) which compiles a variant of TypeScript to WebAssembly
  * [`wasm2js`](https://github.com/WebAssembly/binaryen/blob/main/src/wasm2js.h) which compiles WebAssembly to JS
@@ -226,6 +237,8 @@ This repository contains code that builds the following tools in `bin/` (see the
  * **`wasm-merge`**: Merges multiple wasm files into a single file, connecting
    corresponding imports to exports as it does so. Like a bundler for JS, but
    for wasm.
+ * **`wasm-metadce`**: A tool to remove parts of Wasm files in a flexible way
+ * that depends on how the module is used.
  * **`binaryen.js`**: A standalone JavaScript library that exposes Binaryen methods for [creating and optimizing Wasm modules](https://github.com/WebAssembly/binaryen/blob/main/test/binaryen.js/hello-world.js). For builds, see [binaryen.js on npm](https://www.npmjs.com/package/binaryen) (or download it directly from [GitHub](https://raw.githubusercontent.com/AssemblyScript/binaryen.js/master/index.js) or [unpkg](https://unpkg.com/binaryen@latest/index.js)). Minimal requirements: Node.js v15.8 or Chrome v75 or Firefox v78.
 
 All of the Binaryen tools are deterministic, that is, given the same inputs you should always get the same outputs. (If you see a case that behaves otherwise, please file an issue.)
@@ -384,6 +397,26 @@ Binaryen.js can be built using Emscripten, which can be installed via [the SDK](
    ```
 
    CMake generates a project named "ALL_BUILD.vcxproj" for conveniently building all the projects.
+
+## Releases
+
+Builds are distributed by the various toolchains that use Binaryen, like
+Emscripten, `wasm-pack`, etc. There are also official releases on GitHub:
+
+https://github.com/WebAssembly/binaryen/releases
+
+Currently builds of the following platforms are included:
+
+ * `Linux-x86_64`
+ * `Linux-arm64`
+ * `MacOS-x86_64`
+ * `MacOS-arm64`
+ * `Windows-x86_64`
+ * `Node.js` (experimental): A port of `wasm-opt` to JavaScript+WebAssembly.
+   Run `node wasm-opt.js` as a drop-in replacement for a native build of
+   `wasm-opt`, on any platform that Node.js runs on. Requires Node.js 18+ (for
+   Wasm EH and Wasm Threads). (Note that this build may also run in Deno, Bun,
+   or other JavaScript+WebAssembly environments, but is tested only on Node.js.)
 
 ## Running
 
@@ -918,12 +951,18 @@ fully optimized release build, but it can be useful for local debugging.
 
 * Why the weird name for the project?
 
-"Binaryen" is a combination of **binary** - since WebAssembly is a binary format
-for the web - and **Emscripten** - with which it can integrate in order to
-compile C and C++ all the way to WebAssembly, via asm.js. Binaryen began as
-Emscripten's WebAssembly processing library (`wasm-emscripten`).
+Binaryen's name was inspired by *Emscripten*'s: Emscripten's name
+[suggests](https://en.wikipedia.org/wiki/Lisa_the_Iconoclast#Embiggen_and_cromulent)
+it converts something into a **script** - specifically *JavaScript* - and
+Binaryen's suggests it converts something into a **binary** - specifically
+*WebAssembly*. Binaryen began as Emscripten's WebAssembly generation and
+optimization tool, so the name fit as it moved Emscripten from something that
+emitted the text-based format JavaScript (as it did from its early days) to the
+binary format WebAssembly (which it has done since WebAssembly launched).
 
-"Binaryen" is pronounced [in the same manner](http://www.makinggameofthrones.com/production-diary/2011/2/11/official-pronunciation-guide-for-game-of-thrones.html) as "[Targaryen](https://en.wikipedia.org/wiki/List_of_A_Song_of_Ice_and_Fire_characters#House_Targaryen)": *bi-NAIR-ee-in*. Or something like that? Anyhow, however Targaryen is correctly pronounced, they should rhyme. Aside from pronunciation, the Targaryen house words, "Fire and Blood", have also inspired Binaryen's: "Code and Bugs."
+"Binaryen" is pronounced [in the same manner](https://www.makinggameofthrones.com/production-diary/2011/2/11/official-pronunciation-guide-for-game-of-thrones.html#:~:text=Targaryen%20%2D%20AIR%2Deez-,Tar%2DGAIR%2Dee%2Din,-Alliser%20Thorne%20%2D%20AL)
+as
+"[Targaryen](https://en.wikipedia.org/wiki/List_of_A_Song_of_Ice_and_Fire_characters#House_Targaryen)".
 
 * Does it compile under Windows and/or Visual Studio?
 

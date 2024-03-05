@@ -56,6 +56,10 @@ public:
   // any children or refinalization.
   void push(Expression*);
 
+  // Set the debug location to be attached to the next visited, created, or
+  // pushed instruction.
+  void setDebugLocation(const Function::DebugLocation&);
+
   // Handle the boundaries of control flow structures. Users may choose to use
   // the corresponding `makeXYZ` function below instead of `visitXYZStart`, but
   // either way must call `visitEnd` and friends at the appropriate times.
@@ -65,11 +69,11 @@ public:
   [[nodiscard]] Result<> visitElse();
   [[nodiscard]] Result<> visitLoopStart(Loop* iff);
   [[nodiscard]] Result<> visitTryStart(Try* tryy, Name label = {});
-  [[nodiscard]] Result<> visitTryTableStart(TryTable* trytable,
-                                            Name label = {});
   [[nodiscard]] Result<> visitCatch(Name tag);
   [[nodiscard]] Result<> visitCatchAll();
   [[nodiscard]] Result<> visitDelegate(Index label);
+  [[nodiscard]] Result<> visitTryTableStart(TryTable* trytable,
+                                            Name label = {});
   [[nodiscard]] Result<> visitEnd();
 
   // Binaryen IR uses names to refer to branch targets, but in general there may
@@ -145,7 +149,7 @@ public:
   [[nodiscard]] Result<> makeMemorySize(Name mem);
   [[nodiscard]] Result<> makeMemoryGrow(Name mem);
   [[nodiscard]] Result<> makeUnreachable();
-  // [[nodiscard]] Result<> makePop();
+  [[nodiscard]] Result<> makePop(Type type);
   [[nodiscard]] Result<> makeRefNull(HeapType type);
   [[nodiscard]] Result<> makeRefIsNull();
   [[nodiscard]] Result<> makeRefFunc(Name func);
@@ -206,6 +210,12 @@ public:
   [[nodiscard]] Result<> makeStringIterMove(StringIterMoveOp op);
   [[nodiscard]] Result<> makeStringSliceWTF(StringSliceWTFOp op);
   [[nodiscard]] Result<> makeStringSliceIter();
+  [[nodiscard]] Result<> makeContBind(HeapType contTypeBefore,
+                                      HeapType contTypeAfter);
+  [[nodiscard]] Result<> makeContNew(HeapType ct);
+  [[nodiscard]] Result<> makeResume(HeapType ct,
+                                    const std::vector<Name>& tags,
+                                    const std::vector<Index>& labels);
 
   // Private functions that must be public for technical reasons.
   [[nodiscard]] Result<> visitExpression(Expression*);
@@ -216,25 +226,49 @@ public:
   [[nodiscard]] Result<> visitStructNew(StructNew*);
   [[nodiscard]] Result<> visitArrayNew(ArrayNew*);
   [[nodiscard]] Result<> visitArrayNewFixed(ArrayNewFixed*);
+  // Used to visit break exprs when traversing the module in the fully nested
+  // format. Break label destinations are assumed to have already been visited,
+  // with a corresponding push onto the scope stack. As a result, an error will
+  // return if a corresponding scope is not found for the break.
   [[nodiscard]] Result<> visitBreak(Break*,
                                     std::optional<Index> label = std::nullopt);
+  // Used to visit break nodes when traversing a single block without its
+  // context. The type indicates how many values the break carries to its
+  // destination.
+  [[nodiscard]] Result<> visitBreakWithType(Break*, Type);
   [[nodiscard]] Result<>
+  // Used to visit switch exprs when traversing the module in the fully nested
+  // format. Switch label destinations are assumed to have already been visited,
+  // with a corresponding push onto the scope stack. As a result, an error will
+  // return if a corresponding scope is not found for the switch.
   visitSwitch(Switch*, std::optional<Index> defaultLabel = std::nullopt);
+  // Used to visit switch nodes when traversing a single block without its
+  // context. The type indicates how many values the switch carries to its
+  // destination.
+  [[nodiscard]] Result<> visitSwitchWithType(Switch*, Type);
   [[nodiscard]] Result<> visitCall(Call*);
   [[nodiscard]] Result<> visitCallIndirect(CallIndirect*);
   [[nodiscard]] Result<> visitCallRef(CallRef*);
+  [[nodiscard]] Result<> visitLocalSet(LocalSet*);
+  [[nodiscard]] Result<> visitGlobalSet(GlobalSet*);
   [[nodiscard]] Result<> visitThrow(Throw*);
   [[nodiscard]] Result<> visitStringNew(StringNew*);
   [[nodiscard]] Result<> visitStringEncode(StringEncode*);
+  [[nodiscard]] Result<> visitContBind(ContBind*);
+  [[nodiscard]] Result<> visitResume(Resume*);
   [[nodiscard]] Result<> visitTupleMake(TupleMake*);
   [[nodiscard]] Result<>
   visitTupleExtract(TupleExtract*,
                     std::optional<uint32_t> arity = std::nullopt);
+  [[nodiscard]] Result<> visitPop(Pop*);
 
 private:
   Module& wasm;
   Function* func;
   Builder builder;
+  std::optional<Function::DebugLocation> debugLoc;
+
+  void applyDebugLoc(Expression* expr);
 
   // The context for a single block scope, including the instructions parsed
   // inside that scope so far and the ultimate result type we expect this block
@@ -520,8 +554,8 @@ private:
   [[nodiscard]] Result<> packageHoistedValue(const HoistedVal&,
                                              size_t sizeHint = 1);
 
-  [[nodiscard]] Result<Expression*> getBranchValue(Name labelName,
-                                                   std::optional<Index> label);
+  [[nodiscard]] Result<Expression*>
+  getBranchValue(Expression* curr, Name labelName, std::optional<Index> label);
 
   void dump();
 };

@@ -179,6 +179,9 @@
 ;; CHECK-NEXT:   --jspi                                        wrap imports and exports for
 ;; CHECK-NEXT:                                                 JavaScript promise integration
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --legalize-and-prune-js-interface             legalizes the import/export
+;; CHECK-NEXT:                                                 boundary and prunes when needed
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --legalize-js-interface                       legalizes i64 types on the
 ;; CHECK-NEXT:                                                 import/export boundary
 ;; CHECK-NEXT:
@@ -324,6 +327,9 @@
 ;; CHECK-NEXT:   --print-stack-ir                              print out Stack IR (useful for
 ;; CHECK-NEXT:                                                 internal debugging)
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --propagate-globals-globally                  propagate global values to other
+;; CHECK-NEXT:                                                 globals (useful for tests)
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --remove-imports                              removes imports and replaces
 ;; CHECK-NEXT:                                                 them with nops
 ;; CHECK-NEXT:
@@ -426,6 +432,11 @@
 ;; CHECK-NEXT:   --stack-check                                 enforce limits on llvm's
 ;; CHECK-NEXT:                                                 __stack_pointer global
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --string-gathering                            gathers wasm strings to globals
+;; CHECK-NEXT:
+;; CHECK-NEXT:   --string-lowering                             lowers wasm strings and
+;; CHECK-NEXT:                                                 operations to imports
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --strip                                       deprecated; same as strip-debug
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --strip-debug                                 strip debug info (including the
@@ -445,7 +456,7 @@
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --symbolmap                                   (alias for print-function-map)
 ;; CHECK-NEXT:
-;; CHECK-NEXT:   --translate-eh-old-to-new                     translate old EH instructions to
+;; CHECK-NEXT:   --translate-to-new-eh                         translate old EH instructions to
 ;; CHECK-NEXT:                                                 new ones
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --trap-mode-clamp                             replace trapping operations with

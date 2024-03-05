@@ -256,11 +256,8 @@ def has_shell_timeout():
 V8_OPTS = [
     '--wasm-staging',
     '--experimental-wasm-compilation-hints',
-    '--experimental-wasm-gc',
-    '--experimental-wasm-typed-funcref',
     '--experimental-wasm-memory64',
-    '--experimental-wasm-extended-const',
-    '--wasm-final-types',
+    '--experimental-wasm-stringref',
 ]
 
 # external tools

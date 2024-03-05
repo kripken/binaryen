@@ -362,6 +362,7 @@ public:
     ret->ptr = ptr;
     ret->type = type;
     ret->memory = memory;
+    ret->finalize();
     return ret;
   }
   Load* makeAtomicLoad(
@@ -1197,6 +1198,25 @@ public:
     return ret;
   }
 
+  ContBind* makeContBind(HeapType contTypeBefore,
+                         HeapType contTypeAfter,
+                         const std::vector<Expression*>& operands,
+                         Expression* cont) {
+    auto* ret = wasm.allocator.alloc<ContBind>();
+    ret->contTypeBefore = contTypeBefore;
+    ret->contTypeAfter = contTypeAfter;
+    ret->operands.set(operands);
+    ret->cont = cont;
+    ret->finalize();
+    return ret;
+  }
+  ContNew* makeContNew(HeapType contType, Expression* func) {
+    auto* ret = wasm.allocator.alloc<ContNew>();
+    ret->contType = contType;
+    ret->func = func;
+    ret->finalize();
+    return ret;
+  }
   Resume* makeResume(HeapType contType,
                      const std::vector<Name>& handlerTags,
                      const std::vector<Name>& handlerBlocks,

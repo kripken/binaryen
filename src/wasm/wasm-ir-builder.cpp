@@ -151,6 +151,8 @@ void IRBuilder::push(Expression* expr) {
   }
   scope.exprStack.push_back(expr);
 
+  applyDebugLoc(expr);
+
   DBG(std::cerr << "After pushing " << ShallowExpression{expr} << ":\n");
   DBG(dump());
 }
@@ -162,7 +164,6 @@ Result<Expression*> IRBuilder::pop(size_t size) {
   // Find the suffix of expressions that do not produce values.
   auto hoisted = hoistLastValue();
   CHECK_ERR(hoisted);
-
   if (!hoisted) {
     // There are no expressions that produce values.
     if (scope.unreachable) {
@@ -207,6 +208,24 @@ Result<Expression*> IRBuilder::build() {
   scopeStack.clear();
   labelDepths.clear();
   return expr;
+}
+
+void IRBuilder::setDebugLocation(const Function::DebugLocation& loc) {
+  DBG(std::cerr << "setting debugloc " << loc.fileIndex << ":" << loc.lineNumber
+                << ":" << loc.columnNumber << "\n";);
+  debugLoc = loc;
+}
+
+void IRBuilder::applyDebugLoc(Expression* expr) {
+  if (debugLoc) {
+    if (func) {
+      DBG(std::cerr << "applying debugloc " << debugLoc->fileIndex << ":"
+                    << debugLoc->lineNumber << ":" << debugLoc->columnNumber
+                    << " to expression " << ShallowExpression{expr} << "\n");
+      func->debugLocations[expr] = *debugLoc;
+    }
+    debugLoc.reset();
+  }
 }
 
 void IRBuilder::dump() {
@@ -405,8 +424,14 @@ Result<> IRBuilder::visitArrayNewFixed(ArrayNewFixed* curr) {
   return Ok{};
 }
 
-Result<Expression*> IRBuilder::getBranchValue(Name labelName,
+Result<Expression*> IRBuilder::getBranchValue(Expression* curr,
+                                              Name labelName,
                                               std::optional<Index> label) {
+  // As new branch instructions are added, one of the existing branch visit*
+  // functions is likely to be copied, along with its call to getBranchValue().
+  // This assert serves as a reminder to also add an implementation of
+  // visit*WithType() for new branch instructions.
+  assert(curr->is<Break>() || curr->is<Switch>());
   if (!label) {
     auto index = getLabelIndex(labelName);
     CHECK_ERR(index);
@@ -417,19 +442,7 @@ Result<Expression*> IRBuilder::getBranchValue(Name labelName,
   // Loops would receive their input type rather than their output type, if we
   // supported that.
   size_t numValues = (*scope)->getLoop() ? 0 : (*scope)->getResultType().size();
-  std::vector<Expression*> values(numValues);
-  for (size_t i = 0; i < numValues; ++i) {
-    auto val = pop();
-    CHECK_ERR(val);
-    values[numValues - 1 - i] = *val;
-  }
-  if (numValues == 0) {
-    return nullptr;
-  } else if (numValues == 1) {
-    return values[0];
-  } else {
-    return builder.makeTupleMake(values);
-  }
+  return numValues == 0 ? nullptr : pop(numValues);
 }
 
 Result<> IRBuilder::visitBreak(Break* curr, std::optional<Index> label) {
@@ -438,9 +451,27 @@ Result<> IRBuilder::visitBreak(Break* curr, std::optional<Index> label) {
     CHECK_ERR(cond);
     curr->condition = *cond;
   }
-  auto value = getBranchValue(curr->name, label);
+  auto value = getBranchValue(curr, curr->name, label);
   CHECK_ERR(value);
   curr->value = *value;
+  return Ok{};
+}
+
+Result<> IRBuilder::visitBreakWithType(Break* curr, Type type) {
+  if (curr->condition) {
+    auto cond = pop();
+    CHECK_ERR(cond);
+    curr->condition = *cond;
+  }
+  if (type == Type::none) {
+    curr->value = nullptr;
+  } else {
+    auto value = pop(type.size());
+    CHECK_ERR(value)
+    curr->value = *value;
+  }
+  curr->finalize();
+  push(curr);
   return Ok{};
 }
 
@@ -449,9 +480,25 @@ Result<> IRBuilder::visitSwitch(Switch* curr,
   auto cond = pop();
   CHECK_ERR(cond);
   curr->condition = *cond;
-  auto value = getBranchValue(curr->default_, defaultLabel);
+  auto value = getBranchValue(curr, curr->default_, defaultLabel);
   CHECK_ERR(value);
   curr->value = *value;
+  return Ok{};
+}
+
+Result<> IRBuilder::visitSwitchWithType(Switch* curr, Type type) {
+  auto cond = pop();
+  CHECK_ERR(cond);
+  curr->condition = *cond;
+  if (type == Type::none) {
+    curr->value = nullptr;
+  } else {
+    auto value = pop(type.size());
+    CHECK_ERR(value)
+    curr->value = *value;
+  }
+  curr->finalize();
+  push(curr);
   return Ok{};
 }
 
@@ -492,6 +539,21 @@ Result<> IRBuilder::visitCallRef(CallRef* curr) {
   return Ok{};
 }
 
+Result<> IRBuilder::visitLocalSet(LocalSet* curr) {
+  auto type = func->getLocalType(curr->index);
+  auto val = pop(type.size());
+  CHECK_ERR(val);
+  curr->value = *val;
+  return Ok{};
+}
+
+Result<> IRBuilder::visitGlobalSet(GlobalSet* curr) {
+  auto type = wasm.getGlobal(curr->name)->type;
+  auto val = pop(type.size());
+  CHECK_ERR(val);
+  curr->value = *val;
+  return Ok{};
+}
 Result<> IRBuilder::visitThrow(Throw* curr) {
   auto numArgs = wasm.getTag(curr->tag)->sig.params.size();
   curr->operands.resize(numArgs);
@@ -562,6 +624,48 @@ Result<> IRBuilder::visitStringEncode(StringEncode* curr) {
   WASM_UNREACHABLE("unexpected op");
 }
 
+Result<> IRBuilder::visitContBind(ContBind* curr) {
+  auto cont = pop();
+  CHECK_ERR(cont);
+  curr->cont = *cont;
+
+  size_t paramsBefore =
+    curr->contTypeBefore.getContinuation().type.getSignature().params.size();
+  size_t paramsAfter =
+    curr->contTypeAfter.getContinuation().type.getSignature().params.size();
+  if (paramsBefore < paramsAfter) {
+    return Err{"incompatible continuation types in cont.bind: source type " +
+               curr->contTypeBefore.toString() +
+               " has fewer parameters than destination " +
+               curr->contTypeAfter.toString()};
+  }
+  size_t numArgs = paramsBefore - paramsAfter;
+
+  curr->operands.resize(numArgs);
+  for (size_t i = 0; i < numArgs; ++i) {
+    auto val = pop();
+    CHECK_ERR(val);
+    curr->operands[numArgs - i - 1] = *val;
+  }
+  return Ok{};
+}
+
+Result<> IRBuilder::visitResume(Resume* curr) {
+  auto cont = pop();
+  CHECK_ERR(cont);
+  curr->cont = *cont;
+
+  auto sig = curr->contType.getContinuation().type.getSignature();
+  auto size = sig.params.size();
+  curr->operands.resize(size);
+  for (size_t i = 0; i < size; ++i) {
+    auto val = pop();
+    CHECK_ERR(val);
+    curr->operands[size - i - 1] = *val;
+  }
+  return Ok{};
+}
+
 Result<> IRBuilder::visitTupleMake(TupleMake* curr) {
   assert(curr->operands.size() >= 2);
   for (size_t i = 0, size = curr->operands.size(); i < size; ++i) {
@@ -589,9 +693,19 @@ Result<> IRBuilder::visitTupleExtract(TupleExtract* curr,
   return Ok{};
 }
 
+Result<> IRBuilder::visitPop(Pop*) {
+  // Do not actually push this pop onto the stack since we generate our own pops
+  // as necessary when visiting the beginnings of try blocks.
+  return Ok{};
+}
+
 Result<> IRBuilder::visitFunctionStart(Function* func) {
   if (!scopeStack.empty()) {
     return Err{"unexpected start of function"};
+  }
+  if (debugLoc) {
+    func->prologLocation.insert(*debugLoc);
+    debugLoc.reset();
   }
   scopeStack.push_back(ScopeCtx::makeFunc(func));
   this->func = func;
@@ -599,11 +713,13 @@ Result<> IRBuilder::visitFunctionStart(Function* func) {
 }
 
 Result<> IRBuilder::visitBlockStart(Block* curr) {
+  applyDebugLoc(curr);
   pushScope(ScopeCtx::makeBlock(curr));
   return Ok{};
 }
 
 Result<> IRBuilder::visitIfStart(If* iff, Name label) {
+  applyDebugLoc(iff);
   auto cond = pop();
   CHECK_ERR(cond);
   iff->condition = *cond;
@@ -612,11 +728,13 @@ Result<> IRBuilder::visitIfStart(If* iff, Name label) {
 }
 
 Result<> IRBuilder::visitLoopStart(Loop* loop) {
+  applyDebugLoc(loop);
   pushScope(ScopeCtx::makeLoop(loop));
   return Ok{};
 }
 
 Result<> IRBuilder::visitTryStart(Try* tryy, Name label) {
+  applyDebugLoc(tryy);
   // The delegate label will be regenerated if we need it. See
   // `getDelegateLabelName` for details.
   tryy->name = Name();
@@ -625,11 +743,19 @@ Result<> IRBuilder::visitTryStart(Try* tryy, Name label) {
 }
 
 Result<> IRBuilder::visitTryTableStart(TryTable* trytable, Name label) {
+  applyDebugLoc(trytable);
   pushScope(ScopeCtx::makeTryTable(trytable, label));
   return Ok{};
 }
 
 Result<Expression*> IRBuilder::finishScope(Block* block) {
+  if (debugLoc) {
+    DBG(std::cerr << "discarding debugloc " << debugLoc->fileIndex << ":"
+                  << debugLoc->lineNumber << ":" << debugLoc->columnNumber
+                  << "\n");
+  }
+  debugLoc.reset();
+
   if (scopeStack.empty() || scopeStack.back().isNone()) {
     return Err{"unexpected end of scope"};
   }
@@ -656,6 +782,9 @@ Result<Expression*> IRBuilder::finishScope(Block* block) {
     } else {
       auto hoisted = hoistLastValue();
       CHECK_ERR(hoisted);
+      if (!hoisted) {
+        return Err{"popping from empty stack"};
+      }
       auto hoistedType = scope.exprStack.back()->type;
       if (hoistedType.size() != type.size()) {
         // We cannot propagate the hoisted value directly because it does not
@@ -676,6 +805,9 @@ Result<Expression*> IRBuilder::finishScope(Block* block) {
     // the top.
     auto hoisted = hoistLastValue();
     CHECK_ERR(hoisted);
+    if (!hoisted) {
+      return Err{"popping from empty stack"};
+    }
   }
 
   Expression* ret = nullptr;
@@ -847,6 +979,10 @@ Result<> IRBuilder::visitEnd() {
   auto scope = getScope();
   if (scope.isNone()) {
     return Err{"unexpected end"};
+  }
+  if (auto* func = scope.getFunction(); func && debugLoc) {
+    func->epilogLocation.insert(*debugLoc);
+    debugLoc.reset();
   }
   auto expr = finishScope(scope.getBlock());
   CHECK_ERR(expr);
@@ -1032,6 +1168,7 @@ Result<> IRBuilder::makeLocalGet(Index local) {
 
 Result<> IRBuilder::makeLocalSet(Index local) {
   LocalSet curr;
+  curr.index = local;
   CHECK_ERR(visitLocalSet(&curr));
   push(builder.makeLocalSet(local, curr.value));
   return Ok{};
@@ -1039,6 +1176,7 @@ Result<> IRBuilder::makeLocalSet(Index local) {
 
 Result<> IRBuilder::makeLocalTee(Index local) {
   LocalSet curr;
+  curr.index = local;
   CHECK_ERR(visitLocalSet(&curr));
   push(builder.makeLocalTee(local, curr.value, func->getLocalType(local)));
   return Ok{};
@@ -1051,6 +1189,7 @@ Result<> IRBuilder::makeGlobalGet(Name global) {
 
 Result<> IRBuilder::makeGlobalSet(Name global) {
   GlobalSet curr;
+  curr.name = global;
   CHECK_ERR(visitGlobalSet(&curr));
   push(builder.makeGlobalSet(global, curr.value));
   return Ok{};
@@ -1282,7 +1421,23 @@ Result<> IRBuilder::makeUnreachable() {
   return Ok{};
 }
 
-// Result<> IRBuilder::makePop() {}
+Result<> IRBuilder::makePop(Type type) {
+  // We don't actually want to create a new Pop expression here because we
+  // already create them automatically when starting a legacy catch block that
+  // needs one. Just verify that the Pop we are being asked to make is the same
+  // type as the Pop we have already made.
+  auto& scope = getScope();
+  if (!scope.getCatch() || scope.exprStack.size() != 1 ||
+      !scope.exprStack[0]->is<Pop>()) {
+    return Err{
+      "pop instructions may only appear at the beginning of catch blocks"};
+  }
+  auto expectedType = scope.exprStack[0]->type;
+  if (!Type::isSubType(expectedType, type)) {
+    return Err{std::string("Expected pop of type ") + expectedType.toString()};
+  }
+  return Ok{};
+}
 
 Result<> IRBuilder::makeRefNull(HeapType type) {
   push(builder.makeRefNull(type));
@@ -1719,6 +1874,55 @@ Result<> IRBuilder::makeStringSliceIter() {
   StringSliceIter curr;
   CHECK_ERR(visitStringSliceIter(&curr));
   push(builder.makeStringSliceIter(curr.ref, curr.num));
+  return Ok{};
+}
+
+Result<> IRBuilder::makeContBind(HeapType contTypeBefore,
+                                 HeapType contTypeAfter) {
+  if (!contTypeBefore.isContinuation() || !contTypeAfter.isContinuation()) {
+    return Err{"expected continuation types"};
+  }
+  ContBind curr(wasm.allocator);
+  curr.contTypeBefore = contTypeBefore;
+  curr.contTypeAfter = contTypeAfter;
+  CHECK_ERR(visitContBind(&curr));
+
+  std::vector<Expression*> operands(curr.operands.begin(), curr.operands.end());
+  push(
+    builder.makeContBind(contTypeBefore, contTypeAfter, operands, curr.cont));
+  return Ok{};
+}
+
+Result<> IRBuilder::makeContNew(HeapType ct) {
+  if (!ct.isContinuation()) {
+    return Err{"expected continuation type"};
+  }
+  ContNew curr;
+  CHECK_ERR(visitContNew(&curr));
+
+  push(builder.makeContNew(ct, curr.func));
+  return Ok{};
+}
+
+Result<> IRBuilder::makeResume(HeapType ct,
+                               const std::vector<Name>& tags,
+                               const std::vector<Index>& labels) {
+  if (!ct.isContinuation()) {
+    return Err{"expected continuation type"};
+  }
+  Resume curr(wasm.allocator);
+  curr.contType = ct;
+  CHECK_ERR(visitResume(&curr));
+
+  std::vector<Name> labelNames;
+  labelNames.reserve(labels.size());
+  for (auto label : labels) {
+    auto name = getLabelName(label);
+    CHECK_ERR(name);
+    labelNames.push_back(*name);
+  }
+  std::vector<Expression*> operands(curr.operands.begin(), curr.operands.end());
+  push(builder.makeResume(ct, tags, labelNames, operands, curr.cont));
   return Ok{};
 }
 

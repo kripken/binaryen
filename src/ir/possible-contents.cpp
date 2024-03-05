@@ -1065,7 +1065,8 @@ struct InfoCollector
     addRoot(curr, PossibleContents::exactType(curr->type));
   }
   void visitStringConst(StringConst* curr) {
-    addRoot(curr, PossibleContents::exactType(curr->type));
+    addRoot(curr,
+            PossibleContents::literal(Literal(std::string(curr->string.str))));
   }
   void visitStringMeasure(StringMeasure* curr) {
     // TODO: optimize when possible
@@ -1199,6 +1200,14 @@ struct InfoCollector
 
   void visitReturn(Return* curr) { addResult(curr->value); }
 
+  void visitContBind(ContBind* curr) {
+    // TODO: optimize when possible
+    addRoot(curr);
+  }
+  void visitContNew(ContNew* curr) {
+    // TODO: optimize when possible
+    addRoot(curr);
+  }
   void visitResume(Resume* curr) {
     // TODO: optimize when possible
     addRoot(curr);

@@ -1163,7 +1163,8 @@ bool HeapType::isFunction() const {
 
 bool HeapType::isData() const {
   if (isBasic()) {
-    return id == struct_ || id == array || id == string;
+    return id == struct_ || id == array || id == string ||
+           id == stringview_wtf16;
   } else {
     return getHeapTypeInfo(*this)->isData();
   }
@@ -1788,7 +1789,7 @@ void TypePrinter::printHeapTypeName(HeapType type) {
     print(type);
     return;
   }
-  os << '$' << generator(type).name;
+  generator(type).name.print(os);
 #if TRACE_CANONICALIZATION
   os << "(;" << ((type.getID() >> 4) % 1000) << ";) ";
 #endif
@@ -1915,7 +1916,8 @@ std::ostream& TypePrinter::print(HeapType type) {
 
   auto names = generator(type);
 
-  os << "(type $" << names.name << ' ';
+  os << "(type ";
+  names.name.print(os) << ' ';
 
   if (isTemp(type)) {
     os << "(; temp ;) ";
@@ -1952,11 +1954,9 @@ std::ostream& TypePrinter::print(HeapType type) {
 }
 
 std::ostream& TypePrinter::print(const Tuple& tuple) {
-  os << '(';
-  auto sep = "";
+  os << "(tuple";
   for (Type type : tuple) {
-    os << sep;
-    sep = " ";
+    os << ' ';
     print(type);
   }
   return os << ')';
@@ -2020,7 +2020,7 @@ TypePrinter::print(const Struct& struct_,
     // TODO: move this to the function for printing fields.
     os << " (field ";
     if (auto it = fieldNames.find(i); it != fieldNames.end()) {
-      os << '$' << it->second << ' ';
+      it->second.print(os) << ' ';
     }
     print(struct_.fields[i]);
     os << ')';

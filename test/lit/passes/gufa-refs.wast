@@ -2139,7 +2139,7 @@
   (tag $tag (param (ref null any)) (param (ref null any)))
 
   ;; CHECK:      (func $func (type $1)
-  ;; CHECK-NEXT:  (local $0 (anyref anyref))
+  ;; CHECK-NEXT:  (local $0 (tuple anyref anyref))
   ;; CHECK-NEXT:  (throw $tag
   ;; CHECK-NEXT:   (ref.null none)
   ;; CHECK-NEXT:   (struct.new_default $struct)
@@ -2150,7 +2150,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (catch $tag
   ;; CHECK-NEXT:    (local.set $0
-  ;; CHECK-NEXT:     (pop anyref anyref)
+  ;; CHECK-NEXT:     (pop (tuple anyref anyref))
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (block (result nullref)
@@ -2169,7 +2169,7 @@
   ;; CHECK-NEXT:   (catch $tag
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (tuple.extract 2 1
-  ;; CHECK-NEXT:      (pop anyref anyref)
+  ;; CHECK-NEXT:      (pop (tuple anyref anyref))
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
@@ -2187,7 +2187,7 @@
       (catch $tag
         (drop
           (tuple.extract 2 0
-            (pop (ref null any) (ref null any))
+            (pop (tuple (ref null any) (ref null any)))
           )
         )
       )
@@ -2198,7 +2198,7 @@
       (catch $tag
         (drop
           (tuple.extract 2 1
-            (pop (ref null any) (ref null any))
+            (pop (tuple (ref null any) (ref null any)))
           )
         )
       )
@@ -2207,12 +2207,12 @@
 )
 
 (module
-  ;; CHECK:      (type ${} (sub (struct )))
-  (type ${} (sub (struct)))
+  ;; CHECK:      (type $"{}" (sub (struct )))
+  (type $"{}" (sub (struct)))
 
-  ;; CHECK:      (type $1 (func (result (ref ${}))))
+  ;; CHECK:      (type $1 (func (result (ref $"{}"))))
 
-  ;; CHECK:      (func $func (type $1) (result (ref ${}))
+  ;; CHECK:      (func $func (type $1) (result (ref $"{}"))
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (block $block (result (ref none))
   ;; CHECK-NEXT:    (br_on_non_null $block
@@ -2223,7 +2223,7 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
-  (func $func (result (ref ${}))
+  (func $func (result (ref $"{}"))
     ;; This block can only return a null in theory (in practice, not even that -
     ;; the br will not be taken, but this pass is not smart enough to see that).
     ;; We can optimize to an unreachable here, but must be careful - we cannot
@@ -2231,9 +2231,9 @@
     ;; removed the br, which we don't do atm). All we will do is add an
     ;; unreachable after the block, on the outside of it (which would help other
     ;; passes do more work).
-    (block $block (result (ref ${}))
+    (block $block (result (ref $"{}"))
       (br_on_non_null $block
-        (ref.null ${})
+        (ref.null $"{}")
       )
       (unreachable)
     )
@@ -4567,7 +4567,7 @@
   )
 
   ;; CHECK:      (func $call_ref-nofunc (type $2)
-  ;; CHECK-NEXT:  (block ;; (replaces something unreachable we can't emit)
+  ;; CHECK-NEXT:  (block ;; (replaces unreachable CallRef we can't emit)
   ;; CHECK-NEXT:   (drop
   ;; CHECK-NEXT:    (i32.const 1)
   ;; CHECK-NEXT:   )
@@ -5624,7 +5624,7 @@
 
 ;; Test that we do not error on array.init of a bottom type.
 (module
-  (type $[mut:i32] (array (mut i32)))
+  (type $"[mut:i32]" (array (mut i32)))
 
   ;; CHECK:      (type $0 (func))
 
@@ -5640,7 +5640,7 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
-    (array.init_data $[mut:i32] $0
+    (array.init_data $"[mut:i32]" $0
       (ref.as_non_null
         (ref.null none)
       )

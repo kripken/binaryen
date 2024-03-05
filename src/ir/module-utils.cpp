@@ -341,6 +341,11 @@ struct CodeScanner
       counts.include(get->type);
     } else if (auto* set = curr->dynCast<ArraySet>()) {
       counts.note(set->ref->type);
+    } else if (auto* contBind = curr->dynCast<ContBind>()) {
+      counts.note(contBind->contTypeBefore);
+      counts.note(contBind->contTypeAfter);
+    } else if (auto* contNew = curr->dynCast<ContNew>()) {
+      counts.note(contNew->contType);
     } else if (auto* resume = curr->dynCast<Resume>()) {
       counts.note(resume->contType);
     } else if (Properties::isControlFlowStructure(curr)) {

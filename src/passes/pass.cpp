@@ -221,6 +221,9 @@ void PassRegistry::registerPasses() {
                "legalizes i64 types on the import/export boundary in a minimal "
                "manner, only on things only JS will call",
                createLegalizeJSInterfaceMinimallyPass);
+  registerPass("legalize-and-prune-js-interface",
+               "legalizes the import/export boundary and prunes when needed",
+               createLegalizeAndPruneJSInterfacePass);
   registerPass("local-cse",
                "common subexpression elimination inside basic blocks",
                createLocalCSEPass);
@@ -369,6 +372,9 @@ void PassRegistry::registerPasses() {
   registerPass("print-stack-ir",
                "print out Stack IR (useful for internal debugging)",
                createPrintStackIRPass);
+  registerPass("propagate-globals-globally",
+               "propagate global values to other globals (useful for tests)",
+               createPropagateGlobalsGloballyPass);
   registerPass("remove-non-js-ops",
                "removes operations incompatible with js",
                createRemoveNonJSOpsPass);
@@ -475,6 +481,12 @@ void PassRegistry::registerPasses() {
     "ssa-nomerge",
     "ssa-ify variables so that they have a single assignment, ignoring merges",
     createSSAifyNoMergePass);
+  registerPass("string-gathering",
+               "gathers wasm strings to globals",
+               createStringGatheringPass);
+  registerPass("string-lowering",
+               "lowers wasm strings and operations to imports",
+               createStringLoweringPass);
   registerPass(
     "strip", "deprecated; same as strip-debug", createStripDebugPass);
   registerPass("stack-check",
@@ -491,9 +503,9 @@ void PassRegistry::registerPasses() {
   registerPass("strip-target-features",
                "strip the wasm target features section",
                createStripTargetFeaturesPass);
-  registerPass("translate-eh-old-to-new",
+  registerPass("translate-to-new-eh",
                "translate old EH instructions to new ones",
-               createTranslateEHOldToNewPass);
+               createTranslateToNewEHPass);
   registerPass("trap-mode-clamp",
                "replace trapping operations with clamping semantics",
                createTrapModeClamp);
@@ -710,6 +722,11 @@ void PassRunner::addDefaultGlobalOptimizationPostPasses() {
     addIfNoDWARFIssues("simplify-globals");
   }
   addIfNoDWARFIssues("remove-unused-module-elements");
+  if (options.optimizeLevel >= 2 && wasm->features.hasStrings()) {
+    // Gather strings to globals right before reorder-globals, which will then
+    // sort them properly.
+    addIfNoDWARFIssues("string-gathering");
+  }
   if (options.optimizeLevel >= 2 || options.shrinkLevel >= 1) {
     addIfNoDWARFIssues("reorder-globals");
   }

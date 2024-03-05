@@ -433,6 +433,15 @@ void TranslateToFuzzReader::setupGlobals() {
 }
 
 void TranslateToFuzzReader::setupTags() {
+  // As in modifyInitialFunctions(), we can't allow tag imports as it would trap
+  // when the fuzzing infrastructure doesn't know what to provide.
+  for (auto& tag : wasm.tags) {
+    if (tag->imported()) {
+      tag->module = tag->base = Name();
+    }
+  }
+
+  // Add some random tags.
   Index num = upTo(3);
   for (size_t i = 0; i < num; i++) {
     addTag();
@@ -513,6 +522,23 @@ void TranslateToFuzzReader::finalizeTable() {
         }
         table->initial = std::max(table->initial, maxOffset);
       });
+
+    // The code above raises table->initial to a size large enough to accomodate
+    // all of its segments, with the intention of avoiding a trap during
+    // startup. However a single segment of (say) size 4GB would have a table of
+    // that size, which will use a lot of memory and execute very slowly, so we
+    // prefer in the fuzzer to trap on such a thing. To achieve that, set a
+    // reasonable limit for the maximum table size.
+    //
+    // This also avoids an issue that arises from table->initial being an
+    // Address (64 bits) but Table::kMaxSize being an Index (32 bits), as a
+    // result of which we need to clamp to Table::kMaxSize as well in order for
+    // the module to validate (but since we are clamping to a smaller value,
+    // there is no need).
+    const Address ReasonableMaxTableSize = 10000;
+    table->initial = std::min(table->initial, ReasonableMaxTableSize);
+    assert(ReasonableMaxTableSize <= Table::kMaxSize);
+
     table->max = oneIn(2) ? Address(Table::kUnlimitedSize) : table->initial;
     // Avoid an imported table (which the fuzz harness would need to handle).
     table->module = table->base = Name();

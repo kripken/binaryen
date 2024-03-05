@@ -28,6 +28,8 @@ using namespace std::string_view_literals;
 
 namespace wasm::WATParser {
 
+Name srcAnnotationKind("src");
+
 namespace {
 
 // ================
@@ -329,6 +331,66 @@ public:
   }
 };
 
+struct LexIdResult : LexResult {
+  bool isStr = false;
+  std::optional<std::string> str;
+};
+
+struct LexIdCtx : LexCtx {
+  bool isStr = false;
+  std::optional<std::string> str;
+
+  LexIdCtx(std::string_view in) : LexCtx(in) {}
+
+  std::optional<LexIdResult> lexed() {
+    if (auto basic = LexCtx::lexed()) {
+      return LexIdResult{*basic, isStr, str};
+    }
+    return {};
+  }
+};
+
+struct LexAnnotationResult : LexResult {
+  Annotation annotation;
+};
+
+struct LexAnnotationCtx : LexCtx {
+  std::string_view kind;
+  size_t kindSize = 0;
+  std::string_view contents;
+  size_t contentsSize = 0;
+
+  explicit LexAnnotationCtx(std::string_view in) : LexCtx(in) {}
+
+  void startKind() { kind = next(); }
+
+  void takeKind(size_t size) {
+    kindSize += size;
+    take(size);
+  }
+
+  void setKind(std::string_view kind) {
+    this->kind = kind;
+    kindSize = kind.size();
+  }
+
+  void startContents() { contents = next(); }
+
+  void takeContents(size_t size) {
+    contentsSize += size;
+    take(size);
+  }
+
+  std::optional<LexAnnotationResult> lexed() {
+    if (auto basic = LexCtx::lexed()) {
+      return LexAnnotationResult{
+        *basic,
+        {Name(kind.substr(0, kindSize)), contents.substr(0, contentsSize)}};
+    }
+    return std::nullopt;
+  }
+};
+
 std::optional<LexResult> lparen(std::string_view in) {
   LexCtx ctx(in);
   ctx.takePrefix("("sv);
@@ -338,6 +400,101 @@ std::optional<LexResult> lparen(std::string_view in) {
 std::optional<LexResult> rparen(std::string_view in) {
   LexCtx ctx(in);
   ctx.takePrefix(")"sv);
+  return ctx.lexed();
+}
+
+std::optional<LexResult> idchar(std::string_view);
+std::optional<LexResult> space(std::string_view);
+std::optional<LexResult> keyword(std::string_view);
+std::optional<LexIntResult> integer(std::string_view);
+std::optional<LexFloatResult> float_(std::string_view);
+std::optional<LexStrResult> str(std::string_view);
+std::optional<LexIdResult> ident(std::string_view);
+
+// annotation ::= ';;@' [^\n]* | '(@'idchar+ annotelem* ')'
+// annotelem  ::= keyword | reserved | uN | sN | fN | string | id
+//              | '(' annotelem* ')' | '(@'idchar+ annotelem* ')'
+std::optional<LexAnnotationResult> annotation(std::string_view in) {
+  LexAnnotationCtx ctx(in);
+  if (ctx.takePrefix(";;@"sv)) {
+    ctx.setKind(srcAnnotationKind.str);
+    ctx.startContents();
+    if (auto size = ctx.next().find('\n'); size != ""sv.npos) {
+      ctx.takeContents(size);
+    } else {
+      ctx.takeContents(ctx.next().size());
+    }
+  } else if (ctx.takePrefix("(@"sv)) {
+    ctx.startKind();
+    bool hasIdchar = false;
+    while (auto lexed = idchar(ctx.next())) {
+      ctx.takeKind(1);
+      hasIdchar = true;
+    }
+    if (!hasIdchar) {
+      return std::nullopt;
+    }
+    ctx.startContents();
+    size_t depth = 1;
+    while (true) {
+      if (ctx.empty()) {
+        return std::nullopt;
+      }
+      if (auto lexed = space(ctx.next())) {
+        ctx.takeContents(lexed->span.size());
+        continue;
+      }
+      if (auto lexed = keyword(ctx.next())) {
+        ctx.takeContents(lexed->span.size());
+        continue;
+      }
+      if (auto lexed = integer(ctx.next())) {
+        ctx.takeContents(lexed->span.size());
+        continue;
+      }
+      if (auto lexed = float_(ctx.next())) {
+        ctx.takeContents(lexed->span.size());
+        continue;
+      }
+      if (auto lexed = str(ctx.next())) {
+        ctx.takeContents(lexed->span.size());
+        continue;
+      }
+      if (auto lexed = ident(ctx.next())) {
+        ctx.takeContents(lexed->span.size());
+        continue;
+      }
+      if (ctx.startsWith("(@"sv)) {
+        ctx.takeContents(2);
+        bool hasIdchar = false;
+        while (auto lexed = idchar(ctx.next())) {
+          ctx.takeContents(1);
+          hasIdchar = true;
+        }
+        if (!hasIdchar) {
+          return std::nullopt;
+        }
+        ++depth;
+        continue;
+      }
+      if (ctx.startsWith("("sv)) {
+        ctx.takeContents(1);
+        ++depth;
+        continue;
+      }
+      if (ctx.startsWith(")"sv)) {
+        --depth;
+        if (depth == 0) {
+          ctx.take(1);
+          break;
+        }
+        ctx.takeContents(1);
+        continue;
+      }
+      // Unrecognized token.
+      return std::nullopt;
+    }
+  }
   return ctx.lexed();
 }
 
@@ -356,7 +513,7 @@ std::optional<LexResult> comment(std::string_view in) {
   }
 
   // Line comment
-  if (ctx.takePrefix(";;"sv)) {
+  if (!ctx.startsWith(";;@"sv) && ctx.takePrefix(";;"sv)) {
     if (auto size = ctx.next().find('\n'); size != ""sv.npos) {
       ctx.take(size);
     } else {
@@ -647,26 +804,6 @@ std::optional<LexResult> idchar(std::string_view in) {
   return ctx.lexed();
 }
 
-// id ::= '$' idchar+
-std::optional<LexResult> ident(std::string_view in) {
-  LexCtx ctx(in);
-  if (!ctx.takePrefix("$"sv)) {
-    return {};
-  }
-  if (auto lexed = idchar(ctx.next())) {
-    ctx.take(*lexed);
-  } else {
-    return {};
-  }
-  while (auto lexed = idchar(ctx.next())) {
-    ctx.take(*lexed);
-  }
-  if (ctx.canFinish()) {
-    return ctx.lexed();
-  }
-  return {};
-}
-
 // string     ::= '"' (b*:stringelem)* '"'  => concat((b*)*)
 //                    (if |concat((b*)*)| < 2^32)
 // stringelem ::= c:stringchar              => utf8(c)
@@ -741,6 +878,30 @@ std::optional<LexStrResult> str(std::string_view in) {
   return ctx.lexed();
 }
 
+// id ::= '$' idchar+ | '$' str
+std::optional<LexIdResult> ident(std::string_view in) {
+  LexIdCtx ctx(in);
+  if (!ctx.takePrefix("$"sv)) {
+    return {};
+  }
+  if (auto s = str(ctx.next())) {
+    ctx.isStr = true;
+    ctx.str = s->str;
+    ctx.take(*s);
+  } else if (auto lexed = idchar(ctx.next())) {
+    ctx.take(*lexed);
+    while (auto lexed = idchar(ctx.next())) {
+      ctx.take(*lexed);
+    }
+  } else {
+    return {};
+  }
+  if (ctx.canFinish()) {
+    return ctx.lexed();
+  }
+  return {};
+}
+
 // keyword ::= ( 'a' | ... | 'z' ) idchar* (if literal terminal in grammar)
 // reserved ::= idchar+
 //
@@ -767,76 +928,56 @@ std::optional<LexResult> keyword(std::string_view in) {
 
 } // anonymous namespace
 
-std::optional<uint64_t> Token::getU64() const {
+template<typename T> std::optional<T> Token::getU() const {
+  static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
   if (auto* tok = std::get_if<IntTok>(&data)) {
-    if (tok->sign == NoSign) {
-      return tok->n;
-    }
-  }
-  return {};
-}
-
-std::optional<int64_t> Token::getS64() const {
-  if (auto* tok = std::get_if<IntTok>(&data)) {
-    if (tok->sign == Neg) {
-      if (uint64_t(INT64_MIN) <= tok->n || tok->n == 0) {
-        return int64_t(tok->n);
-      }
-      // TODO: Add error production for signed underflow.
-    } else {
-      if (tok->n <= uint64_t(INT64_MAX)) {
-        return int64_t(tok->n);
-      }
-      // TODO: Add error production for signed overflow.
-    }
-  }
-  return {};
-}
-
-std::optional<uint64_t> Token::getI64() const {
-  if (auto n = getU64()) {
-    return *n;
-  }
-  if (auto n = getS64()) {
-    return *n;
-  }
-  return {};
-}
-
-std::optional<uint32_t> Token::getU32() const {
-  if (auto* tok = std::get_if<IntTok>(&data)) {
-    if (tok->sign == NoSign && tok->n <= UINT32_MAX) {
-      return int32_t(tok->n);
+    if (tok->sign == NoSign && tok->n <= std::numeric_limits<T>::max()) {
+      return T(tok->n);
     }
     // TODO: Add error production for unsigned overflow.
   }
   return {};
 }
 
-std::optional<int32_t> Token::getS32() const {
+template<typename T> std::optional<T> Token::getS() const {
+  static_assert(std::is_integral_v<T> && std::is_signed_v<T>);
   if (auto* tok = std::get_if<IntTok>(&data)) {
     if (tok->sign == Neg) {
-      if (uint64_t(INT32_MIN) <= tok->n || tok->n == 0) {
-        return int32_t(tok->n);
+      if (uint64_t(std::numeric_limits<T>::min()) <= tok->n || tok->n == 0) {
+        return T(tok->n);
       }
     } else {
-      if (tok->n <= uint64_t(INT32_MAX)) {
-        return int32_t(tok->n);
+      if (tok->n <= uint64_t(std::numeric_limits<T>::max())) {
+        return T(tok->n);
       }
     }
   }
   return {};
 }
 
-std::optional<uint32_t> Token::getI32() const {
-  if (auto n = getU32()) {
+template<typename T> std::optional<T> Token::getI() const {
+  static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
+  if (auto n = getU<T>()) {
     return *n;
   }
-  if (auto n = getS32()) {
-    return uint32_t(*n);
+  if (auto n = getS<std::make_signed_t<T>>()) {
+    return T(*n);
   }
   return {};
 }
+
+template std::optional<uint64_t> Token::getU<uint64_t>() const;
+template std::optional<int64_t> Token::getS<int64_t>() const;
+template std::optional<uint64_t> Token::getI<uint64_t>() const;
+template std::optional<uint32_t> Token::getU<uint32_t>() const;
+template std::optional<int32_t> Token::getS<int32_t>() const;
+template std::optional<uint32_t> Token::getI<uint32_t>() const;
+template std::optional<uint16_t> Token::getU<uint16_t>() const;
+template std::optional<int16_t> Token::getS<int16_t>() const;
+template std::optional<uint16_t> Token::getI<uint16_t>() const;
+template std::optional<uint8_t> Token::getU<uint8_t>() const;
+template std::optional<int8_t> Token::getS<int8_t>() const;
+template std::optional<uint8_t> Token::getI<uint8_t>() const;
 
 std::optional<double> Token::getF64() const {
   constexpr int signif = 52;
@@ -909,14 +1050,39 @@ std::optional<std::string_view> Token::getString() const {
     if (tok->str) {
       return std::string_view(*tok->str);
     }
+    // Remove quotes.
     return span.substr(1, span.size() - 2);
   }
   return {};
 }
 
+std::optional<std::string_view> Token::getID() const {
+  if (auto* tok = std::get_if<IdTok>(&data)) {
+    if (tok->str) {
+      return std::string_view(*tok->str);
+    }
+    if (tok->isStr) {
+      // Remove '$' and quotes.
+      return span.substr(2, span.size() - 3);
+    }
+    // Remove '$'.
+    return span.substr(1);
+  }
+  return {};
+}
+
 void Lexer::skipSpace() {
-  if (auto ctx = space(next())) {
-    index += ctx->span.size();
+  while (true) {
+    if (auto ctx = annotation(next())) {
+      index += ctx->span.size();
+      annotations.push_back(ctx->annotation);
+      continue;
+    }
+    if (auto ctx = space(next())) {
+      index += ctx->span.size();
+      continue;
+    }
+    break;
   }
 }
 
@@ -928,7 +1094,7 @@ void Lexer::lexToken() {
   } else if (auto t = rparen(next())) {
     tok = Token{t->span, RParenTok{}};
   } else if (auto t = ident(next())) {
-    tok = Token{t->span, IdTok{}};
+    tok = Token{t->span, IdTok{t->isStr, t->str}};
   } else if (auto t = integer(next())) {
     tok = Token{t->span, IntTok{t->n, t->sign}};
   } else if (auto t = float_(next())) {

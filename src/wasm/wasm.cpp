@@ -99,6 +99,7 @@ Name PRINT("print");
 Name EXIT("exit");
 Name SHARED("shared");
 Name TAG("tag");
+Name TUPLE("tuple");
 
 // Expressions
 
@@ -1350,6 +1351,10 @@ void StringSliceIter::finalize() {
     type = Type(HeapType::string, NonNullable);
   }
 }
+
+void ContBind::finalize() { type = Type(contTypeAfter, NonNullable); }
+
+void ContNew::finalize() { type = Type(contType, NonNullable); }
 
 static void populateResumeSentTypes(Resume* curr, Module* wasm) {
   if (!wasm) {
