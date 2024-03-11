@@ -48,12 +48,12 @@ struct Localizer {
 // interact with any of the others, or if they have side effects which cannot be
 // removed.
 //
-// After this, the original input has only local.gets as inputs, or other things
+// After this, the parent has only local.gets as inputs, or other things
 // that have no interacting effects, and so those children can be reordered
 // and/or removed as needed.
 //
 // The sets of the locals are emitted on a |sets| property on the class. Those
-// must be emitted right before the input.
+// must be emitted right before the parent.
 //
 // This stops at the first unreachable child, as there is no code executing
 // after that point anyhow.

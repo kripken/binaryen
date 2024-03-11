@@ -72,9 +72,11 @@ struct CallOrigin {
 // need adjusting and it is easier to do it all in one place. Also, the caller
 // can update all the types at once throughout the program after making
 // multiple calls to removeParameter().
+//
+// TODO explain why not const on second vector
 void removeParameter(const std::vector<Function*>& funcs,
                      Index index,
-                     const std::vector<CallOrigin>& calls,
+                     std::vector<CallOrigin>& calls,
                      Module* module,
                      PassRunner* runner);
 
@@ -82,7 +84,7 @@ void removeParameter(const std::vector<Function*>& funcs,
 // remove them all, and returns which we removed.
 void removeParameters(const std::vector<Function*>& funcs,
                       SortedVector indexes,
-                      const std::vector<CallOrigin>& calls,
+                      std::vector<CallOrigin>& calls,
                       Module* module,
                       PassRunner* runner);
 

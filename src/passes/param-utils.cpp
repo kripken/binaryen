@@ -60,7 +60,7 @@ static ExpressionList& getOperands(Expression* call) {
 
 void removeParameter(const std::vector<Function*>& funcs,
                      Index index,
-                     const std::vector<CallOrigin>& calls,
+                     std::vector<CallOrigin>& calls,
                      Module* module,
                      PassRunner* runner) {
   assert(funcs.size() > 0);
@@ -127,13 +127,17 @@ void removeParameter(const std::vector<Function*>& funcs,
       // those now.
       auto* replacementBlock = localizer.getReplacement();
       call = replacementBlock;
+
+      // The call has moved: it is now nested in the block. Update the
+      // CallOrigin.
+      callOrigin.call = &replacementBlock->list.back();
     }
   }
 }
 
 void removeParameters(const std::vector<Function*>& funcs,
                       SortedVector indexes,
-                      const std::vector<CallOrigin>& calls,
+                      std::vector<CallOrigin>& calls,
                       Module* module,
                       PassRunner* runner) {
   if (indexes.empty()) {
