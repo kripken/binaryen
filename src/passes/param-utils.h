@@ -44,6 +44,14 @@ namespace wasm::ParamUtils {
 // }
 std::unordered_set<Index> getUsedParams(Function* func);
 
+// Information about a Call/CallRef, enough to be able to rewrite it later.
+struct CallOrigin {
+  Expression** call;
+  // Also track the function this is in. Some rewrites of a call need to add
+  // parameters, which we add in the function.
+  Function* func;
+};
+
 // Try to remove a parameter from a set of functions and replace it with a local
 // instead. This may not succeed if the parameter type cannot be used in a
 // local, or if we hit another limitation, in which case this returns false and
@@ -64,21 +72,19 @@ std::unordered_set<Index> getUsedParams(Function* func);
 // need adjusting and it is easier to do it all in one place. Also, the caller
 // can update all the types at once throughout the program after making
 // multiple calls to removeParameter().
-bool removeParameter(const std::vector<Function*>& funcs,
+void removeParameter(const std::vector<Function*>& funcs,
                      Index index,
-                     const std::vector<Call*>& calls,
-                     const std::vector<CallRef*>& callRefs,
+                     const std::vector<CallOrigin>& calls,
                      Module* module,
                      PassRunner* runner);
 
 // The same as removeParameter, but gets a sorted list of indexes. It tries to
 // remove them all, and returns which we removed.
-SortedVector removeParameters(const std::vector<Function*>& funcs,
-                              SortedVector indexes,
-                              const std::vector<Call*>& calls,
-                              const std::vector<CallRef*>& callRefs,
-                              Module* module,
-                              PassRunner* runner);
+void removeParameters(const std::vector<Function*>& funcs,
+                      SortedVector indexes,
+                      const std::vector<CallOrigin>& calls,
+                      Module* module,
+                      PassRunner* runner);
 
 // Given a set of functions and the calls and call_refs that reach them, find
 // which parameters are passed the same constant value in all the calls. For

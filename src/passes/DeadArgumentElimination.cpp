@@ -58,7 +58,7 @@ struct DAEFunctionInfo {
   // The unused parameters, if any.
   SortedVector unusedParams;
   // Maps a function name to the calls going to it.
-  std::unordered_map<Name, std::vector<Call*>> calls;
+  std::unordered_map<Name, std::vector<Call**>> calls;
   // Map of all calls that are dropped, to their drops' locations (so that
   // if we can optimize out the drop, we can replace the drop there).
   std::unordered_map<Call*, Expression**> droppedCalls;
@@ -86,6 +86,8 @@ struct DAEFunctionInfo {
 
 using DAEFunctionInfoMap = std::unordered_map<Name, DAEFunctionInfo>;
 
+using CallOrigin = ParamUtils::CallOrigin;
+
 struct DAEScanner
   : public WalkerPass<PostWalker<DAEScanner, Visitor<DAEScanner>>> {
   bool isFunctionParallel() override { return true; }
@@ -103,7 +105,7 @@ struct DAEScanner
 
   void visitCall(Call* curr) {
     if (!getModule()->getFunction(curr->target)->imported()) {
-      info->calls[curr->target].push_back(curr);
+      info->calls[curr->target].push_back(getCurrentPointer());
     }
     if (curr->isReturn) {
       info->hasTailCalls = true;
@@ -202,12 +204,14 @@ struct DAE : public Pass {
     // Scan all the functions.
     scanner.run(getPassRunner(), module);
     // Combine all the info.
-    std::map<Name, std::vector<Call*>> allCalls;
+    std::map<Name, std::vector<CallOrigin>> allCalls;
     std::unordered_set<Name> tailCallees;
-    for (auto& [_, info] : infoMap) {
+    for (auto& [func, info] : infoMap) {
       for (auto& [name, calls] : info.calls) {
         auto& allCallsToName = allCalls[name];
-        allCallsToName.insert(allCallsToName.end(), calls.begin(), calls.end());
+        for (auto* call : calls) {
+          allCallsToName.emplace_back(CallOrigin{call, func});
+        }
       }
       for (auto& callee : info.tailCallees) {
         tailCallees.insert(callee);
@@ -264,7 +268,7 @@ struct DAE : public Pass {
         continue;
       }
       auto removedIndexes = ParamUtils::removeParameters(
-        {func}, infoMap[name].unusedParams, calls, {}, module, getPassRunner());
+        {func}, infoMap[name].unusedParams, calls, module, getPassRunner());
       if (!removedIndexes.empty()) {
         // Success!
         changed.insert(func);
@@ -317,14 +321,15 @@ private:
   std::unordered_map<Call*, Expression**> allDroppedCalls;
 
   void
-  removeReturnValue(Function* func, std::vector<Call*>& calls, Module* module) {
+  removeReturnValue(Function* func, const std::vector<CallOrigin>& calls, Module* module) {
     func->setResults(Type::none);
     // Remove the drops on the calls. Note that we must do this before updating
     // returns in ReturnUpdater, as there may be recursive calls of this
     // function to itself. So we first use the information in allDroppedCalls
     // before the ReturnUpdater potentially invalidates that information as it
     // modifies the function.
-    for (auto* call : calls) {
+    for (auto& callOrigin : calls) {
+      auto* call = *callOrigin.call;
       auto iter = allDroppedCalls.find(call);
       assert(iter != allDroppedCalls.end());
       Expression** location = iter->second;
@@ -361,7 +366,7 @@ private:
   // This assumes that the function has no calls aside from |calls|, that is, it
   // is not exported or called from the table or by reference.
   bool refineArgumentTypes(Function* func,
-                           const std::vector<Call*>& calls,
+                           const std::vector<CallOrigin>& calls,
                            Module* module,
                            const DAEFunctionInfo& info) {
     if (!module->features.hasGC()) {
@@ -384,7 +389,8 @@ private:
         continue;
       }
       auto& lub = lubs[i];
-      for (auto* call : calls) {
+      for (auto& callOrigin : calls) {
+        auto* call = *callOrigin.call;
         auto* operand = call->operands[i];
         lub.note(operand->type);
         if (lub.getLUB() == originalType) {
@@ -432,7 +438,7 @@ private:
   //       unoptimality can happen with multiple functions, more local code in
   //       the middle, etc.
   bool refineReturnTypes(Function* func,
-                         const std::vector<Call*>& calls,
+                         const std::vector<CallOrigin>& calls,
                          Module* module) {
     auto lub = LUB::getResultsLUB(func, *module);
     if (!lub.noted()) {
@@ -441,7 +447,8 @@ private:
     auto newType = lub.getLUB();
     if (newType != func->getResults()) {
       func->setResults(newType);
-      for (auto* call : calls) {
+      for (auto& callOrigin : calls) {
+        auto* call = *callOrigin.call;
         if (call->type != Type::unreachable) {
           call->type = newType;
         }

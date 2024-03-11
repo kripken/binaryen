@@ -16,6 +16,7 @@
 
 #include "ir/function-utils.h"
 #include "ir/local-graph.h"
+#include "ir/localize.h"
 #include "ir/possible-constant.h"
 #include "ir/type-updating.h"
 #include "support/sorted_vector.h"
@@ -45,10 +46,9 @@ std::unordered_set<Index> getUsedParams(Function* func) {
   return usedParams;
 }
 
-bool removeParameter(const std::vector<Function*>& funcs,
+void removeParameter(const std::vector<Function*>& funcs,
                      Index index,
-                     const std::vector<Call*>& calls,
-                     const std::vector<CallRef*>& callRefs,
+                     const std::vector<CallOrigin>& calls,
                      Module* module,
                      PassRunner* runner) {
   assert(funcs.size() > 0);
@@ -58,56 +58,6 @@ bool removeParameter(const std::vector<Function*>& funcs,
     assert(func->type == first->type);
   }
 #endif
-
-  // Check if none of the calls has a param with side effects that we cannot
-  // remove (as if we can remove them, we will simply do that when we remove the
-  // parameter). Note: flattening the IR beforehand can help here.
-  //
-  // It would also be bad if we remove a parameter that causes the type of the
-  // call to change, like this:
-  //
-  //  (call $foo
-  //    (unreachable))
-  //
-  // After removing the parameter the type should change from unreachable to
-  // something concrete. We could handle this by updating the type and then
-  // propagating that out, or by appending an unreachable after the call, but
-  // for simplicity just ignore such cases; if we are called again later then
-  // if DCE ran meanwhile then we could optimize.
-  auto hasBadEffects = [&](auto* call) {
-    auto& operands = call->operands;
-    bool hasUnremovable =
-      EffectAnalyzer(runner->options, *module, operands[index])
-        .hasUnremovableSideEffects();
-    bool wouldChangeType = call->type == Type::unreachable && !call->isReturn &&
-                           operands[index]->type == Type::unreachable;
-    return hasUnremovable || wouldChangeType;
-  };
-  bool callParamsAreValid =
-    std::none_of(calls.begin(), calls.end(), [&](Call* call) {
-      return hasBadEffects(call);
-    });
-  if (!callParamsAreValid) {
-    return false;
-  }
-  bool callRefParamsAreValid =
-    std::none_of(callRefs.begin(), callRefs.end(), [&](CallRef* call) {
-      return hasBadEffects(call);
-    });
-  if (!callRefParamsAreValid) {
-    return false;
-  }
-
-  // The type must be valid for us to handle as a local (since we
-  // replace the parameter with a local).
-  // TODO: if there are no references at all, we can avoid creating a
-  //       local
-  bool typeIsValid = TypeUpdating::canHandleAsLocal(first->getLocalType(index));
-  if (!typeIsValid) {
-    return false;
-  }
-
-  // We can do it!
 
   // Remove the parameter from the function. We must add a new local
   // for uses of the parameter, but cannot make it use the same index
@@ -154,24 +104,29 @@ bool removeParameter(const std::vector<Function*>& funcs,
   }
 
   // Remove the arguments from the calls.
-  for (auto* call : calls) {
+  for (auto& callOrigin : calls) {
+    auto*& call = *callOrigin.call;
+    // Localize the call's children so that we can remove the one we want.
+    ChildLocalizer localizer(call, callOrigin.func, *module, runner.options);
     call->operands.erase(call->operands.begin() + index);
-  }
-  for (auto* call : callRefs) {
-    call->operands.erase(call->operands.begin() + index);
+    if (!localizer.sets.empty()) {
+      // When we localized we found we need some sets before the call. Add
+      // those now.
+      auto* replacementBlock = localizer.getReplacement();
+      call = replacementBlock;
+    }
   }
 
   return true;
 }
 
-SortedVector removeParameters(const std::vector<Function*>& funcs,
-                              SortedVector indexes,
-                              const std::vector<Call*>& calls,
-                              const std::vector<CallRef*>& callRefs,
-                              Module* module,
-                              PassRunner* runner) {
+void removeParameters(const std::vector<Function*>& funcs,
+                      SortedVector indexes,
+                      const std::vector<CallOrigin>& calls,
+                      Module* module,
+                      PassRunner* runner) {
   if (indexes.empty()) {
-    return {};
+    return;
   }
 
   assert(funcs.size() > 0);
@@ -198,7 +153,6 @@ SortedVector removeParameters(const std::vector<Function*>& funcs,
     }
     i--;
   }
-  return removed;
 }
 
 SortedVector applyConstantValues(const std::vector<Function*>& funcs,

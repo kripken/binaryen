@@ -60,14 +60,18 @@ struct Localizer {
 //
 // TODO: use in more places
 struct ChildLocalizer {
+  Expression* parent;
+  Module& wasm;
+  const PassOptions& options;
+
   std::vector<LocalSet*> sets;
 
-  ChildLocalizer(Expression* input,
+  ChildLocalizer(Expression* parent,
                  Function* func,
-                 Module* wasm,
-                 const PassOptions& options) {
-    Builder builder(*wasm);
-    ChildIterator iterator(input);
+                 Module& wasm,
+                 const PassOptions& options) : parent(parent), wasm(wasm), options(options) {
+    Builder builder(wasm);
+    ChildIterator iterator(parent);
     auto& children = iterator.children;
     auto num = children.size();
 
@@ -105,6 +109,16 @@ struct ChildLocalizer {
         *childp = builder.makeLocalGet(local, child->type);
       }
     }
+  }
+
+  // Helper that gets a replacement for the parent with a block containing the
+  // sets + the parent.
+  Block* getReplacement() {
+    auto* block = builder(wasm).makeBlock();
+    block->list.set(sets);
+    block->list.push_back(parent);
+    block->finalize(parent->type);
+    return block;
   }
 };
 
