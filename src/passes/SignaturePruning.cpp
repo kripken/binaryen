@@ -223,19 +223,16 @@ struct SignaturePruning : public Pass {
       }
 
       auto oldParams = sig.params;
-      auto removedIndexes = ParamUtils::removeParameters(funcs,
-                                                         unusedParams,
-                                                         info.calls,
-                                                         module,
-                                                         getPassRunner());
-      if (removedIndexes.empty()) {
-        continue;
-      }
+      ParamUtils::removeParameters(funcs,
+                                   unusedParams,
+                                   info.calls,
+                                   module,
+                                   getPassRunner());
 
       // Success! Update the types.
       std::vector<Type> newParams;
       for (Index i = 0; i < numParams; i++) {
-        if (!removedIndexes.has(i)) {
+        if (unusedParams.has(i)) {
           newParams.push_back(oldParams[i]);
         }
       }
