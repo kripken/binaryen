@@ -44,6 +44,8 @@ namespace wasm {
 
 namespace {
 
+using CallOrigin = ParamUtils::CallOrigin;
+
 struct SignaturePruning : public Pass {
   // Maps each heap type to the possible pruned heap type. We will fill this
   // during analysis and then use it while doing an update of the types. If a
@@ -71,8 +73,7 @@ struct SignaturePruning : public Pass {
     // function in parallel.
 
     struct Info {
-      std::vector<Call*> calls;
-      std::vector<CallRef*> callRefs;
+      std::vector<CallOrigin> calls;
 
       std::unordered_set<Index> usedParams;
 
@@ -89,8 +90,12 @@ struct SignaturePruning : public Pass {
           return;
         }
 
-        info.calls = std::move(FindAll<Call>(func->body).list);
-        info.callRefs = std::move(FindAll<CallRef>(func->body).list);
+        for (auto* call : FindAllPointers<Call>(func->body).list) {
+          info.calls.push_back(CallOrigin{call, func});
+        }
+        for (auto* call : FindAllPointers<CallRef>(func->body).list) {
+          info.calls.push_back(CallOrigin{call, func});
+        }
         info.usedParams = ParamUtils::getUsedParams(func);
       });
 
@@ -107,29 +112,32 @@ struct SignaturePruning : public Pass {
       auto* func = f.get();
       auto& info = analysis.map[func];
 
-      // For direct calls, add each call to the type of the function being
-      // called.
-      for (auto* call : info.calls) {
-        allInfo[module->getFunction(call->target)->type].calls.push_back(call);
+      for (auto& callOrigin : info.calls) {
+        auto* call = *callOrigin.call;
+        if (auto* c = call->dynCast<Call>()) {
+          // For direct calls, add each call to the type of the function being
+          // called.
+          allInfo[module->getFunction(c->target)->type].calls.push_back(callOrigin);
 
-        // Intrinsics limit our ability to optimize in some cases. We will avoid
-        // modifying any type that is used by call.without.effects, to avoid
-        // the complexity of handling that. After intrinsics are lowered,
-        // this optimization will be able to run at full power anyhow.
-        if (Intrinsics(*module).isCallWithoutEffects(call)) {
-          // The last operand is the actual call target.
-          auto* target = call->operands.back();
-          if (target->type != Type::unreachable) {
-            allInfo[target->type.getHeapType()].optimizable = false;
+          // Intrinsics limit our ability to optimize in some cases. We will avoid
+          // modifying any type that is used by call.without.effects, to avoid
+          // the complexity of handling that. After intrinsics are lowered,
+          // this optimization will be able to run at full power anyhow.
+          if (Intrinsics(*module).isCallWithoutEffects(c)) {
+            // The last operand is the actual call target.
+            auto* target = c->operands.back();
+            if (target->type != Type::unreachable) {
+              allInfo[target->type.getHeapType()].optimizable = false;
+            }
           }
-        }
-      }
-
-      // For indirect calls, add each call_ref to the type the call_ref uses.
-      for (auto* callRef : info.callRefs) {
-        auto calledType = callRef->target->type;
-        if (calledType != Type::unreachable) {
-          allInfo[calledType.getHeapType()].callRefs.push_back(callRef);
+        } else if (auto* c = call->dynCast<CallRef>()) {
+          // For indirect calls, add each call_ref to the type the call_ref uses.
+          auto calledType = c->target->type;
+          if (calledType != Type::unreachable) {
+            allInfo[calledType.getHeapType()].calls.push_back(callOrigin);
+          }
+        } else {
+          WASM_UNREACHABLE("bad call");
         }
       }
 
@@ -195,7 +203,7 @@ struct SignaturePruning : public Pass {
       // the parameter unused (since the applied value makes us ignore the value
       // arriving in the parameter).
       auto optimizedIndexes = ParamUtils::applyConstantValues(
-        funcs, info.calls, info.callRefs, module);
+        funcs, info.calls, module);
       for (auto i : optimizedIndexes) {
         usedParams.erase(i);
       }
@@ -218,7 +226,6 @@ struct SignaturePruning : public Pass {
       auto removedIndexes = ParamUtils::removeParameters(funcs,
                                                          unusedParams,
                                                          info.calls,
-                                                         info.callRefs,
                                                          module,
                                                          getPassRunner());
       if (removedIndexes.empty()) {

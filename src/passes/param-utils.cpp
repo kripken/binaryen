@@ -47,6 +47,17 @@ std::unordered_set<Index> getUsedParams(Function* func) {
   return usedParams;
 }
 
+// Get the operands of a Call/CallRef.
+static ExpressionList& getOperands(Expression* call) {
+  if (auto* c = call->dynCast<Call>()) {
+    return c->operands;
+  } else if (auto* c = call->dynCast<CallRef>()) {
+    return c->operands;
+  } else {
+    WASM_UNREACHABLE("bad call");
+  }
+};
+
 void removeParameter(const std::vector<Function*>& funcs,
                      Index index,
                      const std::vector<CallOrigin>& calls,
@@ -109,14 +120,7 @@ void removeParameter(const std::vector<Function*>& funcs,
     auto*& call = *callOrigin.call;
     // Localize the call's children so that we can remove the one we want.
     ChildLocalizer localizer(call, callOrigin.func, *module, runner->options);
-    ExpressionList* operands;
-    if (auto* c = call->dynCast<Call>()) {
-      operands = &c->operands;
-    } else if (auto* c = call->dynCast<CallRef>()) {
-      operands = &c->operands;
-    } else {
-      WASM_UNREACHABLE("bad call");
-    }
+    auto* operands = getOperands(call);
     operands->erase(operands->begin() + index);
     if (!localizer.sets.empty()) {
       // When we localized we found we need some sets before the call. Add
@@ -159,8 +163,7 @@ void removeParameters(const std::vector<Function*>& funcs,
 }
 
 SortedVector applyConstantValues(const std::vector<Function*>& funcs,
-                                 const std::vector<Call*>& calls,
-                                 const std::vector<CallRef*>& callRefs,
+                                 const std::vector<CallOrigin>& calls,
                                  Module* module) {
   assert(funcs.size() > 0);
   auto* first = funcs[0];
@@ -174,14 +177,10 @@ SortedVector applyConstantValues(const std::vector<Function*>& funcs,
   auto numParams = first->getNumParams();
   for (Index i = 0; i < numParams; i++) {
     PossibleConstantValues value;
-    for (auto* call : calls) {
-      value.note(call->operands[i], *module);
-      if (!value.isConstant()) {
-        break;
-      }
-    }
-    for (auto* call : callRefs) {
-      value.note(call->operands[i], *module);
+    for (auto& callOrigin : calls) {
+      auto*& call = *callOrigin.call;
+      auto* operands = getOperands(call);
+      value.note(operands[i], *module);
       if (!value.isConstant()) {
         break;
       }

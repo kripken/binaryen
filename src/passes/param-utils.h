@@ -94,8 +94,7 @@ void removeParameters(const std::vector<Function*>& funcs,
 //
 // Returns the indexes that were optimized.
 SortedVector applyConstantValues(const std::vector<Function*>& funcs,
-                                 const std::vector<Call*>& calls,
-                                 const std::vector<CallRef*>& callRefs,
+                                 const std::vector<CallOrigin>& calls,
                                  Module* module);
 
 } // namespace wasm::ParamUtils
