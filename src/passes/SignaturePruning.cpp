@@ -232,7 +232,7 @@ struct SignaturePruning : public Pass {
       // Success! Update the types.
       std::vector<Type> newParams;
       for (Index i = 0; i < numParams; i++) {
-        if (unusedParams.has(i)) {
+        if (!unusedParams.has(i)) {
           newParams.push_back(oldParams[i]);
         }
       }
