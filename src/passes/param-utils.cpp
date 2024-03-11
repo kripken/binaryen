@@ -120,7 +120,7 @@ void removeParameter(const std::vector<Function*>& funcs,
     auto*& call = *callOrigin.call;
     // Localize the call's children so that we can remove the one we want.
     ChildLocalizer localizer(call, callOrigin.func, *module, runner->options);
-    auto* operands = getOperands(call);
+    auto& operands = getOperands(call);
     operands->erase(operands->begin() + index);
     if (!localizer.sets.empty()) {
       // When we localized we found we need some sets before the call. Add
@@ -179,7 +179,7 @@ SortedVector applyConstantValues(const std::vector<Function*>& funcs,
     PossibleConstantValues value;
     for (auto& callOrigin : calls) {
       auto*& call = *callOrigin.call;
-      auto* operands = getOperands(call);
+      auto& operands = getOperands(call);
       value.note(operands[i], *module);
       if (!value.isConstant()) {
         break;
