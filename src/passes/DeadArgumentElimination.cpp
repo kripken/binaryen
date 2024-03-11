@@ -58,7 +58,7 @@ struct DAEFunctionInfo {
   // The unused parameters, if any.
   SortedVector unusedParams;
   // Maps a function name to the calls going to it.
-  std::unordered_map<Name, std::vector<Call**>> calls;
+  std::unordered_map<Name, std::vector<Expression**>> calls;
   // Map of all calls that are dropped, to their drops' locations (so that
   // if we can optimize out the drop, we can replace the drop there).
   std::unordered_map<Call*, Expression**> droppedCalls;
@@ -210,7 +210,7 @@ struct DAE : public Pass {
       for (auto& [name, calls] : info.calls) {
         auto& allCallsToName = allCalls[name];
         for (auto* call : calls) {
-          allCallsToName.emplace_back(CallOrigin{call, func});
+          allCallsToName.emplace_back(CallOrigin{call, module->getFunction(func)});
         }
       }
       for (auto& callee : info.tailCallees) {
@@ -244,7 +244,7 @@ struct DAE : public Pass {
         refinedReturnTypes = true;
       }
       auto optimizedIndexes =
-        ParamUtils::applyConstantValues({func}, calls, {}, module);
+        ParamUtils::applyConstantValues({func}, calls, module);
       for (auto i : optimizedIndexes) {
         // Mark it as unused, which we know it now is (no point to re-scan just
         // for that).
@@ -264,15 +264,12 @@ struct DAE : public Pass {
       }
       auto* func = module->getFunction(name);
       auto numParams = func->getNumParams();
-      if (numParams == 0) {
+      if (numParams == 0 || infoMap[name].unusedParams.empty()) {
         continue;
       }
-      auto removedIndexes = ParamUtils::removeParameters(
+      ParamUtils::removeParameters(
         {func}, infoMap[name].unusedParams, calls, module, getPassRunner());
-      if (!removedIndexes.empty()) {
-        // Success!
-        changed.insert(func);
-      }
+      changed.insert(func);
     }
     // We can also tell which calls have all their return values dropped. Note
     // that we can't do this if we changed anything so far, as we may have
@@ -299,7 +296,8 @@ struct DAE : public Pass {
         }
         auto& calls = iter->second;
         bool allDropped =
-          std::all_of(calls.begin(), calls.end(), [&](Call* call) {
+          std::all_of(calls.begin(), calls.end(), [&](const CallOrigin& callOrigin) {
+            auto* call = (*callOrigin.call)->cast<Call>();
             return allDroppedCalls.count(call);
           });
         if (!allDropped) {
@@ -329,7 +327,7 @@ private:
     // before the ReturnUpdater potentially invalidates that information as it
     // modifies the function.
     for (auto& callOrigin : calls) {
-      auto* call = *callOrigin.call;
+      auto* call = (*callOrigin.call)->cast<Call>();
       auto iter = allDroppedCalls.find(call);
       assert(iter != allDroppedCalls.end());
       Expression** location = iter->second;
@@ -390,7 +388,7 @@ private:
       }
       auto& lub = lubs[i];
       for (auto& callOrigin : calls) {
-        auto* call = *callOrigin.call;
+        auto* call = (*callOrigin.call)->cast<Call>();
         auto* operand = call->operands[i];
         lub.note(operand->type);
         if (lub.getLUB() == originalType) {

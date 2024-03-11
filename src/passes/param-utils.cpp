@@ -121,7 +121,7 @@ void removeParameter(const std::vector<Function*>& funcs,
     // Localize the call's children so that we can remove the one we want.
     ChildLocalizer localizer(call, callOrigin.func, *module, runner->options);
     auto& operands = getOperands(call);
-    operands->erase(operands->begin() + index);
+    operands.erase(operands.begin() + index);
     if (!localizer.sets.empty()) {
       // When we localized we found we need some sets before the call. Add
       // those now.
