@@ -81,7 +81,7 @@ struct ChildLocalizer {
       // The children are in reverse order in ChildIterator, but we want to
       // process them in the normal order.
       auto* child = *children[num - 1 - i];
-      effects.emplace_back(options, *wasm, child);
+      effects.emplace_back(options, wasm, child);
     }
 
     // Go through the children and move to locals those that we need to.
@@ -114,7 +114,7 @@ struct ChildLocalizer {
   // Helper that gets a replacement for the parent with a block containing the
   // sets + the parent.
   Block* getReplacement() {
-    auto* block = builder(wasm).makeBlock();
+    auto* block = Builder(wasm).makeBlock();
     block->list.set(sets);
     block->list.push_back(parent);
     block->finalize(parent->type);

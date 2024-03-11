@@ -365,7 +365,7 @@ struct GlobalTypeOptimization : public Pass {
           if (!func) {
             Fatal() << "TODO: side effects in removed fields in globals\n";
           }
-          ChildLocalizer localizer(curr, func, getModule(), getPassOptions());
+          ChildLocalizer localizer(curr, func, *getModule(), getPassOptions());
           replaceCurrent(localizer.getReplacement());
         }
 

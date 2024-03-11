@@ -19,6 +19,7 @@
 #include "ir/localize.h"
 #include "ir/possible-constant.h"
 #include "ir/type-updating.h"
+#include "passes/param-utils.h"
 #include "support/sorted_vector.h"
 #include "wasm.h"
 
@@ -107,8 +108,16 @@ void removeParameter(const std::vector<Function*>& funcs,
   for (auto& callOrigin : calls) {
     auto*& call = *callOrigin.call;
     // Localize the call's children so that we can remove the one we want.
-    ChildLocalizer localizer(call, callOrigin.func, *module, runner.options);
-    call->operands.erase(call->operands.begin() + index);
+    ChildLocalizer localizer(call, callOrigin.func, *module, runner->options);
+    ExpressionList* operands;
+    if (auto* c = call->dynCast<Call>()) {
+      operands = &c->operands;
+    } else if (auto* c = call->dynCast<CallRef>()) {
+      operands = &c->operands;
+    } else {
+      WASM_UNREACHABLE("bad call");
+    }
+    operands->erase(operands->begin() + index);
     if (!localizer.sets.empty()) {
       // When we localized we found we need some sets before the call. Add
       // those now.
@@ -116,8 +125,6 @@ void removeParameter(const std::vector<Function*>& funcs,
       call = replacementBlock;
     }
   }
-
-  return true;
 }
 
 void removeParameters(const std::vector<Function*>& funcs,
@@ -140,13 +147,9 @@ void removeParameters(const std::vector<Function*>& funcs,
   // Iterate downwards, as we may remove more than one, and going forwards would
   // alter the indexes after us.
   Index i = first->getNumParams() - 1;
-  SortedVector removed;
   while (1) {
     if (indexes.has(i)) {
-      if (removeParameter(funcs, i, calls, callRefs, module, runner)) {
-        // Success!
-        removed.insert(i);
-      }
+      removeParameter(funcs, i, calls, module, runner);
     }
     if (i == 0) {
       break;

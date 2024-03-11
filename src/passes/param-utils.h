@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef wasm_ir_function_h
-#define wasm_ir_function_h
+#ifndef wasm_passes_param_utils_h
+#define wasm_passes_param_utils_h
 
 #include "pass.h"
 #include "support/sorted_vector.h"
@@ -100,4 +100,4 @@ SortedVector applyConstantValues(const std::vector<Function*>& funcs,
 
 } // namespace wasm::ParamUtils
 
-#endif // wasm_ir_function_h
+#endif // wasm_passes_param_utils_h
