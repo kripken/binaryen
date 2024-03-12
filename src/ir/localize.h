@@ -64,7 +64,8 @@ struct ChildLocalizer {
   Module& wasm;
   const PassOptions& options;
 
-  std::vector<LocalSet*> sets;
+  std::vector<Expression*> sets;
+  bool hasUnreachableChild = false;
 
   ChildLocalizer(Expression* parent,
                  Function* func,
@@ -89,6 +90,12 @@ struct ChildLocalizer {
       auto** childp = children[num - 1 - i];
       auto* child = *childp;
       if (child->type == Type::unreachable) {
+        // Move the child out, and put an unreachable in its place (note that we
+        // don't need an actual set here, as there is no value to set to a
+        // local).
+        sets.push_back(child);
+        *childp = builder.makeUnreachable();
+        hasUnreachableChild = true;
         break;
       }
 
@@ -116,7 +123,10 @@ struct ChildLocalizer {
   Block* getReplacement() {
     auto* block = Builder(wasm).makeBlock();
     block->list.set(sets);
-    block->list.push_back(parent);
+    // If there is an unreachable child then we do not need the parent at all.
+    if (!hasUnreachableChild) {
+      block->list.push_back(parent);
+    }
     block->finalize(parent->type);
     return block;
   }

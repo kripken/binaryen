@@ -131,6 +131,8 @@ void removeParameter(const std::vector<Function*>& funcs,
       // The call has moved: it is now nested in the block. Update the
       // CallOrigin.
       callOrigin.call = &replacementBlock->list.back();
+
+      // We may need to change the type here, if the child was unreachable
     }
   }
 }
