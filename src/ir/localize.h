@@ -18,6 +18,7 @@
 #define wasm_ir_localizer_h
 
 #include "ir/iteration.h"
+#include "support/sorted_vector.h"
 #include "wasm-builder.h"
 
 namespace wasm {
@@ -58,6 +59,12 @@ struct Localizer {
 // This stops at the first unreachable child, as there is no code executing
 // after that point anyhow.
 //
+// Optionally |relevantIndexesForEffects| can be provided, which is set of
+// relevant indexes to check for effects. If none of those indexes have
+// effects then we assume we do not need to do anything at all. For example, if
+// the user of this code will remove those indexes from the parent, then if they
+// indeed have no effects to speak of then we can avoid localizing anything.
+//
 // TODO: use in more places
 struct ChildLocalizer {
   Expression* parent;
@@ -70,7 +77,8 @@ struct ChildLocalizer {
   ChildLocalizer(Expression* parent,
                  Function* func,
                  Module& wasm,
-                 const PassOptions& options) : parent(parent), wasm(wasm), options(options) {
+                 const PassOptions& options,
+                 std::optional<SortedVector> relevantIndexesForEffects = std::nullopt) : parent(parent), wasm(wasm), options(options) {
     Builder builder(wasm);
     ChildIterator iterator(parent);
     auto& children = iterator.children;
@@ -83,6 +91,20 @@ struct ChildLocalizer {
       // process them in the normal order.
       auto* child = *children[num - 1 - i];
       effects.emplace_back(options, wasm, child);
+    }
+
+    if (relevantIndexesForEffects) {
+      bool foundRelevantEffects = false;
+      for (auto index : *relevantIndexesForEffects) {
+        assert(index < effects.size());
+        if (effects[index].hasUnremovableSideEffects()) {
+          foundRelevantEffects = true;
+          break;
+        }
+      }
+      if (!foundRelevantEffects) {
+        return;
+      }
     }
 
     // Go through the children and move to locals those that we need to.
@@ -120,7 +142,12 @@ struct ChildLocalizer {
 
   // Helper that gets a replacement for the parent with a block containing the
   // sets + the parent.
-  Block* getReplacement() {
+  Expression* getReplacement() {
+    if (sets.empty()) {
+      // Nothing to add.
+      return parent;
+    }
+
     auto* block = Builder(wasm).makeBlock();
     block->list.set(sets);
     // If there is an unreachable child then we do not need the parent at all.

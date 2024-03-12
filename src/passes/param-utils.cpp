@@ -118,21 +118,40 @@ void removeParameter(const std::vector<Function*>& funcs,
   // Remove the arguments from the calls.
   for (auto& callOrigin : calls) {
     auto*& call = *callOrigin.call;
-    // Localize the call's children so that we can remove the one we want.
-    ChildLocalizer localizer(call, callOrigin.func, *module, runner->options);
+    // Localize the call's children so that we can remove the one we want. Pass
+    // in {index} as the set of relevant indexes to scan for effects, as if
+    // there are no effects on that parameter then the localizer does not need
+    // to do any work.
+    ChildLocalizer localizer(call, callOrigin.func, *module, runner->options, SortedVector{index});
     auto& operands = getOperands(call);
     operands.erase(operands.begin() + index);
+
+    // We may need to change the type here, if the child was unreachable, as
+    // after removing it we may have no more unreachable children.
+    if (auto* c = call->dynCast<Call>()) {
+      // Look up the function and apply its type (then finalize to handle
+      // unreachability, as other unreachable children may remain).
+      c->type = module->getFunction(c->target)->getResults();
+      c->finalize();
+    } else if (auto* c = call->dynCast<CallRef>()) {
+      // CallRef needs no help, as it can find the type from the target.
+      c->finalize();
+    } else {
+      WASM_UNREACHABLE("bad call");
+    }  
+
+    // The localizer may have had to move code around.
     if (!localizer.sets.empty()) {
       // When we localized we found we need some sets before the call. Add
       // those now.
-      auto* replacementBlock = localizer.getReplacement();
-      call = replacementBlock;
+      auto* replacement = localizer.getReplacement();
+      call = replacement;
 
-      // The call has moved: it is now nested in the block. Update the
-      // CallOrigin.
-      callOrigin.call = &replacementBlock->list.back();
-
-      // We may need to change the type here, if the child was unreachable
+      if (auto* block = replacement->dynCast<Block>()) {
+        // The call has moved: it is now nested in the block that the localizer
+        // generated. Update the CallOrigin.
+        callOrigin.call = &block->list.back();
+      }
     }
   }
 }
