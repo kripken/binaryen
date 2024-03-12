@@ -743,3 +743,27 @@
   )
  )
 )
+
+(module
+ (func $target (param $a i32) (param $b i32) (param $c i32) (param $d i32) (result i32)
+  ;; Test removing a parameter despite calls having interesting non-unreachable
+  ;; effects. This also tests recursion of such calls.
+  (call $target
+   (local.get $b)
+   (call $target
+    (i32.const 0)
+    (i32.const 1)
+    (i32.const 2)
+    (i32.const 3)
+   )
+   (local.get $d)
+   (call $target
+    (i32.const 4)
+    (i32.const 5)
+    (i32.const 6)
+    (i32.const 7)
+   )
+  )
+ )
+)
+
