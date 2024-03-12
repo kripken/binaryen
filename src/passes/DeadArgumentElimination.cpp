@@ -210,7 +210,8 @@ struct DAE : public Pass {
       for (auto& [name, calls] : info.calls) {
         auto& allCallsToName = allCalls[name];
         for (auto* call : calls) {
-          allCallsToName.emplace_back(CallOrigin{call, module->getFunction(func)});
+          allCallsToName.emplace_back(
+            CallOrigin{call, module->getFunction(func)});
         }
       }
       for (auto& callee : info.tailCallees) {
@@ -295,8 +296,8 @@ struct DAE : public Pass {
           continue;
         }
         auto& calls = iter->second;
-        bool allDropped =
-          std::all_of(calls.begin(), calls.end(), [&](const CallOrigin& callOrigin) {
+        bool allDropped = std::all_of(
+          calls.begin(), calls.end(), [&](const CallOrigin& callOrigin) {
             auto* call = (*callOrigin.call)->cast<Call>();
             return allDroppedCalls.count(call);
           });
@@ -318,8 +319,9 @@ struct DAE : public Pass {
 private:
   std::unordered_map<Call*, Expression**> allDroppedCalls;
 
-  void
-  removeReturnValue(Function* func, const std::vector<CallOrigin>& calls, Module* module) {
+  void removeReturnValue(Function* func,
+                         const std::vector<CallOrigin>& calls,
+                         Module* module) {
     func->setResults(Type::none);
     // Remove the drops on the calls. Note that we must do this before updating
     // returns in ReturnUpdater, as there may be recursive calls of this

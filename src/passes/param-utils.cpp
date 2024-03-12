@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include "passes/param-utils.h"
 #include "ir/function-utils.h"
 #include "ir/local-graph.h"
 #include "ir/localize.h"
 #include "ir/possible-constant.h"
 #include "ir/type-updating.h"
-#include "passes/param-utils.h"
 #include "support/sorted_vector.h"
 #include "wasm.h"
 
@@ -122,7 +122,8 @@ void removeParameter(const std::vector<Function*>& funcs,
     // in {index} as the set of relevant indexes to scan for effects, as if
     // there are no effects on that parameter then the localizer does not need
     // to do any work.
-    ChildLocalizer localizer(call, callOrigin.func, *module, runner->options, SortedVector{index});
+    ChildLocalizer localizer(
+      call, callOrigin.func, *module, runner->options, SortedVector{index});
     auto& operands = getOperands(call);
     operands.erase(operands.begin() + index);
 
@@ -138,7 +139,7 @@ void removeParameter(const std::vector<Function*>& funcs,
       c->finalize();
     } else {
       WASM_UNREACHABLE("bad call");
-    }  
+    }
 
     // The localizer may have had to move code around.
     if (!localizer.sets.empty()) {

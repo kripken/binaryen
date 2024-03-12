@@ -117,12 +117,14 @@ struct SignaturePruning : public Pass {
         if (auto* c = call->dynCast<Call>()) {
           // For direct calls, add each call to the type of the function being
           // called.
-          allInfo[module->getFunction(c->target)->type].calls.push_back(callOrigin);
+          allInfo[module->getFunction(c->target)->type].calls.push_back(
+            callOrigin);
 
-          // Intrinsics limit our ability to optimize in some cases. We will avoid
-          // modifying any type that is used by call.without.effects, to avoid
-          // the complexity of handling that. After intrinsics are lowered,
-          // this optimization will be able to run at full power anyhow.
+          // Intrinsics limit our ability to optimize in some cases. We will
+          // avoid modifying any type that is used by call.without.effects, to
+          // avoid the complexity of handling that. After intrinsics are
+          // lowered, this optimization will be able to run at full power
+          // anyhow.
           if (Intrinsics(*module).isCallWithoutEffects(c)) {
             // The last operand is the actual call target.
             auto* target = c->operands.back();
@@ -131,7 +133,8 @@ struct SignaturePruning : public Pass {
             }
           }
         } else if (auto* c = call->dynCast<CallRef>()) {
-          // For indirect calls, add each call_ref to the type the call_ref uses.
+          // For indirect calls, add each call_ref to the type the call_ref
+          // uses.
           auto calledType = c->target->type;
           if (calledType != Type::unreachable) {
             allInfo[calledType.getHeapType()].calls.push_back(callOrigin);
@@ -202,8 +205,8 @@ struct SignaturePruning : public Pass {
       // constant value, and apply that value in the function. That then makes
       // the parameter unused (since the applied value makes us ignore the value
       // arriving in the parameter).
-      auto optimizedIndexes = ParamUtils::applyConstantValues(
-        funcs, info.calls, module);
+      auto optimizedIndexes =
+        ParamUtils::applyConstantValues(funcs, info.calls, module);
       for (auto i : optimizedIndexes) {
         usedParams.erase(i);
       }
@@ -223,11 +226,8 @@ struct SignaturePruning : public Pass {
       }
 
       auto oldParams = sig.params;
-      ParamUtils::removeParameters(funcs,
-                                   unusedParams,
-                                   info.calls,
-                                   module,
-                                   getPassRunner());
+      ParamUtils::removeParameters(
+        funcs, unusedParams, info.calls, module, getPassRunner());
 
       // Success! Update the types.
       std::vector<Type> newParams;
