@@ -36,23 +36,20 @@
 (module
   ;; CHECK:      (type $0 (func))
 
-  ;; CHECK:      (type $1 (func (param i32)))
-
   ;; CHECK:      (func $caller (type $0)
-  ;; CHECK-NEXT:  (call $target
-  ;; CHECK-NEXT:   (unreachable)
-  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call $target)
   ;; CHECK-NEXT: )
   (func $caller
-    ;; Removing this parameter would require the type of the call to change from
-    ;; unreachable to none. We don't handle such complexity and ignore such
-    ;; cases.
+    ;; Removing this parameter makes the type of the call change from
+    ;; unreachable to none. This is only possible because we assume traps never
+    ;; happen, so that unreachable never executes anyhow.
     (call $target
       (unreachable)
     )
   )
 
-  ;; CHECK:      (func $target (type $1) (param $0 i32)
+  ;; CHECK:      (func $target (type $0)
+  ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (nop)
   ;; CHECK-NEXT: )
   (func $target (param i32)
