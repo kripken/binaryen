@@ -154,7 +154,7 @@ struct ChildLocalizer {
     if (!hasUnreachableChild) {
       block->list.push_back(parent);
     }
-    block->finalize(parent->type);
+    block->finalize();
     return block;
   }
 };
