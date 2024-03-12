@@ -153,6 +153,7 @@ void removeParameter(const std::vector<Function*>& funcs,
         callOrigin.call = &block->list.back();
       }
     }
+    // the one test that gfoes unreahble call => none call seem dubious
   }
 }
 
