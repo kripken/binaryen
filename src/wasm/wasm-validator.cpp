@@ -3231,8 +3231,9 @@ void FunctionValidator::visitStringNew(StringNew* curr) {
             curr->ptr->type.isRef(), curr, "string.new_wtf16_array input must have string type")) {
         return;
       }
+      auto ptrHeapType = curr->ptr->type.getHeapType();
       if (!shouldBeTrue(
-            ptrheapType.isBottom() || ptrHeapType.isArray(),
+            ptrHeapType.isBottom() || ptrHeapType.isArray(),
             curr, "string.new_wtf16_array input must be array")) {
         return;
       }
