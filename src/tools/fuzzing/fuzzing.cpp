@@ -2469,12 +2469,13 @@ Expression* TranslateToFuzzReader::makeBasicRef(Type type) {
       return builder.makeStringConst(std::to_string(upTo(1024)));
     case HeapType::stringview_wtf8:
       return builder.makeStringAs(StringAsWTF8,
-                                  makeBasicRef(HeapType::string));
+                                  makeBasicRef(Type(HeapType::string, NonNullable)));
     case HeapType::stringview_wtf16:
       return builder.makeStringAs(StringAsWTF16,
-                                  makeBasicRef(HeapType::string));
+                                  makeBasicRef(Type(HeapType::string, NonNullable)));
     case HeapType::stringview_iter:
-      WASM_UNREACHABLE("TODO: strings");
+      return builder.makeStringAs(StringAsIter,
+                                  makeBasicRef(Type(HeapType::string, NonNullable)));
     case HeapType::none:
     case HeapType::noext:
     case HeapType::nofunc:
