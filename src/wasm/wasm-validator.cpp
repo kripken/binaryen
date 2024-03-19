@@ -3224,6 +3224,31 @@ void FunctionValidator::visitStringNew(StringNew* curr) {
   shouldBeTrue(!getModule() || getModule()->features.hasStrings(),
                curr,
                "string operations require reference-types [--enable-strings]");
+
+  switch (curr->op) {
+    case StringNewWTF16Array: {
+      if (!shouldBeTrue(
+            curr->ptr->type.isRef(), curr, "string.new_wtf16_array input must have string type")) {
+        return;
+      }
+      if (!shouldBeTrue(
+            curr->ptr->type.getHeapType().isArray(), curr, "string.new_wtf16_array input must be array")) {
+        return;
+      }
+      shouldBeEqualOrFirstIsUnreachable(
+        curr->start->type,
+        Type(Type::i32),
+        curr,
+        "string.new_wtf16_array start must be i32");
+      shouldBeEqualOrFirstIsUnreachable(
+        curr->end->type,
+        Type(Type::i32),
+        curr,
+        "string.new_wtf16_array end must be i32");
+      break;
+    }
+    default: {}
+  }
 }
 
 void FunctionValidator::visitStringConst(StringConst* curr) {
