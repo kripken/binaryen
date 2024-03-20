@@ -3227,11 +3227,15 @@ void FunctionValidator::visitStringNew(StringNew* curr) {
 
   switch (curr->op) {
     case StringNewWTF16Array: {
-      if (!shouldBeTrue(
-            curr->ptr->type.isRef(), curr, "string.new_wtf16_array input must have string type")) {
+      auto ptrType = curr->ptr->type;
+      if (ptrType == Type::unreachable) {
         return;
       }
-      auto ptrHeapType = curr->ptr->type.getHeapType();
+      if (!shouldBeTrue(
+            ptrType.isRef(), curr, "string.new_wtf16_array input must have string type")) {
+        return;
+      }
+      auto ptrHeapType = ptrType.getHeapType();
       if (!shouldBeTrue(
             ptrHeapType.isBottom() || ptrHeapType.isArray(),
             curr, "string.new_wtf16_array input must be array")) {
