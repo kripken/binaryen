@@ -3231,14 +3231,15 @@ void FunctionValidator::visitStringNew(StringNew* curr) {
       if (ptrType == Type::unreachable) {
         return;
       }
-      if (!shouldBeTrue(
-            ptrType.isRef(), curr, "string.new_wtf16_array input must have string type")) {
+      if (!shouldBeTrue(ptrType.isRef(),
+                        curr,
+                        "string.new_wtf16_array input must have string type")) {
         return;
       }
       auto ptrHeapType = ptrType.getHeapType();
-      if (!shouldBeTrue(
-            ptrHeapType.isBottom() || ptrHeapType.isArray(),
-            curr, "string.new_wtf16_array input must be array")) {
+      if (!shouldBeTrue(ptrHeapType.isBottom() || ptrHeapType.isArray(),
+                        curr,
+                        "string.new_wtf16_array input must be array")) {
         return;
       }
       shouldBeEqualOrFirstIsUnreachable(
@@ -3253,7 +3254,8 @@ void FunctionValidator::visitStringNew(StringNew* curr) {
         "string.new_wtf16_array end must be i32");
       break;
     }
-    default: {}
+    default: {
+    }
   }
 }
 
