@@ -1986,6 +1986,7 @@ public:
     if (ref.breaking()) {
       return ref;
     }
+    // TODO: "WTF-16 position treatment", as in stringview_wtf16.slice?
     Flow ptr = visit(curr->ptr);
     if (ptr.breaking()) {
       return ptr;
