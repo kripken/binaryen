@@ -1959,6 +1959,11 @@ public:
     if (!leftData || !rightData) {
       trap("null ref");
     }
+    // This is only correct if all the bytes in the left operand correspond
+    // to single unicode code points.
+    if (hasNonAsciiUpTo(leftData->values)) {
+      return Flow(NONCONSTANT_FLOW);
+    }
 
     Literals contents;
     contents.reserve(leftData->values.size() + rightData->values.size());
@@ -1981,6 +1986,7 @@ public:
     if (ref.breaking()) {
       return ref;
     }
+    // TODO: "WTF-16 position treatment", as in stringview_wtf16.slice?
     Flow ptr = visit(curr->ptr);
     if (ptr.breaking()) {
       return ptr;
@@ -2168,9 +2174,7 @@ public:
     auto& refValues = refData->values;
     auto startVal = start.getSingleValue().getUnsigned();
     auto endVal = end.getSingleValue().getUnsigned();
-    if (endVal > refValues.size()) {
-      trap("array oob");
-    }
+    endVal = std::min(endVal, refValues.size());
     if (hasNonAsciiUpTo(refValues, endVal)) {
       return Flow(NONCONSTANT_FLOW);
     }
