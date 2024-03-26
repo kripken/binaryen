@@ -269,12 +269,8 @@ private:
 
   // Make something with no chance of infinite recursion. We can optionally
   // disallow local operations here.
-  enum AllowLocals {
-    LocalsAllowed,
-    LocalsDisallowed
-  };
-  Expression* makeTrivial(Type type,
-                          AllowLocals allowLocals=LocalsAllowed);
+  enum AllowLocals { LocalsAllowed, LocalsDisallowed };
+  Expression* makeTrivial(Type type, AllowLocals allowLocals = LocalsAllowed);
 
   // We must note when we are nested in a makeTrivial() call. When we are, all
   // operations must try to be as trivial as possible.

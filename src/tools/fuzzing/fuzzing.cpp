@@ -642,8 +642,8 @@ TranslateToFuzzReader::FunctionCreationContext::~FunctionCreationContext() {
       // we need to not trap, but TypeUpdating::handleNonDefaultableLocals a few
       // lines below may end up making that local nullable + add
       // ref.as_non_null.
-      auto* value = parent.makeTrivial(func->getLocalType(index),
-                                       LocalsDisallowed);
+      auto* value =
+        parent.makeTrivial(func->getLocalType(index), LocalsDisallowed);
       func->body = parent.builder.makeSequence(
         parent.builder.makeLocalSet(index, value), func->body);
     }
