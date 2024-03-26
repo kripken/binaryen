@@ -635,7 +635,15 @@ TranslateToFuzzReader::FunctionCreationContext::~FunctionCreationContext() {
     // Do not always do this, but with high probability, to reduce the amount of
     // traps.
     if (!parent.oneIn(5)) {
-      auto* value = parent.makeTrivial(func->getLocalType(index));
+      // Disallow local operations here: We just want some value that will
+      // avoid trapping, and a local.get is risky as it may be a non-nullable
+      // local that will itself get fixed up. That is, it looks non-nullable
+      // now, so we are tempted to read from it to get a non-nullable value that
+      // we need to not trap, but TypeUpdating::handleNonDefaultableLocals a few
+      // lines below may end up making that local nullable + add
+      // ref.as_non_null.
+      auto* value = parent.makeTrivial(func->getLocalType(index),
+                                       LocalsDisallowed);
       func->body = parent.builder.makeSequence(
         parent.builder.makeLocalSet(index, value), func->body);
     }
@@ -1448,7 +1456,8 @@ Expression* TranslateToFuzzReader::_makeunreachable() {
   return (this->*pick(options))(Type::unreachable);
 }
 
-Expression* TranslateToFuzzReader::makeTrivial(Type type) {
+Expression* TranslateToFuzzReader::makeTrivial(Type type,
+                                               AllowLocals allowLocals) {
   struct TrivialNester {
     TranslateToFuzzReader& parent;
     TrivialNester(TranslateToFuzzReader& parent) : parent(parent) {
@@ -1461,7 +1470,7 @@ Expression* TranslateToFuzzReader::makeTrivial(Type type) {
     // If we have a function context, use a local half the time. Use a local
     // less often if the local is non-nullable, however, as then we might be
     // using it before it was set, which would trap.
-    if (funcContext && oneIn(type.isNonNullable() ? 10 : 2)) {
+    if (allowLocals && funcContext && oneIn(type.isNonNullable() ? 10 : 2)) {
       return makeLocalGet(type);
     } else {
       return makeConst(type);
@@ -1472,7 +1481,7 @@ Expression* TranslateToFuzzReader::makeTrivial(Type type) {
   assert(type == Type::unreachable);
   Expression* ret = nullptr;
   if (funcContext->func->getResults().isConcrete()) {
-    ret = makeTrivial(funcContext->func->getResults());
+    ret = makeTrivial(funcContext->func->getResults(), allowLocals);
   }
   return builder.makeReturn(ret);
 }
@@ -2432,7 +2441,7 @@ Expression* TranslateToFuzzReader::makeRefFuncConst(Type type) {
   auto heapType = type.getHeapType();
   if (heapType == HeapType::func) {
     // First set to target to the last created function, and try to select
-    // among other existing function if possible.
+    // among other existing functions if possible.
     Function* target = funcContext ? funcContext->func : nullptr;
     // If there is no last function, and we have others, pick between them. Also
     // pick between them with some random probability even if there is a last
