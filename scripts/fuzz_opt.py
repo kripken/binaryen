@@ -659,6 +659,9 @@ def run_vm(cmd):
             # removing locals, which makes stack frames smaller), which is
             # noticeable.
             'Maximum call stack size exceeded',
+            # the stringref proposal lacks annotations, see
+            # https://github.com/WebAssembly/binaryen/issues/6443
+            'string.new_wtf16_array[0] expected array of i16, found ref.as_non_null of type (ref none)',
             # all host limitations are arbitrary and may differ between VMs and
             # also be affected by optimizations, so ignore them.
             # this is the prefix that the binaryen interpreter emits. For V8,
