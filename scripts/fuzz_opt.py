@@ -1314,6 +1314,10 @@ class CtorEval(TestCaseHandler):
 
         compare_between_vms(fix_output(wasm_exec), fix_output(evalled_wasm_exec), 'CtorEval')
 
+    def can_run_on_feature_opts(self, feature_opts):
+        # TODO: strings support in wasm-ctor-eval
+        return all_disallowed(['strings'])
+
 
 # Tests wasm-merge
 class Merge(TestCaseHandler):
