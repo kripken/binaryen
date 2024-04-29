@@ -2729,7 +2729,37 @@ void StackIRGenerator::emit(Expression* curr) {
     stackInst = makeStackInst(StackInst::TryBegin, curr);
   } else if (curr->is<TryTable>()) {
     stackInst = makeStackInst(StackInst::TryTableBegin, curr);
+  } else if (auto* br = curr->dynCast<Break>()) {
+    // br_if with a value needs special handling in some cases. TODO identify
+    // accurately them
+    if (curr->type.hasRef()) {
+      Builder builder(module);
+      // XXX the condition is right before us, not the value; stash it too sadly
+      auto tempCondition = builder.addVar(func, Type::i32); // XXX Remove this later
+      auto* set = builder.makeLocalSet(tempCondition, br->condition); // XXX reuses
+      stackIR.push_back(makeStackInst(set));
+      // Tee the value.
+      auto tempValue = builder.addVar(func, curr->type); // XXX Remove this later
+      auto* tee = builder.makeLocalTee(tempValue, br->value, br->value->type); // XXX reuses br.value
+      stackIR.push_back(makeStackInst(tee));
+      // get the condition.
+      auto* get = builder.makeLocalGet(tempCondition, Type::i32);
+      stackIR.push_back(makeStackInst(get));
+      // Emit the br_if.
+      stackIR.push_back(makeStackInst(curr));
+      // Drop the br_if.
+      auto* drop = builder.makeDrop(curr); // XXX reuse
+      stackIR.push_back(makeStackInst(drop));
+      // Get the value, which has the fully refined original type.
+      auto* get2 = builder.makeLocalGet(tempValue, br->value->type);
+      stackIR.push_back(makeStackInst(get2));
+      return;
+    }
+
+    // A generic br_if.
+    stackInst = makeStackInst(curr);
   } else {
+    // A generic instruction.
     stackInst = makeStackInst(curr);
   }
   stackIR.push_back(stackInst);
