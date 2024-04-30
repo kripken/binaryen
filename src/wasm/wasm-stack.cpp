@@ -50,6 +50,16 @@ PreBinaryScanner::PreBinaryScanner(Function* func, Module& wasm) {
     }
   } walker(*this);
   walker.walkFunction(func);
+
+  if (!wasm.features.hasGC()) {
+    // br_ifs that look dangerous are not actually so, if GC is not enabled.
+    // Without GC the only situation that looks like it requires a cast would be
+    // when we see a (ref func) vs (ref null func), but that difference is of no
+    // consequence in the binary as we only emit nullable types when GC is
+    // disabled anyhow (we do allow non-nullable function references in our IR,
+    // for consistency, but we make them nullable on write).
+    numDangerousBrIfs = 0;
+  }
 }
 
 void BinaryInstWriter::emitResultType(Type type) {
