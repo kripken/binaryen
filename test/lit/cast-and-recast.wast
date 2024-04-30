@@ -19,25 +19,17 @@
   )
 
   ;; CHECK:      (func $test (type $3) (param $B (ref $B)) (param $x i32) (result anyref)
-  ;; CHECK-NEXT:  (local $2 i32)
-  ;; CHECK-NEXT:  (local $3 (ref $B))
-  ;; CHECK-NEXT:  (local $4 (ref $B))
+  ;; CHECK-NEXT:  (local $2 (ref $B))
   ;; CHECK-NEXT:  (block $label$1 (result (ref $A))
-  ;; CHECK-NEXT:   (local.set $4
-  ;; CHECK-NEXT:    (local.get $B)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.set $2
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (drop
   ;; CHECK-NEXT:    (br_if $label$1
-  ;; CHECK-NEXT:     (local.tee $3
-  ;; CHECK-NEXT:      (local.get $4)
+  ;; CHECK-NEXT:     (local.tee $2
+  ;; CHECK-NEXT:      (local.get $B)
   ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (local.get $2)
+  ;; CHECK-NEXT:     (local.get $x)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.get $3)
+  ;; CHECK-NEXT:   (local.get $2)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test (param $B (ref $B)) (param $x i32) (result anyref)
@@ -53,26 +45,12 @@
   )
 
   ;; CHECK:      (func $test-cast (type $3) (param $B (ref $B)) (param $x i32) (result anyref)
-  ;; CHECK-NEXT:  (local $2 i32)
-  ;; CHECK-NEXT:  (local $3 (ref $B))
-  ;; CHECK-NEXT:  (local $4 (ref $B))
   ;; CHECK-NEXT:  (block $label$1 (result (ref $A))
-  ;; CHECK-NEXT:   (local.set $4
-  ;; CHECK-NEXT:    (local.get $B)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.set $2
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (br_if $label$1
-  ;; CHECK-NEXT:     (local.tee $3
-  ;; CHECK-NEXT:      (local.get $4)
-  ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (local.get $2)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (ref.cast (ref $B)
-  ;; CHECK-NEXT:    (local.get $3)
+  ;; CHECK-NEXT:    (br_if $label$1
+  ;; CHECK-NEXT:     (local.get $B)
+  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -90,26 +68,12 @@
   )
 
   ;; CHECK:      (func $test-cast-more (type $3) (param $B (ref $B)) (param $x i32) (result anyref)
-  ;; CHECK-NEXT:  (local $2 i32)
-  ;; CHECK-NEXT:  (local $3 (ref $B))
-  ;; CHECK-NEXT:  (local $4 (ref $B))
   ;; CHECK-NEXT:  (block $label$1 (result (ref $A))
-  ;; CHECK-NEXT:   (local.set $4
-  ;; CHECK-NEXT:    (local.get $B)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.set $2
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (br_if $label$1
-  ;; CHECK-NEXT:     (local.tee $3
-  ;; CHECK-NEXT:      (local.get $4)
-  ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (local.get $2)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (ref.cast (ref $C)
-  ;; CHECK-NEXT:    (local.get $3)
+  ;; CHECK-NEXT:    (br_if $label$1
+  ;; CHECK-NEXT:     (local.get $B)
+  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -127,26 +91,12 @@
   )
 
   ;; CHECK:      (func $test-cast-less (type $3) (param $B (ref $B)) (param $x i32) (result anyref)
-  ;; CHECK-NEXT:  (local $2 i32)
-  ;; CHECK-NEXT:  (local $3 (ref $B))
-  ;; CHECK-NEXT:  (local $4 (ref $B))
   ;; CHECK-NEXT:  (block $label$1 (result (ref $A))
-  ;; CHECK-NEXT:   (local.set $4
-  ;; CHECK-NEXT:    (local.get $B)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.set $2
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (br_if $label$1
-  ;; CHECK-NEXT:     (local.tee $3
-  ;; CHECK-NEXT:      (local.get $4)
-  ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (local.get $2)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (ref.cast (ref $B)
-  ;; CHECK-NEXT:    (local.get $3)
+  ;; CHECK-NEXT:    (br_if $label$1
+  ;; CHECK-NEXT:     (local.get $B)
+  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -167,21 +117,13 @@
   ;; CHECK:      (func $test-local (type $3) (param $B (ref $B)) (param $x i32) (result anyref)
   ;; CHECK-NEXT:  (local $temp (ref $B))
   ;; CHECK-NEXT:  (local $3 (ref $B))
-  ;; CHECK-NEXT:  (local $4 (ref $B))
-  ;; CHECK-NEXT:  (local $5 i32)
   ;; CHECK-NEXT:  (block $label$1 (result (ref $A))
-  ;; CHECK-NEXT:   (local.set $4
-  ;; CHECK-NEXT:    (local.get $B)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.set $5
-  ;; CHECK-NEXT:    (local.get $x)
-  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (drop
   ;; CHECK-NEXT:    (br_if $label$1
   ;; CHECK-NEXT:     (local.tee $3
-  ;; CHECK-NEXT:      (local.get $4)
+  ;; CHECK-NEXT:      (local.get $B)
   ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (local.get $5)
+  ;; CHECK-NEXT:     (local.get $x)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (local.set $temp
@@ -233,25 +175,11 @@
   )
 
   ;; CHECK:      (func $test-same (type $4) (param $A (ref $A)) (param $x i32) (result anyref)
-  ;; CHECK-NEXT:  (local $2 i32)
-  ;; CHECK-NEXT:  (local $3 (ref $A))
-  ;; CHECK-NEXT:  (local $4 (ref $A))
   ;; CHECK-NEXT:  (block $label$1 (result (ref $A))
-  ;; CHECK-NEXT:   (local.set $4
+  ;; CHECK-NEXT:   (br_if $label$1
   ;; CHECK-NEXT:    (local.get $A)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.set $2
   ;; CHECK-NEXT:    (local.get $x)
   ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (br_if $label$1
-  ;; CHECK-NEXT:     (local.tee $3
-  ;; CHECK-NEXT:      (local.get $4)
-  ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (local.get $2)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.get $3)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test-same (param $A (ref $A)) (param $x i32) (result anyref)
