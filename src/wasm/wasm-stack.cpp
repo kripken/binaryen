@@ -24,6 +24,34 @@ namespace wasm {
 
 static Name IMPOSSIBLE_CONTINUE("impossible-continue");
 
+PreBinaryScanner::PreBinaryScanner(Function* func) {
+  struct Walker : PostWalker<Walker> {
+    PreBinaryScanner& parent;
+
+    Walker(PreBinaryScanner& parent) : parent(parent) {}
+
+    void visitTupleExtract(TupleExtract* curr) {
+      parent.tupleExtracts.push_back(curr);
+    }
+
+    void visitBreak(Break* curr) {
+      if (curr->type.hasRef()) {
+        parent.numDangerousBrIfs++;
+      }
+    }
+
+    void visitDrop(Drop* curr) {
+      if (curr->value->is<Break>() && curr->value->type.hasRef()) {
+        // The value is exactly a br_if of a ref, that we just visited before
+        // us. Undo the ++ from there as it can be ignored.
+        assert(parent.numDangerousBrIfs > 0);
+        parent.numDangerousBrIfs--;
+      }
+    }
+  } walker(*this);
+  walker.walkFunction(func);
+}
+
 void BinaryInstWriter::emitResultType(Type type) {
   if (type == Type::unreachable) {
     parent.writeType(Type::none);
@@ -2573,7 +2601,7 @@ void BinaryInstWriter::mapLocalsAndEmitHeader() {
   // do not do any reordering at all - instead, do a trivial mapping that
   // keeps everything unmoved.
   if (DWARF) {
-    if (!scanner.tupleExtracts.list.empty()) {
+    if (!scanner.tupleExtracts.empty()) {
       Fatal() << "DWARF + multivalue is not yet complete";
     }
     Index varStart = func->getVarIndexBase();

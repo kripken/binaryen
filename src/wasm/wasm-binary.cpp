@@ -384,7 +384,8 @@ void WasmBinaryWriter::writeFunctionSignatures() {
 }
 
 void WasmBinaryWriter::writeExpression(Expression* curr) {
-  BinaryenIRToBinaryWriter(*this, o).visit(curr);
+  PreBinaryScanner emptyScanner; // XXX one global one?
+  BinaryenIRToBinaryWriter(*this, emptyScanner, o).visit(curr);
 }
 
 void WasmBinaryWriter::writeFunctions() {
@@ -403,28 +404,27 @@ void WasmBinaryWriter::writeFunctions() {
     size_t start = o.size();
     BYN_TRACE("writing" << func->name << std::endl);
     // Scan the function and pick the right way to emit it.
-    PreBinaryScanner& scanner.
-    scanner.scan(func);
+    PreBinaryScanner scanner(func);
     if (scanner.mustUseStackIR()) {
       if (sourceMap || DWARF) {
         Fatal() << "TODO: debug info support with StackIR";
       }
 
       // Generate StackIR right now, and we will use it right below.
-      PassRunner runner;
+      PassRunner runner(wasm);
       runner.add("generate-stack-ir");
       runner.runOnFunction(func);
     }
     if (func->stackIR && !sourceMap && !DWARF) {
       BYN_TRACE("write Stack IR\n");
-      StackIRToBinaryWriter writer(*this, o, func);
+      StackIRToBinaryWriter writer(*this, scanner, o, func);
       writer.write();
       if (debugInfo) {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());
       }
     } else {
       BYN_TRACE("write Binaryen IR\n");
-      BinaryenIRToBinaryWriter writer(*this, o, func, sourceMap, DWARF);
+      BinaryenIRToBinaryWriter writer(*this, scanner, o, func, sourceMap, DWARF);
       writer.write();
       if (debugInfo) {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());

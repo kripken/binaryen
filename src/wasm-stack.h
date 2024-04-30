@@ -87,12 +87,10 @@ public:
 
 // A helper class that scans BinaryenIR before binary writing. This does a pass
 // on the function to find things that will need special handling.
-struct PreBinaryScanner : PostWalker<PreBinaryScanner> {
-  // Users call this method and can then query the APIs and data structures
-  // below.
-  void scan(Function* func) {
-    walkFunction(func);
-  }
+struct PreBinaryScanner {
+  // Used in cases where we do not have a function to scan (optional?)
+  PreBinaryScanner() {}
+  PreBinaryScanner(Function* func);
 
   // We will note all TupleExtracts for purposes of scratch locals.
   std::vector<TupleExtract*> tupleExtracts;
@@ -117,27 +115,6 @@ struct PreBinaryScanner : PostWalker<PreBinaryScanner> {
   bool mustUseStackIR() {
     // StackIR has the logic to handle such br_ifs.
     return numDangerousBrIfs > 0;
-  }
-
-  // Walking logic.
-
-  void visitTupleExtract(TupleExtract* curr) {
-    tupleExtracts.push_back(curr);
-  }
-
-  void visitBreak(Break* curr) {
-    if (curr>type.hasRef()) {
-      numDangerousBrIfs++;
-    }
-  }
-
-  void visitDrop(Drop* curr) {
-    if (curr>value>is<Break>() && curr>value>type.hasRef()) {
-      // The value is exactly a br_if of a ref, that we just visited before
-      // us. Undo the ++ from there as it can be ignored.
-      assert(numDangerousBrIfs > 0);
-      numDangerousBrIfs;
-    }
   }
 };
 
@@ -188,6 +165,7 @@ private:
   int32_t getBreakIndex(Name name);
 
   WasmBinaryWriter& parent;
+  PreBinaryScanner& scanner;
   BufferWithRandomAccess& o;
   Function* func = nullptr;
   bool sourceMap;
