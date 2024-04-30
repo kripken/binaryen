@@ -424,7 +424,8 @@ void WasmBinaryWriter::writeFunctions() {
       }
     } else {
       BYN_TRACE("write Binaryen IR\n");
-      BinaryenIRToBinaryWriter writer(*this, scanner, o, func, sourceMap, DWARF);
+      BinaryenIRToBinaryWriter writer(
+        *this, scanner, o, func, sourceMap, DWARF);
       writer.write();
       if (debugInfo) {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());

@@ -129,7 +129,8 @@ public:
                    Function* func,
                    bool sourceMap,
                    bool DWARF)
-    : parent(parent), scanner(scanner), o(o), func(func), sourceMap(sourceMap), DWARF(DWARF) {}
+    : parent(parent), scanner(scanner), o(o), func(func), sourceMap(sourceMap),
+      DWARF(DWARF) {}
 
   void visit(Expression* curr) {
     if (func && !sourceMap) {
@@ -467,7 +468,8 @@ public:
                            bool sourceMap = false,
                            bool DWARF = false)
     : BinaryenIRWriter<BinaryenIRToBinaryWriter>(func), parent(parent),
-      writer(parent, scanner, o, func, sourceMap, DWARF), sourceMap(sourceMap) {}
+      writer(parent, scanner, o, func, sourceMap, DWARF), sourceMap(sourceMap) {
+  }
 
   void emit(Expression* curr) { writer.visit(curr); }
   void emitHeader() {
@@ -549,7 +551,8 @@ public:
                         PreBinaryScanner& scanner,
                         BufferWithRandomAccess& o,
                         Function* func)
-    : writer(parent, scanner, o, func, false /* sourceMap */, false /* DWARF */),
+    : writer(
+        parent, scanner, o, func, false /* sourceMap */, false /* DWARF */),
       func(func) {}
 
   void write();

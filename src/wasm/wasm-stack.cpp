@@ -2771,12 +2771,16 @@ void StackIRGenerator::emit(Expression* curr) {
     if (curr->type.hasRef()) {
       Builder builder(module);
       // XXX the condition is right before us, not the value; stash it too sadly
-      auto tempCondition = builder.addVar(func, Type::i32); // XXX Remove this later
-      auto* set = builder.makeLocalSet(tempCondition, br->condition); // XXX reuses
+      auto tempCondition =
+        builder.addVar(func, Type::i32); // XXX Remove this later
+      auto* set =
+        builder.makeLocalSet(tempCondition, br->condition); // XXX reuses
       stackIR.push_back(makeStackInst(set));
       // Tee the value.
-      auto tempValue = builder.addVar(func, curr->type); // XXX Remove this later
-      auto* tee = builder.makeLocalTee(tempValue, br->value, br->value->type); // XXX reuses br.value
+      auto tempValue =
+        builder.addVar(func, curr->type); // XXX Remove this later
+      auto* tee = builder.makeLocalTee(
+        tempValue, br->value, br->value->type); // XXX reuses br.value
       stackIR.push_back(makeStackInst(tee));
       // get the condition.
       auto* get = builder.makeLocalGet(tempCondition, Type::i32);
