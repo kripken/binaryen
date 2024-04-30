@@ -508,8 +508,11 @@ private:
 // Queues the expressions linearly in Stack IR (SIR)
 class StackIRGenerator : public BinaryenIRWriter<StackIRGenerator> {
 public:
-  StackIRGenerator(Module& module, Function* func, BinaryWritingContext& context)
-    : BinaryenIRWriter<StackIRGenerator>(func), module(module), context(context) {}
+  StackIRGenerator(Module& module,
+                   Function* func,
+                   BinaryWritingContext& context)
+    : BinaryenIRWriter<StackIRGenerator>(func), module(module),
+      context(context) {}
 
   void emit(Expression* curr);
   void emitScopeEnd(Expression* curr);

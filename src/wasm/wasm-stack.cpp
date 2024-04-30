@@ -2829,10 +2829,9 @@ void StackIRGenerator::emit(Expression* curr) {
     // This is the value of a br_if we must fix. Stash it in a local by emitting
     // a tee of it, right after the instruction itself that we just added above.
     Builder builder(module);
-    auto temp =
-      builder.addVar(func, curr->type); // XXX Remove this later
-    auto* tee = builder.makeLocalTee(
-      temp, curr, curr->type); // XXX reuses br.value
+    auto temp = builder.addVar(func, curr->type); // XXX Remove this later
+    auto* tee =
+      builder.makeLocalTee(temp, curr, curr->type); // XXX reuses br.value
     stackIR.push_back(makeStackInst(tee));
     context.brIfValuesToFix[curr] = temp;
   } else if (context.brIfsToFix.count(curr)) {
