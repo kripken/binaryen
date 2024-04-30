@@ -384,8 +384,8 @@ void WasmBinaryWriter::writeFunctionSignatures() {
 }
 
 void WasmBinaryWriter::writeExpression(Expression* curr) {
-  PreBinaryScanner emptyScanner; // XXX one global one?
-  BinaryenIRToBinaryWriter(*this, emptyScanner, o).visit(curr);
+  BinaryWritingContext empty; // XXX one global one?
+  BinaryenIRToBinaryWriter(*this, empty, o).visit(curr);
 }
 
 void WasmBinaryWriter::writeFunctions() {
@@ -404,7 +404,7 @@ void WasmBinaryWriter::writeFunctions() {
     size_t start = o.size();
     BYN_TRACE("writing" << func->name << std::endl);
     // Scan the function and pick the right way to emit it.
-    PreBinaryScanner scanner(func, *wasm);
+    BinaryWritingContext scanner(func, *wasm);
     if (scanner.mustUseStackIR()) {
       if (sourceMap || DWARF) {
         Fatal() << "TODO: debug info support with StackIR";

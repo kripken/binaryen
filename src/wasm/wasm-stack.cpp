@@ -24,11 +24,11 @@ namespace wasm {
 
 static Name IMPOSSIBLE_CONTINUE("impossible-continue");
 
-PreBinaryScanner::PreBinaryScanner(Function* func, Module& wasm) {
+BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
   struct Walker : PostWalker<Walker> {
-    PreBinaryScanner& parent;
+    BinaryWritingContext& parent;
 
-    Walker(PreBinaryScanner& parent) : parent(parent) {}
+    Walker(BinaryWritingContext& parent) : parent(parent) {}
 
     void visitTupleExtract(TupleExtract* curr) {
       parent.tupleExtracts.push_back(curr);

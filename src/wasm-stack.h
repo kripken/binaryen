@@ -90,10 +90,10 @@ public:
 // that all the different binary writers will need is refactored into this
 // place, to avoid duplication, and we do that work up front and then pass this
 // to them.
-struct PreBinaryScanner {
+struct BinaryWritingContext {
   // Used in cases where we do not have a function to scan (optional?)
-  PreBinaryScanner() {}
-  PreBinaryScanner(Function* func, Module& wasm);
+  BinaryWritingContext() {}
+  BinaryWritingContext(Function* func, Module& wasm);
 
   // We will note all TupleExtracts for purposes of scratch locals.
   std::vector<TupleExtract*> tupleExtracts;
@@ -124,7 +124,7 @@ struct PreBinaryScanner {
 class BinaryInstWriter : public OverriddenVisitor<BinaryInstWriter> {
 public:
   BinaryInstWriter(WasmBinaryWriter& parent,
-                   PreBinaryScanner& scanner,
+                   BinaryWritingContext& scanner,
                    BufferWithRandomAccess& o,
                    Function* func,
                    bool sourceMap,
@@ -169,7 +169,7 @@ private:
   int32_t getBreakIndex(Name name);
 
   WasmBinaryWriter& parent;
-  PreBinaryScanner& scanner;
+  BinaryWritingContext& scanner;
   BufferWithRandomAccess& o;
   Function* func = nullptr;
   bool sourceMap;
@@ -462,7 +462,7 @@ class BinaryenIRToBinaryWriter
   : public BinaryenIRWriter<BinaryenIRToBinaryWriter> {
 public:
   BinaryenIRToBinaryWriter(WasmBinaryWriter& parent,
-                           PreBinaryScanner& scanner,
+                           BinaryWritingContext& scanner,
                            BufferWithRandomAccess& o,
                            Function* func = nullptr,
                            bool sourceMap = false,
@@ -548,7 +548,7 @@ private:
 class StackIRToBinaryWriter {
 public:
   StackIRToBinaryWriter(WasmBinaryWriter& parent,
-                        PreBinaryScanner& scanner,
+                        BinaryWritingContext& scanner,
                         BufferWithRandomAccess& o,
                         Function* func)
     : writer(
