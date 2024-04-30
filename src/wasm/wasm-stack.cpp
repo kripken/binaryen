@@ -41,7 +41,7 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
 
     void visitBreak(Break* curr) {
       if (curr->type.hasRef()) {
-        parent.numDangerousBrIfs++;
+        numDangerousBrIfs++;
       }
     }
 
@@ -49,8 +49,8 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
       if (curr->value->is<Break>() && curr->value->type.hasRef()) {
         // The value is exactly a br_if of a ref, that we just visited before
         // us. Undo the ++ from there as it can be ignored, as it is dropped.
-        assert(parent.numDangerousBrIfs > 0);
-        parent.numDangerousBrIfs--;
+        assert(numDangerousBrIfs > 0);
+        numDangerousBrIfs--;
       }
     }
   } scanner(*this);
@@ -75,9 +75,9 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
   // being fully precise here, we'll only emit casts when absolutely necessary,
   // which avoids repeated roundtrips adding more and more code.
   struct RefinementScanner : public ExpressionStackWalker<RefinementScanner> {
-    BinaryWritingContext& parent;
+    BinaryWritingContext& context;
 
-    RefinementScanner(BinaryWritingContext& parent) : parent(parent) {}
+    RefinementScanner(BinaryWritingContext& context) : context(context) {}
 
     void visitBreak(Break* curr) {
       // See if this is one of the dangerous br_ifs we must handle.
@@ -109,8 +109,8 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
 
       // Mark the br_if as needing handling, and its value. For the temp local
       // of the value, just insert a placeholder for now.
-      parent.brIfsToFix.insert(curr);
-      parent.brIfValuesToFix[curr->value] = Index(-1);
+      context.brIfsToFix.insert(curr);
+      context.brIfValuesToFix[curr->value] = Index(-1);
     }
   } refinementScanner(*this);
   refinementScanner.walk(func->body);
@@ -2836,12 +2836,14 @@ void StackIRGenerator::emit(Expression* curr) {
     stackIR.push_back(makeStackInst(tee));
     context.brIfValuesToFix[curr] = temp;
   } else if (context.brIfsToFix.count(curr)) {
+    auto* br = curr->cast<Break>();
     // This is a br_if we must fix. The value has been stashed to a local. Here
     // we drop the br_if which we just emitted, and fetch the stashed value from
     // the local.
-    stackIR.push_back(makeStackInst(builder.makeDrop(curr))); // XXX reuse
-    assert(context.brIfValuesToFix.find(curr->value));
-    auto temp = context.brIfValuesToFix[curr->value];
+    Builder builder(module);
+    stackIR.push_back(makeStackInst(builder.makeDrop(br))); // XXX reuse
+    assert(context.brIfValuesToFix.count(br->value));
+    auto temp = context.brIfValuesToFix[br->value];
     // The value must have been properly initialized.
     assert(temp != Index(-1));
     auto* get = builder.makeLocalGet(temp, br->value->type);

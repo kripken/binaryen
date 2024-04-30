@@ -112,7 +112,7 @@ struct BinaryWritingContext {
   // We track both those br_ifs and their values, as we need to stash the values
   // before we reach the br_if. For the values, we map them to the index of a
   // temp local that we use to stash them.
-  std::unordered_set<Break*> brIfsToFix;
+  std::unordered_set<Expression*> brIfsToFix;
   std::unordered_map<Expression*, Index> brIfValuesToFix;
 
   bool mustUseStackIR() {
