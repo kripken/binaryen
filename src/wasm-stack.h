@@ -86,11 +86,14 @@ public:
 };
 
 // A helper class that scans BinaryenIR before binary writing. This does a pass
-// on the function to find things that will need special handling.
+// on the function to find things that will need special handling. Shared logic
+// that all the different binary writers will need is refactored into this
+// place, to avoid duplication, and we do that work up front and then pass this
+// to them.
 struct PreBinaryScanner {
   // Used in cases where we do not have a function to scan (optional?)
   PreBinaryScanner() {}
-  PreBinaryScanner(Function* func);
+  PreBinaryScanner(Function* func, Module& wasm);
 
   // We will note all TupleExtracts for purposes of scratch locals.
   std::vector<TupleExtract*> tupleExtracts;

@@ -10,11 +10,27 @@
 
 (module
   ;; CHECK:      (func $test (param $x i32) (result funcref)
+  ;; CHECK-NEXT:  (local $1 i32)
+  ;; CHECK-NEXT:  (local $2 funcref)
+  ;; CHECK-NEXT:  (local $3 (ref $0))
   ;; CHECK-NEXT:  (block $label$1 (result funcref)
-  ;; CHECK-NEXT:   (br_if $label$1
-  ;; CHECK-NEXT:    (ref.func $test)
-  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (br_if $label$1
+  ;; CHECK-NEXT:     (local.tee $2
+  ;; CHECK-NEXT:      (block (result (ref $0))
+  ;; CHECK-NEXT:       (local.set $3
+  ;; CHECK-NEXT:        (ref.func $test)
+  ;; CHECK-NEXT:       )
+  ;; CHECK-NEXT:       (local.set $1
+  ;; CHECK-NEXT:        (local.get $x)
+  ;; CHECK-NEXT:       )
+  ;; CHECK-NEXT:       (local.get $3)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.get $1)
+  ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.get $2)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test (param $x i32) (result funcref)

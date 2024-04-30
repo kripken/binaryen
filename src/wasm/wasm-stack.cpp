@@ -24,7 +24,7 @@ namespace wasm {
 
 static Name IMPOSSIBLE_CONTINUE("impossible-continue");
 
-PreBinaryScanner::PreBinaryScanner(Function* func) {
+PreBinaryScanner::PreBinaryScanner(Function* func, Module& wasm) {
   struct Walker : PostWalker<Walker> {
     PreBinaryScanner& parent;
 
