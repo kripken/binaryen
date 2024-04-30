@@ -38,7 +38,8 @@ struct GenerateStackIR : public WalkerPass<PostWalker<GenerateStackIR>> {
   bool modifiesBinaryenIR() override { return false; }
 
   void doWalkFunction(Function* func) {
-    StackIRGenerator stackIRGen(*getModule(), func);
+    BinaryWritingContext context(func, *getModule());
+    StackIRGenerator stackIRGen(*getModule(), func, context);
     stackIRGen.write();
     func->stackIR = std::make_unique<StackIR>();
     func->stackIR->swap(stackIRGen.getStackIR());
