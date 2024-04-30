@@ -124,12 +124,12 @@ struct BinaryWritingContext {
 class BinaryInstWriter : public OverriddenVisitor<BinaryInstWriter> {
 public:
   BinaryInstWriter(WasmBinaryWriter& parent,
-                   BinaryWritingContext& scanner,
+                   BinaryWritingContext& context,
                    BufferWithRandomAccess& o,
                    Function* func,
                    bool sourceMap,
                    bool DWARF)
-    : parent(parent), scanner(scanner), o(o), func(func), sourceMap(sourceMap),
+    : parent(parent), context(context), o(o), func(func), sourceMap(sourceMap),
       DWARF(DWARF) {}
 
   void visit(Expression* curr) {
@@ -169,7 +169,7 @@ private:
   int32_t getBreakIndex(Name name);
 
   WasmBinaryWriter& parent;
-  BinaryWritingContext& scanner;
+  BinaryWritingContext& context;
   BufferWithRandomAccess& o;
   Function* func = nullptr;
   bool sourceMap;
@@ -462,13 +462,13 @@ class BinaryenIRToBinaryWriter
   : public BinaryenIRWriter<BinaryenIRToBinaryWriter> {
 public:
   BinaryenIRToBinaryWriter(WasmBinaryWriter& parent,
-                           BinaryWritingContext& scanner,
+                           BinaryWritingContext& context,
                            BufferWithRandomAccess& o,
                            Function* func = nullptr,
                            bool sourceMap = false,
                            bool DWARF = false)
     : BinaryenIRWriter<BinaryenIRToBinaryWriter>(func), parent(parent),
-      writer(parent, scanner, o, func, sourceMap, DWARF), sourceMap(sourceMap) {
+      writer(parent, context, o, func, sourceMap, DWARF), sourceMap(sourceMap) {
   }
 
   void emit(Expression* curr) { writer.visit(curr); }
@@ -508,8 +508,8 @@ private:
 // Queues the expressions linearly in Stack IR (SIR)
 class StackIRGenerator : public BinaryenIRWriter<StackIRGenerator> {
 public:
-  StackIRGenerator(Module& module, Function* func)
-    : BinaryenIRWriter<StackIRGenerator>(func), module(module) {}
+  StackIRGenerator(Module& module, Function* func, BinaryWritingContext& context)
+    : BinaryenIRWriter<StackIRGenerator>(func), module(module), context(context) {}
 
   void emit(Expression* curr);
   void emitScopeEnd(Expression* curr);
@@ -541,6 +541,8 @@ private:
   }
 
   Module& module;
+  BinaryWritingContext& context;
+
   StackIR stackIR; // filled in write()
 };
 
@@ -548,11 +550,11 @@ private:
 class StackIRToBinaryWriter {
 public:
   StackIRToBinaryWriter(WasmBinaryWriter& parent,
-                        BinaryWritingContext& scanner,
+                        BinaryWritingContext& context,
                         BufferWithRandomAccess& o,
                         Function* func)
     : writer(
-        parent, scanner, o, func, false /* sourceMap */, false /* DWARF */),
+        parent, context, o, func, false /* sourceMap */, false /* DWARF */),
       func(func) {}
 
   void write();
