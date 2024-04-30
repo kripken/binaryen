@@ -402,7 +402,19 @@ void WasmBinaryWriter::writeFunctions() {
     size_t sizePos = writeU32LEBPlaceholder();
     size_t start = o.size();
     BYN_TRACE("writing" << func->name << std::endl);
-    // Emit Stack IR if present, and if we can
+    // Scan the function and pick the right way to emit it.
+    PreBinaryScanner& scanner.
+    scanner.scan(func);
+    if (scanner.mustUseStackIR()) {
+      if (sourceMap || DWARF) {
+        Fatal() << "TODO: debug info support with StackIR";
+      }
+
+      // Generate StackIR right now, and we will use it right below.
+      PassRunner runner;
+      runner.add("generate-stack-ir");
+      runner.runOnFunction(func);
+    }
     if (func->stackIR && !sourceMap && !DWARF) {
       BYN_TRACE("write Stack IR\n");
       StackIRToBinaryWriter writer(*this, o, func);

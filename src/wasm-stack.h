@@ -85,14 +85,71 @@ public:
   Type type;
 };
 
+// A helper class that scans BinaryenIR before binary writing. This does a pass
+// on the function to find things that will need special handling.
+struct PreBinaryScanner : PostWalker<PreBinaryScanner> {
+  // Users call this method and can then query the APIs and data structures
+  // below.
+  void scan(Function* func) {
+    walkFunction(func);
+  }
+
+  // We will note all TupleExtracts for purposes of scratch locals.
+  std::vector<TupleExtract*> tupleExtracts;
+
+  // XXX As mentioned in BinaryInstWriter::visitBreak, the type of br_if with a
+  // value may be more refined in Binaryen IR compared to the wasm spec, as we
+  // give it the type of the value, while the spec gives it the type of the
+  // block it targets. To avoid problems we must handle the case where a br_if
+  // has a value, the value is more refined then the target, and the value is
+  // not dropped (the last condition is very rare in realworld wasm, making
+  // all of this a quite unusual situation). First, detect such situations by
+  // seeing if we have br_ifs that return reference types at all. We do so by
+  // counting them, and as we go we ignore ones that are dropped, since a
+  // dropped value is not a problem for us.
+  //
+  // Note that we do not check all the conditions here, such as if the type
+  // matches the break target, or if the parent is a cast, which we leave for
+  // a more expensive analysis later, which we only run if we see something
+  // suspicious here.
+  Index numDangerousBrIfs = 0;
+
+  bool mustUseStackIR() {
+    // StackIR has the logic to handle such br_ifs.
+    return numDangerousBrIfs > 0;
+  }
+
+  // Walking logic.
+
+  void visitTupleExtract(TupleExtract* curr) {
+    tupleExtracts.push_back(curr);
+  }
+
+  void visitBreak(Break* curr) {
+    if (curr>type.hasRef()) {
+      numDangerousBrIfs++;
+    }
+  }
+
+  void visitDrop(Drop* curr) {
+    if (curr>value>is<Break>() && curr>value>type.hasRef()) {
+      // The value is exactly a br_if of a ref, that we just visited before
+      // us. Undo the ++ from there as it can be ignored.
+      assert(numDangerousBrIfs > 0);
+      numDangerousBrIfs;
+    }
+  }
+};
+
 class BinaryInstWriter : public OverriddenVisitor<BinaryInstWriter> {
 public:
   BinaryInstWriter(WasmBinaryWriter& parent,
+                   PreBinaryScanner& scanner,
                    BufferWithRandomAccess& o,
                    Function* func,
                    bool sourceMap,
                    bool DWARF)
-    : parent(parent), o(o), func(func), sourceMap(sourceMap), DWARF(DWARF) {}
+    : parent(parent), scanner(scanner), o(o), func(func), sourceMap(sourceMap), DWARF(DWARF) {}
 
   void visit(Expression* curr) {
     if (func && !sourceMap) {
@@ -423,12 +480,13 @@ class BinaryenIRToBinaryWriter
   : public BinaryenIRWriter<BinaryenIRToBinaryWriter> {
 public:
   BinaryenIRToBinaryWriter(WasmBinaryWriter& parent,
+                           PreBinaryScanner& scanner,
                            BufferWithRandomAccess& o,
                            Function* func = nullptr,
                            bool sourceMap = false,
                            bool DWARF = false)
     : BinaryenIRWriter<BinaryenIRToBinaryWriter>(func), parent(parent),
-      writer(parent, o, func, sourceMap, DWARF), sourceMap(sourceMap) {}
+      writer(parent, scanner, o, func, sourceMap, DWARF), sourceMap(sourceMap) {}
 
   void emit(Expression* curr) { writer.visit(curr); }
   void emitHeader() {
@@ -507,9 +565,10 @@ private:
 class StackIRToBinaryWriter {
 public:
   StackIRToBinaryWriter(WasmBinaryWriter& parent,
+                        PreBinaryScanner& scanner,
                         BufferWithRandomAccess& o,
                         Function* func)
-    : writer(parent, o, func, false /* sourceMap */, false /* DWARF */),
+    : writer(parent, scanner, o, func, false /* sourceMap */, false /* DWARF */),
       func(func) {}
 
   void write();
@@ -522,62 +581,6 @@ private:
 };
 
 std::ostream& printStackIR(std::ostream& o, Module* module, bool optimize);
-
-// A helper class that scans BinaryenIR before binary writing. This does a pass
-// on the function to find things that will need special handling.
-struct PreBinaryScanner : PostWalker<PreBinaryScanner> {
-  // Users call this method and can then query the APIs and data structures
-  // below.
-  void scan(Function* func) {
-    walkFunction(func);
-  }
-
-  // We will note all TupleExtracts for purposes of scratch locals.
-  std::vector<TupleExtract*> tupleExtracts;
-
-  // XXX As mentioned in BinaryInstWriter::visitBreak, the type of br_if with a
-  // value may be more refined in Binaryen IR compared to the wasm spec, as we
-  // give it the type of the value, while the spec gives it the type of the
-  // block it targets. To avoid problems we must handle the case where a br_if
-  // has a value, the value is more refined then the target, and the value is
-  // not dropped (the last condition is very rare in realworld wasm, making
-  // all of this a quite unusual situation). First, detect such situations by
-  // seeing if we have br_ifs that return reference types at all. We do so by
-  // counting them, and as we go we ignore ones that are dropped, since a
-  // dropped value is not a problem for us.
-  //
-  // Note that we do not check all the conditions here, such as if the type
-  // matches the break target, or if the parent is a cast, which we leave for
-  // a more expensive analysis later, which we only run if we see something
-  // suspicious here.
-  Index numDangerousBrIfs = 0;
-
-  bool mustUseStackIR() {
-    // StackIR has the logic to handle such br_ifs.
-    return numDangerousBrIfs > 0;
-  }
-
-  // Walking logic.
-
-  void visitTupleExtract(TupleExtract* curr) {
-    tupleExtracts.push_back(curr);
-  }
-
-  void visitBreak(Break* curr) {
-    if (curr>type.hasRef()) {
-      numDangerousBrIfs++;
-    }
-  }
-
-  void visitDrop(Drop* curr) {
-    if (curr>value>is<Break>() && curr>value>type.hasRef()) {
-      // The value is exactly a br_if of a ref, that we just visited before
-      // us. Undo the ++ from there as it can be ignored.
-      assert(numDangerousBrIfs > 0);
-      numDangerousBrIfs;
-    }
-  }
-};
 
 } // namespace wasm
 

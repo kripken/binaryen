@@ -2573,8 +2573,7 @@ void BinaryInstWriter::mapLocalsAndEmitHeader() {
   // do not do any reordering at all - instead, do a trivial mapping that
   // keeps everything unmoved.
   if (DWARF) {
-    FindAll<TupleExtract> extracts(func->body);
-    if (!extracts.list.empty()) {
+    if (!scanner.tupleExtracts.list.empty()) {
       Fatal() << "DWARF + multivalue is not yet complete";
     }
     Index varStart = func->getVarIndexBase();
@@ -2651,8 +2650,7 @@ void BinaryInstWriter::noteLocalType(Type type) {
 void BinaryInstWriter::countScratchLocals() {
   // Add a scratch register in `numLocalsByType` for each type of
   // tuple.extract with nonzero index present.
-  FindAll<TupleExtract> extracts(func->body);
-  for (auto* extract : extracts.list) {
+  for (auto* extract : scanner.tupleExtracts) {
     if (extract->type != Type::unreachable && extract->index != 0) {
       scratchLocals[extract->type] = 0;
     }
@@ -2662,7 +2660,7 @@ void BinaryInstWriter::countScratchLocals() {
   }
   // While we have all the tuple.extracts, also find extracts of local.gets,
   // local.tees, and global.gets that we can optimize.
-  for (auto* extract : extracts.list) {
+  for (auto* extract : scanner.tupleExtracts) {
     auto* tuple = extract->tuple;
     if (tuple->is<LocalGet>() || tuple->is<LocalSet>() ||
         tuple->is<GlobalGet>()) {
