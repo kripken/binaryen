@@ -25,14 +25,19 @@ namespace wasm {
 static Name IMPOSSIBLE_CONTINUE("impossible-continue");
 
 BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
-  struct Walker : PostWalker<Walker> {
+  // Scan for tuple.extracts and dangerous br_ifs in an initial quick pass. This
+  // does not investigate the br_ifs in detail, which requires more effort. We
+  // do that below if it is necessary.
+  struct Scanner : PostWalker<Scanner> {
     BinaryWritingContext& parent;
 
-    Walker(BinaryWritingContext& parent) : parent(parent) {}
+    Scanner(BinaryWritingContext& parent) : parent(parent) {}
 
     void visitTupleExtract(TupleExtract* curr) {
       parent.tupleExtracts.push_back(curr);
     }
+
+    Index numDangerousBrIfs = 0;
 
     void visitBreak(Break* curr) {
       if (curr->type.hasRef()) {
@@ -43,13 +48,13 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
     void visitDrop(Drop* curr) {
       if (curr->value->is<Break>() && curr->value->type.hasRef()) {
         // The value is exactly a br_if of a ref, that we just visited before
-        // us. Undo the ++ from there as it can be ignored.
+        // us. Undo the ++ from there as it can be ignored, as it is dropped.
         assert(parent.numDangerousBrIfs > 0);
         parent.numDangerousBrIfs--;
       }
     }
-  } walker(*this);
-  walker.walkFunction(func);
+  } scanner(*this);
+  scanner.walkFunction(func);
 
   if (!wasm.features.hasGC()) {
     // br_ifs that look dangerous are not actually so, if GC is not enabled.
@@ -58,8 +63,57 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
     // consequence in the binary as we only emit nullable types when GC is
     // disabled anyhow (we do allow non-nullable function references in our IR,
     // for consistency, but we make them nullable on write).
-    numDangerousBrIfs = 0;
+    scanner.numDangerousBrIfs = 0;
   }
+
+  if (!scanner.numDangerousBrIfs) {
+    return;
+  }
+
+  // There are dangerous-looking br_ifs, so we must do the harder work to
+  // actually investigate them in detail, including tracking block types. By
+  // being fully precise here, we'll only emit casts when absolutely necessary,
+  // which avoids repeated roundtrips adding more and more code.
+  struct RefinementScanner : public ExpressionStackWalker<RefinementScanner> {
+    BinaryWritingContext& parent;
+
+    RefinementScanner(BinaryWritingContext& parent) : parent(parent) {}
+
+    void visitBreak(Break* curr) {
+      // See if this is one of the dangerous br_ifs we must handle.
+      if (!curr->type.hasRef()) {
+        // Not even a reference.
+        return;
+      }
+      auto* parent = getParent();
+      if (parent) {
+        if (parent->is<Drop>()) {
+          // It is dropped anyhow.
+          return;
+        }
+        if (auto* cast = parent->dynCast<RefCast>()) {
+          if (Type::isSubType(cast->type, curr->type)) {
+            // It is cast to the same type or a better one. In particular this
+            // handles the case of repeated roundtripping: After the first
+            // roundtrip we emit a cast that we'll identify here, and not emit
+            // an additional one.
+            return;
+          }
+        }
+      }
+      auto* breakTarget = findBreakTarget(curr->name);
+      if (breakTarget->type == curr->type) {
+        // It has the proper type anyhow.
+        return;
+      }
+
+      // Mark the br_if as needing handling, and its value. For the temp local
+      // of the value, just insert a placeholder for now.
+      parent.brIfsToFix.insert(curr);
+      parent.brIfValuesToFix[curr->value] = Index(-1);
+    }
+  } refinementScanner(*this);
+  refinementScanner.walk(func->body);
 }
 
 void BinaryInstWriter::emitResultType(Type type) {
@@ -2765,44 +2819,34 @@ void StackIRGenerator::emit(Expression* curr) {
     stackInst = makeStackInst(StackInst::TryBegin, curr);
   } else if (curr->is<TryTable>()) {
     stackInst = makeStackInst(StackInst::TryTableBegin, curr);
-  } else if (auto* br = curr->dynCast<Break>()) {
-    // br_if with a value needs special handling in some cases. TODO identify
-    // accurately them
-    if (curr->type.hasRef()) {
-      Builder builder(module);
-      // XXX the condition is right before us, not the value; stash it too sadly
-      auto tempCondition =
-        builder.addVar(func, Type::i32); // XXX Remove this later
-      auto* set =
-        builder.makeLocalSet(tempCondition, br->condition); // XXX reuses
-      stackIR.push_back(makeStackInst(set));
-      // Tee the value.
-      auto tempValue =
-        builder.addVar(func, curr->type); // XXX Remove this later
-      auto* tee = builder.makeLocalTee(
-        tempValue, br->value, br->value->type); // XXX reuses br.value
-      stackIR.push_back(makeStackInst(tee));
-      // get the condition.
-      auto* get = builder.makeLocalGet(tempCondition, Type::i32);
-      stackIR.push_back(makeStackInst(get));
-      // Emit the br_if.
-      stackIR.push_back(makeStackInst(curr));
-      // Drop the br_if.
-      auto* drop = builder.makeDrop(curr); // XXX reuse
-      stackIR.push_back(makeStackInst(drop));
-      // Get the value, which has the fully refined original type.
-      auto* get2 = builder.makeLocalGet(tempValue, br->value->type);
-      stackIR.push_back(makeStackInst(get2));
-      return;
-    }
-
-    // A generic br_if.
-    stackInst = makeStackInst(curr);
   } else {
     // A generic instruction.
     stackInst = makeStackInst(curr);
   }
   stackIR.push_back(stackInst);
+
+  if (context.brIfValuesToFix.count(curr)) {
+    // This is the value of a br_if we must fix. Stash it in a local by emitting
+    // a tee of it, right after the instruction itself that we just added above.
+    Builder builder(module);
+    auto temp =
+      builder.addVar(func, curr->type); // XXX Remove this later
+    auto* tee = builder.makeLocalTee(
+      temp, curr, curr->type); // XXX reuses br.value
+    stackIR.push_back(makeStackInst(tee));
+    context.brIfValuesToFix[curr] = temp;
+  } else if (context.brIfsToFix.count(curr)) {
+    // This is a br_if we must fix. The value has been stashed to a local. Here
+    // we drop the br_if which we just emitted, and fetch the stashed value from
+    // the local.
+    stackIR.push_back(makeStackInst(builder.makeDrop(curr))); // XXX reuse
+    assert(context.brIfValuesToFix.find(curr->value));
+    auto temp = context.brIfValuesToFix[curr->value];
+    // The value must have been properly initialized.
+    assert(temp != Index(-1));
+    auto* get = builder.makeLocalGet(temp, br->value->type);
+    stackIR.push_back(makeStackInst(get));
+  }
 }
 
 void StackIRGenerator::emitScopeEnd(Expression* curr) {

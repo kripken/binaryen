@@ -109,15 +109,15 @@ struct BinaryWritingContext {
   // counting them, and as we go we ignore ones that are dropped, since a
   // dropped value is not a problem for us.
   //
-  // Note that we do not check all the conditions here, such as if the type
-  // matches the break target, or if the parent is a cast, which we leave for
-  // a more expensive analysis later, which we only run if we see something
-  // suspicious here.
-  Index numDangerousBrIfs = 0;
+  // We track both those br_ifs and their values, as we need to stash the values
+  // before we reach the br_if. For the values, we map them to the index of a
+  // temp local that we use to stash them.
+  std::unordered_set<Break*> brIfsToFix;
+  std::unordered_map<Expression*, Index> brIfValuesToFix;
 
   bool mustUseStackIR() {
     // StackIR has the logic to handle such br_ifs.
-    return numDangerousBrIfs > 0;
+    return !brIfsToFix.empty();
   }
 };
 
