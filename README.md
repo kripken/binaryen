@@ -148,16 +148,16 @@ There are a few differences between Binaryen IR and the WebAssembly language:
       `requiresNonNullableLocalFixups()` hook in `pass.h` and the
       `LocalStructuralDominance` class.
   * `br_if` output types are more refined in Binaryen IR: they have the type of
-    the value, when a value flows in. In the wasm spec the type is that of the
+    the value, when a value flows out. In the wasm spec the type is that of the
     branch target, which may be less refined. Using the more refined type here
     ensures that we optimize in the best way possible, using all the type
     information, but it does mean that some roundtripping operations may look a
     little different. In particular, when we emit a `br_if` whose type is more
-    refined in Binaryen IR then we emit a cast right after it, so that the
-    output has the right type in the wasm spec. That may cause a few bytes of
-    extra size in rare cases. (Interactions between this and tuples can lead to
-    larger code size increases, that is, `br_if`s that send multiple values are
-    best avoided.)
+    refined in Binaryen IR, and the value is used (and not dropped as it often
+    is) then we save the value to a local, drop the `br_if`, and fetch the
+    refined value from the local after it, which ensures we emit the right type
+    for the wasm spec. This can increase code size, but it is rare that such
+    fixups are needed.
  * Strings
    * Binaryen allows string views (`stringview_wtf16` etc.) to be cast using
      `ref.cast`. This simplifies the IR, as it allows `ref.cast` to always be
