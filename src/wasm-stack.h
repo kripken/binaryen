@@ -101,8 +101,17 @@ struct BinaryWritingContext {
   std::vector<Type> locals;
   Index numParams;
 
+  Type getLocalType(Index index) const {
+    assert(index < locals.size());
+    return locals[index];
+  }
+
   // Add a var and return its index.
-  Index addVar(Type type);
+  Index addVar(Type type) {
+    Index ret = locals.size();
+    locals.push_back(type);
+    return ret;
+  }
 
   // We will note all TupleExtracts for purposes of scratch locals.
   std::vector<TupleExtract*> tupleExtracts;
@@ -134,7 +143,8 @@ public:
                    bool sourceMap,
                    bool DWARF)
     : parent(parent), context(context), o(o), func(func), sourceMap(sourceMap),
-      DWARF(DWARF) {}
+      DWARF(DWARF) {
+      std::cout << "BinaryInstWriter gott " << &context << '\n';}
 
   void visit(Expression* curr) {
     if (func && !sourceMap) {

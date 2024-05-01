@@ -30,6 +30,8 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
   }
   numParams = func->getNumParams();
 
+  std::cout << this << " locals: " << locals.size() << '\n';
+
   // Scan for tuple.extracts and dangerous br_ifs in an initial quick pass. This
   // does not investigate the br_ifs in detail, which requires more effort. We
   // do that below if it is necessary.
@@ -119,12 +121,6 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
   refinementScanner.walk(func->body);
 }
 
-Index BinaryWritingContext::addVar(Type type) {
-  Index ret = locals.size();
-  locals.push_back(type);
-  return ret;
-}
-
 void BinaryInstWriter::emitResultType(Type type) {
   if (type == Type::unreachable) {
     parent.writeType(Type::none);
@@ -197,7 +193,7 @@ void BinaryInstWriter::visitLocalGet(LocalGet* curr) {
       << U32LEB(mappedLocals[std::make_pair(curr->index, it->second)]);
     return;
   }
-  size_t numValues = context.locals[curr->index].size();
+  size_t numValues = context.getLocalType(curr->index).size();
   for (Index i = 0; i < numValues; ++i) {
     o << int8_t(BinaryConsts::LocalGet)
       << U32LEB(mappedLocals[std::make_pair(curr->index, i)]);
@@ -205,7 +201,7 @@ void BinaryInstWriter::visitLocalGet(LocalGet* curr) {
 }
 
 void BinaryInstWriter::visitLocalSet(LocalSet* curr) {
-  size_t numValues = context.locals[curr->index].size();
+  size_t numValues = context.getLocalType(curr->index).size();
   // If this is a tuple, set all the elements with nonzero index.
   for (Index i = numValues - 1; i >= 1; --i) {
     o << int8_t(BinaryConsts::LocalSet)
@@ -2685,13 +2681,13 @@ void BinaryInstWriter::mapLocalsAndEmitHeader() {
     for (Index i = varStart; i < varEnd; i++) {
       mappedLocals[std::make_pair(i, 0)] = i;
       o << U32LEB(1);
-      parent.writeType(context.locals[i]);
+      parent.writeType(context.getLocalType(i));
     }
     return;
   }
 
   for (Index i = varStart; i < varEnd; i++) {
-    for (const auto& t : context.locals[i]) {
+    for (const auto& t : context.getLocalType(i)) {
       noteLocalType(t);
     }
   }
@@ -2722,7 +2718,7 @@ void BinaryInstWriter::mapLocalsAndEmitHeader() {
   std::unordered_map<Type, size_t> currLocalsByType;
   for (Index i = varStart; i < varEnd; i++) {
     Index j = 0;
-    for (const auto& type : context.locals[i]) {
+    for (const auto& type : context.getLocalType(i)) {
       auto fullIndex = std::make_pair(i, j++);
       Index index = varStart;
       for (auto& localType : localTypes) {

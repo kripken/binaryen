@@ -404,20 +404,23 @@ void WasmBinaryWriter::writeFunctions() {
     size_t start = o.size();
     BYN_TRACE("writing" << func->name << std::endl);
     // Scan the function and pick the right way to emit it.
-    BinaryWritingContext scanner(func, *wasm);
-    if (scanner.mustUseStackIR()) {
+    BinaryWritingContext context(func, *wasm);
+    if (context.mustUseStackIR()) {
       if (sourceMap || DWARF) {
         Fatal() << "TODO: debug info support with StackIR";
       }
 
-      // Generate StackIR right now, and we will use it right below.
-      PassRunner runner(wasm);
-      runner.add("generate-stack-ir");
-      runner.runOnFunction(func);
+      if (!func->stackIR) {
+        // Generate StackIR right now, and we will use it right below.
+        StackIRGenerator stackIRGen(*getModule(), func, context);
+        stackIRGen.write(); // the swapping too? TODO
+        func->stackIR = std::make_unique<StackIR>();
+        func->stackIR->swap(stackIRGen.getStackIR());
+      }
     }
     if (func->stackIR && !sourceMap && !DWARF) {
       BYN_TRACE("write Stack IR\n");
-      StackIRToBinaryWriter writer(*this, scanner, o, func);
+      StackIRToBinaryWriter writer(*this, context, o, func);
       writer.write();
       if (debugInfo) {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());
@@ -425,7 +428,7 @@ void WasmBinaryWriter::writeFunctions() {
     } else {
       BYN_TRACE("write Binaryen IR\n");
       BinaryenIRToBinaryWriter writer(
-        *this, scanner, o, func, sourceMap, DWARF);
+        *this, context, o, func, sourceMap, DWARF);
       writer.write();
       if (debugInfo) {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());
