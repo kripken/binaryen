@@ -2849,7 +2849,8 @@ void StackIRGenerator::fixBrIf(Expression* curr) {
   //       2 new locals per br_if.
   auto* br = curr->cast<Break>();
   Builder builder(module);
-  auto tempCondition = builder.addVar(func, Type::i32); // XXX Remove this later
+  auto tempCondition = builder.addVar(func, Type::i32); // XXX Remove this later XXX this makes BinaryenIR change , which causes pass-debug errors.
+                                                                              // Likeley need to store the new local state on the side, i nthe Context
   auto tempValue = builder.addVar(func, br->type); // XXX Remove this later
 
   // Set the condition to a local.
