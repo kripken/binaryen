@@ -913,7 +913,8 @@ void PassRunner::clear() { passes.clear(); }
 // pass-debug mode is enabled.
 struct AfterEffectFunctionChecker {
   Function* func;
-  Name name;
+  Name funcName;
+  Name passName;
 
   // Check Stack IR state: if the main IR changes, there should be no
   // stack IR, as the stack IR would be wrong.
@@ -922,7 +923,7 @@ struct AfterEffectFunctionChecker {
 
   // In the creator we can scan the state of the module and function before the
   // pass runs.
-  AfterEffectFunctionChecker(Function* func) : func(func), name(func->name) {
+  AfterEffectFunctionChecker(Function* func, Name passName) : func(func), funcName(func->name), passName(passName) {
     beganWithStackIR = func->stackIR != nullptr;
     if (beganWithStackIR) {
       originalFunctionHash = FunctionHasher::hashFunction(func);
@@ -931,14 +932,14 @@ struct AfterEffectFunctionChecker {
 
   // This is called after the pass is run, at which time we can check things.
   void check() {
-    assert(func->name == name); // no global module changes should have occurred
+    assert(func->name == funcName); // no global module changes should have occurred
     if (beganWithStackIR && func->stackIR) {
       auto after = FunctionHasher::hashFunction(func);
       if (after != originalFunctionHash) {
         Fatal() << "[PassRunner] PASS_DEBUG check failed: had Stack IR before "
-                   "and after the pass ran, and the pass modified the main IR, "
-                   "which invalidates Stack IR - pass should have been marked "
-                   "'modifiesBinaryenIR'";
+                   "and after the pass " << passName << ", and the pass "
+                   " modified the main IR, which invalidates Stack IR - the "
+                   " pass should have been marked 'modifiesBinaryenIR'";
       }
     }
   }
@@ -956,7 +957,7 @@ struct AfterEffectModuleChecker {
 
   AfterEffectModuleChecker(Module* module) : module(module) {
     for (auto& func : module->functions) {
-      checkers.emplace_back(func.get());
+      checkers.emplace_back(func.get(), "(module)");
     }
     beganWithAnyStackIR = hasAnyStackIR();
   }
@@ -974,7 +975,7 @@ struct AfterEffectModuleChecker {
           error();
         }
         // Did a name change?
-        if (module->functions[i]->name != checkers[i].name) {
+        if (module->functions[i]->name != checkers[i].funcName) {
           error();
         }
       }
@@ -1053,7 +1054,7 @@ void PassRunner::runPassOnFunction(Pass* pass, Function* func) {
 
   std::unique_ptr<AfterEffectFunctionChecker> checker;
   if (passDebug) {
-    checker = std::make_unique<AfterEffectFunctionChecker>(func);
+    checker = std::make_unique<AfterEffectFunctionChecker>(func, pass->name);
   }
 
   // Function-parallel passes get a new instance per function
