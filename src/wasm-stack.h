@@ -108,12 +108,7 @@ struct BinaryWritingContext {
   // seeing if we have br_ifs that return reference types at all. We do so by
   // counting them, and as we go we ignore ones that are dropped, since a
   // dropped value is not a problem for us.
-  //
-  // We track both those br_ifs and their values, as we need to stash the values
-  // before we reach the br_if. For the values, we map them to the index of a
-  // temp local that we use to stash them.
   std::unordered_set<Expression*> brIfsToFix;
-  std::unordered_map<Expression*, Index> brIfValuesToFix;
 
   bool mustUseStackIR() {
     // StackIR has the logic to handle such br_ifs.

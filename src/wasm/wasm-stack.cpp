@@ -107,10 +107,8 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
         return;
       }
 
-      // Mark the br_if as needing handling, and its value. For the temp local
-      // of the value, just insert a placeholder for now.
+      // Mark the br_if as needing handling
       context.brIfsToFix.insert(curr);
-      context.brIfValuesToFix[curr->value] = Index(-1);
     }
   } refinementScanner(*this);
   refinementScanner.walk(func->body);
@@ -2823,31 +2821,52 @@ void StackIRGenerator::emit(Expression* curr) {
     // A generic instruction.
     stackInst = makeStackInst(curr);
   }
-  stackIR.push_back(stackInst);
 
-  if (context.brIfValuesToFix.count(curr)) {
-    // This is the value of a br_if we must fix. Stash it in a local by emitting
-    // a tee of it, right after the instruction itself that we just added above.
-    Builder builder(module);
-    auto temp = builder.addVar(func, curr->type); // XXX Remove this later
-    auto* tee =
-      builder.makeLocalTee(temp, curr, curr->type); // XXX reuses br.value
-    stackIR.push_back(makeStackInst(tee));
-    context.brIfValuesToFix[curr] = temp;
-  } else if (context.brIfsToFix.count(curr)) {
-    auto* br = curr->cast<Break>();
-    // This is a br_if we must fix. The value has been stashed to a local. Here
-    // we drop the br_if which we just emitted, and fetch the stashed value from
-    // the local.
-    Builder builder(module);
-    stackIR.push_back(makeStackInst(builder.makeDrop(br))); // XXX reuse
-    assert(context.brIfValuesToFix.count(br->value));
-    auto temp = context.brIfValuesToFix[br->value];
-    // The value must have been properly initialized.
-    assert(temp != Index(-1));
-    auto* get = builder.makeLocalGet(temp, br->value->type);
-    stackIR.push_back(makeStackInst(get));
+  if (!context.brIfsToFix.count(curr)) {
+    // Nothing special here. Add the instruction and leave.
+    stackIR.push_back(stackInst);
+    return;
   }
+
+  // This is a br_if we must fix. We must stash the value to a local, drop the
+  // br_if, and then get that value.
+  //
+  // To do so, note that the stack at this time contains the value and then
+  // the condition of the br_if. For simplicity we stash the condition to get
+  // to the value. (Another approach might be to stash the value when we get
+  // to it, but that is not trivial as the child might not get an emit() call
+  // at all, if we can elide it when generating StackIR, like a nameless
+  // block. Yet another approach might be to look backwards and rewrite the
+  // emitted StackIR so far, which could lead to better code at the cost of
+  // more complexity. As this situation is rare, we prefer the simpler
+  // approach for now.)
+  auto* br = curr->cast<Break>();
+  Builder builder(module);
+  auto tempCondition = builder.addVar(func, Type::i32); // XXX Remove this later
+  auto tempValue = builder.addVar(func, br->type); // XXX Remove this later
+
+  // Set the condition to a local.
+  auto* set = builder.makeLocalSet(tempCondition, br->condition); // XXX reuse
+  stackIR.push_back(makeStackInst(set));
+
+  // Tee the value.
+  auto* tee =
+    builder.makeLocalTee(tempValue, br->value, br->type); // XXX reuse
+  stackIR.push_back(makeStackInst(tee));
+
+  // Get the condition back.
+  auto* getCondition =
+    builder.makeLocalGet(tempCondition, Type::i32);
+  stackIR.push_back(makeStackInst(getCondition));
+
+  // Emit the br_if itself, and drop it.
+  stackIR.push_back(stackInst);
+  auto* drop = builder.makeDrop(br); // XXX reuse
+  stackIR.push_back(makeStackInst(drop));
+
+  // Get the value.
+  auto* getValue = builder.makeLocalGet(tempValue, br->type);
+  stackIR.push_back(makeStackInst(getValue));
 }
 
 void StackIRGenerator::emitScopeEnd(Expression* curr) {
