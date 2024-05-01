@@ -30,8 +30,6 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
   }
   numParams = func->getNumParams();
 
-  std::cout << this << " locals: " << locals.size() << '\n';
-
   // Scan for tuple.extracts and dangerous br_ifs in an initial quick pass. This
   // does not investigate the br_ifs in detail, which requires more effort. We
   // do that below if it is necessary.

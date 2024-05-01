@@ -143,8 +143,7 @@ public:
                    bool sourceMap,
                    bool DWARF)
     : parent(parent), context(context), o(o), func(func), sourceMap(sourceMap),
-      DWARF(DWARF) {
-      std::cout << "BinaryInstWriter gott " << &context << '\n';}
+      DWARF(DWARF) {}
 
   void visit(Expression* curr) {
     if (func && !sourceMap) {
