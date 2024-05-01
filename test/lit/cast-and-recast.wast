@@ -18,18 +18,28 @@
     (type $C (sub $B (struct)))
   )
 
+  (type $func (func (param (ref null func)) (result i32)))
+
   ;; CHECK:      (func $test (type $3) (param $B (ref $B)) (param $x i32) (result anyref)
-  ;; CHECK-NEXT:  (local $2 (ref $B))
+  ;; CHECK-NEXT:  (local $2 i32)
+  ;; CHECK-NEXT:  (local $3 (ref $B))
+  ;; CHECK-NEXT:  (local $4 (ref $B))
   ;; CHECK-NEXT:  (block $label$1 (result (ref $A))
+  ;; CHECK-NEXT:   (local.set $4
+  ;; CHECK-NEXT:    (local.get $B)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.set $2
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (drop
   ;; CHECK-NEXT:    (br_if $label$1
-  ;; CHECK-NEXT:     (local.tee $2
-  ;; CHECK-NEXT:      (local.get $B)
+  ;; CHECK-NEXT:     (local.tee $3
+  ;; CHECK-NEXT:      (local.get $4)
   ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:     (local.get $2)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.get $2)
+  ;; CHECK-NEXT:   (local.get $3)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test (param $B (ref $B)) (param $x i32) (result anyref)
@@ -117,13 +127,21 @@
   ;; CHECK:      (func $test-local (type $3) (param $B (ref $B)) (param $x i32) (result anyref)
   ;; CHECK-NEXT:  (local $temp (ref $B))
   ;; CHECK-NEXT:  (local $3 (ref $B))
+  ;; CHECK-NEXT:  (local $4 (ref $B))
+  ;; CHECK-NEXT:  (local $5 i32)
   ;; CHECK-NEXT:  (block $label$1 (result (ref $A))
+  ;; CHECK-NEXT:   (local.set $4
+  ;; CHECK-NEXT:    (local.get $B)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.set $5
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (drop
   ;; CHECK-NEXT:    (br_if $label$1
   ;; CHECK-NEXT:     (local.tee $3
-  ;; CHECK-NEXT:      (local.get $B)
+  ;; CHECK-NEXT:      (local.get $4)
   ;; CHECK-NEXT:     )
-  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:     (local.get $5)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (local.set $temp
@@ -193,4 +211,57 @@
       )
     )
   )
+
+  ;; CHECK:      (func $unnamed-block (type $5) (result funcref)
+  ;; CHECK-NEXT:  (local $0 i32)
+  ;; CHECK-NEXT:  (local $1 (ref nofunc))
+  ;; CHECK-NEXT:  (local $2 (ref nofunc))
+  ;; CHECK-NEXT:  (block $label$1 (result nullfuncref)
+  ;; CHECK-NEXT:   (local.set $2
+  ;; CHECK-NEXT:    (ref.as_non_null
+  ;; CHECK-NEXT:     (ref.null nofunc)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.set $0
+  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (br_if $label$1
+  ;; CHECK-NEXT:     (local.tee $1
+  ;; CHECK-NEXT:      (local.get $2)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.get $0)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (local.get $1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (ref.null nofunc)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $unnamed-block (result (ref null func))
+    (block $out (result nullfuncref)
+     (drop
+       (call_ref $func
+         ;; This br_if's value is a block without a name, which is not emitted
+         ;; into StackIR at all. We must not get confused by that.
+         (br_if $out
+           (block (result (ref nofunc))
+             (ref.as_non_null
+               (ref.null nofunc)
+             )
+           )
+           (i32.const 0)
+         )
+         (ref.null nofunc)
+        )
+      )
+      (ref.null nofunc)
+    )
+  )
 )
+
+;; TODO: test br_if of br_if, nesting, br_if in both role of br_if and value
