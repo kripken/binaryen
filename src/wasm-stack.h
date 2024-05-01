@@ -538,6 +538,8 @@ private:
     return makeStackInst(StackInst::Basic, origin);
   }
 
+  void fixBrIf(Expression* curr);
+
   Module& module;
   BinaryWritingContext& context;
 

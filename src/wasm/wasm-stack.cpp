@@ -2822,12 +2822,16 @@ void StackIRGenerator::emit(Expression* curr) {
     stackInst = makeStackInst(curr);
   }
 
-  if (!context.brIfsToFix.count(curr)) {
-    // Nothing special here. Add the instruction and leave.
-    stackIR.push_back(stackInst);
+  if (context.brIfsToFix.count(curr)) {
+    fixBrIf(curr);
     return;
   }
 
+  // Nothing special here.
+  stackIR.push_back(stackInst);
+}
+
+void StackIRGenerator::fixBrIf(Expression* curr) {
   // This is a br_if we must fix. We must stash the value to a local, drop the
   // br_if, and then get that value.
   //
@@ -2863,7 +2867,8 @@ void StackIRGenerator::emit(Expression* curr) {
   stackIR.push_back(makeStackInst(getCondition));
 
   // Emit the br_if itself, and drop it.
-  stackIR.push_back(stackInst);
+  auto* brIf = makeStackInst(br);
+  stackIR.push_back(brIf);
   auto* drop = builder.makeDrop(br); // XXX reuse
   stackIR.push_back(makeStackInst(drop));
 
