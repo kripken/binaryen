@@ -5,7 +5,7 @@
 ;; We also need to add an actual pass to optimize so that --converge does
 ;; work, so we add --ssa.
 
-;; RUN: wasm-opt %s -all --ssa --converge --print -o %t.wasm -o - | filecheck %s
+;; RUN: wasm-opt %s -all --ssa --converge --print -o %t.wasm | filecheck %s
 
 (module
   (rec
@@ -16,11 +16,17 @@
     (type $B (sub $A (struct)))
   )
 
+  ;; CHECK:      (func $test (type $2) (param $B (ref $B)) (param $x i32) (result anyref)
+  ;; CHECK-NEXT:  (block $out (result (ref $A))
+  ;; CHECK-NEXT:   (br_if $out
+  ;; CHECK-NEXT:    (local.get $B)
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
   (func $test (param $B (ref $B)) (param $x i32) (result anyref)
+    ;; No changes are expected here, and we should not error.
     (block $out (result (ref $A))
-      ;; The br_if's value is of type $B which is more precise than the block's
-      ;; type, $A, so we emit a cast here, but only one despite the three
-      ;; roundtrips.
       (br_if $out
         (local.get $B)
         (local.get $x)
