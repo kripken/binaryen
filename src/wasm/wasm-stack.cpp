@@ -2840,6 +2840,9 @@ void StackIRGenerator::emit(Expression* curr) {
   // emitted StackIR so far, which could lead to better code at the cost of
   // more complexity. As this situation is rare, we prefer the simpler
   // approach for now.)
+  //
+  // TODO: A StackIR optimization to reuse locals could help, as atm we generate
+  //       2 new locals per br_if.
   auto* br = curr->cast<Break>();
   Builder builder(module);
   auto tempCondition = builder.addVar(func, Type::i32); // XXX Remove this later
