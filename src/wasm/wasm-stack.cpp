@@ -25,6 +25,11 @@ namespace wasm {
 static Name IMPOSSIBLE_CONTINUE("impossible-continue");
 
 BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
+  for (Index i = 0; i < func->getNumLocals(); i++) {
+    locals.push_back(func->getLocalType(i));
+  }
+  numParams = func->getNumParams();
+
   // Scan for tuple.extracts and dangerous br_ifs in an initial quick pass. This
   // does not investigate the br_ifs in detail, which requires more effort. We
   // do that below if it is necessary.
@@ -114,6 +119,12 @@ BinaryWritingContext::BinaryWritingContext(Function* func, Module& wasm) {
   refinementScanner.walk(func->body);
 }
 
+Index BinaryWritingContext::addVar(Type type) {
+  Index ret = locals.size();
+  locals.push_back(type);
+  return ret;
+}
+
 void BinaryInstWriter::emitResultType(Type type) {
   if (type == Type::unreachable) {
     parent.writeType(Type::none);
@@ -186,7 +197,7 @@ void BinaryInstWriter::visitLocalGet(LocalGet* curr) {
       << U32LEB(mappedLocals[std::make_pair(curr->index, it->second)]);
     return;
   }
-  size_t numValues = func->getLocalType(curr->index).size();
+  size_t numValues = context.locals[curr->index].size();
   for (Index i = 0; i < numValues; ++i) {
     o << int8_t(BinaryConsts::LocalGet)
       << U32LEB(mappedLocals[std::make_pair(curr->index, i)]);
@@ -194,7 +205,7 @@ void BinaryInstWriter::visitLocalGet(LocalGet* curr) {
 }
 
 void BinaryInstWriter::visitLocalSet(LocalSet* curr) {
-  size_t numValues = func->getLocalType(curr->index).size();
+  size_t numValues = context.locals[curr->index].size();
   // If this is a tuple, set all the elements with nonzero index.
   for (Index i = numValues - 1; i >= 1; --i) {
     o << int8_t(BinaryConsts::LocalSet)
@@ -2654,10 +2665,14 @@ void BinaryInstWriter::emitUnreachable() {
 
 void BinaryInstWriter::mapLocalsAndEmitHeader() {
   assert(func && "BinaryInstWriter: function is not set");
+
   // Map params
-  for (Index i = 0; i < func->getNumParams(); i++) {
+  for (Index i = 0; i < context.numParams; i++) {
     mappedLocals[std::make_pair(i, 0)] = i;
   }
+  Index varStart = context.numParams;
+  Index varEnd = context.locals.size();
+
   // Normally we map all locals of the same type into a range of adjacent
   // addresses, which is more compact. However, if we need to keep DWARF valid,
   // do not do any reordering at all - instead, do a trivial mapping that
@@ -2666,18 +2681,17 @@ void BinaryInstWriter::mapLocalsAndEmitHeader() {
     if (!context.tupleExtracts.empty()) {
       Fatal() << "DWARF + multivalue is not yet complete";
     }
-    Index varStart = func->getVarIndexBase();
-    Index varEnd = varStart + func->getNumVars();
-    o << U32LEB(func->getNumVars());
+    o << U32LEB(varEnd - varStart);
     for (Index i = varStart; i < varEnd; i++) {
       mappedLocals[std::make_pair(i, 0)] = i;
       o << U32LEB(1);
-      parent.writeType(func->getLocalType(i));
+      parent.writeType(context.locals[i]);
     }
     return;
   }
-  for (auto type : func->vars) {
-    for (const auto& t : type) {
+
+  for (Index i = varStart; i < varEnd; i++) {
+    for (const auto& t : context.locals[i]) {
       noteLocalType(t);
     }
   }
@@ -2706,11 +2720,11 @@ void BinaryInstWriter::mapLocalsAndEmitHeader() {
   }
 
   std::unordered_map<Type, size_t> currLocalsByType;
-  for (Index i = func->getVarIndexBase(); i < func->getNumLocals(); i++) {
+  for (Index i = varStart; i < varEnd; i++) {
     Index j = 0;
-    for (const auto& type : func->getLocalType(i)) {
+    for (const auto& type : context.locals[i]) {
       auto fullIndex = std::make_pair(i, j++);
-      Index index = func->getVarIndexBase();
+      Index index = varStart;
       for (auto& localType : localTypes) {
         if (type == localType) {
           mappedLocals[fullIndex] = index + currLocalsByType[localType];
@@ -2760,7 +2774,7 @@ void BinaryInstWriter::countScratchLocals() {
 }
 
 void BinaryInstWriter::setScratchLocals() {
-  Index index = func->getVarIndexBase();
+  Index index = context.numParams;
   for (auto& localType : localTypes) {
     index += numLocalsByType[localType];
     if (scratchLocals.find(localType) != scratchLocals.end()) {
@@ -2848,12 +2862,11 @@ void StackIRGenerator::fixBrIf(Expression* curr) {
   // TODO: A StackIR optimization to reuse locals could help, as atm we generate
   //       2 new locals per br_if.
   auto* br = curr->cast<Break>();
-  Builder builder(module);
-  auto tempCondition = builder.addVar(func, Type::i32); // XXX Remove this later XXX this makes BinaryenIR change , which causes pass-debug errors.
-                                                                              // Likeley need to store the new local state on the side, i nthe Context
-  auto tempValue = builder.addVar(func, br->type); // XXX Remove this later
+  auto tempCondition = context.addVar(Type::i32);
+  auto tempValue = context.addVar(br->type);
 
   // Set the condition to a local.
+  Builder builder(module);
   auto* set = builder.makeLocalSet(tempCondition, br->condition); // XXX reuse
   stackIR.push_back(makeStackInst(set));
 

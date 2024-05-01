@@ -85,7 +85,8 @@ public:
   Type type;
 };
 
-// A helper class that scans BinaryenIR before binary writing. This does a pass
+// A helper class that scans BinaryenIR before binary writing of a function.
+// This does a pass
 // on the function to find things that will need special handling. Shared logic
 // that all the different binary writers will need is refactored into this
 // place, to avoid duplication, and we do that work up front and then pass this
@@ -94,6 +95,14 @@ struct BinaryWritingContext {
   // Used in cases where we do not have a function to scan (optional?)
   BinaryWritingContext() {}
   BinaryWritingContext(Function* func, Module& wasm);
+
+  // We may need more vars than in BinaryenIR, and so we track all params+vars
+  // here.
+  std::vector<Type> locals;
+  Index numParams;
+
+  // Add a var and return its index.
+  Index addVar(Type type);
 
   // We will note all TupleExtracts for purposes of scratch locals.
   std::vector<TupleExtract*> tupleExtracts;
