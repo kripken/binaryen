@@ -26,6 +26,7 @@
 #include "support/string.h"
 #include "wasm-binary.h"
 #include "wasm-debug.h"
+#include "wasm-limits.h"
 #include "wasm-stack.h"
 
 #define DEBUG_TYPE "binary"
@@ -420,7 +421,7 @@ void WasmBinaryWriter::writeFunctions() {
     }
     if (func->stackIR && !sourceMap && !DWARF) {
       BYN_TRACE("write Stack IR\n");
-      StackIRToBinaryWriter writer(*this, context, o, func);
+      StackIRToBinaryWriter writer(*this, context, o, func, sourceMap, DWARF);
       writer.write();
       if (debugInfo) {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());
