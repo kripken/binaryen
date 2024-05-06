@@ -2671,15 +2671,36 @@ void BinaryInstWriter::mapLocalsAndEmitHeader() {
   // addresses, which is more compact. However, if we need to keep DWARF valid,
   // do not do any reordering at all - instead, do a trivial mapping that
   // keeps everything unmoved.
+  //
+  // Unless we have run DWARF-invalidating passes, all locals added during the
+  // process that are not in DWARF info (tuple locals, tuple scratch locals,
+  // locals to resolve stacky format, ..) have been all tacked on to the
+  // existing locals and happen at the end, so as long as we print the local
+  // types in order, we don't invalidate original local DWARF info here.
   if (DWARF) {
-    if (!context.tupleExtracts.empty()) {
-      Fatal() << "DWARF + multivalue is not yet complete";
-    }
-    o << U32LEB(varEnd - varStart);
+    Index mappedIndex = varStart;
     for (Index i = varStart; i < varEnd; i++) {
-      mappedLocals[std::make_pair(i, 0)] = i;
+      size_t size = context.getLocalType(i).size();
+      for (Index j = 0; j < size; j++) {
+        mappedLocals[std::make_pair(i, j)] = mappedIndex + j;
+      }
+      mappedIndex += size;
+    }
+    countScratchLocals();
+
+    size_t numBinaryLocals =
+      mappedIndex - varStart + scratchLocals.size();
+    o << U32LEB(numBinaryLocals);
+    for (Index i = varStart; i < varEnd; i++) {
+      for (const auto& type : context.getLocalType(i)) {
+        o << U32LEB(1);
+        parent.writeType(type);
+      }
+    }
+    for (auto& [type, _] : scratchLocals) {
       o << U32LEB(1);
-      parent.writeType(context.getLocalType(i));
+      parent.writeType(type);
+      scratchLocals[type] = mappedIndex++;
     }
     return;
   }
@@ -2989,8 +3010,13 @@ void StackIRToBinaryWriter::write() {
         WASM_UNREACHABLE("unexpected op");
     }
   }
+  // Indicate the debug location corresponding to the end opcode that
+  // terminates the function code.
   if (func->epilogLocation.size()) {
     parent.writeDebugLocation(*func->epilogLocation.begin());
+  } else {
+    // The end opcode has no debug location.
+    parent.writeNoDebugLocation();
   }
   writer.emitFunctionEnd();
 }
