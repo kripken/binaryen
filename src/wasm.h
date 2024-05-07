@@ -2140,6 +2140,8 @@ struct BinaryLocations {
 // the stackIR property.
 // Stack IR is a secondary IR to the main IR defined in this file (Binaryen
 // IR). See wasm-stack.h.
+// XXX we must store the BinaryWritingContext here too! In fact store just it,
+//     and it can contain StackInsts.
 class StackInst;
 
 using StackIR = std::vector<StackInst*>;
