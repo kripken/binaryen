@@ -2136,15 +2136,24 @@ struct BinaryLocations {
   std::unordered_map<Function*, FunctionLocations> functions;
 };
 
-// Forward declarations of Stack IR, as functions can contain it, see
+// Forward declaration of Stack IR, as functions can contain it, see
 // the stackIR property.
 // Stack IR is a secondary IR to the main IR defined in this file (Binaryen
 // IR). See wasm-stack.h.
 // XXX we must store the BinaryWritingContext here too! In fact store just it,
 //     and it can contain StackInsts.
-class StackInst;
+struct StackIR;
 
-using StackIR = std::vector<StackInst*>;
+// std::unique_ptr<StackIR> cannot work with only a forward declaration, so wrap
+// it with a container.
+struct StackIRContainer {
+  StackIR* stackIR = nullptr;
+
+  StackIRContainer(StackIR* stackIR);
+  ~StackIRContainer();
+
+  StackIR& operator*();
+};
 
 class Function : public Importable {
 public:
@@ -2163,7 +2172,7 @@ public:
   // emit stack IR and then optimize the main IR, you need to recompute the
   // stack IR. The Pass system will throw away Stack IR if a pass is run
   // that declares it may modify Binaryen IR.
-  std::unique_ptr<StackIR> stackIR;
+  std::optional<StackIRContainer> stackIR;
 
   // local names. these are optional.
   std::unordered_map<Index, Name> localNames;
@@ -2513,8 +2522,6 @@ std::ostream& operator<<(std::ostream& o, wasm::Function& func);
 std::ostream& operator<<(std::ostream& o, wasm::Expression& expression);
 std::ostream& operator<<(std::ostream& o, wasm::ModuleExpression pair);
 std::ostream& operator<<(std::ostream& o, wasm::ShallowExpression expression);
-std::ostream& operator<<(std::ostream& o, wasm::StackInst& inst);
-std::ostream& operator<<(std::ostream& o, wasm::StackIR& ir);
 
 } // namespace std
 
