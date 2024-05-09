@@ -3023,7 +3023,7 @@ void PrintSExpression::visitDefinedFunction(Function* curr) {
     assert(controlFlowDepth == 0);
   } else {
     // Print the stack IR.
-    printStackIR(&*curr->stackIR, *this);
+    printStackIR(curr->stackIR.get(), *this);
   }
   if (currFunction->epilogLocation.size()) {
     // Print last debug location: mix of decIndent and printDebugLocation
@@ -3514,9 +3514,8 @@ static std::ostream& printStackIR(StackIR* ir, PrintSExpression& printer) {
   int controlFlowDepth = 0;
   // Stack to track indices of catches within a try
   SmallVector<Index, 4> catchIndexStack;
-  auto& insts = ir->insts;
   for (Index i = 0; i < (*ir).size(); i++) {
-    auto* inst = insts[i];
+    auto* inst = (*ir)[i];
     if (!inst) {
       continue;
     }
