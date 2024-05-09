@@ -393,6 +393,12 @@ void WasmBinaryWriter::writeFunctions() {
   if (importInfo->getNumDefinedFunctions() == 0) {
     return;
   }
+
+  std::optional<ModuleStackIR> moduleStackIR;
+  if (options.generateStackIR) {
+    moduleStackIR.emplace(*wasm, options);
+  }
+
   BYN_TRACE("== writeFunctions\n");
   auto sectionStart = startSection(BinaryConsts::Section::Code);
   o << U32LEB(importInfo->getNumDefinedFunctions());
@@ -407,23 +413,20 @@ void WasmBinaryWriter::writeFunctions() {
     size_t start = o.size();
     BYN_TRACE("writing" << func->name << std::endl);
     // Scan the function and pick the right way to emit it.
+    StackIR* stackIR = nullptr;
+    if (moduleStackIR) {
+      stackIR = moduleStackIR->getStackIROrNull(func);
+    }
     BinaryWritingContext context(func, *wasm);
-    if (context.mustUseStackIR()) {
-      if (sourceMap || DWARF) {
-        Fatal() << "TODO: debug info support with StackIR";
-      }
-
-      if (!func->stackIR) {
-        // Generate StackIR right now, and we will use it right below.
-        StackIRGenerator stackIRGen(*getModule(), func, context);
-        stackIRGen.write(); // the swapping too? TODO
-        func->stackIR = std::make_unique<StackIR>();
-        func->stackIR->swap(stackIRGen.getStackIR());
-      }
+    std::unique_ptr<StackIR> ownedStackIR;
+    if (context.mustUseStackIR() && !stackIR) {
+      // We need StackIR but it is not present, so generate it right now.
+      ownedStackIR = ModuleStackIR::generateMinimalStackIR(func, *wasm, options);
+      stackIR = ownedStackIR.get();
     }
     if (func->stackIR && !sourceMap && !DWARF) {
       BYN_TRACE("write Stack IR\n");
-      StackIRToBinaryWriter writer(*this, context, o, func, sourceMap, DWARF);
+      StackIRToBinaryWriter writer(*this, context, o, func, *stackIR, sourceMap, DWARF);
       writer.write();
       if (debugInfo) {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());
