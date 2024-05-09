@@ -2956,7 +2956,7 @@ void StackIRToBinaryWriter::write() {
   writer.mapLocalsAndEmitHeader();
   // Stack to track indices of catches within a try
   SmallVector<Index, 4> catchIndexStack;
-  for (auto* inst : *func->stackIR) {
+  for (auto* inst : func->stackIR->stackIR->insts) {
     if (!inst) {
       continue; // a nullptr is just something we can skip
     }
@@ -3021,9 +3021,9 @@ void StackIRToBinaryWriter::write() {
   writer.emitFunctionEnd();
 }
 
-StackIRContainer::StackIRContainer(StackIR* stackIR) : stackIR(stackIR) {
+StackIRContainer::StackIRContainer(StackIR* stackIR) : stackIR(stackIR) {}
 
-~StackIRContainer::StackIRContainer() {
+StackIRContainer::~StackIRContainer() {
   assert(stackIR);
   delete stackIR;
 }

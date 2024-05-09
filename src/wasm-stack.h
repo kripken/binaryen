@@ -136,6 +136,8 @@ struct BinaryWritingContext {
 
 // StackIR is a binary writing context that also adds a vector of StackInsts.
 struct StackIR : public BinaryWritingContext {
+  StackIR(Function* func, Module& wasm) : BinaryWritingContext(func, wasm) {}
+
   std::vector<StackInst*> insts;
 };
 
