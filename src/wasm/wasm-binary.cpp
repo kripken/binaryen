@@ -412,6 +412,7 @@ void WasmBinaryWriter::writeFunctions() {
     size_t sizePos = writeU32LEBPlaceholder();
     size_t start = o.size();
     BYN_TRACE("writing" << func->name << std::endl);
+
     // Scan the function and pick the right way to emit it.
     StackIR* stackIR = nullptr;
     if (moduleStackIR) {
@@ -421,12 +422,17 @@ void WasmBinaryWriter::writeFunctions() {
     std::unique_ptr<StackIR> ownedStackIR;
     if (context.mustUseStackIR() && !stackIR) {
       // We need StackIR but it is not present, so generate it right now.
-      ownedStackIR = ModuleStackIR::generateMinimalStackIR(func, *wasm, options);
+      ownedStackIR =
+        ModuleStackIR::generateMinimalStackIR(func, *wasm, options);
       stackIR = ownedStackIR.get();
+      assert(stackIR);
     }
-    if (func->stackIR && !sourceMap && !DWARF) {
+
+    // Emit either StackIR or BinaryenIR.
+    if (stackIR) {
       BYN_TRACE("write Stack IR\n");
-      StackIRToBinaryWriter writer(*this, context, o, func, *stackIR, sourceMap, DWARF);
+      StackIRToBinaryWriter writer(
+        *this, context, o, func, *stackIR, sourceMap, DWARF);
       writer.write();
       if (debugInfo) {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());
@@ -440,6 +446,7 @@ void WasmBinaryWriter::writeFunctions() {
         funcMappedLocals[func->name] = std::move(writer.getMappedLocals());
       }
     }
+
     size_t size = o.size() - start;
     assert(size <= std::numeric_limits<uint32_t>::max());
     BYN_TRACE("body size: " << size << ", writing at " << sizePos

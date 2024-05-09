@@ -549,7 +549,8 @@ public:
   // This is used in binary writing for rare cases in which we must use StackIR
   // for some reason. "Minimal" is used here as this never optimizes the IR: it
   // generates the simplest StackIR.
-  static std::unique_ptr<StackIR> generateMinimalStackIR(Function* func, Module& wasm, const PassOptions& options);
+  static std::unique_ptr<StackIR> generateMinimalStackIR(
+    Function* func, Module& wasm, const PassOptions& options);
 };
 
 // Stack IR to binary writer
@@ -562,9 +563,8 @@ public:
                         StackIR& stackIR,
                         bool sourceMap = false,
                         bool DWARF = false)
-    : parent(parent),
-      writer(parent, context, o, func, sourceMap, DWARF), func(func),
-      stackIR(stackIR), sourceMap(sourceMap) {}
+    : parent(parent), writer(parent, context, o, func, sourceMap, DWARF),
+      func(func), stackIR(stackIR), sourceMap(sourceMap) {}
 
   void write();
 

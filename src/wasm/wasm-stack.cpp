@@ -2688,8 +2688,7 @@ void BinaryInstWriter::mapLocalsAndEmitHeader() {
     }
     countScratchLocals();
 
-    size_t numBinaryLocals =
-      mappedIndex - varStart + scratchLocals.size();
+    size_t numBinaryLocals = mappedIndex - varStart + scratchLocals.size();
     o << U32LEB(numBinaryLocals);
     for (Index i = varStart; i < varEnd; i++) {
       for (const auto& type : context.getLocalType(i)) {
@@ -2925,13 +2924,11 @@ void StackIRGenerator::fixBrIf(Expression* curr) {
   stackIR.push_back(makeStackInst(set));
 
   // Tee the value.
-  auto* tee =
-    builder.makeLocalTee(tempValue, br->value, br->type); // XXX reuse
+  auto* tee = builder.makeLocalTee(tempValue, br->value, br->type); // XXX reuse
   stackIR.push_back(makeStackInst(tee));
 
   // Get the condition back.
-  auto* getCondition =
-    builder.makeLocalGet(tempCondition, Type::i32);
+  auto* getCondition = builder.makeLocalGet(tempCondition, Type::i32);
   stackIR.push_back(makeStackInst(getCondition));
 
   // Emit the br_if itself, and drop it.
@@ -3004,7 +3001,8 @@ ModuleStackIR::ModuleStackIR(Module& wasm, const PassOptions& options)
       }
     }) {}
 
-std::unique_ptr<StackIR> ModuleStackIR::generateMinimalStackIR(Function* func, Module& wasm, const PassOptions& options) {
+std::unique_ptr<StackIR> ModuleStackIR::generateMinimalStackIR(
+  Function* func, Module& wasm, const PassOptions& options) {
   StackIRGenerator stackIRGen(wasm, func);
   stackIRGen.write();
   return std::make_unique<StackIR>(std::move(stackIRGen.getStackIR()));
