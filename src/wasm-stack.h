@@ -86,6 +86,8 @@ public:
   Type type;
 };
 
+using StackIR = std::vector<StackInst*>;
+
 // A helper class that scans BinaryenIR before binary writing of a function.
 // This does a pass
 // on the function to find things that will need special handling. Shared logic
@@ -98,9 +100,9 @@ struct BinaryWritingContext {
   BinaryWritingContext(Function* func, Module& wasm);
 
   // We may need more vars than in BinaryenIR, and so we track all params+vars
-  // here.
-  std::vector<Type> locals;
+  // here, and new vars may be added.
   Index numParams;
+  std::vector<Type> locals;
 
   Type getLocalType(Index index) const {
     assert(index < locals.size());
@@ -133,9 +135,10 @@ struct BinaryWritingContext {
     // StackIR has the logic to handle such br_ifs.
     return !brIfsToFix.empty();
   }
-};
 
-using StackIR = std::vector<StackInst*>;
+  // The StackIR instructions we build up, if we are using StackIR.
+  StackIR insts;
+};
 
 class BinaryInstWriter : public OverriddenVisitor<BinaryInstWriter> {
 public:
@@ -529,7 +532,7 @@ private:
 // StackIR in parallel, and then allows querying for the StackIR of individual
 // functions.
 class ModuleStackIR {
-  ModuleUtils::ParallelFunctionAnalysis<StackIR> analysis;
+  ModuleUtils::ParallelFunctionAnalysis<BinaryWritingContext - I think?> analysis;
 
 public:
   ModuleStackIR(Module& wasm, const PassOptions& options);
