@@ -2836,8 +2836,11 @@ int32_t BinaryInstWriter::getBreakIndex(Name name) { // -1 if not found
 // Queues the expressions linearly in Stack IR (SIR)
 class StackIRGenerator : public BinaryenIRWriter<StackIRGenerator> {
 public:
-  StackIRGenerator(Module& module, Function* func)
-    : BinaryenIRWriter<StackIRGenerator>(func), module(module) {}
+  StackIRGenerator(Module& module,
+                   Function* func,
+                   BinaryWritingContext& context)
+    : BinaryenIRWriter<StackIRGenerator>(func), module(module),
+      context(context) {}
 
   void emit(Expression* curr);
   void emitScopeEnd(Expression* curr);
@@ -2868,7 +2871,11 @@ private:
     return makeStackInst(StackInst::Basic, origin);
   }
 
+  void fixBrIf(Expression* curr);
+
   Module& module;
+  BinaryWritingContext& context;
+
   StackIR stackIR; // filled in write()
 };
 
