@@ -39,9 +39,9 @@ struct GenerateStackIR : public WalkerPass<PostWalker<GenerateStackIR>> {
 
   void doWalkFunction(Function* func) {
     auto stackIR = std::make_unique<StackIR>(func, *getModule());
-    StackIRGenerator stackIRGen(*getModule(), func, *stackIR.get());
+    func->stackIR.emplace(stackIR.forget());
+    StackIRGenerator stackIRGen(*getModule(), func, **stackIR);
     stackIRGen.write();
-    func->stackIR.emplace(stackIR.release());
   }
 };
 
@@ -52,14 +52,14 @@ Pass* createGenerateStackIRPass() { return new GenerateStackIR(); }
 class StackIROptimizer {
   Function* func;
   PassOptions& passOptions;
-  std::vector<StackInst*>& insts;
+  StackIR& insts;
   FeatureSet features;
 
 public:
   StackIROptimizer(Function* func,
                    PassOptions& passOptions,
                    FeatureSet features)
-    : func(func), passOptions(passOptions), insts(func->stackIR->stackIR->insts),
+    : func(func), passOptions(passOptions), insts(*func->stackIR.get()),
       features(features) {
     assert(func->stackIR);
   }
