@@ -923,7 +923,7 @@ struct AfterEffectFunctionChecker {
   // In the creator we can scan the state of the module and function before the
   // pass runs.
   AfterEffectFunctionChecker(Function* func) : func(func), name(func->name) {
-    beganWithStackIR = !!func->stackIR;
+    beganWithStackIR = func->stackIR != nullptr;
     if (beganWithStackIR) {
       originalFunctionHash = FunctionHasher::hashFunction(func);
     }
@@ -1097,7 +1097,7 @@ void PassRunner::handleAfterEffects(Pass* pass, Function* func) {
 
   // If Binaryen IR is modified, Stack IR must be cleared - it would
   // be out of sync in a potentially dangerous way.
-  func->stackIR.reset();
+  func->stackIR.reset(nullptr);
 
   if (pass->requiresNonNullableLocalFixups()) {
     TypeUpdating::handleNonDefaultableLocals(func, *wasm);

@@ -134,11 +134,6 @@ struct BinaryWritingContext {
   }
 };
 
-// StackIR is a binary writing context that also adds a vector of StackInsts.
-struct StackIR : public BinaryWritingContext {
-  std::vector<StackInst*> insts;
-};
-
 class BinaryInstWriter : public OverriddenVisitor<BinaryInstWriter> {
 public:
   BinaryInstWriter(WasmBinaryWriter& parent,
@@ -533,28 +528,28 @@ class StackIRGenerator : public BinaryenIRWriter<StackIRGenerator> {
 public:
   StackIRGenerator(Module& module,
                    Function* func,
-                   StackIR& stackIR)
+                   BinaryWritingContext& context)
     : BinaryenIRWriter<StackIRGenerator>(func), module(module),
-      stackIR(stackIR) {}
+      context(context) {}
 
   void emit(Expression* curr);
   void emitScopeEnd(Expression* curr);
   void emitHeader() {}
   void emitIfElse(If* curr) {
-    stackIR.insts.push_back(makeStackInst(StackInst::IfElse, curr));
+    stackIR.push_back(makeStackInst(StackInst::IfElse, curr));
   }
   void emitCatch(Try* curr, Index i) {
-    stackIR.insts.push_back(makeStackInst(StackInst::Catch, curr));
+    stackIR.push_back(makeStackInst(StackInst::Catch, curr));
   }
   void emitCatchAll(Try* curr) {
-    stackIR.insts.push_back(makeStackInst(StackInst::CatchAll, curr));
+    stackIR.push_back(makeStackInst(StackInst::CatchAll, curr));
   }
   void emitDelegate(Try* curr) {
-    stackIR.insts.push_back(makeStackInst(StackInst::Delegate, curr));
+    stackIR.push_back(makeStackInst(StackInst::Delegate, curr));
   }
   void emitFunctionEnd() {}
   void emitUnreachable() {
-    stackIR.insts.push_back(makeStackInst(Builder(module).makeUnreachable()));
+    stackIR.push_back(makeStackInst(Builder(module).makeUnreachable()));
   }
   void emitDebugLocation(Expression* curr) {}
 
@@ -569,7 +564,9 @@ private:
   void fixBrIf(Expression* curr);
 
   Module& module;
-  StackIR& stackIR;
+  BinaryWritingContext& context;
+
+  StackIR stackIR; // filled in write()
 };
 
 // Stack IR to binary writer
@@ -599,12 +596,5 @@ private:
 std::ostream& printStackIR(std::ostream& o, Module* module, bool optimize);
 
 } // namespace wasm
-
-namespace std {
-
-std::ostream& operator<<(std::ostream& o, wasm::StackInst& inst);
-std::ostream& operator<<(std::ostream& o, wasm::StackIR& ir);
-
-} // namespace std
 
 #endif // wasm_stack_h

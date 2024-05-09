@@ -2851,13 +2851,13 @@ void StackIRGenerator::emit(Expression* curr) {
     stackInst = makeStackInst(curr);
   }
 
-  if (stackIR.brIfsToFix.count(curr)) {
+  if (context.brIfsToFix.count(curr)) {
     fixBrIf(curr);
     return;
   }
 
   // Nothing special here.
-  stackIR.insts.push_back(stackInst);
+  stackIR.push_back(stackInst);
 }
 
 void StackIRGenerator::fixBrIf(Expression* curr) {
@@ -2877,33 +2877,33 @@ void StackIRGenerator::fixBrIf(Expression* curr) {
   // TODO: A StackIR optimization to reuse locals could help, as atm we generate
   //       2 new locals per br_if.
   auto* br = curr->cast<Break>();
-  auto tempCondition = stackIR.addVar(Type::i32);
-  auto tempValue = stackIR.addVar(br->type);
+  auto tempCondition = context.addVar(Type::i32);
+  auto tempValue = context.addVar(br->type);
 
   // Set the condition to a local.
   Builder builder(module);
   auto* set = builder.makeLocalSet(tempCondition, br->condition); // XXX reuse
-  stackIR.insts.push_back(makeStackInst(set));
+  stackIR.push_back(makeStackInst(set));
 
   // Tee the value.
   auto* tee =
     builder.makeLocalTee(tempValue, br->value, br->type); // XXX reuse
-  stackIR.insts.push_back(makeStackInst(tee));
+  stackIR.push_back(makeStackInst(tee));
 
   // Get the condition back.
   auto* getCondition =
     builder.makeLocalGet(tempCondition, Type::i32);
-  stackIR.insts.push_back(makeStackInst(getCondition));
+  stackIR.push_back(makeStackInst(getCondition));
 
   // Emit the br_if itself, and drop it.
   auto* brIf = makeStackInst(br);
-  stackIR.insts.push_back(brIf);
+  stackIR.push_back(brIf);
   auto* drop = builder.makeDrop(br); // XXX reuse
-  stackIR.insts.push_back(makeStackInst(drop));
+  stackIR.push_back(makeStackInst(drop));
 
   // Get the value.
   auto* getValue = builder.makeLocalGet(tempValue, br->type);
-  stackIR.insts.push_back(makeStackInst(getValue));
+  stackIR.push_back(makeStackInst(getValue));
 }
 
 void StackIRGenerator::emitScopeEnd(Expression* curr) {
@@ -2921,7 +2921,7 @@ void StackIRGenerator::emitScopeEnd(Expression* curr) {
   } else {
     WASM_UNREACHABLE("unexpected expr type");
   }
-  stackIR.insts.push_back(stackInst);
+  stackIR.push_back(stackInst);
 }
 
 StackInst* StackIRGenerator::makeStackInst(StackInst::Op op,
@@ -3019,18 +3019,6 @@ void StackIRToBinaryWriter::write() {
     parent.writeNoDebugLocation();
   }
   writer.emitFunctionEnd();
-}
-
-StackIRContainer::StackIRContainer(StackIR* stackIR) : stackIR(stackIR) {
-
-~StackIRContainer::StackIRContainer() {
-  assert(stackIR);
-  delete stackIR;
-}
-
-StackIR& StackIRContainer::operator*() {
-  assert(stackIR);
-  return *stackIR;
 }
 
 } // namespace wasm
