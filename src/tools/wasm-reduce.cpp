@@ -1162,6 +1162,15 @@ struct Reducer
       return tryToReplaceCurrent(n);
     }
 
+    // Strings (non-nullable ones, as null was handled before).
+    if (curr->type.isString()) {
+      Expression* emptyString = builder->makeStringConst("");
+      if (ExpressionAnalyzer::equal(emptyString, curr)) {
+        return false;
+      }
+      return tryToReplaceCurrent(emptyString);
+    }
+
     // Numbers. We try to replace them with a 0 or a 1.
     if (!curr->type.isNumber()) {
       return false;
