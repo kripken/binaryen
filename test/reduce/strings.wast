@@ -1,6 +1,8 @@
 (module
   (type $struct (struct (field $string (mut stringref))))
 
+  (type $nnstruct (struct (field $string (mut (ref string)))))
+
   (global $e stringref (string.const ""))
 
   (global $x stringref (string.const "x"))
@@ -9,7 +11,7 @@
 
   (global $q (ref $struct) (struct.new $struct
     (global.get $x) ;; this should be trampled with an empty string, as it will
-                    ;; be written before it is read.
+                    ;; be written before it is read. XXX or null
   ))
 
   (global $r (ref $struct) (struct.new $struct
@@ -24,7 +26,14 @@
     (global.get $x) ;; this should NOT change, as it will be read
   ))
 
-  (global $other stringref (string.const "other"))
+  (global $nn (ref $nnstruct) (struct.new $nnstruct
+    (global.get $nx) ;; this should be trampled with an empty string, as it
+                     ;; cannot be a null
+  ))
+
+  (global $other (ref string) (string.const "other"))
+
+  (global $mut (mut stringref) (ref.null string))
 
   (func $sets (export "sets")
     (struct.set $struct $string
@@ -33,17 +42,21 @@
     )
     (struct.set $struct $string
       (global.get $r)
-      (global.get $other)
+      (ref.null string)
     )
     (struct.set $struct $string
       (global.get $t)
+      (global.get $other)
+    )
+    (struct.set $nnstruct $string
+      (global.get $nn)
       (global.get $other)
     )
     ;; Note, no write to $u.
   )
 
   (func $q (export "q") (result stringref)
-    ;; We wrote to this before, so tihs prints the global $other.
+    ;; We wrote to this before, so this prints the global $other.
     (struct.get $struct $string
       (global.get $q)
     )
@@ -67,6 +80,12 @@
     )
   )
 
+  (func $nn (export "nn") (result stringref)
+    (struct.get $nnstruct $string
+      (global.get $nn)
+    )
+  )
+
   (func $get-e (export "get-e") (result stringref)
     (global.get $e)
   )
@@ -77,5 +96,36 @@
 
   (func $get-nx (export "get-nx") (result stringref)
     (global.get $nx)
+  )
+
+  (func $get-set-mut (export "get-set-mut") (result stringref)
+    (local $temp stringref)
+    (local.set $temp
+      (global.get $mut)
+    )
+    (global.set $mut
+      (string.const "foo")
+    )
+    (local.get $temp)
+  )
+
+  (func $get-mut (export "get-mut") (result stringref)
+    (global.get $mut) ;; this stays, it must return "foo".
+  )
+
+  (func $get-set-mut-2 (export "get-set-mut-2") (result stringref)
+    (local $temp stringref)
+    (local.set $temp
+      (global.get $mut)
+    )
+    (global.set $mut
+      (string.const "") ;; now we set the empty string
+    )
+    (local.get $temp)
+  )
+
+  (func $get-mut-2 (export "get-mut-2") (result stringref)
+    (global.get $mut) ;; this can be optimized to the empty string (and the
+                      ;; function then gets merged).
   )
 )

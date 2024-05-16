@@ -1,7 +1,8 @@
 (module
  (type $0 (struct (field (mut stringref))))
  (type $1 (func (result stringref)))
- (type $2 (func))
+ (type $2 (struct (field (mut (ref string)))))
+ (type $3 (func))
  (global $global$0 (ref $0) (struct.new $0
   (string.const "x")
  ))
@@ -14,14 +15,23 @@
  (global $global$3 (ref $0) (struct.new $0
   (string.const "x")
  ))
+ (global $global$4 (ref $2) (struct.new $2
+  (string.const "x")
+ ))
+ (global $global$5 (mut stringref) (ref.null none))
  (export "sets" (func $0))
  (export "q" (func $1))
  (export "r" (func $2))
  (export "t" (func $3))
  (export "u" (func $4))
- (export "get-e" (func $5))
- (export "get-x" (func $6))
- (export "get-nx" (func $6))
+ (export "nn" (func $5))
+ (export "get-e" (func $6))
+ (export "get-x" (func $7))
+ (export "get-nx" (func $7))
+ (export "get-set-mut" (func $8))
+ (export "get-mut" (func $9))
+ (export "get-set-mut-2" (func $10))
+ (export "get-mut-2" (func $9))
  (func $0
   (struct.set $0 0
    (global.get $global$0)
@@ -29,10 +39,14 @@
   )
   (struct.set $0 0
    (global.get $global$1)
-   (string.const "other")
+   (ref.null none)
   )
   (struct.set $0 0
    (global.get $global$2)
+   (string.const "other")
+  )
+  (struct.set $2 0
+   (global.get $global$4)
    (string.const "other")
   )
  )
@@ -57,10 +71,35 @@
   )
  )
  (func $5 (result stringref)
-  (string.const "")
+  (struct.get $2 0
+   (global.get $global$4)
+  )
  )
  (func $6 (result stringref)
+  (string.const "")
+ )
+ (func $7 (result stringref)
   (string.const "x")
+ )
+ (func $8 (result stringref)
+  (global.set $global$5
+   (string.const "foo")
+  )
+  (ref.null none)
+ )
+ (func $9 (result stringref)
+  (global.get $global$5)
+ )
+ (func $10 (result stringref)
+  (local $0 stringref)
+  (local $1 stringref)
+  (local.set $1
+   (global.get $global$5)
+  )
+  (global.set $global$5
+   (string.const "")
+  )
+  (local.get $1)
  )
 )
 
