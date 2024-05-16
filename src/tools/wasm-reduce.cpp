@@ -1168,7 +1168,7 @@ struct Reducer
       // It's already a one.
       return false;
     }
-    c->value = Literal::makeOne(curr->type);
+    auto* c = builder->makeConst(Literal::makeOne(curr->type));
     return tryToReplaceCurrent(c);
   }
 
