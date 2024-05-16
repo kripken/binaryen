@@ -1146,6 +1146,8 @@ struct Reducer
   bool tryToReduceCurrentToConst() {
     auto* curr = getCurrent();
 
+// TODO disable isNumber and see a test fails, also tuple - all the removd code
+
     if (curr->type.isDefaultable()) {
       Expression* n =
         builder->makeConstantExpression(Literal::makeZeros(curr->type));
@@ -1157,19 +1159,29 @@ struct Reducer
       }
     }
 
-    // For a number we can also try to replace it with a 1.
-    if (!curr->type.isNumber()) {
-      return false;
+    // We can try to replace a number with 1 (0 was already tried before).
+    if (curr->type.isNumber()) {
+      auto* existing = curr->dynCast<Const>();
+      if (existing &&
+          existing->value == Literal::makeFromInt32(1, existing->type)) {
+        // It's already a one.
+        return false;
+      }
+      auto* c = builder->makeConst(Literal::makeOne(curr->type));
+      return tryToReplaceCurrent(c);
     }
 
-    auto* existing = curr->dynCast<Const>();
-    if (existing &&
-        existing->value == Literal::makeFromInt32(1, existing->type)) {
-      // It's already a one.
-      return false;
+    // We can try to replace a string with the empty string (for a nullable
+    // string we already tried null before).
+    if (curr->type.isString()) {
+      auto* s = builder->makeStringConst("");
+      if (ExpressionAnalyzer::equal(s, curr)) {
+        return false;
+      }
+      return tryToReplaceCurrent(s);
     }
-    auto* c = builder->makeConst(Literal::makeOne(curr->type));
-    return tryToReplaceCurrent(c);
+
+    return false;
   }
 
   bool tryToReduceCurrentToUnreachable() {

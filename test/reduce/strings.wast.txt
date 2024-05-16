@@ -4,10 +4,10 @@
  (type $2 (struct (field (mut (ref string)))))
  (type $3 (func))
  (global $global$0 (ref $0) (struct.new $0
-  (string.const "x")
+  (string.const "")
  ))
  (global $global$1 (ref $0) (struct.new $0
-  (string.const "x")
+  (string.const "")
  ))
  (global $global$2 (ref $0) (struct.new $0
   (string.const "")
@@ -16,7 +16,7 @@
   (string.const "x")
  ))
  (global $global$4 (ref $2) (struct.new $2
-  (string.const "x")
+  (string.const "")
  ))
  (global $global$5 (mut stringref) (ref.null none))
  (export "sets" (func $0))
