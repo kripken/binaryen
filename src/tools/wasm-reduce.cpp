@@ -1146,46 +1146,23 @@ struct Reducer
   bool tryToReduceCurrentToConst() {
     auto* curr = getCurrent();
 
-    // References.
-    if (curr->type.isNullable() && !curr->is<RefNull>()) {
-      RefNull* n = builder->makeRefNull(curr->type.getHeapType());
-      return tryToReplaceCurrent(n);
-    }
-
-    // Tuples.
-    if (curr->type.isTuple() && curr->type.isDefaultable()) {
+    if (curr->type.isDefaultable()) {
       Expression* n =
         builder->makeConstantExpression(Literal::makeZeros(curr->type));
       if (ExpressionAnalyzer::equal(n, curr)) {
         return false;
       }
-      return tryToReplaceCurrent(n);
-    }
-
-    // Strings (non-nullable ones, as null was handled before).
-    if (curr->type.isString()) {
-      Expression* emptyString = builder->makeStringConst("");
-      if (ExpressionAnalyzer::equal(emptyString, curr)) {
-        return false;
+      if (tryToReplaceCurrent(n)) {
+        return true;
       }
-      return tryToReplaceCurrent(emptyString);
     }
 
-    // Numbers. We try to replace them with a 0 or a 1.
+    // For a number we can also try to replace it with a 1.
     if (!curr->type.isNumber()) {
       return false;
     }
+
     auto* existing = curr->dynCast<Const>();
-    if (existing && existing->value.isZero()) {
-      // It's already a zero.
-      return false;
-    }
-    auto* c = builder->makeConst(Literal::makeZero(curr->type));
-    if (tryToReplaceCurrent(c)) {
-      return true;
-    }
-    // It's not a zero, and can't be replaced with a zero. Try to make it a one,
-    // if it isn't already.
     if (existing &&
         existing->value == Literal::makeFromInt32(1, existing->type)) {
       // It's already a one.
