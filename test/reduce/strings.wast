@@ -8,7 +8,8 @@
   (global $nx (ref string) (string.const "x"))
 
   (global $q (ref $struct) (struct.new $struct
-    (global.get $x) ;; this should be trampled with an empty string.
+    (global.get $x) ;; this should be trampled with an empty string, as it will
+                    ;; be written before it is read.
   ))
 
   (global $r (ref $struct) (struct.new $struct
@@ -17,6 +18,10 @@
 
   (global $t (ref $struct) (struct.new $struct
     (global.get $e) ;; this should be trampled with an empty string.
+  ))
+
+  (global $u (ref $struct) (struct.new $struct
+    (global.get $x) ;; this should NOT change, as it will be read
   ))
 
   (global $other stringref (string.const "other"))
@@ -34,6 +39,7 @@
       (global.get $t)
       (global.get $other)
     )
+    ;; Note, no write to $u.
   )
 
   (func $q (export "q") (result stringref)
@@ -52,6 +58,12 @@
   (func $t (export "t") (result stringref)
     (struct.get $struct $string
       (global.get $t)
+    )
+  )
+
+  (func $u (export "u") (result stringref)
+    (struct.get $struct $string
+      (global.get $u)
     )
   )
 

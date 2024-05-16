@@ -11,13 +11,17 @@
  (global $global$2 (ref $0) (struct.new $0
   (string.const "")
  ))
+ (global $global$3 (ref $0) (struct.new $0
+  (string.const "x")
+ ))
  (export "sets" (func $0))
  (export "q" (func $1))
  (export "r" (func $2))
  (export "t" (func $3))
- (export "get-e" (func $4))
- (export "get-x" (func $5))
- (export "get-nx" (func $5))
+ (export "u" (func $4))
+ (export "get-e" (func $5))
+ (export "get-x" (func $6))
+ (export "get-nx" (func $6))
  (func $0
   (struct.set $0 0
    (global.get $global$0)
@@ -48,9 +52,14 @@
   )
  )
  (func $4 (result stringref)
-  (string.const "")
+  (struct.get $0 0
+   (global.get $global$3)
+  )
  )
  (func $5 (result stringref)
+  (string.const "")
+ )
+ (func $6 (result stringref)
   (string.const "x")
  )
 )
