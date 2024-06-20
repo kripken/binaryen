@@ -17554,4 +17554,71 @@
       (i32.const 1)
     )
   )
+
+  ;; CHECK:      (func $and.nonnegative.range (param $x i32) (result i32)
+  ;; CHECK-NEXT:  (i32.le_u
+  ;; CHECK-NEXT:   (local.get $x)
+  ;; CHECK-NEXT:   (i32.const 255)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $and.nonnegative.range (param $x i32) (result i32)
+    ;; (signed)x <= C & (signed)x >= 0   =>   (unsigned)x <= C
+    (i32.and
+      (i32.le_s
+        (local.get $x)
+        (i32.const 255)
+      )
+      (i32.ge_s
+        (local.get $x)
+        (i32.const 0)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $and.nonnegative.range.64 (param $x i64) (result i32)
+  ;; CHECK-NEXT:  (i64.le_u
+  ;; CHECK-NEXT:   (local.get $x)
+  ;; CHECK-NEXT:   (i64.const 255)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $and.nonnegative.range.64 (param $x i64) (result i32)
+    ;; As above, but i64 inputs.
+    (i32.and
+      (i64.le_s
+        (local.get $x)
+        (i64.const 255)
+      )
+      (i64.ge_s
+        (local.get $x)
+        (i64.const 0)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $and.nonnegative.range.no (param $x i32) (result i32)
+  ;; CHECK-NEXT:  (i32.and
+  ;; CHECK-NEXT:   (i32.le_s
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:    (i32.const -2004318072)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (i32.ge_s
+  ;; CHECK-NEXT:    (local.get $x)
+  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $and.nonnegative.range.no (param $x i32) (result i32)
+    ;; Similar to the above, but the constant here is too high: it has the sign
+    ;; bit set, and we cannot optimize.
+    (i32.and
+      (i32.le_s
+        (local.get $x)
+        (i32.const 0x88888888)
+      )
+      (i32.ge_s
+        (local.get $x)
+        (i32.const 0)
+      )
+    )
+  )
 )

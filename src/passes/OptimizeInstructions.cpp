@@ -3464,6 +3464,22 @@ private:
         return bx;
       }
     }
+    {
+      // (signed)x <= C & (signed)x >= 0   =>   (unsigned)x <= C
+      //   iff C does not have the sign bit set
+      Expression *x, *y;
+      Const* c;
+      if (matches(curr->left, binary(LeS, any(&x), ival(&c))) &&
+          matches(curr->right, binary(GeS, any(&y), ival(0))) &&
+          c->value.getInteger() >= 0 &&
+          areConsecutiveInputsEqualAndFoldable(x, y)) {
+        // Reuse the left child, which is x <= C and only needs to be
+        // unsigned.
+        auto* ret = curr->left->cast<Binary>();
+        ret->op = getBinary(ret->left->type, LeU);
+        return ret;
+      }
+    }
     return nullptr;
   }
 
