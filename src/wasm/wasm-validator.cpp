@@ -212,7 +212,7 @@ struct ValidationInfo {
   }
 };
 
-struct FunctionValidator : public WalkerPass<ControlFlowWalker<FunctionValidator>> {
+struct FunctionValidator : public WalkerPass<PostWalker<FunctionValidator>> {
   bool isFunctionParallel() override { return true; }
 
   std::unique_ptr<Pass> create() override {
@@ -239,6 +239,7 @@ struct FunctionValidator : public WalkerPass<ControlFlowWalker<FunctionValidator
   std::unordered_map<Name, std::unordered_set<Type>> breakTypes;
   std::unordered_set<Name> delegateTargetNames;
   std::unordered_set<Name> rethrowTargetNames;
+  std::unordered_map<Name, Type> blockTypes;
 
   // Binaryen IR requires that label names must be unique - IR generators must
   // ensure that
@@ -249,7 +250,7 @@ struct FunctionValidator : public WalkerPass<ControlFlowWalker<FunctionValidator
 public:
   // visitors
 
-  void visit(Expression*);
+  void visit(Expression* curr);
 
   void validatePoppyExpression(Expression* curr);
 
@@ -262,6 +263,7 @@ public:
     auto* curr = (*currp)->cast<Block>();
     if (curr->name.is()) {
       self->breakTypes[curr->name];
+      self->blockTypes[curr->name] = curr->type;
     }
   }
 
@@ -324,7 +326,7 @@ public:
       return;
     }
 
-    ControlFlowWalker<FunctionValidator>::scan(self, currp);
+    PostWalker<FunctionValidator>::scan(self, currp);
 
     if (curr->is<Block>()) {
       self->pushTask(visitPreBlock, currp);
@@ -595,6 +597,7 @@ private:
 };
 
 void FunctionValidator::visit(Expression* curr) {
+std::cout << "halp\n";
   struct ChildValidator : public ChildTyper<ChildValidator> {
     FunctionValidator& parent;
     
@@ -627,10 +630,13 @@ void FunctionValidator::visit(Expression* curr) {
     }
 
     Type getLabelType(Name label) {
-      auto* target = parent.findBreakTarget(label);
-      // Loops are branched to at the top, which means the type is none.
-      assert(target->is<Block>() || target->is<Loop>());
-      return target->is<Block>() ? target->type : Type::none;
+      auto iter = parent.blockTypes.find(label);
+      if (iter != parent.blockTypes.end()) {
+        return iter->second;
+      } else {
+        // Not a block (a loop).
+        return Type::none;
+      }
     }
   } childValidator(*getModule(), getFunction(), *this);
 
@@ -641,7 +647,7 @@ void FunctionValidator::visit(Expression* curr) {
   } else {
     // The children are valid, so we can continue to further specific
     // validation.
-    ControlFlowWalker<FunctionValidator>::visit(curr);
+    PostWalker<FunctionValidator>::visit(curr);
   }
 }
 
