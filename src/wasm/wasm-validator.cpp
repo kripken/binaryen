@@ -183,7 +183,7 @@ struct ValidationInfo {
     return true;
   }
 
-  void shouldBeIntOrUnreachable(Type ty,
+  bool shouldBeIntOrUnreachable(Type ty,
                                 Expression* curr,
                                 const char* text,
                                 Function* func = nullptr) {
@@ -191,10 +191,11 @@ struct ValidationInfo {
       case Type::i32:
       case Type::i64:
       case Type::unreachable: {
-        break;
+        return true;
       }
       default:
         fail(text, curr, func);
+        return false;
     }
   }
 
@@ -222,6 +223,13 @@ struct FunctionValidator : public WalkerPass<PostWalker<FunctionValidator>> {
   bool modifiesBinaryenIR() override { return false; }
 
   ValidationInfo& info;
+
+  // |info| stores the global validation state over all functions. We also
+  // track inside each function as we go (we need to stop checking after one
+  // error in a function, as the rest might not be valid, and we don't want to
+  // check the global validation state as there is nondeterminism in when other
+  // threads may set it).
+  bool valid = true;
 
   FunctionValidator(Module& wasm, ValidationInfo* info) : info(*info) {
     setModule(&wasm);
@@ -530,37 +538,65 @@ private:
 
   template<typename T>
   bool shouldBeTrue(bool result, T curr, const char* text) {
-    return info.shouldBeTrue(result, curr, text, getFunction());
+    if (info.shouldBeTrue(result, curr, text, getFunction())) {
+      return true;
+    }
+    valid = false;
+    return false;
   }
   template<typename T>
   bool shouldBeFalse(bool result, T curr, const char* text) {
-    return info.shouldBeFalse(result, curr, text, getFunction());
+    if (info.shouldBeFalse(result, curr, text, getFunction())) {
+      return true;
+    }
+    valid = false;
+    return false;
   }
 
   template<typename T, typename S>
   bool shouldBeEqual(S left, S right, T curr, const char* text) {
-    return info.shouldBeEqual(left, right, curr, text, getFunction());
+    if (info.shouldBeEqual(left, right, curr, text, getFunction())) {
+      return true;
+    }
+    valid = false;
+    return false;
   }
 
   template<typename T, typename S>
   bool
   shouldBeEqualOrFirstIsUnreachable(S left, S right, T curr, const char* text) {
-    return info.shouldBeEqualOrFirstIsUnreachable(
-      left, right, curr, text, getFunction());
+    if (info.shouldBeEqualOrFirstIsUnreachable(
+      left, right, curr, text, getFunction())) {
+      return true;
+    }
+    valid = false;
+    return false;
   }
 
   template<typename T, typename S>
   bool shouldBeUnequal(S left, S right, T curr, const char* text) {
-    return info.shouldBeUnequal(left, right, curr, text, getFunction());
+    if (info.shouldBeUnequal(left, right, curr, text, getFunction())) {
+      return true;
+    }
+    valid = false;
+    return false;
   }
 
-  void shouldBeIntOrUnreachable(Type ty, Expression* curr, const char* text) {
-    return info.shouldBeIntOrUnreachable(ty, curr, text, getFunction());
+  bool shouldBeIntOrUnreachable(Type ty, Expression* curr, const char* text) {
+    if (info.shouldBeIntOrUnreachable(ty, curr, text, getFunction())) {
+      return true;
+    }
+    valid = false;
+    return false;
   }
 
   bool
   shouldBeSubType(Type left, Type right, Expression* curr, const char* text) {
-    return info.shouldBeSubType(left, right, curr, text, getFunction());
+    if (info.shouldBeSubType(left, right, curr, text, getFunction())) {
+      return true;
+    }
+    valid = false;
+    return false;
   }
 
   void validateOffset(Address offset, Memory* mem, Expression* curr);
@@ -568,28 +604,34 @@ private:
     size_t align, Type type, Index bytes, bool isAtomic, Expression* curr);
   void validateMemBytes(uint8_t bytes, Type type, Expression* curr);
 
-  template<typename T> void validateReturnCall(T* curr) {
-    shouldBeTrue(!curr->isReturn || getModule()->features.hasTailCall(),
+  template<typename T> bool validateReturnCall(T* curr) {
+    if (shouldBeTrue(!curr->isReturn || getModule()->features.hasTailCall(),
                  curr,
-                 "return_call* requires tail calls [--enable-tail-call]");
+                 "return_call* requires tail calls [--enable-tail-call]")) {
+      return true;
+    }
+    valid = false;
+    return false;
   }
 
   // |printable| is the expression to print in case of an error. That may differ
   // from |curr| which we are validating.
   template<typename T>
-  void validateCallParamsAndResult(T* curr,
+  bool validateCallParamsAndResult(T* curr,
                                    HeapType sigType,
                                    Expression* printable) {
     if (!shouldBeTrue(sigType.isSignature(),
                       printable,
                       "Heap type must be a signature type")) {
-      return;
+      valid = false;
+      return false;
     }
     auto sig = sigType.getSignature();
     if (!shouldBeTrue(curr->operands.size() == sig.params.size(),
                       printable,
                       "call* param number must match")) {
-      return;
+      valid = false;
+      return false;
     }
     size_t i = 0;
     for (const auto& param : sig.params) {
@@ -599,21 +641,25 @@ private:
                            "call param types must match") &&
           !info.quiet) {
         getStream() << "(on argument " << i << ")\n";
+        return false;
       }
       ++i;
     }
     if (curr->isReturn) {
-      shouldBeEqual(curr->type,
+      if (!shouldBeEqual(curr->type,
                     Type(Type::unreachable),
                     printable,
-                    "return_call* should have unreachable type");
-      shouldBeSubType(
+                    "return_call* should have unreachable type")) {
+        valid = false;
+        return false;
+      }
+      return shouldBeSubType(
         sig.results,
         getFunction()->getResults(),
         printable,
         "return_call* callee return type must match caller return type");
     } else {
-      shouldBeEqualOrFirstIsUnreachable(
+      return shouldBeEqualOrFirstIsUnreachable(
         curr->type,
         sig.results,
         printable,
@@ -623,12 +669,23 @@ private:
 
   // In the common case, we use |curr| as |printable|.
   template<typename T>
-  void validateCallParamsAndResult(T* curr, HeapType sigType) {
-    validateCallParamsAndResult(curr, sigType, curr);
+  bool validateCallParamsAndResult(T* curr, HeapType sigType) {
+    return validateCallParamsAndResult(curr, sigType, curr);
   }
 };
 
 void FunctionValidator::visit(Expression* curr) {
+  // We should have stopped looking in this function at the first error.
+  assert(valid);
+
+  // Validate using the visitFOO() methods, and stop if we hit an error.
+  PostWalker<FunctionValidator>::visit(curr);
+  if (!valid) {
+    stopWalk();
+    return;
+  }
+
+  // Validate the types of children.
   struct ChildValidator : public ChildTyper<ChildValidator> {
     FunctionValidator& parent;
     
@@ -682,10 +739,8 @@ void FunctionValidator::visit(Expression* curr) {
 
   if (childValidator.error) {
     getStream() << "(on child of:\n" << *curr << "\n)";
-  } else {
-    // The children are valid, so we can continue to further specific
-    // validation.
-    PostWalker<FunctionValidator>::visit(curr);
+    valid = false;
+    stopWalk();
   }
 }
 

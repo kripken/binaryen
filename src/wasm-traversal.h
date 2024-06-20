@@ -308,6 +308,11 @@ struct Walker : public VisitorType {
     }
   }
 
+  // Stops any walk currently in progress.
+  void stopWalk() {
+    stack.clear();
+  }
+
   // subclasses implement this to define the proper order of execution
   static void scan(SubType* self, Expression** currp) { abort(); }
 
