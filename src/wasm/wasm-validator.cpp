@@ -19,6 +19,7 @@
 #include <sstream>
 #include <unordered_set>
 
+#include "ir/child-typer.h"
 #include "ir/eh-utils.h"
 #include "ir/features.h"
 #include "ir/find_all.h"
@@ -211,7 +212,7 @@ struct ValidationInfo {
   }
 };
 
-struct FunctionValidator : public WalkerPass<PostWalker<FunctionValidator>> {
+struct FunctionValidator : public WalkerPass<ControlFlowWalker<FunctionValidator>> {
   bool isFunctionParallel() override { return true; }
 
   std::unique_ptr<Pass> create() override {
@@ -247,6 +248,8 @@ struct FunctionValidator : public WalkerPass<PostWalker<FunctionValidator>> {
 
 public:
   // visitors
+
+  void visit(Expression*);
 
   void validatePoppyExpression(Expression* curr);
 
@@ -321,7 +324,7 @@ public:
       return;
     }
 
-    PostWalker<FunctionValidator>::scan(self, currp);
+    ControlFlowWalker<FunctionValidator>::scan(self, currp);
 
     if (curr->is<Block>()) {
       self->pushTask(visitPreBlock, currp);
@@ -526,7 +529,6 @@ private:
     return info.shouldBeSubType(left, right, curr, text, getFunction());
   }
 
-  void validateOffset(Address offset, Memory* mem, Expression* curr);
   void validateAlignment(
     size_t align, Type type, Index bytes, bool isAtomic, Expression* curr);
   void validateMemBytes(uint8_t bytes, Type type, Expression* curr);
@@ -590,6 +592,57 @@ private:
     validateCallParamsAndResult(curr, sigType, curr);
   }
 };
+
+void FunctionValidator::visit(Expression* curr) {
+  struct ChildValidator : public ChildTyper<ChildValidator> {
+    FunctionValidator& parent;
+    
+    ChildValidator(Module& wasm, Function* func, FunctionValidator& parent) : ChildTyper(wasm, func), parent(parent) {}
+
+    bool error = false;
+
+    void noteSubtype(Expression** childp, Type type) {
+      if (!parent.shouldBeSubType((*childp)->type, type, *childp, "child must be subtype")) {
+        error = true;
+      }
+    }
+
+    void noteAnyType(Expression** childp) {
+      if (!parent.shouldBeTrue(!(*childp)->type.isTuple(), *childp, "child must not be tuple")) {
+        error = true;
+      }
+    }
+
+    void noteAnyReferenceType(Expression** childp) {
+      if (!parent.shouldBeTrue(!(*childp)->type.isRef(), *childp, "child must be a reference")) {
+        error = true;
+      }
+    }
+
+    void noteAnyTupleType(Expression** childp, size_t arity) {
+      if (!parent.shouldBeEqual((*childp)->type.size(), arity, *childp, "child has wrong arity")) {
+        error = true;
+      }
+    }
+
+    Type getLabelType(Name label) {
+      auto* target = parent.findBreakTarget(label);
+      // Loops are branched to at the top, which means the type is none.
+      assert(target->is<Block>() || target->is<Loop>());
+      return target->is<Block>() ? target->type : Type::none;
+    }
+  } childValidator(*getModule(), getFunction(), *this);
+
+  childValidator.visit(curr);
+
+  if (childValidator.error) {
+    getStream() << "(on child of: " << *curr << ')';
+  } else {
+    // The children are valid, so we can continue to further specific
+    // validation.
+    ControlFlowWalker<FunctionValidator>::visit(curr);
+  }
+}
 
 void FunctionValidator::noteLabelName(Name name) {
   if (!name.is()) {
