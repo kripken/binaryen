@@ -529,6 +529,7 @@ private:
     return info.shouldBeSubType(left, right, curr, text, getFunction());
   }
 
+  void validateOffset(Address offset, Memory* mem, Expression* curr);
   void validateAlignment(
     size_t align, Type type, Index bytes, bool isAtomic, Expression* curr);
   void validateMemBytes(uint8_t bytes, Type type, Expression* curr);
