@@ -309,6 +309,10 @@ public:
     }
   }
 
+  static void doVisit(FunctionValidator* self, Expression** currp) {
+    self->visit(*currp);
+  }
+
   // override scan to add a pre and a post check task to all nodes
   static void scan(FunctionValidator* self, Expression** currp) {
     auto* curr = *currp;
@@ -326,7 +330,35 @@ public:
       return;
     }
 
-    PostWalker<FunctionValidator>::scan(self, currp);
+    // Rather than visit the super's scan(), we reimplement it ourselves here so
+    // that we can get the behavior of calling visit() manually each time. That
+    // lets us do generic work first and call visitFOO() methods from there, if
+    // relevant. Note how in the logic below we have |doVisit| rather than
+    // |doVisit##id|.
+#define DELEGATE_ID curr->_id
+
+#define DELEGATE_START(id)                                                     \
+  self->pushTask(doVisit, currp);                                 \
+  [[maybe_unused]] auto* cast = curr->cast<id>();
+
+#define DELEGATE_GET_FIELD(id, field) cast->field
+
+#define DELEGATE_FIELD_CHILD(id, field)                                        \
+  self->pushTask(scan, &cast->field);
+
+#define DELEGATE_FIELD_OPTIONAL_CHILD(id, field)                               \
+  self->maybePushTask(scan, &cast->field);
+
+#define DELEGATE_FIELD_INT(id, field)
+#define DELEGATE_FIELD_LITERAL(id, field)
+#define DELEGATE_FIELD_NAME(id, field)
+#define DELEGATE_FIELD_SCOPE_NAME_DEF(id, field)
+#define DELEGATE_FIELD_SCOPE_NAME_USE(id, field)
+#define DELEGATE_FIELD_TYPE(id, field)
+#define DELEGATE_FIELD_HEAPTYPE(id, field)
+#define DELEGATE_FIELD_ADDRESS(id, field)
+
+#include "wasm-delegations-fields.def"
 
     if (curr->is<Block>()) {
       self->pushTask(visitPreBlock, currp);
@@ -597,7 +629,6 @@ private:
 };
 
 void FunctionValidator::visit(Expression* curr) {
-std::cout << "halp\n";
   struct ChildValidator : public ChildTyper<ChildValidator> {
     FunctionValidator& parent;
     
@@ -643,7 +674,7 @@ std::cout << "halp\n";
   childValidator.visit(curr);
 
   if (childValidator.error) {
-    getStream() << "(on child of: " << *curr << ')';
+    getStream() << "(on child of:\n" << *curr << "\n)";
   } else {
     // The children are valid, so we can continue to further specific
     // validation.
