@@ -637,6 +637,13 @@ void FunctionValidator::visit(Expression* curr) {
     bool error = false;
 
     void noteSubtype(Expression** childp, Type type) {
+      if (type == Type::unreachable) {
+        // Unreachability does not impose any subtyping constraints. We do have
+        // some checks related to unreachability (an unreachable instruction
+        // usually needs to have an unreachable child, for example), but those
+        // are handled elsewhere.
+        return;
+      }
       if (!parent.shouldBeSubType((*childp)->type, type, *childp, "child must be subtype")) {
         error = true;
       }
@@ -3543,12 +3550,7 @@ void FunctionValidator::visitFunction(Function* curr) {
       }
     }
 
-    // Assert that we finished with a clean state after processing the body's
-    // expressions, and reset the state for next time. Note that we use some of
-    // this state in the above validations, so this must appear last.
-    assert(breakTypes.empty());
-    assert(delegateTargetNames.empty());
-    assert(rethrowTargetNames.empty());
+    // Reset the state for next time.
     labelNames.clear();
   }
 }
