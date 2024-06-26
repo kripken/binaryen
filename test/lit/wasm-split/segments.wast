@@ -20,10 +20,14 @@
  ;; PRIMARY:      (data $data "hello world")
  (data $data "hello world")
 
+ ;; PRIMARY:      (table $0 0 funcref)
+
  ;; PRIMARY:      (elem $elem externref)
  (elem $elem externref)
 
  ;; PRIMARY:      (export "memory" (memory $mem))
+
+ ;; PRIMARY:      (export "table" (table $0))
 
  ;; PRIMARY:      (func $data.drop
  ;; PRIMARY-NEXT:  (data.drop $data)
@@ -84,6 +88,8 @@
  ;; SECONDARY:      (type $0 (func))
 
  ;; SECONDARY:      (import "primary" "memory" (memory $mem 0))
+
+ ;; SECONDARY:      (import "primary" "table" (table $timport$0 0 funcref))
 
  ;; SECONDARY:      (func $no-segment
  ;; SECONDARY-NEXT:  (nop)

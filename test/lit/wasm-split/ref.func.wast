@@ -12,29 +12,35 @@
 
  ;; PRIMARY:      (import "placeholder" "1" (func $placeholder_1))
 
- ;; PRIMARY:      (import "placeholder" "2" (func $placeholder_2))
+ ;; PRIMARY:      (import "placeholder" "0" (func $placeholder_0))
 
  ;; PRIMARY:      (global $glob1 (ref func) (ref.func $prime))
 
  ;; PRIMARY:      (global $glob2 (ref func) (ref.func $2))
 
- ;; PRIMARY:      (table $table 3 3 funcref)
+ ;; PRIMARY:      (table $table 1 1 funcref)
  (table $table 1 1 funcref)
 
  (global $glob1 (ref func) (ref.func $prime))
 
  (global $glob2 (ref func) (ref.func $second))
 
- ;; PRIMARY:      (elem $elem (i32.const 0) $in-table $placeholder_1 $placeholder_2)
+ ;; PRIMARY:      (table $1 1 funcref)
+
+ ;; PRIMARY:      (elem $elem (table $table) (i32.const 0) func $in-table $placeholder_1)
  (elem $elem (i32.const 0) $in-table $second-in-table)
+
+ ;; PRIMARY:      (elem $1 (table $1) (i32.const 0) func $placeholder_0)
 
  ;; PRIMARY:      (export "prime" (func $prime))
 
  ;; PRIMARY:      (export "table" (table $table))
 
+ ;; PRIMARY:      (export "table_2" (table $1))
+
  ;; PRIMARY:      (export "global" (global $glob1))
 
- ;; PRIMARY:      (export "global_3" (global $glob2))
+ ;; PRIMARY:      (export "global_4" (global $glob2))
 
  ;; PRIMARY:      (func $prime
  ;; PRIMARY-NEXT:  (drop
@@ -55,15 +61,17 @@
 
  ;; SECONDARY:      (type $0 (func))
 
- ;; SECONDARY:      (import "primary" "table" (table $table 3 3 funcref))
+ ;; SECONDARY:      (import "primary" "table_2" (table $timport$0 1 funcref))
+
+ ;; SECONDARY:      (import "primary" "table" (table $table 1 1 funcref))
 
  ;; SECONDARY:      (import "primary" "global" (global $glob1 (ref func)))
 
- ;; SECONDARY:      (import "primary" "global_3" (global $glob2 (ref func)))
+ ;; SECONDARY:      (import "primary" "global_4" (global $glob2 (ref func)))
 
  ;; SECONDARY:      (import "primary" "prime" (func $prime))
 
- ;; SECONDARY:      (elem $0 (i32.const 1) $second-in-table $second)
+ ;; SECONDARY:      (elem $0 (table $timport$0) (i32.const 0) func $second $second-in-table)
 
  ;; SECONDARY:      (func $second
  ;; SECONDARY-NEXT:  (drop
@@ -101,6 +109,6 @@
 )
 ;; PRIMARY:      (func $2
 ;; PRIMARY-NEXT:  (call_indirect (type $0)
-;; PRIMARY-NEXT:   (i32.const 2)
+;; PRIMARY-NEXT:   (i32.const 0)
 ;; PRIMARY-NEXT:  )
 ;; PRIMARY-NEXT: )

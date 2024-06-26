@@ -4,6 +4,8 @@
 ;; RUN: wasm-dis %t.1.wasm | filecheck %s --check-prefix PRIMARY
 ;; RUN: wasm-dis %t.2.wasm | filecheck %s --check-prefix SECONDARY
 
+;; Despite a table existing, we create a new one, as reference types are
+;; enabled.
 (module
  (type $func-array (array (mut funcref)))
 
@@ -14,16 +16,16 @@
  ;; PRIMARY:      (table $table 3 funcref)
  (table $table 3 funcref)
 
- ;; Workaround for https://github.com/WebAssembly/binaryen/issues/6572 - we
- ;; error without an active segment.
- (elem (i32.const 0))
-
- ;; PRIMARY:      (elem $0 (i32.const 0) $placeholder_0)
+ ;; PRIMARY:      (table $1 1 funcref)
 
  ;; PRIMARY:      (elem $passive func $in-table $1)
  (elem $passive func $in-table $second-in-table)
 
+ ;; PRIMARY:      (elem $1 (table $1) (i32.const 0) func $placeholder_0)
+
  ;; PRIMARY:      (export "table" (table $table))
+
+ ;; PRIMARY:      (export "table_1" (table $1))
 
  ;; PRIMARY:      (func $in-table
  ;; PRIMARY-NEXT:  (nop)
@@ -35,9 +37,11 @@
 
  ;; SECONDARY:      (type $0 (func))
 
+ ;; SECONDARY:      (import "primary" "table_1" (table $timport$0 1 funcref))
+
  ;; SECONDARY:      (import "primary" "table" (table $table 3 funcref))
 
- ;; SECONDARY:      (elem $0 (i32.const 0) $second-in-table)
+ ;; SECONDARY:      (elem $0 (table $timport$0) (i32.const 0) func $second-in-table)
 
  ;; SECONDARY:      (func $second-in-table
  ;; SECONDARY-NEXT:  (nop)
