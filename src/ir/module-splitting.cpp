@@ -147,19 +147,24 @@ void TableSlotManager::addSlot(Name func, Slot slot) {
 }
 
 TableSlotManager::TableSlotManager(Module& module) : module(module) {
-  // TODO: Reject or handle passive element segments
-  // TODO: If reference types are enabled, just create a fresh table to make bad
-  // interactions with user code impossible.
-  auto funcref = Type(HeapType::func, Nullable);
-  auto it = std::find_if(
-    module.tables.begin(),
-    module.tables.end(),
-    [&](std::unique_ptr<Table>& table) { return table->type == funcref; });
-  if (it == module.tables.end()) {
-    return;
+  // If reference types are enabled then multiple tables are an option. Use a
+  // new table just for us, to avoid collisions with user code.
+  if (module.features.hasReferenceTypes()) {
+    activeTable = makeTable();
+  } else {
+    // TODO: Reject or handle passive element segments
+    auto funcref = Type(HeapType::func, Nullable);
+    auto it = std::find_if(
+      module.tables.begin(),
+      module.tables.end(),
+      [&](std::unique_ptr<Table>& table) { return table->type == funcref; });
+    if (it == module.tables.end()) {
+      return;
+    }
+
+    activeTable = it->get();
   }
 
-  activeTable = it->get();
   ModuleUtils::iterTableSegments(
     module, activeTable->name, [&](ElementSegment* segment) {
       activeTableSegments.push_back(segment);
