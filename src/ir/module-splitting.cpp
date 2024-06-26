@@ -147,13 +147,14 @@ void TableSlotManager::addSlot(Name func, Slot slot) {
 }
 
 TableSlotManager::TableSlotManager(Module& module) : module(module) {
+  auto funcref = Type(HeapType::func, Nullable);
+
   // If reference types are enabled then multiple tables are an option. Use a
   // new table just for us, to avoid collisions with user code.
   if (module.features.hasReferenceTypes()) {
     activeTable = makeTable();
   } else {
     // TODO: Reject or handle passive element segments
-    auto funcref = Type(HeapType::func, Nullable);
     auto it = std::find_if(
       module.tables.begin(),
       module.tables.end(),
