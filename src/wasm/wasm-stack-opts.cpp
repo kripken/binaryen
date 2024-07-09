@@ -45,6 +45,10 @@ void StackIROptimizer::run() {
 }
 
 void StackIROptimizer::dce() {
+  if (insts.empty()) {
+    return;
+  }
+
   // Remove code after an unreachable instruction: anything after it, up to the
   // next control flow barrier, can simply be removed.
   bool inUnreachableCode = false;
@@ -66,7 +70,7 @@ void StackIROptimizer::dce() {
     }
   }
 
-  // Remove code before an Unreachable. Consider this:
+  // Remove code before unreachable code. Consider this:
   //
   //  (drop
   //   ..
@@ -76,30 +80,56 @@ void StackIROptimizer::dce() {
   // The drop is not needed, as the unreachable puts the stack in the
   // polymorphic state anyhow. Note that we don't need to optimize anything
   // other than a drop here, as in general the Binaryen IR DCE pass will handle
-  // everything else. A drop followed by an unreachable is the only thing that
+  // everything else. A drop followed by unreachable code is the only thing that
   // pass cannot handle, as the structured form of Binaryen IR does not allow
   // removing such a drop, and so we can only do it here in StackIR.
   //
-  // TODO: We can look even further back, say if there is another drop of
-  //       something before, then we can remove that drop as well. To do that
-  //       we'd need to inspect the stack going backwards.
-  for (Index i = 1; i < insts.size(); i++) {
-    auto* inst = insts[i];
-    if (!inst || inst->op != StackInst::Basic ||
-        !inst->origin->is<Unreachable>()) {
+  // Generalizing the above pattern, when we find an unreachable instruction
+  // then we know the stack is polymorphic (until the next control flow
+  // structure), so it is ok to have more things on the stack right before it,
+  // allowing us to remove drops past other things:
+  //
+  //  (drop  ;; this can be removed
+  //   ..
+  //  )
+  //  (call $foo ..)
+  //  (br ..)
+  //
+  // To optimize this, we go backwards and consider the state of the stack as we
+  // go. We can remove any drop whose value would flow into a polymorphic stack
+  // (that is, that nothing else before the polymorphic stack could pop it). To
+  // know that, we measure the amount of values we've seen consumed.
+  bool headingToPolymorphicStack = false;
+  Index consumedFromStack = 0;
+  assert(!insts.empty());
+  for (int64_t i = insts.size() - 1; i >= 0; i--) {
+    auto*& inst = insts[i];
+    if (!inst) {
       continue;
     }
 
-    // Look back past nulls.
-    Index j = i - 1;
-    while (j > 0 && !insts[j]) {
-      j--;
+    if (inst->op == StackInst::Basic) {
+      if (inst->origin->is<Drop>()) {
+        if (headingToPolymorphicStack && consumedFromStack == 0) {
+          // This is a drop and the value it drops is not consumed after it, so
+          // we can let it flow into the polymorphic stack.
+          inst = nullptr;
+        }
+        // This is a drop, and needs no further handling.
+        continue;
+      }
+      if (inst->origin->type == Type::unreachable) {
+        headingToPolymorphicStack = true;
+      }
     }
 
-    auto*& prev = insts[j];
-    if (prev && prev->op == StackInst::Basic && prev->origin->is<Drop>()) {
-      prev = nullptr;
+    if (isControlFlowBarrier(inst)) {
+      // This is a new section for purposes of unreachability. Reset.
+      headingToPolymorphicStack = false;
+      consumedFromStack = 0;
     }
+
+    consumedFromStack += getNumConsumedValues(inst);
   }
 }
 

@@ -412,7 +412,7 @@
         )
       )
     )
-    ;;  Two more outside the if.
+    ;; Two more outside the if.
     (drop
       (call $drop-unreachable)
     )
