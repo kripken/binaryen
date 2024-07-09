@@ -5,11 +5,11 @@
 ;; RUN: wasm-opt %s --generate-stack-ir --optimize-stack-ir -all --roundtrip --print | filecheck %s --check-prefix=ROUNDTRIP
 
 (module
-  ;; CHECK:      (func $drop-unreachable (type $0) (result i32)
+  ;; CHECK:      (func $drop-unreachable (type $1) (result i32)
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
-  ;; ROUNDTRIP:      (func $drop-unreachable (type $0) (result i32)
+  ;; ROUNDTRIP:      (func $drop-unreachable (type $1) (result i32)
   ;; ROUNDTRIP-NEXT:  (drop
   ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
   ;; ROUNDTRIP-NEXT:  )
@@ -52,13 +52,13 @@
     (unreachable)
   )
 
-  ;; CHECK:      (func $drop-unreachable-sequence (type $0) (result i32)
+  ;; CHECK:      (func $drop-unreachable-sequence (type $1) (result i32)
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
-  ;; ROUNDTRIP:      (func $drop-unreachable-sequence (type $0) (result i32)
+  ;; ROUNDTRIP:      (func $drop-unreachable-sequence (type $1) (result i32)
   ;; ROUNDTRIP-NEXT:  (drop
   ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
   ;; ROUNDTRIP-NEXT:  )
@@ -94,7 +94,7 @@
     )
   )
 
-  ;; CHECK:      (func $drop-sequence-reachable (type $1)
+  ;; CHECK:      (func $drop-sequence-reachable (type $0)
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  drop
   ;; CHECK-NEXT:  call $drop-unreachable
@@ -102,7 +102,7 @@
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  drop
   ;; CHECK-NEXT: )
-  ;; ROUNDTRIP:      (func $drop-sequence-reachable (type $1)
+  ;; ROUNDTRIP:      (func $drop-sequence-reachable (type $0)
   ;; ROUNDTRIP-NEXT:  (drop
   ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
   ;; ROUNDTRIP-NEXT:  )
@@ -127,7 +127,7 @@
     )
   )
 
-  ;; CHECK:      (func $drop-br (type $1)
+  ;; CHECK:      (func $drop-br (type $0)
   ;; CHECK-NEXT:  block $out
   ;; CHECK-NEXT:   call $drop-unreachable
   ;; CHECK-NEXT:   drop
@@ -137,7 +137,7 @@
   ;; CHECK-NEXT:   br $out
   ;; CHECK-NEXT:  end
   ;; CHECK-NEXT: )
-  ;; ROUNDTRIP:      (func $drop-br (type $1)
+  ;; ROUNDTRIP:      (func $drop-br (type $0)
   ;; ROUNDTRIP-NEXT:  (block $label$1
   ;; ROUNDTRIP-NEXT:   (drop
   ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
@@ -167,10 +167,10 @@
     )
   )
 
-  ;; CHECK:      (func $unreachable (type $0) (result i32)
+  ;; CHECK:      (func $unreachable (type $1) (result i32)
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
-  ;; ROUNDTRIP:      (func $unreachable (type $0) (result i32)
+  ;; ROUNDTRIP:      (func $unreachable (type $1) (result i32)
   ;; ROUNDTRIP-NEXT:  (unreachable)
   ;; ROUNDTRIP-NEXT: )
   (func $unreachable (result i32)
@@ -178,11 +178,11 @@
     (unreachable)
   )
 
-  ;; CHECK:      (func $unreachable-non-drop (type $1)
+  ;; CHECK:      (func $unreachable-non-drop (type $0)
   ;; CHECK-NEXT:  call $unreachable-non-drop
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
-  ;; ROUNDTRIP:      (func $unreachable-non-drop (type $1)
+  ;; ROUNDTRIP:      (func $unreachable-non-drop (type $0)
   ;; ROUNDTRIP-NEXT:  (call $unreachable-non-drop)
   ;; ROUNDTRIP-NEXT:  (unreachable)
   ;; ROUNDTRIP-NEXT: )
@@ -193,7 +193,95 @@
     (unreachable)
   )
 
-  ;; CHECK:      (func $many-drop-unreachable (type $0) (result i32)
+  ;; CHECK:      (func $control-flow (type $0)
+  ;; CHECK-NEXT:  i32.const 1
+  ;; CHECK-NEXT:  if
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   unreachable
+  ;; CHECK-NEXT:  else
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   drop
+  ;; CHECK-NEXT:  end
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $control-flow (type $0)
+  ;; ROUNDTRIP-NEXT:  (if
+  ;; ROUNDTRIP-NEXT:   (i32.const 1)
+  ;; ROUNDTRIP-NEXT:   (then
+  ;; ROUNDTRIP-NEXT:    (drop
+  ;; ROUNDTRIP-NEXT:     (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:    )
+  ;; ROUNDTRIP-NEXT:    (unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (else
+  ;; ROUNDTRIP-NEXT:    (drop
+  ;; ROUNDTRIP-NEXT:     (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:    )
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT: )
+  (func $control-flow
+    ;; We can only remove the drop in the arm with the unreachable.
+    (if
+      (i32.const 1)
+      (then
+        (drop
+          (call $drop-unreachable)
+        )
+        (unreachable)
+      )
+      (else
+        (drop
+          (call $drop-unreachable)
+        )
+      )
+    )
+  )
+
+  ;; CHECK:      (func $control-flow-flip (type $0)
+  ;; CHECK-NEXT:  i32.const 1
+  ;; CHECK-NEXT:  if
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   drop
+  ;; CHECK-NEXT:  else
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   unreachable
+  ;; CHECK-NEXT:  end
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $control-flow-flip (type $0)
+  ;; ROUNDTRIP-NEXT:  (if
+  ;; ROUNDTRIP-NEXT:   (i32.const 1)
+  ;; ROUNDTRIP-NEXT:   (then
+  ;; ROUNDTRIP-NEXT:    (drop
+  ;; ROUNDTRIP-NEXT:     (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:    )
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (else
+  ;; ROUNDTRIP-NEXT:    (drop
+  ;; ROUNDTRIP-NEXT:     (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:    )
+  ;; ROUNDTRIP-NEXT:    (unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT: )
+  (func $control-flow-flip
+    ;; We can only remove the drop in the arm with the unreachable.
+    (if
+      (i32.const 1)
+      (then
+        (drop
+          (call $drop-unreachable)
+        )
+      )
+      (else
+        (drop
+          (call $drop-unreachable)
+        )
+        (unreachable)  ;; this moved
+      )
+    )
+  )
+
+  ;; CHECK:      (func $many-drop-unreachable (type $1) (result i32)
   ;; CHECK-NEXT:  i32.const 1
   ;; CHECK-NEXT:  if (result i32)
   ;; CHECK-NEXT:   call $drop-unreachable
@@ -205,7 +293,7 @@
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
-  ;; ROUNDTRIP:      (func $many-drop-unreachable (type $0) (result i32)
+  ;; ROUNDTRIP:      (func $many-drop-unreachable (type $1) (result i32)
   ;; ROUNDTRIP-NEXT:  (drop
   ;; ROUNDTRIP-NEXT:   (if (result i32)
   ;; ROUNDTRIP-NEXT:    (i32.const 1)
