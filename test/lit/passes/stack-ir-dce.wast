@@ -129,7 +129,6 @@
 
   ;; CHECK:      (func $drop-sequence-middle-return (type $3) (param $x i32)
   ;; CHECK-NEXT:  call $drop-unreachable
-  ;; CHECK-NEXT:  drop
   ;; CHECK-NEXT:  call $drop-sequence-reachable
   ;; CHECK-NEXT:  i32.const 41
   ;; CHECK-NEXT:  i32.const 1
@@ -168,6 +167,7 @@
         (i32.const 1)
       )
     )
+    ;; This drop can also be removed.
     (drop
       (call $drop-unreachable)
     )
@@ -177,7 +177,6 @@
   ;; CHECK:      (func $drop-br (type $0)
   ;; CHECK-NEXT:  block $out
   ;; CHECK-NEXT:   call $drop-unreachable
-  ;; CHECK-NEXT:   drop
   ;; CHECK-NEXT:   i32.const 1
   ;; CHECK-NEXT:   br_if $out
   ;; CHECK-NEXT:   call $drop-unreachable
@@ -199,7 +198,8 @@
   ;; ROUNDTRIP-NEXT:  )
   ;; ROUNDTRIP-NEXT: )
   (func $drop-br
-    ;; A br is also an opportunity to optimize away drops, but not a br_if.
+    ;; A br is also an opportunity to optimize away drops, including past a
+    ;; br_if.
     (block $out
       (drop
         (call $drop-unreachable)
