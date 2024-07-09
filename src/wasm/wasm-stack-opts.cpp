@@ -132,7 +132,7 @@ void StackIROptimizer::dce() {
     consumedFromStack += getNumConsumedValues(inst);
 
     // Note what we produce.
-    consumedFromStack -= getNumConsumedValues(inst);
+    consumedFromStack -= getNumProducedValues(inst);
   }
 }
 
