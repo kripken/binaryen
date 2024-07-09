@@ -214,6 +214,45 @@
     )
   )
 
+  ;; CHECK:      (func $drop-no-br (type $0)
+  ;; CHECK-NEXT:  block $out
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   drop
+  ;; CHECK-NEXT:   i32.const 1
+  ;; CHECK-NEXT:   br_if $out
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   drop
+  ;; CHECK-NEXT:  end
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $drop-no-br (type $0)
+  ;; ROUNDTRIP-NEXT:  (block $label$1
+  ;; ROUNDTRIP-NEXT:   (drop
+  ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (br_if $label$1
+  ;; ROUNDTRIP-NEXT:    (i32.const 1)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (drop
+  ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT: )
+  (func $drop-no-br
+    ;; As above, but remove the br. We can remove nothing here (the br_if does
+    ;; not help us remove any drops).
+    (block $out
+      (drop
+        (call $drop-unreachable)
+      )
+      (br_if $out
+        (i32.const 1)
+      )
+      (drop
+        (call $drop-unreachable)
+      )
+    )
+  )
+
   ;; CHECK:      (func $unreachable (type $1) (result i32)
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
