@@ -25,7 +25,6 @@
   ;; CHECK-NEXT:     end
   ;; CHECK-NEXT:     br $outer
   ;; CHECK-NEXT:    end
-  ;; CHECK-NEXT:    tuple.drop 2
   ;; CHECK-NEXT:    br $outer
   ;; CHECK-NEXT:   end
   ;; CHECK-NEXT:   drop

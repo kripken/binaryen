@@ -23,6 +23,121 @@
     (unreachable)
   )
 
+  ;; CHECK:      (func $drop-unreachable-sequence (type $0) (result i32)
+  ;; CHECK-NEXT:  call $drop-unreachable
+  ;; CHECK-NEXT:  call $drop-unreachable
+  ;; CHECK-NEXT:  call $drop-unreachable
+  ;; CHECK-NEXT:  unreachable
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $drop-unreachable-sequence (type $0) (result i32)
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (unreachable)
+  ;; ROUNDTRIP-NEXT: )
+  (func $drop-unreachable-sequence (result i32)
+    ;; These three drops can be removed.
+    (drop
+      (call $drop-unreachable)
+    )
+    (drop
+      (call $drop-unreachable)
+    )
+    (drop
+      (call $drop-unreachable)
+    )
+    (unreachable)
+    ;; All of this from here is in unreachable code, and can be removed.
+    (drop
+      (call $drop-unreachable)
+    )
+    (drop
+      (call $drop-unreachable)
+    )
+    (drop
+      (call $drop-unreachable)
+    )
+  )
+
+  ;; CHECK:      (func $drop-sequence-reachable (type $1)
+  ;; CHECK-NEXT:  call $drop-unreachable
+  ;; CHECK-NEXT:  drop
+  ;; CHECK-NEXT:  call $drop-unreachable
+  ;; CHECK-NEXT:  drop
+  ;; CHECK-NEXT:  call $drop-unreachable
+  ;; CHECK-NEXT:  drop
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $drop-sequence-reachable (type $1)
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT: )
+  (func $drop-sequence-reachable
+    ;; These three drops must remain, as there is no unreachable code after
+    ;; them.
+    (drop
+      (call $drop-unreachable)
+    )
+    (drop
+      (call $drop-unreachable)
+    )
+    (drop
+      (call $drop-unreachable)
+    )
+  )
+
+  ;; CHECK:      (func $drop-br (type $1)
+  ;; CHECK-NEXT:  block $out
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   drop
+  ;; CHECK-NEXT:   i32.const 1
+  ;; CHECK-NEXT:   br_if $out
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   br $out
+  ;; CHECK-NEXT:  end
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $drop-br (type $1)
+  ;; ROUNDTRIP-NEXT:  (block $label$1
+  ;; ROUNDTRIP-NEXT:   (drop
+  ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (br_if $label$1
+  ;; ROUNDTRIP-NEXT:    (i32.const 1)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (drop
+  ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (br $label$1)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT: )
+  (func $drop-br
+    ;; A br is also an opportunity to optimize away drops, but not a br_if.
+    (block $out
+      (drop
+        (call $drop-unreachable)
+      )
+      (br_if $out
+        (i32.const 1)
+      )
+      (drop
+        (call $drop-unreachable)
+      )
+      (br $out)
+    )
+  )
+
   ;; CHECK:      (func $unreachable (type $0) (result i32)
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
@@ -58,7 +173,6 @@
   ;; CHECK-NEXT:   call $drop-unreachable
   ;; CHECK-NEXT:   unreachable
   ;; CHECK-NEXT:  end
-  ;; CHECK-NEXT:  drop
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
@@ -86,8 +200,7 @@
   ;; ROUNDTRIP-NEXT:  (unreachable)
   ;; ROUNDTRIP-NEXT: )
   (func $many-drop-unreachable (result i32)
-    ;; Two drop-unreachables in an if. The drop on the if can remain, but all
-    ;; others are removable.
+    ;; Two drop-unreachables in an if. The drop on the if can also be removed.
     (drop
       (if (result i32)
         (i32.const 1)
