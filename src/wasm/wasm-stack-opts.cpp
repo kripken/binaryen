@@ -114,9 +114,8 @@ void StackIROptimizer::dce() {
           // This is a drop and the value it drops is not consumed after it, so
           // we can let it flow into the polymorphic stack.
           inst = nullptr;
+          continue;
         }
-        // This is a drop, and needs no further handling.
-        continue;
       }
       if (inst->origin->type == Type::unreachable) {
         headingToPolymorphicStack = true;
