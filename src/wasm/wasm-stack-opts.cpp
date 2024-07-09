@@ -100,7 +100,7 @@ void StackIROptimizer::dce() {
   // (that is, that nothing else before the polymorphic stack could pop it). To
   // know that, we measure the amount of values we've seen consumed.
   bool headingToPolymorphicStack = false;
-  Index consumedFromStack = 0;
+  int64_t consumedFromStack = 0;
   assert(!insts.empty());
   for (int64_t i = insts.size() - 1; i >= 0; i--) {
     auto*& inst = insts[i];
@@ -128,7 +128,11 @@ void StackIROptimizer::dce() {
       consumedFromStack = 0;
     }
 
+    // Note what we consume.
     consumedFromStack += getNumConsumedValues(inst);
+
+    // Note what we produce.
+    consumedFromStack -= getNumConsumedValues(inst);
   }
 }
 
@@ -404,7 +408,13 @@ Index StackIROptimizer::getNumConsumedValues(StackInst* inst) {
     return 0;
   }
   // Otherwise, for basic instructions, just count the expression children.
+  // XXX multivalue
   return ChildIterator(inst->origin).children.size();
+}
+
+Index StackIROptimizer::getNumProducedValues(StackInst* inst) {
+  // TODO
+  // XXX for say an if, where do we count this? tail?
 }
 
 // Given a pair of a local.set and local.get, see if we can remove them
