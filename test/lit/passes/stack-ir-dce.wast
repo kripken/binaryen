@@ -127,6 +127,53 @@
     )
   )
 
+  ;; CHECK:      (func $drop-sequence-middle-return (type $3) (param $x i32)
+  ;; CHECK-NEXT:  call $drop-unreachable
+  ;; CHECK-NEXT:  drop
+  ;; CHECK-NEXT:  call $drop-sequence-reachable
+  ;; CHECK-NEXT:  i32.const 41
+  ;; CHECK-NEXT:  i32.const 1
+  ;; CHECK-NEXT:  i32.add
+  ;; CHECK-NEXT:  call $drop-sequence-middle-return
+  ;; CHECK-NEXT:  call $drop-unreachable
+  ;; CHECK-NEXT:  return
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $drop-sequence-middle-return (type $3) (param $x i32)
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (call $drop-sequence-reachable)
+  ;; ROUNDTRIP-NEXT:  (call $drop-sequence-middle-return
+  ;; ROUNDTRIP-NEXT:   (i32.add
+  ;; ROUNDTRIP-NEXT:    (i32.const 41)
+  ;; ROUNDTRIP-NEXT:    (i32.const 1)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (return)
+  ;; ROUNDTRIP-NEXT: )
+  (func $drop-sequence-middle-return (param $x i32)
+    ;; Both drops can be removed here, despite the other calls in the middle, as
+    ;; we reach a return.
+    (drop
+      (call $drop-unreachable)
+    )
+    ;; Test a call with no params, and one with.
+    (call $drop-sequence-reachable)
+    (call $drop-sequence-middle-return
+      (i32.add
+        (i32.const 41)
+        (i32.const 1)
+      )
+    )
+    (drop
+      (call $drop-unreachable)
+    )
+    (return)
+  )
+
   ;; CHECK:      (func $drop-br (type $0)
   ;; CHECK-NEXT:  block $out
   ;; CHECK-NEXT:   call $drop-unreachable
