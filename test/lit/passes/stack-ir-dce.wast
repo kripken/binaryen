@@ -253,6 +253,55 @@
     )
   )
 
+  ;; CHECK:      (func $drop-nested (type $0)
+  ;; CHECK-NEXT:  block $out
+  ;; CHECK-NEXT:   block $in
+  ;; CHECK-NEXT:    call $drop-unreachable
+  ;; CHECK-NEXT:    drop
+  ;; CHECK-NEXT:    i32.const 1
+  ;; CHECK-NEXT:    br_if $in
+  ;; CHECK-NEXT:   end
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   br $out
+  ;; CHECK-NEXT:  end
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $drop-nested (type $0)
+  ;; ROUNDTRIP-NEXT:  (block $label$1
+  ;; ROUNDTRIP-NEXT:   (block $label$2
+  ;; ROUNDTRIP-NEXT:    (drop
+  ;; ROUNDTRIP-NEXT:     (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:    )
+  ;; ROUNDTRIP-NEXT:    (br_if $label$2
+  ;; ROUNDTRIP-NEXT:     (i32.const 1)
+  ;; ROUNDTRIP-NEXT:    )
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (drop
+  ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (br $label$1)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT: )
+  (func $drop-nested
+    ;; The final br allows us to optimize, but not into the inner block.
+    (block $out
+      (block $in
+        ;; This drop remains.
+        (drop
+          (call $drop-unreachable)
+        )
+        ;; Keep the inner block alive with a br_if.
+        (br_if $in
+          (i32.const 1)
+        )
+      )
+      ;; This drop is optimized away.
+      (drop
+        (call $drop-unreachable)
+      )
+      (br $out)
+    )
+  )
+
   ;; CHECK:      (func $unreachable (type $1) (result i32)
   ;; CHECK-NEXT:  unreachable
   ;; CHECK-NEXT: )
