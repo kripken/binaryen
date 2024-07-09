@@ -292,8 +292,10 @@ void StackIROptimizer::local2Stack() {
         }
       }
       if (!optimized) {
-        // This is an actual regular value on the value stack.
-        values.push_back(null);
+        // This is an actual regular value(s) on the value stack.
+        for (Index i = 0; i < inst->type.size(); i++) {
+          values.push_back(null);
+        }
       }
     } else if (inst->origin->is<LocalSet>() && inst->type == Type::none) {
       // This set is potentially optimizable later, add to stack.
@@ -401,20 +403,41 @@ void StackIROptimizer::removeAt(Index i) {
 
 Index StackIROptimizer::getNumConsumedValues(StackInst* inst) {
   if (isControlFlow(inst)) {
-    // If consumes 1; that's it.
-    if (inst->op == StackInst::IfBegin) {
+    // If consumes 1 (assuming the condition is reachable).
+    if (inst->op == StackInst::IfBegin &&
+        inst->origin->cast<If>()->condition->type != Type::unreachable) {
       return 1;
     }
+
+    // No other control flow construct consumes anything.
     return 0;
   }
-  // Otherwise, for basic instructions, just count the expression children.
-  // XXX multivalue
-  return ChildIterator(inst->origin).children.size();
+
+  // Otherwise, for basic instructions, just count the expression's childrens'
+  // values (the expression consumes all of those) and handle unreachability.
+  Index ret = 0;
+  ChildIterator childIterator(inst->origin);
+  for (auto* child : childIterator) {
+    if (child->type == Type::unreachable) {
+      return 0;
+    }
+    ret += child->type.size();
+  }
+  return ret;
 }
 
 Index StackIROptimizer::getNumProducedValues(StackInst* inst) {
-  // TODO
-  // XXX for say an if, where do we count this? tail?
+  // Basic insts and control flow endings can produce values, but nothing else.
+  if (inst->op != StackInst::Basic && !isControlFlowEnd(inst)) {
+    return 0;
+  }
+
+  // Unreachable instructions produce nothing.
+  if (inst->type == Type::unreachable) {
+    return 0;
+  }
+
+  return inst->type.size();
 }
 
 // Given a pair of a local.set and local.get, see if we can remove them

@@ -81,8 +81,12 @@ public:
 
   Expression* origin; // the expression this originates from
 
-  // the type - usually identical to the origin type, but e.g. wasm has no
-  // unreachable blocks, they must be none
+  // The type. Usually this is identical to the origin type, but e.g. wasm has
+  // no unreachable blocks, so such blocks will have type none, matching the
+  // type in the wasm binary format. We also mark multi-part constructs only at
+  // the end, that is, an if-else-end will have type none on IfBegin and IfElse,
+  // and IfEnd will have the concrete type (if there is one), which makes sense
+  // as the end of the construct is what is consumed by the subsequent code.
   Type type;
 };
 
@@ -561,7 +565,17 @@ private:
   bool isControlFlowEnd(StackInst* inst);
   bool isControlFlow(StackInst* inst);
   void removeAt(Index i);
+
+  // Get the number of consumed values from the stack. If there is an
+  // unreachable child then we return 0 (indicating that nothing is consumed, as
+  // we are not reached).
   Index getNumConsumedValues(StackInst* inst);
+
+  // Get the number of produced values to the stack. If there is an unreachable
+  // child then we return 0 (indicating that nothing is produced, as we are not
+  // reached).
+  Index getNumProducedValues(StackInst* inst);
+
   bool canRemoveSetGetPair(Index setIndex, Index getIndex);
   std::unordered_set<LocalGet*> findStringViewDeferredGets();
 };
