@@ -23,6 +23,35 @@
     (unreachable)
   )
 
+  ;; CHECK:      (func $drop-tuple-unreachable (type $2) (result i32 i32)
+  ;; CHECK-NEXT:  call $drop-tuple-unreachable
+  ;; CHECK-NEXT:  unreachable
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $drop-tuple-unreachable (type $2) (result i32 i32)
+  ;; ROUNDTRIP-NEXT:  (local $0 (tuple i32 i32))
+  ;; ROUNDTRIP-NEXT:  (local.set $0
+  ;; ROUNDTRIP-NEXT:   (call $drop-tuple-unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (tuple.extract 2 0
+  ;; ROUNDTRIP-NEXT:    (local.get $0)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (drop
+  ;; ROUNDTRIP-NEXT:   (tuple.extract 2 1
+  ;; ROUNDTRIP-NEXT:    (local.get $0)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (unreachable)
+  ;; ROUNDTRIP-NEXT: )
+  (func $drop-tuple-unreachable (result i32 i32)
+    ;; This tuple drop can be removed.
+    (tuple.drop 2
+      (call $drop-tuple-unreachable)
+    )
+    (unreachable)
+  )
+
   ;; CHECK:      (func $drop-unreachable-sequence (type $0) (result i32)
   ;; CHECK-NEXT:  call $drop-unreachable
   ;; CHECK-NEXT:  call $drop-unreachable
