@@ -281,6 +281,83 @@
     )
   )
 
+  ;; CHECK:      (func $control-flow-blocks (type $3) (param $x i32)
+  ;; CHECK-NEXT:  block $a
+  ;; CHECK-NEXT:   local.get $x
+  ;; CHECK-NEXT:   br_if $a
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   drop
+  ;; CHECK-NEXT:  end
+  ;; CHECK-NEXT:  block $b
+  ;; CHECK-NEXT:   local.get $x
+  ;; CHECK-NEXT:   br_if $b
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   drop
+  ;; CHECK-NEXT:  end
+  ;; CHECK-NEXT:  block $c
+  ;; CHECK-NEXT:   local.get $x
+  ;; CHECK-NEXT:   br_if $c
+  ;; CHECK-NEXT:   call $drop-unreachable
+  ;; CHECK-NEXT:   unreachable
+  ;; CHECK-NEXT:  end
+  ;; CHECK-NEXT: )
+  ;; ROUNDTRIP:      (func $control-flow-blocks (type $3) (param $x i32)
+  ;; ROUNDTRIP-NEXT:  (block $label$1
+  ;; ROUNDTRIP-NEXT:   (br_if $label$1
+  ;; ROUNDTRIP-NEXT:    (local.get $x)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (drop
+  ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (block $label$2
+  ;; ROUNDTRIP-NEXT:   (br_if $label$2
+  ;; ROUNDTRIP-NEXT:    (local.get $x)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (drop
+  ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT:  (block $label$3
+  ;; ROUNDTRIP-NEXT:   (br_if $label$3
+  ;; ROUNDTRIP-NEXT:    (local.get $x)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (drop
+  ;; ROUNDTRIP-NEXT:    (call $drop-unreachable)
+  ;; ROUNDTRIP-NEXT:   )
+  ;; ROUNDTRIP-NEXT:   (unreachable)
+  ;; ROUNDTRIP-NEXT:  )
+  ;; ROUNDTRIP-NEXT: )
+  (func $control-flow-blocks (param $x i32)
+    ;; We can only remove drops inside the last block, which has an unreachable.
+    (block $a
+      ;; Use br_ifs to keep the blocks alive through other opts.
+      (br_if $a
+        (local.get $x)
+      )
+      (drop
+        (call $drop-unreachable)
+      )
+    )
+    (block $b
+      (br_if $b
+        (local.get $x)
+      )
+      (drop
+        (call $drop-unreachable)
+      )
+    )
+    (block $c
+      (br_if $c
+        (local.get $x)
+      )
+      (drop
+        (call $drop-unreachable)
+      )
+      (unreachable)
+    )
+  )
+
   ;; CHECK:      (func $many-drop-unreachable (type $1) (result i32)
   ;; CHECK-NEXT:  i32.const 1
   ;; CHECK-NEXT:  if (result i32)
