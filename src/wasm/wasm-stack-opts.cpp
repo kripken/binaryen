@@ -259,8 +259,10 @@ void StackIROptimizer::local2Stack() {
         }
       }
       if (!optimized) {
-        // This is an actual regular value on the value stack.
-        values.push_back(null);
+        // This is an actual regular value(s) on the value stack.
+        for (Index i = 0; i < inst->type.size(); i++) {
+          values.push_back(null);
+        }
       }
     } else if (inst->origin->is<LocalSet>() && inst->type == Type::none) {
       // This set is potentially optimizable later, add to stack.
