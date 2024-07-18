@@ -325,6 +325,9 @@ private:
   Expression* makeBasicRef(Type type);
   Expression* makeCompoundRef(Type type);
 
+  Expression* makeTableSet(Type type);
+  Expression* makeTableGet(Type type);
+
   Expression* makeStringConst();
   Expression* makeStringNewArray();
   Expression* makeStringNewCodePoint();

@@ -1394,6 +1394,9 @@ Expression* TranslateToFuzzReader::_makeConcrete(Type type) {
     if (heapType.isBasic()) {
       options.add(FeatureSet::ReferenceTypes | FeatureSet::GC,
                   &Self::makeBasicRef);
+      if (heapType == HeapType::func) {
+        options.add(FeatureSet::ReferenceTypes, &Self::makeTableGet);
+      }
     } else {
       options.add(FeatureSet::ReferenceTypes | FeatureSet::GC,
                   &Self::makeCompoundRef);
@@ -1441,6 +1444,7 @@ Expression* TranslateToFuzzReader::_makenone() {
          &Self::makeGlobalSet)
     .add(FeatureSet::BulkMemory, &Self::makeBulkMemory)
     .add(FeatureSet::Atomics, &Self::makeAtomic)
+    .add(FeatureSet::GC | FeatureSet::ReferenceTypes, &Self::makeTableSet)
     .add(FeatureSet::GC | FeatureSet::ReferenceTypes, &Self::makeCallRef)
     .add(FeatureSet::GC | FeatureSet::ReferenceTypes, &Self::makeStructSet)
     .add(FeatureSet::GC | FeatureSet::ReferenceTypes, &Self::makeArraySet)
@@ -2773,6 +2777,23 @@ Expression* TranslateToFuzzReader::makeCompoundRef(Type type) {
   } else {
     WASM_UNREACHABLE("bad user-defined ref type");
   }
+}
+
+Expression* TranslateToFuzzReader::makeTableSet(Type type) {
+  assert(type == Type::none);
+  // TODO: Add more tables and use those
+  auto tableType = wasm.getTable(funcrefTableName)->type;
+  return builder.makeTableSet(funcrefTableName, make(tableType));
+}
+
+Expression* TranslateToFuzzReader::makeTableGet(Type type) {
+  // TODO: Add more tables and use those
+  auto tableType = wasm.getTable(funcrefTableName)->type;
+  if (Type::isSubType(tableType, type)) {
+    return builder.makeTableGet(funcrefTableName, tableType);
+  }
+  // No table found, make something trivial.
+  return makeTrivial(type);
 }
 
 Expression* TranslateToFuzzReader::makeStringNewArray() {
