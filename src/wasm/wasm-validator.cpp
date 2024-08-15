@@ -265,11 +265,14 @@ struct ValidationInfo {
     }    
 
     if (type.isRef()) {
-      auto recGroup = type.getHeapType().getRecGroup();
-      if (recGroup.size() > 1) {
-        // We'll validate the rest of this rec group (all but |type|) later.
-        std::unique_lock<std::mutex> lock(mutex);
-        recGroups.insert(recGroup);
+      auto heapType = type.getHeapType();
+      if (!heapType.isBasic()) {
+        auto recGroup = heapType.getRecGroup();
+        if (recGroup.size() > 1) {
+          // We'll validate the rest of this rec group (all but |type|) later.
+          std::unique_lock<std::mutex> lock(mutex);
+          recGroups.insert(recGroup);
+        }
       }
     }
   }
