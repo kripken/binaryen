@@ -56,6 +56,22 @@ printModuleComponent(Expression* curr, std::ostream& stream, Module& wasm) {
   return stream;
 }
 
+static std::string getMissingFeaturesList(Module& wasm, FeatureSet feats) {
+  std::stringstream ss;
+  bool first = true;
+  ss << '[';
+  (feats - wasm.features).iterFeatures([&](FeatureSet feat) {
+    if (first) {
+      first = false;
+    } else {
+      ss << " ";
+    }
+    ss << "--enable-" << feat.toString();
+  });
+  ss << ']';
+  return ss.str();
+}
+
 // For parallel validation, we have a helper struct for coordination
 struct ValidationInfo {
   Module& wasm;
@@ -221,23 +237,55 @@ struct ValidationInfo {
     auto matchedRight = Type(ht.getBasic(share), right.getNullability());
     return shouldBeSubType(left, matchedRight, curr, text, func);
   }
-};
 
-std::string getMissingFeaturesList(Module& wasm, FeatureSet feats) {
-  std::stringstream ss;
-  bool first = true;
-  ss << '[';
-  (feats - wasm.features).iterFeatures([&](FeatureSet feat) {
-    if (first) {
-      first = false;
-    } else {
-      ss << " ";
+  // Validate that it is ok to include a type in a module, considering the
+  // features needed by the type and allowed by the module. Almost trivial, but
+  // we need to not only test the type itself, but anything in its rec group, as
+  // the entire rec group will be included. For example, the rec group might
+  // include an otherwise-unused type that depends on a feature, in which case
+  // the module must still allow that feature (closed-world optimizations could
+  // remove such unsed types, of course, but until they do, the feature is
+  // necessary). We stash all rec groups we see and validate them at the end (to
+  // avoid duplicate work).
+  //
+  // If |feats| is provided then we use that. Otherwise we compute the features.
+  template<typename T>
+  void validateType(Type type, Function* func, const char* context, T curr, std::optional<FeatureSet> feats = std::nullopt) {
+    if (!feats) {
+      feats = type.getFeatures();
     }
-    ss << "--enable-" << feat.toString();
-  });
-  ss << ']';
-  return ss.str();
-}
+    if (!shouldBeTrue(*feats <= wasm.features,
+                      type,
+                      "all used features should be allowed")) {
+      std::ostringstream ss;
+      ss << "(context: " << context << ": " << curr << ")\n";
+      ss << getMissingFeaturesList(wasm, *feats) << '\n';
+      fail(ss.str(), curr, func);
+      return;
+    }    
+
+    if (type.isRef()) {
+      auto recGroup = type.getHeapType().getRecGroup();
+      if (recGroup.size() > 1) {
+        // We'll validate the rest of this rec group (all but |type|) later.
+        std::unique_lock<std::mutex> lock(mutex);
+        recGroups.insert(recGroup);
+      }
+    }
+  }
+
+  // As above, but receiving a heap type instead of a type.
+  template<typename T>
+  void validateType(HeapType type, Function* func, const char* context, T curr, std::optional<FeatureSet> feats = std::nullopt) {
+    // Just wrap the heap type with nullability, which does not affect the
+    // features.
+    validateType(Type(type, Nullable), func, context, curr, feats);
+  }
+
+  // All rec groups we have seen (trivial ones are ignored, as they have nothing
+  // extra for us to validate).
+  std::unordered_set<RecGroup> recGroups;
+};
 
 struct FunctionValidator : public WalkerPass<PostWalker<FunctionValidator>> {
   bool isFunctionParallel() override { return true; }
@@ -998,9 +1046,7 @@ void FunctionValidator::visitCallIndirect(CallIndirect* curr) {
 }
 
 void FunctionValidator::visitConst(Const* curr) {
-  shouldBeTrue(curr->type.getFeatures() <= getModule()->features,
-               curr,
-               "all used features should be allowed");
+  info.validateType(curr->type, getFunction(), "Const", curr);
 }
 
 void FunctionValidator::visitLocalGet(LocalGet* curr) {
@@ -2220,6 +2266,10 @@ void FunctionValidator::visitRefNull(RefNull* curr) {
   // If we are not in a function, this is a global location like a table. We
   // allow RefNull there as we represent tables that way regardless of what
   // features are enabled.
+  //
+  // Note that we do not need to use validateType because nulls are always of a
+  // bottom type, so there is no need to look at rec groups or anything else but
+  // the type itself.
   auto feats = curr->type.getFeatures();
   if (!shouldBeTrue(!getFunction() || feats <= getModule()->features,
                     curr,
@@ -3458,25 +3508,22 @@ void FunctionValidator::visitSuspend(Suspend* curr) {
 }
 
 void FunctionValidator::visitFunction(Function* curr) {
-  FeatureSet features;
   // Check for things like having a rec group with GC enabled. The type we're
   // checking is a reference type even if this an MVP function type, so ignore
   // the reference types feature here.
-  features |= (curr->type.getFeatures() & ~FeatureSet::ReferenceTypes);
+  auto funcFeats = (curr->type.getFeatures() & ~FeatureSet::ReferenceTypes);
+  info.validateType(curr->type, curr, "func", curr->name, funcFeats);
   for (const auto& param : curr->getParams()) {
-    features |= param.getFeatures();
+    info.validateType(param, curr, "param", param);
     shouldBeTrue(param.isConcrete(), curr, "params must be concretely typed");
   }
   for (const auto& result : curr->getResults()) {
-    features |= result.getFeatures();
+    info.validateType(result, curr, "result", result);
     shouldBeTrue(result.isConcrete(), curr, "results must be concretely typed");
   }
   for (const auto& var : curr->vars) {
-    features |= var.getFeatures();
+    info.validateType(var, curr, "var", var);
   }
-  shouldBeTrue(features <= getModule()->features,
-               curr->name,
-               "all used types should be allowed");
 
   // validate optional local names
   std::unordered_set<Name> seen;
@@ -3746,9 +3793,6 @@ static void validateExports(Module& module, ValidationInfo& info) {
 static void validateGlobals(Module& module, ValidationInfo& info) {
   std::unordered_set<Global*> seen;
   ModuleUtils::iterDefinedGlobals(module, [&](Global* curr) {
-    info.shouldBeTrue(curr->type.getFeatures() <= module.features,
-                      curr->name,
-                      "all used types should be allowed");
     info.shouldBeTrue(
       curr->init != nullptr, curr->name, "global init must be non-null");
     assert(curr->init);
@@ -3780,12 +3824,7 @@ static void validateGlobals(Module& module, ValidationInfo& info) {
 
   // Check that globals have allowed types.
   for (auto& g : module.globals) {
-    auto globalFeats = g->type.getFeatures();
-    if (!info.shouldBeTrue(globalFeats <= module.features, g->name, "")) {
-      info.getStream(nullptr)
-        << "global type requires additional features "
-        << getMissingFeaturesList(module, globalFeats) << '\n';
-    }
+    info.validateType(g->type, nullptr, "global", g->name);
   }
 }
 
@@ -3894,13 +3933,8 @@ static void validateTables(Module& module, ValidationInfo& info) {
       table->type.isNullable(),
       "table",
       "Non-nullable reference types are not yet supported for tables");
-    auto typeFeats = table->type.getFeatures();
-    if (!info.shouldBeTrue(table->type == funcref ||
-                             typeFeats <= module.features,
-                           "table",
-                           "table type requires additional features")) {
-      info.getStream(nullptr)
-        << getMissingFeaturesList(module, typeFeats) << '\n';
+    if (table->type != funcref) {
+      info.validateType(table->type, nullptr, "table", table->name);
     }
     if (table->is64()) {
       info.shouldBeTrue(module.features.hasMemory64(),
@@ -3917,13 +3951,8 @@ static void validateTables(Module& module, ValidationInfo& info) {
       segment->type.isNullable(),
       "elem",
       "Non-nullable reference types are not yet supported for tables");
-    auto typeFeats = segment->type.getFeatures();
-    if (!info.shouldBeTrue(
-          segment->type == funcref || typeFeats <= module.features,
-          "elem",
-          "element segment type requires additional features")) {
-      info.getStream(nullptr)
-        << getMissingFeaturesList(module, typeFeats) << '\n';
+    if (segment->type != funcref) {
+      info.validateType(segment->type, nullptr, "element segment", segment->name);
     }
 
     bool isPassive = !segment->table.is();
@@ -3984,16 +4013,12 @@ static void validateTags(Module& module, ValidationInfo& info) {
         curr->name,
         "Multivalue tag type requires multivalue [--enable-multivalue]");
     }
-    FeatureSet features;
     for (const auto& param : curr->sig.params) {
-      features |= param.getFeatures();
+      info.validateType(param, nullptr, "tag param", curr->name);
       info.shouldBeTrue(param.isConcrete(),
                         curr->name,
                         "Values in a tag should have concrete types");
     }
-    info.shouldBeTrue(features <= module.features,
-                      curr->name,
-                      "all param types in tags should be allowed");
   }
 }
 
@@ -4071,6 +4096,18 @@ static void validateFeatures(Module& module, ValidationInfo& info) {
     info.shouldBeTrue(module.features.hasReferenceTypes(),
                       module.features,
                       "--enable-gc requires --enable-reference-types");
+  }
+
+  // Validate all contents of all rec groups.
+  for (auto group : info.recGroups) {
+    for (auto t : group) {
+      auto feats = t.getFeatures();
+      if (!info.shouldBeTrue(feats <= module.features,
+                        t,
+                        "all used features in rec groups should be allowed")) {
+        info.getStream(nullptr) << getMissingFeaturesList(module, feats) << '\n';
+      }
+    }
   }
 }
 
