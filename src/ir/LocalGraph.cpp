@@ -163,6 +163,8 @@ public:
     return phi;
   }
 
+  void linkLoop(currBasicBlock, indexSets); waka
+
 private:
   // Map of merge phis to the two sets that they merge.
   // TODO: consider appending more sets to a given phi?
@@ -249,40 +251,64 @@ struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalS
   LocalGraph::GetSetses& getSetses;
   LocalGraph::Locations& locations;
 
+  LocalGraphComputer(LocalGraph::GetSetses& getSetses, LocalGraph::Locations& locations) : getSetses(getSetses), locations(locations) {}
+
   // The function state we track (phis etc.).
   FunctionState funcState;
+
+  // We track all loop entries, as backedges to them work differently.
+  std::unordered_set<BasicBlock*> loopEntries;
 
   // Loops must set up the state so that phis are used.
   void visitLoop(Loop* curr) {
     if (currBasicBlock) {
+      loopEntries.insert(currBasicBlock);
+
       currBasicBlock->contents.loop = curr;
 
-      // CFGWalker automatically linked the basic block before us to us, but we
-      // don't want that data: indexSets should be empty, and the fact we set
-      // |loop| just above will cause any read to generate a phi. (Note that we
-      // could optimize things by avoiding linking in that case, but the
-      // intrusive changes to do that would not really help much, since the
-      // linking operation just copied a shared_ptr, which we undo here.)
-      currBasicBlock->contents.indexSets.reset();      
+      // CFGWalker automatically linked the basic block before us to us, so we
+      // now contain the data arriving from outside the loop. Erase that so that
+      // we are ready to apply phis as needed, after stashing the information
+      // for later.
+      auto& indexSets = currBasicBlock->contents.indexSets;
+      funcState.linkLoop(currBasicBlock, indexSets);
+      currBasicBlock->contents.indexSets.reset();
     }
   }
 
-  // LocalGet/Set call the proper hooks on LocalState.
+  // LocalGet/Set call the proper hooks on LocalState, and append locations.
   void visitLocalGet(LocalGet* curr) {
     if (currBasicBlock) {
       getSetses[curr].insert(currBasicBlock->contents.getSet(curr, funcState);
+      locations[curr] = getCurrentPointer();
     }
   }
   void visitLocalSet(LocalSet* curr) {
     if (currBasicBlock) {
       currBasicBlock->contents.applySet(curr);
+      locations[curr] = getCurrentPointer();
     }
   }
 
   // Linking of basic blocks leads to merging of data.
   void doLink(BasicBlock* from, BasicBlock* to) {
     assert(from && to);
-    to->contents.mergeIn(from->contents, funcState);
+    if (loopEntries.count(to)) {
+      funcState.linkLoop(to, from->contents.indexSets);
+    } else {
+      to->contents.mergeIn(from->contents, funcState);
+    }
+  }
+
+  // Finally, when the function is fully processed we can finish up by expanding
+  // phis: we have already filled |getSetses|, and the only thing that remains
+  // to do is replace any phis with the actual LocalSets that we now know they
+  // refer to.
+  void visitFunction(Function* curr) {
+  // Given a map of gets to sets, expand the phis: some of the sets are phis,
+  // and we must replace them with
+//  void expandPhis(LocalGraph::GetSetses& getSetses) {
+ // }
   }
 };
 
@@ -291,7 +317,9 @@ struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalS
 // LocalGraph implementation
 
 LocalGraph::LocalGraph(Function* func, Module* module) : func(func) {
-  Flower flower(getSetses, locations, func, module);
+  LocalGraphComputer computer(getSetses, locations);
+  computer.walkFunctionInModule(func, module);
+
 
 #ifdef LOCAL_GRAPH_DEBUG
   std::cout << "LocalGraph::dump\n";
