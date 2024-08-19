@@ -389,7 +389,7 @@ struct LocalGraphComputer
 
   // We track all loop entries, mapping them to their loops, as backedges to
   // loops need special handling.
-  std::unordered_set<BasicBlock*, Loop*> loopEntries;
+  std::unordered_map<BasicBlock*, Loop*> loopEntries;
 
   // Loops must set up the state so that phis are used.
   void visitLoop(Loop* curr) {
@@ -411,7 +411,7 @@ struct LocalGraphComputer
   // LocalGet/Set call the proper hooks on LocalState, and append locations.
   void visitLocalGet(LocalGet* curr) {
     if (currBasicBlock) {
-      getSetses[curr].insert(currBasicBlock->contents.getSet(curr, funcState);
+      getSetses[curr].insert(currBasicBlock->contents.getSet(curr, funcState));
       locations[curr] = getCurrentPointer();
     }
   }
