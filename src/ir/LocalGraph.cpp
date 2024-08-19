@@ -16,14 +16,144 @@
 
 #include <iterator>
 
-#include <cfg/cfg-traversal.h>
-#include <ir/find_all.h>
-#include <ir/local-graph.h>
-#include <wasm-builder.h>
+#include "cfg/cfg-traversal.h"
+#include "ir/find_all.h"
+#include "ir/local-graph.h"
+#include "wasm-builder.h"
 
 namespace wasm {
 
-namespace LocalGraphInternal {
+namespace {
+
+// Fill in a LocalGraph by processing the AST, taking advantage of the
+// structured control flow for speed. Another approach would be to construct a
+// CFG and do a flow, which would be slightly simpler conceptually, but the
+// difference in speed is quite large and this is a core utility that many
+// passes utilize.
+//
+// In particular, doing it this way allows us to do almost all the work in a
+// single forward pass, since in post-order each block is visited after its
+// predecessors. The only exceptions are backedges, which in the AST are
+// conveniently identified as reaching Loops. We handle those using phis, just
+// like SSA form: any read of a local from a loop entry is turned into a read of
+// a phi (for that local + loop). At the end of the flow, after we have seen all
+// backedges as well, we can "expand out" those phis (into the combination of
+// values arriving from the block before the Loop entry, and the backedges).
+//
+// For efficiency we also use phis for forward merges as well (e.g. at the end
+// of Ifs). The benefit is that it allows our core data structure to represent
+// the overall local state as a map of indexes to single values. The single
+// value can be a LocalSet* if there is just one, or a phi if there is more than
+// one, and the phi then refers to the multiple possible values. This avoids
+// copying multiple values all the time.
+//
+// The following data structure represents the core state that we track as we do
+// the forward pass.
+struct LocalState {
+  // The (top-most, i.e., closest to us) loop we are enclosed in, if there is
+  // one, and nullptr if not.
+  Loop* loop = nullptr;
+
+  // Maps local indexes to the the LocalSet that writes to them. That is, when
+  // we reach a LocalGet, it will read from that set. Note that the LocalSet*
+  // here can be to a phi, which is just a special LocalSet.
+  //
+  // We do not store nullptr values here, to save space. That is, when a get
+  // would read from the parameter of default value at the function entry, then
+  // LocalGraph represents that as a nullptr (since there is no explicit
+  // LocalSet), and we do not store such nullptrs here. That avoids us needing
+  // to fill in nullptrs for all locals, which can waste memory in functions
+  // with many locals that are used sparsely. Similarly, when |loop| is not null
+  // then an empty entry here means that we would read the "implicit" value,
+  // which in a loop is the loop phi. We only construct an actual phi when we
+  // see such a get, which once more allows us to avoid filling in values for
+  // all locals eagerly.
+  // TODO: small map? ordered/unordered?
+  using IndexSets = std::unordered_map<Index, LocalSet*>;
+
+  // A shared reference to a map of index sets. A shared reference is useful to
+  // reduce memory usage here, because we will have a LocalState for each active
+  // basic block. That is, we can "deactivate" blocks (free their memory) once
+  // we are totally done with them, but sometimes we need to allocate them ahead
+  // of time, say when we reach a branch, then we must track all the things that
+  // are send to that branch target. For example, consider an If: the state
+  // before the If is passed into the body, and the result of the body is
+  // combined with the state before the If to get the new state after it. If
+  // there are no actual LocalSets in the If body then we can just keep
+  // referring to the same LocalState in this entire process, avoiding any new
+  // allocation at all. We do that by copy-on-write: we only allocate a new
+  // IndexSets when we modify it.
+  //
+  // As another example, consider a br_table that branches to 1,000 blocks. We
+  // will initially only pass a shared reference to them all, avoiding
+  // allocation. If each of those blocks has a set then we will end up
+  // allocating, but at least we will only do so when we actually reach that
+  // block - by which point, other blocks before it will have been deallocated.
+  // That is, lazily allocating can reduce the maximum memory usage here, which
+  // can be important given that we may have thousands of locals and thousands
+  // of basic blocks.
+  std::shared_ptr<IndexSets> indexSets;
+
+  // Apply a given LocalSet to the state. All later reads from that set's index
+  // will read from it.
+  void applySet(LocalSet* set) {
+    if (!indexSets) {
+      // This is the first set here. Allocate a new IndexSets.
+      indexSets = std::make_shared<IndexSets>();
+    } else if (indexSets.use_count() > 1) {
+      // This has multiple users, so before we write we must make a private
+      // copy.
+  }
+
+};
+
+// The function-level state we track here.
+struct FunctionState {
+  phis, loops
+};
+
+//
+// We use CFGWalker here, which has all the logic to figure out where control
+// flow joins and splits exist. It normally uses that to build a 
+struct LocalGraphComputer : public CFGWalker<LocalGraphComputer> {
+  // The data we fill in (see LocalGraph class).
+  LocalGraph::GetSetses& getSetses;
+  LocalGraph::Locations& locations;
+
+  // We must handle
+  static void scan(SubType* self, Expression** currp) {
+    auto* curr = *currp;
+
+    switch (curr->_id) {
+      case Expression::Id::BlockId:
+      case Expression::Id::IfId:
+      case Expression::Id::LoopId:
+      case Expression::Id::TryId:
+      case Expression::Id::TryTableId: {
+        self->pushTask(SubType::doPostVisitControlFlow, currp);
+        break;
+      }
+      default: {
+      }
+    }
+
+    PostWalker<SubType, VisitorType>::scan(self, currp);
+
+    switch (curr->_id) {
+      case Expression::Id::BlockId:
+      case Expression::Id::IfId:
+      case Expression::Id::LoopId:
+      case Expression::Id::TryId:
+      case Expression::Id::TryTableId: {
+        self->pushTask(SubType::doPreVisitControlFlow, currp);
+        break;
+      }
+      default: {
+      }
+    }
+  }
+
+};
 
 // Information about a basic block.
 struct Info {
@@ -40,8 +170,6 @@ struct Info {
 // flow helper class. flows the gets to their sets
 
 struct Flower : public CFGWalker<Flower, Visitor<Flower>, Info> {
-  LocalGraph::GetSetses& getSetses;
-  LocalGraph::Locations& locations;
 
   Flower(LocalGraph::GetSetses& getSetses,
          LocalGraph::Locations& locations,
@@ -256,12 +384,12 @@ struct Flower : public CFGWalker<Flower, Visitor<Flower>, Info> {
   }
 };
 
-} // namespace LocalGraphInternal
+} // anonymous namespace
 
 // LocalGraph implementation
 
 LocalGraph::LocalGraph(Function* func, Module* module) : func(func) {
-  LocalGraphInternal::Flower flower(getSetses, locations, func, module);
+  Flower flower(getSetses, locations, func, module);
 
 #ifdef LOCAL_GRAPH_DEBUG
   std::cout << "LocalGraph::dump\n";
