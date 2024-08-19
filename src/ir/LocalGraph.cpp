@@ -151,6 +151,8 @@ public:
     // We only merge sets of the same index.
     assert(a->index == b->index);
     auto* phi = builder.makeLocalSet(a->index, nullptr);
+    // TODO: consider appending more sets to a given phi, and not always making
+    //       a new merge of 2?
     mergePhis[phi] = {a, b};
     return phi;
   }
@@ -253,7 +255,6 @@ public:
 
 private:
   // Map of merge phis to the two sets that they merge.
-  // TODO: consider appending more sets to a given phi?
   GetSetses mergePhis;
 
   struct LoopInfo {
