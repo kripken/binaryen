@@ -184,8 +184,7 @@ public:
     // First, gather all the phis to a single map from each phi to the sets it
     // can reach. We can simply move over the merge phis, but have work to
     // convert the loop phis.
-    auto allPhis = std::move(mergePhis).
-    for (auto& loopInfo : loopInfos) {
+    auto allPhis = std::move(mergePhis).for (auto& loopInfo : loopInfos) {
       // Each phi can reach all values in the indexSetses that reach this loop
       // (of the proper index).
       for (auto& [_, phi] : loopInfo.phis) {
@@ -208,9 +207,7 @@ public:
       }
     }
 
-    auto isPhi = [&](LocalSet* set) {
-      return allPhis.count(set) > 0;
-    };
+    auto isPhi = [&](LocalSet* set) { return allPhis.count(set) > 0; };
 
     // Phis may refer to other phis, and may form loops, so we do a flow
     // operation to find the set of normal LocalSet*s (i.e., that are not phis)
@@ -337,12 +334,15 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
 // do not need (in theory we could remove the |out|, |in| vectors of edges on
 // the BasicBlock struct, but the template magic to do so might not be
 // worthwhile).
-struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalState> {
+struct LocalGraphComputer
+  : public CFGWalker<LocalGraphComputer, Visitor, LocalState> {
   // The data we fill in (see LocalGraph class).
   LocalGraph::GetSetses& getSetses;
   LocalGraph::Locations& locations;
 
-  LocalGraphComputer(LocalGraph::GetSetses& getSetses, LocalGraph::Locations& locations) : getSetses(getSetses), locations(locations) {}
+  LocalGraphComputer(LocalGraph::GetSetses& getSetses,
+                     LocalGraph::Locations& locations)
+    : getSetses(getSetses), locations(locations) {}
 
   // The function state we track (phis etc.).
   FunctionState funcState;
@@ -399,9 +399,7 @@ struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalS
   // phis: we have already filled |getSetses|, and the only thing that remains
   // to do is replace any phis with the actual LocalSets that we now know they
   // refer to.
-  void visitFunction(Function* curr) {
-    funcState.expandPhis(getSetses);
-  }
+  void visitFunction(Function* curr) { funcState.expandPhis(getSetses); }
 };
 
 } // anonymous namespace
@@ -411,7 +409,6 @@ struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalS
 LocalGraph::LocalGraph(Function* func, Module* module) : func(func) {
   LocalGraphComputer computer(getSetses, locations);
   computer.walkFunctionInModule(func, module);
-
 
 #ifdef LOCAL_GRAPH_DEBUG
   std::cout << "LocalGraph::dump\n";
