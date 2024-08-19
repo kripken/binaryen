@@ -170,6 +170,12 @@ public:
     loopInfos[loop].indexSetses.push_back(indexSets);
   }
 
+  // Given a map of gets to sets, expand the phis: some of the sets are phis,
+  // and we must replace them with the sets that we know they refer to.
+  void expandPhis(LocalGraph::GetSetses& getSetses) {
+    // Phis may refer to other phis, so we do this as a topological sort.
+  }
+
 private:
   // Map of merge phis to the two sets that they merge.
   // TODO: consider appending more sets to a given phi?
@@ -321,10 +327,7 @@ struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalS
   // to do is replace any phis with the actual LocalSets that we now know they
   // refer to.
   void visitFunction(Function* curr) {
-  // Given a map of gets to sets, expand the phis: some of the sets are phis,
-  // and we must replace them with
-//  void expandPhis(LocalGraph::GetSetses& getSetses) {
- // }
+    funcState.expandPhis(getSetses);
   }
 };
 
