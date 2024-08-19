@@ -236,7 +236,14 @@ public:
       // |sets| contains phis and may also contain non-phi sets as well. We need
       // to expand the phis while keeping the sets. First, remove the phis,
       // which we've added to |subPhis| already.
-      std::erase_if(sets, isPhi);
+      for (auto iter
+      LocalGraph::Sets copy;
+      copy.swap(sets);
+      for (auto* set : copy) {
+        if (!isPhi(set)) {
+          sets.insert(set);
+        }
+      }
 
       // Continue to do work while any remains. Note that subPhis is a non-
       // repeating queue, so we don't need to handle cycles here.
@@ -253,9 +260,8 @@ public:
       }
     }
 
-    // XXX teh getsetsts itself!!1
-    waka
-    
+    // Phis are now expanded, and we can process getSetses.
+    for (auto& [_, sets]) {
   }
 
 private:
