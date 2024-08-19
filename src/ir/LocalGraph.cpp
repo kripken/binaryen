@@ -151,27 +151,39 @@ public:
 
   // Gets a loop phi for a loop + index combination.
   LocalSet* getLoopPhi(Loop* loop, Index index) {
-    auto pair = std::pair(loop, index);
-    auto iter = loopPhis.find(pair);
-    if (iter != loopPhis.end()) {
+    auto& loopInfo = loopInfos[loop;
+    auto iter = loopInfo.phis.find(index);
+    if (iter != loopInfo.phis.end()) {
       return iter->second;
     }
 
     // Allocate a new phi here, as this is the first use.
     auto* phi = builder.makeLocalSet(index, nullptr);
-    loopPhis[pair] = phi;
+    loopInfo.phis[index] = phi;
     return phi;
   }
 
-  void linkLoop(currBasicBlock, indexSets); waka
+  // Adds a link to a loop entry. This is called both to link the basic block
+  // before the loop, as well as backedges to it. We store all the arriving data
+  // for later, when it is used to compute phis.
+  void linkLoop(Loop* loop, std::shared_ptr<IndexSets> indexSets) {
+    loopInfos[loop].indexSetses.push_back(indexSets);
+  }
 
 private:
   // Map of merge phis to the two sets that they merge.
   // TODO: consider appending more sets to a given phi?
   std::unordered_map<LocalSet*, std::pair<LocalSet*, LocalSet*>> mergePhis;
 
-  // Map of loop+index to the phi for that loop+index combination.
-  std::unordered_map<std::pair<Loop, Index>, LocalSet*> loopPhis;
+  struct LoopInfo {
+    // Map of indexes to phis for that index in this loop.
+    std::unordered_map<Index, LocalSet*> phis;
+
+    // All incoming data, one indexSets for each branch to the loop top.
+    std::vector<std::shared_ptr<IndexSets>> indexSetses;
+  };
+
+  std::unordered_map<Loop*, LoopInfo> loopInfos;
 };
 
 // LocalState implementations (written out here, as they also depend on the
@@ -256,13 +268,14 @@ struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalS
   // The function state we track (phis etc.).
   FunctionState funcState;
 
-  // We track all loop entries, as backedges to them work differently.
-  std::unordered_set<BasicBlock*> loopEntries;
+  // We track all loop entries, mapping them to their loops, as backedges to
+  // loops need special handling.
+  std::unordered_set<BasicBlock*, Loop*> loopEntries;
 
   // Loops must set up the state so that phis are used.
   void visitLoop(Loop* curr) {
     if (currBasicBlock) {
-      loopEntries.insert(currBasicBlock);
+      loopEntries[currBasicBlock] = curr;
 
       currBasicBlock->contents.loop = curr;
 
@@ -271,7 +284,7 @@ struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalS
       // we are ready to apply phis as needed, after stashing the information
       // for later.
       auto& indexSets = currBasicBlock->contents.indexSets;
-      funcState.linkLoop(currBasicBlock, indexSets);
+      funcState.linkLoop(curr, indexSets);
       currBasicBlock->contents.indexSets.reset();
     }
   }
@@ -293,9 +306,12 @@ struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalS
   // Linking of basic blocks leads to merging of data.
   void doLink(BasicBlock* from, BasicBlock* to) {
     assert(from && to);
-    if (loopEntries.count(to)) {
-      funcState.linkLoop(to, from->contents.indexSets);
+    auto iter = loopEntries.find(to);
+    if (iter != loopEntries.end()) {
+      // Loops are linked in a special way at the function level.
+      funcState.linkLoop(iter->second, from->contents.indexSets);
     } else {
+      // Other merges are simple.
       to->contents.mergeIn(from->contents, funcState);
     }
   }
