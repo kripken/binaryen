@@ -173,6 +173,15 @@ public:
   // Given a map of gets to sets, expand the phis: some of the sets are phis,
   // and we must replace them with the sets that we know they refer to.
   void expandPhis(LocalGraph::GetSetses& getSetses) {
+    // First, gather all the loop phis to a single map from phi to the loop info
+    // for that phi's loop.
+    std::unordered_map<LocalSet*, LoopInfo*> loopPhiInfos;
+    for (auto& loopInfo : loopInfos) {
+      for (auto& [_, phi] : loopInfo.phis) {
+        loopPhiInfos[phi[ = &loopInfo;
+      }
+    }
+
     // Phis may refer to other phis, so we do this as a topological sort.
   }
 
