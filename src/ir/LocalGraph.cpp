@@ -19,6 +19,7 @@
 #include "cfg/cfg-traversal.h"
 #include "ir/find_all.h"
 #include "ir/local-graph.h"
+#include "support/unique_deferring_queue.h"
 #include "wasm-builder.h"
 
 namespace wasm {
@@ -182,7 +183,20 @@ public:
       }
     }
 
-    // Phis may refer to other phis, so we do this as a topological sort.
+    // Phis may refer to other phis, and may form loops, so we do a flow
+    // operation to find the set of normal LocalSet*s (i.e., that are not phis)
+    // for each phi. Start by marking all phis as needing processing.
+    UniqueDeferredQueue<LocalSet*> work;
+    for (auto& [phi, _] : mergePhis) {
+      work.push(phi);
+    }
+    for (auto& [phi, _] : loopPhis) {
+      work.push(phi);
+    }
+
+    std::unordered_set<LocalSet*> seenXXX;
+
+    while (!work.empty
   }
 
 private:
