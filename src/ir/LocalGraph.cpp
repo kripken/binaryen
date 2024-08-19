@@ -142,6 +142,21 @@ struct FunctionState {
 private:
   Builder builder;
 
+  using PhiSetses = std::unordered_map<Phi*, LocalGraph::Sets>;
+
+  // Map of merge phis to the two sets that they merge.
+  PhiSetses mergePhis;
+
+  struct LoopInfo {
+    // Map of indexes to phis for that index in this loop.
+    std::unordered_map<Index, Phi*> phis;
+
+    // All incoming data, one indexSets for each branch to the loop top.
+    std::vector<std::shared_ptr<IndexSets>> indexSetses;
+  };
+
+  std::unordered_map<Loop*, LoopInfo> loopInfos;
+
 public:
   FunctionState(Module& wasm) : builder(wasm) {}
 
@@ -188,7 +203,7 @@ public:
     // can reach. We can simply move over the merge phis, but have work to
     // convert the loop phis.
     auto allPhis = std::move(mergePhis);
-    for (auto& loopInfo : loopInfos) {
+    for (auto& [_, loopInfo] : loopInfos) {
       // Each phi can reach all values in the indexSetses that reach this loop
       // (of the proper index).
       for (auto& [_, phi] : loopInfo.phis) {
@@ -236,9 +251,7 @@ public:
       // |sets| contains phis and may also contain non-phi sets as well. We need
       // to expand the phis while keeping the sets. First, remove the phis,
       // which we've added to |subPhis| already.
-      for (auto iter
-      LocalGraph::Sets copy;
-      copy.swap(sets);
+      LocalGraph::Sets copy = std::move(sets);
       for (auto* set : copy) {
         if (!isPhi(set)) {
           sets.insert(set);
@@ -261,32 +274,42 @@ public:
     }
 
     // Phis are now expanded, and we can process getSetses.
-    for (auto& [_, sets]) {
+    for (auto& [_, sets] : getSetses) {
+      std::vector<Phi*> phis;
+      for (auto* set : sets) {
+        if (isPhi(set)) {
+          phis.push_back(set);
+        }
+      }
+
+      if (phis.empty()) {
+        continue;
+      }
+
+      // Remove phis from sets.
+      LocalGraph::Sets copy = std::move(sets);
+      for (auto* set : copy) {
+        if (!isPhi(set)) {
+          sets.insert(set);
+        }
+      }
+
+      // Add values from phis.
+      for (auto* phi : phis) {
+        for (auto* phiSet : allPhis[phi]) {
+          sets.insert(phiSet);
+        }
+      }
+    }
   }
-
-private:
-  using PhiSetses = std::unordered_map<Phi*, LocalGraph::Sets>;
-
-  // Map of merge phis to the two sets that they merge.
-  PhiSetses mergePhis;
-
-  struct LoopInfo {
-    // Map of indexes to phis for that index in this loop.
-    std::unordered_map<Index, Phi*> phis;
-
-    // All incoming data, one indexSets for each branch to the loop top.
-    std::vector<std::shared_ptr<IndexSets>> indexSetses;
-  };
-
-  std::unordered_map<Loop*, LoopInfo> loopInfos;
 };
 
 // LocalState implementations (written out here, as they also depend on the
 // definition of FunctionState).
 LocalSet* LocalState::getSet(LocalGet* get, FunctionState& funcState) {
   if (indexSets) {
-    auto iter = indexSets.find(get->index);
-    if (iter != indexSets.end()) {
+    auto iter = indexSets->find(get->index);
+    if (iter != indexSets->end()) {
       return iter->second;
     }
   }
@@ -340,7 +363,7 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
 
     // We have different values, so this is a merge that creates a new phi.
     ensure();
-    iter->second = funcState.makePhi(iter->second, set);
+    iter->second = funcState.makeMergePhi(iter->second, set);
   }
 }
 
@@ -351,17 +374,18 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
 // the BasicBlock struct, but the template magic to do so might not be
 // worthwhile).
 struct LocalGraphComputer
-  : public CFGWalker<LocalGraphComputer, Visitor, LocalState> {
+  : public CFGWalker<LocalGraphComputer, Visitor<LocalGraphComputer>, LocalState> {
   // The data we fill in (see LocalGraph class).
   LocalGraph::GetSetses& getSetses;
   LocalGraph::Locations& locations;
 
-  LocalGraphComputer(LocalGraph::GetSetses& getSetses,
-                     LocalGraph::Locations& locations)
-    : getSetses(getSetses), locations(locations) {}
-
   // The function state we track (phis etc.).
   FunctionState funcState;
+
+  LocalGraphComputer(LocalGraph::GetSetses& getSetses,
+                     LocalGraph::Locations& locations,
+                     Module& wasm)
+    : getSetses(getSetses), locations(locations), funcState(wasm) {}
 
   // We track all loop entries, mapping them to their loops, as backedges to
   // loops need special handling.
@@ -423,8 +447,8 @@ struct LocalGraphComputer
 // LocalGraph implementation
 
 LocalGraph::LocalGraph(Function* func, Module* module) : func(func) {
-  LocalGraphComputer computer(getSetses, locations);
-  computer.walkFunctionInModule(func, module);
+  LocalGraphComputer computer(getSetses, locations, *module);
+  computer.walkFunction(func);
 
 #ifdef LOCAL_GRAPH_DEBUG
   std::cout << "LocalGraph::dump\n";
