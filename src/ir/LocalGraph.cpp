@@ -53,6 +53,23 @@ namespace {
 // phis in the same place as sets.
 using Phi = LocalSet;
 
+// Maps local indexes to the the LocalSet that writes to them. That is, when
+// we reach a LocalGet, it will read from that set. Note that the LocalSet*
+// here can be to a phi, which is just a special LocalSet.
+//
+// We do not store nullptr values here, to save space. That is, when a get
+// would read from the parameter of default value at the function entry, then
+// LocalGraph represents that as a nullptr (since there is no explicit
+// LocalSet), and we do not store such nullptrs here. That avoids us needing
+// to fill in nullptrs for all locals, which can waste memory in functions
+// with many locals that are used sparsely. Similarly, when |loop| is not null
+// then an empty entry here means that we would read the "implicit" value,
+// which in a loop is the loop phi. We only construct an actual phi when we
+// see such a get, which once more allows us to avoid filling in values for
+// all locals eagerly.
+// TODO: small map? ordered/unordered?
+using IndexSets = std::unordered_map<Index, LocalSet*>;
+
 // The function-level state, such as information about phis.
 struct FunctionState;
 
@@ -61,23 +78,6 @@ struct LocalState {
   // The (top-most, i.e., closest to us) loop we are enclosed in, if there is
   // one, and nullptr if not.
   Loop* loop = nullptr;
-
-  // Maps local indexes to the the LocalSet that writes to them. That is, when
-  // we reach a LocalGet, it will read from that set. Note that the LocalSet*
-  // here can be to a phi, which is just a special LocalSet.
-  //
-  // We do not store nullptr values here, to save space. That is, when a get
-  // would read from the parameter of default value at the function entry, then
-  // LocalGraph represents that as a nullptr (since there is no explicit
-  // LocalSet), and we do not store such nullptrs here. That avoids us needing
-  // to fill in nullptrs for all locals, which can waste memory in functions
-  // with many locals that are used sparsely. Similarly, when |loop| is not null
-  // then an empty entry here means that we would read the "implicit" value,
-  // which in a loop is the loop phi. We only construct an actual phi when we
-  // see such a get, which once more allows us to avoid filling in values for
-  // all locals eagerly.
-  // TODO: small map? ordered/unordered?
-  using IndexSets = std::unordered_map<Index, LocalSet*>;
 
   // A shared reference to a map of index sets. A shared reference is useful to
   // reduce memory usage here, because we will have a LocalState for each active
@@ -106,7 +106,7 @@ struct LocalState {
   // it. All later reads from that set's index will read from it.
   void applySet(LocalSet* set) {
     ensureSoleOwnership();
-    indexSets[set->index] = set;
+    (*indexSets)[set->index] = set;
   }
 
   // Given a LocalGet, return the LocalSet for it. The FunctionState is used to
@@ -140,7 +140,7 @@ private:
 // The function-level state we track here.
 struct FunctionState {
 private:
-  Builder& builder;
+  Builder builder;
 
 public:
   FunctionState(Module& wasm) : builder(wasm) {}
@@ -153,13 +153,16 @@ public:
     auto* phi = builder.makeLocalSet(a->index, nullptr);
     // TODO: consider appending more sets to a given phi, and not always making
     //       a new merge of 2?
-    mergePhis[phi] = {a, b};
+    LocalGraph::Sets sets;
+    sets.insert(a);
+    sets.insert(b);
+    mergePhis[phi] = std::move(sets);
     return phi;
   }
 
   // Gets a loop phi for a loop + index combination.
   Phi* getLoopPhi(Loop* loop, Index index) {
-    auto& loopInfo = loopInfos[loop;
+    auto& loopInfo = loopInfos[loop];
     auto iter = loopInfo.phis.find(index);
     if (iter != loopInfo.phis.end()) {
       return iter->second;
@@ -184,7 +187,8 @@ public:
     // First, gather all the phis to a single map from each phi to the sets it
     // can reach. We can simply move over the merge phis, but have work to
     // convert the loop phis.
-    auto allPhis = std::move(mergePhis).for (auto& loopInfo : loopInfos) {
+    auto allPhis = std::move(mergePhis);
+    for (auto& loopInfo : loopInfos) {
       // Each phi can reach all values in the indexSetses that reach this loop
       // (of the proper index).
       for (auto& [_, phi] : loopInfo.phis) {
@@ -215,7 +219,7 @@ public:
     // TODO: It may be worth computing strongly-connected components here and
     //       then doing a topological sort, to avoid repeated work.
     for (auto& [phi, sets] : allPhis) {
-      UniqueDeferredNonrepeatingQueue<Phi*> subPhis;
+      UniqueNonrepeatingDeferredQueue<Phi*> subPhis;
       for (auto* set : sets) {
         if (isPhi(set)) {
           // This is another phi, whose items we will need to add.
@@ -248,11 +252,17 @@ public:
         }
       }
     }
+
+    // XXX teh getsetsts itself!!1
+    waka
+    
   }
 
 private:
+  using PhiSetses = std::unordered_map<Phi*, LocalGraph::Sets>;
+
   // Map of merge phis to the two sets that they merge.
-  GetSetses mergePhis;
+  PhiSetses mergePhis;
 
   struct LoopInfo {
     // Map of indexes to phis for that index in this loop.
