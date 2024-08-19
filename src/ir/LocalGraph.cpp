@@ -140,8 +140,6 @@ private:
 // The function-level state we track here.
 struct FunctionState {
 private:
-  Builder builder;
-
   using PhiSetses = std::unordered_map<Phi*, LocalGraph::Sets>;
 
   // Map of merge phis to the two sets that they merge.
@@ -158,8 +156,6 @@ private:
   std::unordered_map<Loop*, LoopInfo> loopInfos;
 
 public:
-  FunctionState(Module& wasm) : builder(wasm) {}
-
   // Given two sets, return a phi that combines the two. This is used in control
   // flow merges, like after an If.
   Phi* makeMergePhi(LocalSet* a, LocalSet* b) {
@@ -305,17 +301,21 @@ public:
 
 private:
   Phi* makePhi(Index index) {
-    // The value does not matter, but must refer to something. We allocate a
+    auto phi = std::make_unique<LocalSet>();
+    phi->index = index;
+    // The value does not matter, but must refer to something. We utilize a
     // singleton nop for that purpose (this is intentionally invalid in two
     // ways: it does not have a concrete value, and it will be used in multiple
     // places; that way if this ends up in actual code we will error).
-    if (!nop) {
-      nop = builder.makeNop();
-    }
-    return builder.makeLocalSet(index, nop);
+    phi->value = &nop;
+    auto* ret = phi.get();
+    allocatedSets.push_back(std::move(phi));
+    return ret;
   }
 
-  Nop* nop = nullptr;
+  Nop nop;
+
+  std::vector<std::unique_ptr<LocalSet>> allocatedSets;
 };
 
 // LocalState implementations (written out here, as they also depend on the
@@ -408,9 +408,8 @@ struct LocalGraphComputer
   FunctionState funcState;
 
   LocalGraphComputer(LocalGraph::GetSetses& getSetses,
-                     LocalGraph::Locations& locations,
-                     Module& wasm)
-    : getSetses(getSetses), locations(locations), funcState(wasm) {}
+                     LocalGraph::Locations& locations)
+    : getSetses(getSetses), locations(locations) {}
 
   // We track all loop entries, mapping them to their loops, as backedges to
   // loops need special handling.
@@ -472,7 +471,7 @@ struct LocalGraphComputer
 // LocalGraph implementation
 
 LocalGraph::LocalGraph(Function* func, Module* module) : func(func) {
-  LocalGraphComputer computer(getSetses, locations, *module);
+  LocalGraphComputer computer(getSetses, locations);
   computer.walkFunction(func);
 
 #ifdef LOCAL_GRAPH_DEBUG
