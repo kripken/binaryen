@@ -48,6 +48,11 @@ namespace {
 // one, and the phi then refers to the multiple possible values. This avoids
 // copying multiple values all the time.
 
+// We represent phis as LocalSets. We do not need the value there, but we do
+// need the index, and also it is convenient to be able to store pointers to
+// phis in the same place as sets.
+using Phi = LocalSet;
+
 // The function-level state, such as information about phis.
 struct FunctionState;
 
@@ -142,7 +147,7 @@ public:
 
   // Given two sets, return a phi that combines the two. This is used in control
   // flow merges, like after an If.
-  LocalSet* makeMergePhi(LocalSet* a, LocalSet* b) {
+  Phi* makeMergePhi(LocalSet* a, LocalSet* b) {
     // We only merge sets of the same index.
     assert(a->index == b->index);
     auto* phi = builder.makeLocalSet(a->index, nullptr);
@@ -151,7 +156,7 @@ public:
   }
 
   // Gets a loop phi for a loop + index combination.
-  LocalSet* getLoopPhi(Loop* loop, Index index) {
+  Phi* getLoopPhi(Loop* loop, Index index) {
     auto& loopInfo = loopInfos[loop;
     auto iter = loopInfo.phis.find(index);
     if (iter != loopInfo.phis.end()) {
@@ -174,20 +179,43 @@ public:
   // Given a map of gets to sets, expand the phis: some of the sets are phis,
   // and we must replace them with the sets that we know they refer to.
   void expandPhis(LocalGraph::GetSetses& getSetses) {
-    // First, gather all the loop phis to a single map from phi to the loop info
-    // for that phi's loop.
-    std::unordered_map<LocalSet*, LoopInfo*> loopPhiInfos;
+    // First, gather all the loop phis to a single map from each phi to the sets
+    // it can reach.
+    GetSetses loopPhis;
     for (auto& loopInfo : loopInfos) {
+      // Each phi can reach all values in the indexSetses that reach this loop
+      // (of the proper index).
       for (auto& [_, phi] : loopInfo.phis) {
-        loopPhiInfos[phi[ = &loopInfo;
+        auto& loopPhi = loopPhis[phi];
+        for (auto& indexSets : loopInfo.indexSetses) {
+          if (!indexSets) {
+            // This is a read of the function entry value (if this were of a
+            // loop value, then a read of a missing element in an indexSet would
+            // lead to us creating a phi and filling in the element).
+            loopPhi.insert(nullptr);
+          }
+          auto iter = indexSets->find(phi->index);
+          if (iter == indexSets->end()) {
+            // See above.
+            loopPhi.insert(nullptr);
+          } else {
+            loopPhi.insert(iter->second);
+          }
+        }
       }
     }
 
     // Phis may refer to other phis, and may form loops, so we do a flow
     // operation to find the set of normal LocalSet*s (i.e., that are not phis)
-    // for each phi. Start by marking all phis as needing processing.
+    // for each phi.
+    // TODO: It may be worth computing strongly-connected components here and
+    //       then doing a topological sort, to avoid repeated work.
+    GetSetses phiSetses;
+    auto computePhi = [&](Phi* phi) {
+    };
     UniqueDeferredQueue<LocalSet*> work;
     for (auto& [phi, _] : mergePhis) {
+      computePhi
       work.push(phi);
     }
     for (auto& [phi, _] : loopPhis) {
@@ -202,11 +230,11 @@ public:
 private:
   // Map of merge phis to the two sets that they merge.
   // TODO: consider appending more sets to a given phi?
-  std::unordered_map<LocalSet*, std::pair<LocalSet*, LocalSet*>> mergePhis;
+  std::unordered_map<Phi*, std::pair<LocalSet*, LocalSet*>> mergePhis;
 
   struct LoopInfo {
     // Map of indexes to phis for that index in this loop.
-    std::unordered_map<Index, LocalSet*> phis;
+    std::unordered_map<Index, Phi*> phis;
 
     // All incoming data, one indexSets for each branch to the loop top.
     std::vector<std::shared_ptr<IndexSets>> indexSetses;
@@ -221,10 +249,7 @@ LocalSet* LocalState::getSet(LocalGet* get, FunctionState& funcState) {
   if (indexSets) {
     auto iter = indexSets.find(get->index);
     if (iter != indexSets.end()) {
-      auto* set = iter->second;
-      // We never store nullptr in indexSets
-      assert(set);
-      return set;
+      return iter->second;
     }
   }
 
