@@ -312,7 +312,7 @@ private:
     if (!nop) {
       nop = builder.makeNop();
     }
-    builder.makeLocalSet(index, nop);
+    return builder.makeLocalSet(index, nop);
   }
 
   Nop* nop = nullptr;
