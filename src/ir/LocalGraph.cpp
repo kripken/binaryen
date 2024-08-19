@@ -179,14 +179,15 @@ public:
   // Given a map of gets to sets, expand the phis: some of the sets are phis,
   // and we must replace them with the sets that we know they refer to.
   void expandPhis(LocalGraph::GetSetses& getSetses) {
-    // First, gather all the loop phis to a single map from each phi to the sets
-    // it can reach.
-    GetSetses loopPhis;
+    // First, gather all the phis to a single map from each phi to the sets it
+    // can reach. We can simply move over the merge phis, but have work to
+    // convert the loop phis.
+    auto allPhis = std::move(mergePhis).
     for (auto& loopInfo : loopInfos) {
       // Each phi can reach all values in the indexSetses that reach this loop
       // (of the proper index).
       for (auto& [_, phi] : loopInfo.phis) {
-        auto& loopPhi = loopPhis[phi];
+        auto& loopPhi = allPhis[phi];
         for (auto& indexSets : loopInfo.indexSetses) {
           if (!indexSets) {
             // This is a read of the function entry value (if this were of a
@@ -205,32 +206,55 @@ public:
       }
     }
 
+    auto isPhi = [&](LocalSet* set) {
+      return allPhis.count(set) > 0;
+    };
+
     // Phis may refer to other phis, and may form loops, so we do a flow
     // operation to find the set of normal LocalSet*s (i.e., that are not phis)
     // for each phi.
     // TODO: It may be worth computing strongly-connected components here and
     //       then doing a topological sort, to avoid repeated work.
-    GetSetses phiSetses;
-    auto computePhi = [&](Phi* phi) {
-    };
-    UniqueDeferredQueue<LocalSet*> work;
-    for (auto& [phi, _] : mergePhis) {
-      computePhi
-      work.push(phi);
-    }
-    for (auto& [phi, _] : loopPhis) {
-      work.push(phi);
-    }
+    for (auto& [phi, sets] : allPhis) {
+      UniqueDeferredNonrepeatingQueue<Phi*> subPhis;
+      for (auto* set : sets) {
+        if (isPhi(set)) {
+          // This is another phi, whose items we will need to add.
+          subPhis.push(set);
+        }
+      }
 
-    std::unordered_set<LocalSet*> seenXXX;
+      if (subPhis.empty()) {
+        // No phis referred to, so |sets| is perfect as it is, and we can skip
+        // all the below work.
+        continue;
+      }
 
-    while (!work.empty
+      // |sets| contains phis and may also contain non-phi sets as well. We need
+      // to expand the phis while keeping the sets. First, remove the phis,
+      // which we've added to |subPhis| already.
+      std::erase_if(sets, isPhi);
+
+      // Continue to do work while any remains. Note that subPhis is a non-
+      // repeating queue, so we don't need to handle cycles here.
+      while (!subPhis.empty()) {
+        auto* subPhi = subPhis.pop();
+        assert(!isPhi(subPhi));
+        for (auto* set : allPhis[subPhi]) {
+          if (isPhi(set)) {
+            subPhis.push(set);
+          } else {
+            sets.insert(set);
+          }
+        }
+      }
+    }
   }
 
 private:
   // Map of merge phis to the two sets that they merge.
   // TODO: consider appending more sets to a given phi?
-  std::unordered_map<Phi*, std::pair<LocalSet*, LocalSet*>> mergePhis;
+  GetSetses mergePhis;
 
   struct LoopInfo {
     // Map of indexes to phis for that index in this loop.
