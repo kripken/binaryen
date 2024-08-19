@@ -165,7 +165,7 @@ public:
   Phi* makeMergePhi(LocalSet* a, LocalSet* b) {
     // We only merge sets of the same index.
     assert(a->index == b->index);
-    auto* phi = builder.makeLocalSet(a->index, nullptr);
+    auto* phi = makePhi(a->index);
     // TODO: consider appending more sets to a given phi, and not always making
     //       a new merge of 2?
     LocalGraph::Sets sets;
@@ -184,7 +184,7 @@ public:
     }
 
     // Allocate a new phi here, as this is the first use.
-    auto* phi = builder.makeLocalSet(index, nullptr);
+    auto* phi = makePhi(index);
     loopInfo.phis[index] = phi;
     return phi;
   }
@@ -302,6 +302,20 @@ public:
       }
     }
   }
+
+private:
+  Phi* makePhi(Index index) {
+    // The value does not matter, but must refer to something. We allocate a
+    // singleton nop for that purpose (this is intentionally invalid in two
+    // ways: it does not have a concrete value, and it will be used in multiple
+    // places; that way if this ends up in actual code we will error).
+    if (!nop) {
+      nop = builder.makeNop();
+    }
+    builder.makeLocalSet(index, nop);
+  }
+
+  Nop* nop = nullptr;
 };
 
 // LocalState implementations (written out here, as they also depend on the
