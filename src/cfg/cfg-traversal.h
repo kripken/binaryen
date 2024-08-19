@@ -129,6 +129,13 @@ struct CFGWalker : public PostWalker<SubType, VisitorType> {
     if (!from || !to) {
       return; // if one of them is not reachable, ignore
     }
+
+    // Allow subtypes to specialize linking of basic blocks by overriding
+    // |doLink|.
+    ((SubType*)this)->doLink(from, to);
+  }
+
+  void doLink(BasicBlock* from, BasicBlock* to) {
     from->out.push_back(to);
     to->in.push_back(from);
   }

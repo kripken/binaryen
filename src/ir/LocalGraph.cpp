@@ -114,7 +114,8 @@ struct LocalState {
 
 private:
   // Ensures |indexSets| exists and that we are the sole owner/referrer, so that
-  // it is valid for us to add LocalSets to it.
+  // it is valid for us to add LocalSets to it (which is the only modification
+  // we ever do).
   void ensureSoleOwnership() {
     if (!indexSets) {
       // This is the first set here. Allocate a new IndexSets.
@@ -171,7 +172,8 @@ private:
   std::unordered_map<std::pair<Loop, Index>, LocalSet*> loopPhis;
 };
 
-// LocalState implementations.
+// LocalState implementations (written out here, as they also depend on the
+// definition of FunctionState).
 LocalSet* LocalState::getSet(LocalGet* get, FunctionState& funcState) {
   if (indexSets) {
     auto iter = indexSets.find(get->index);
@@ -238,273 +240,49 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
 
 //
 // We use CFGWalker here, which has all the logic to figure out where control
-// flow joins and splits exist. It normally uses that to build a 
-struct LocalGraphComputer : public CFGWalker<LocalGraphComputer> {
+// flow joins and splits exist. It normally uses that to build a CFG, which we
+// do not need (in theory we could remove the |out|, |in| vectors of edges on
+// the BasicBlock struct, but the template magic to do so might not be
+// worthwhile).
+struct LocalGraphComputer : public CFGWalker<LocalGraphComputer, Visitor, LocalState> {
   // The data we fill in (see LocalGraph class).
   LocalGraph::GetSetses& getSetses;
   LocalGraph::Locations& locations;
 
-  // We must handle
-  static void scan(SubType* self, Expression** currp) {
-    auto* curr = *currp;
+  // The function state we track (phis etc.).
+  FunctionState funcState;
 
-    switch (curr->_id) {
-      case Expression::Id::BlockId:
-      case Expression::Id::IfId:
-      case Expression::Id::LoopId:
-      case Expression::Id::TryId:
-      case Expression::Id::TryTableId: {
-        self->pushTask(SubType::doPostVisitControlFlow, currp);
-        break;
-      }
-      default: {
-      }
-    }
+  // Loops must set up the state so that phis are used.
+  void visitLoop(Loop* curr) {
+    if (currBasicBlock) {
+      currBasicBlock->contents.loop = curr;
 
-    PostWalker<SubType, VisitorType>::scan(self, currp);
-
-    switch (curr->_id) {
-      case Expression::Id::BlockId:
-      case Expression::Id::IfId:
-      case Expression::Id::LoopId:
-      case Expression::Id::TryId:
-      case Expression::Id::TryTableId: {
-        self->pushTask(SubType::doPreVisitControlFlow, currp);
-        break;
-      }
-      default: {
-      }
+      // CFGWalker automatically linked the basic block before us to us, but we
+      // don't want that data: indexSets should be empty, and the fact we set
+      // |loop| just above will cause any read to generate a phi. (Note that we
+      // could optimize things by avoiding linking in that case, but the
+      // intrusive changes to do that would not really help much, since the
+      // linking operation just copied a shared_ptr, which we undo here.)
+      currBasicBlock->contents.indexSets.reset();      
     }
   }
 
-};
-
-// Information about a basic block.
-struct Info {
-  // actions occurring in this block: local.gets and local.sets
-  std::vector<Expression*> actions;
-  // for each index, the last local.set for it
-  std::unordered_map<Index, LocalSet*> lastSets;
-
-  void dump(Function* func) {
-    std::cout << "    info: " << actions.size() << " actions\n";
+  // LocalGet/Set call the proper hooks on LocalState.
+  void visitLocalGet(LocalGet* curr) {
+    if (currBasicBlock) {
+      getSetses[curr].insert(currBasicBlock->contents.getSet(curr, funcState);
+    }
   }
-};
-
-// flow helper class. flows the gets to their sets
-
-struct Flower : public CFGWalker<Flower, Visitor<Flower>, Info> {
-
-  Flower(LocalGraph::GetSetses& getSetses,
-         LocalGraph::Locations& locations,
-         Function* func,
-         Module* module)
-    : getSetses(getSetses), locations(locations) {
-    setFunction(func);
-    setModule(module);
-    // create the CFG by walking the IR
-    CFGWalker<Flower, Visitor<Flower>, Info>::doWalkFunction(func);
-    // flow gets across blocks
-    flow(func);
+  void visitLocalSet(LocalSet* curr) {
+    if (currBasicBlock) {
+      currBasicBlock->contents.applySet(curr);
+    }
   }
 
-  BasicBlock* makeBasicBlock() { return new BasicBlock(); }
-
-  // Branches outside of the function can be ignored, as we only look at locals
-  // which vanish when we leave.
-  bool ignoreBranchesOutsideOfFunc = true;
-
-  // cfg traversal work
-
-  static void doVisitLocalGet(Flower* self, Expression** currp) {
-    auto* curr = (*currp)->cast<LocalGet>();
-    // if in unreachable code, skip
-    if (!self->currBasicBlock) {
-      return;
-    }
-    self->currBasicBlock->contents.actions.emplace_back(curr);
-    self->locations[curr] = currp;
-  }
-
-  static void doVisitLocalSet(Flower* self, Expression** currp) {
-    auto* curr = (*currp)->cast<LocalSet>();
-    // if in unreachable code, skip
-    if (!self->currBasicBlock) {
-      return;
-    }
-    self->currBasicBlock->contents.actions.emplace_back(curr);
-    self->currBasicBlock->contents.lastSets[curr->index] = curr;
-    self->locations[curr] = currp;
-  }
-
-  void flow(Function* func) {
-    // This block struct is optimized for this flow process (Minimal
-    // information, iteration index).
-    struct FlowBlock {
-      // Last Traversed Iteration: This value helps us to find if this block has
-      // been seen while traversing blocks. We compare this value to the current
-      // iteration index in order to determine if we already process this block
-      // in the current iteration. This speeds up the processing compared to
-      // unordered_set or other struct usage. (No need to reset internal values,
-      // lookup into container, ...)
-      size_t lastTraversedIteration;
-      std::vector<Expression*> actions;
-      std::vector<FlowBlock*> in;
-      // Sor each index, the last local.set for it
-      // The unordered_map from BasicBlock.Info is converted into a vector
-      // This speeds up search as there are usually few sets in a block, so just
-      // scanning them linearly is efficient, avoiding hash computations (while
-      // in Info, it's convenient to have a map so we can assign them easily,
-      // where the last one seen overwrites the previous; and, we do that O(1)).
-      std::vector<std::pair<Index, LocalSet*>> lastSets;
-    };
-
-    auto numLocals = func->getNumLocals();
-    std::vector<FlowBlock*> work;
-
-    // Convert input blocks (basicBlocks) into more efficient flow blocks to
-    // improve memory access.
-    std::vector<FlowBlock> flowBlocks;
-    flowBlocks.resize(basicBlocks.size());
-
-    // Init mapping between basicblocks and flowBlocks
-    std::unordered_map<BasicBlock*, FlowBlock*> basicToFlowMap;
-    for (Index i = 0; i < basicBlocks.size(); ++i) {
-      auto* block = basicBlocks[i].get();
-      basicToFlowMap[block] = &flowBlocks[i];
-    }
-
-    // We note which local indexes have local.sets, as that can help us
-    // optimize later (if there are none at all).
-    std::vector<bool> hasSet(numLocals, false);
-
-    const size_t NULL_ITERATION = -1;
-
-    FlowBlock* entryFlowBlock = nullptr;
-    for (Index i = 0; i < flowBlocks.size(); ++i) {
-      auto& block = basicBlocks[i];
-      auto& flowBlock = flowBlocks[i];
-      // Get the equivalent block to entry in the flow list
-      if (block.get() == entry) {
-        entryFlowBlock = &flowBlock;
-      }
-      flowBlock.lastTraversedIteration = NULL_ITERATION;
-      flowBlock.actions.swap(block->contents.actions);
-      // Map in block to flow blocks
-      auto& in = block->in;
-      flowBlock.in.resize(in.size());
-      std::transform(in.begin(),
-                     in.end(),
-                     flowBlock.in.begin(),
-                     [&](BasicBlock* block) { return basicToFlowMap[block]; });
-      // Convert unordered_map to vector.
-      flowBlock.lastSets.reserve(block->contents.lastSets.size());
-      for (auto set : block->contents.lastSets) {
-        flowBlock.lastSets.emplace_back(set);
-        hasSet[set.first] = true;
-      }
-    }
-    assert(entryFlowBlock != nullptr);
-
-    size_t currentIteration = 0;
-    for (auto& block : flowBlocks) {
-#ifdef LOCAL_GRAPH_DEBUG
-      std::cout << "basic block " << &block << " :\n";
-      for (auto& action : block.actions) {
-        std::cout << "  action: " << *action << '\n';
-      }
-      for (auto& val : block.lastSets) {
-        std::cout << "  last set " << val.second << '\n';
-      }
-#endif
-
-      // Track all gets in this block, by index.
-      std::vector<std::vector<LocalGet*>> allGets(numLocals);
-
-      // go through the block, finding each get and adding it to its index,
-      // and seeing how sets affect that
-      auto& actions = block.actions;
-
-      // move towards the front, handling things as we go
-      for (int i = int(actions.size()) - 1; i >= 0; i--) {
-        auto* action = actions[i];
-        if (auto* get = action->dynCast<LocalGet>()) {
-          allGets[get->index].push_back(get);
-        } else {
-          // This set is the only set for all those gets.
-          auto* set = action->cast<LocalSet>();
-          auto& gets = allGets[set->index];
-          for (auto* get : gets) {
-            getSetses[get].insert(set);
-          }
-          gets.clear();
-        }
-      }
-      // If anything is left, we must flow it back through other blocks. we
-      // can do that for all gets as a whole, they will get the same results.
-      for (Index index = 0; index < numLocals; index++) {
-        auto& gets = allGets[index];
-        if (gets.empty()) {
-          continue;
-        }
-        if (!hasSet[index]) {
-          // This local index has no sets, so we know all gets will end up
-          // reaching the entry block. Do that here as an optimization to avoid
-          // flowing through the (potentially very many) blocks in the function.
-          //
-          // Note that we may be in unreachable code, and if so, we might add
-          // the entry values when they are not actually relevant. That is, we
-          // are not precise in the case of unreachable code. This can be
-          // confusing when debugging, but it does not have any downside for
-          // optimization (since unreachable code should be removed anyhow).
-          for (auto* get : gets) {
-            getSetses[get].insert(nullptr);
-          }
-          continue;
-        }
-        work.push_back(&block);
-        // Note that we may need to revisit the later parts of this initial
-        // block, if we are in a loop, so don't mark it as seen.
-        while (!work.empty()) {
-          auto* curr = work.back();
-          work.pop_back();
-          // We have gone through this block; now we must handle flowing to
-          // the inputs.
-          if (curr->in.empty()) {
-            if (curr == entryFlowBlock) {
-              // These receive a param or zero init value.
-              for (auto* get : gets) {
-                getSetses[get].insert(nullptr);
-              }
-            }
-          } else {
-            for (auto* pred : curr->in) {
-              if (pred->lastTraversedIteration == currentIteration) {
-                // We've already seen pred in this iteration.
-                continue;
-              }
-              pred->lastTraversedIteration = currentIteration;
-              auto lastSet =
-                std::find_if(pred->lastSets.begin(),
-                             pred->lastSets.end(),
-                             [&](std::pair<Index, LocalSet*>& value) {
-                               return value.first == index;
-                             });
-              if (lastSet != pred->lastSets.end()) {
-                // There is a set here, apply it, and stop the flow.
-                for (auto* get : gets) {
-                  getSetses[get].insert(lastSet->second);
-                }
-              } else {
-                // Keep on flowing.
-                work.push_back(pred);
-              }
-            }
-          }
-        }
-        currentIteration++;
-      }
-    }
+  // Linking of basic blocks leads to merging of data.
+  void doLink(BasicBlock* from, BasicBlock* to) {
+    assert(from && to);
+    to->contents.mergeIn(from->contents, funcState);
   }
 };
 
