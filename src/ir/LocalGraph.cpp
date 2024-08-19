@@ -46,9 +46,11 @@ namespace {
 // value can be a LocalSet* if there is just one, or a phi if there is more than
 // one, and the phi then refers to the multiple possible values. This avoids
 // copying multiple values all the time.
-//
-// The following data structure represents the core state that we track as we do
-// the forward pass.
+
+// The function-level state, such as information about phis.
+struct FunctionState;
+
+// The core state that we track in each basic block as we do the forward pass.
 struct LocalState {
   // The (top-most, i.e., closest to us) loop we are enclosed in, if there is
   // one, and nullptr if not.
@@ -94,23 +96,145 @@ struct LocalState {
   // of basic blocks.
   std::shared_ptr<IndexSets> indexSets;
 
-  // Apply a given LocalSet to the state. All later reads from that set's index
-  // will read from it.
+  // Apply a given LocalSet to the state, which tramples all LocalSets before
+  // it. All later reads from that set's index will read from it.
   void applySet(LocalSet* set) {
+    ensureSoleOwnership();
+    indexSets[set->index] = set;
+  }
+
+  // Given a LocalGet, return the LocalSet for it. The FunctionState is used to
+  // handle phis.
+  LocalSet* getSet(LocalGet* get, FunctionState& funcState);
+
+  // Given another LocalState, merge its contents into ours. This is done each
+  // time we find a branch to a target, for example: each branch brings more
+  // possible sets, which we must all merge in.
+  void mergeIn(const LocalState& other, FunctionState& funcState);
+
+private:
+  // Ensures |indexSets| exists and that we are the sole owner/referrer, so that
+  // it is valid for us to add LocalSets to it.
+  void ensureSoleOwnership() {
     if (!indexSets) {
       // This is the first set here. Allocate a new IndexSets.
       indexSets = std::make_shared<IndexSets>();
     } else if (indexSets.use_count() > 1) {
       // This has multiple users, so before we write we must make a private
       // copy.
-  }
+      indexSets = std::make_shared<IndexSets>(*indexSets);
+    }
 
+    // We now are the sole owner of this data, and can write to it.
+    assert(indexSets.use_count() == 1);
+  }
 };
 
 // The function-level state we track here.
 struct FunctionState {
-  phis, loops
+private:
+  Builder& builder;
+
+public:
+  FunctionState(Module& wasm) : builder(wasm) {}
+
+  // Given two sets, return a phi that combines the two. This is used in control
+  // flow merges, like after an If.
+  LocalSet* makeMergePhi(LocalSet* a, LocalSet* b) {
+    // We only merge sets of the same index.
+    assert(a->index == b->index);
+    auto* phi = builder.makeLocalSet(a->index, nullptr);
+    mergePhis[phi] = {a, b};
+    return phi;
+  }
+
+  // Gets a loop phi for a loop + index combination.
+  LocalSet* getLoopPhi(Loop* loop, Index index) {
+    auto pair = std::pair(loop, index);
+    auto iter = loopPhis.find(pair);
+    if (iter != loopPhis.end()) {
+      return iter->second;
+    }
+
+    // Allocate a new phi here, as this is the first use.
+    auto* phi = builder.makeLocalSet(index, nullptr);
+    loopPhis[pair] = phi;
+    return phi;
+  }
+
+private:
+  // Map of merge phis to the two sets that they merge.
+  // TODO: consider appending more sets to a given phi?
+  std::unordered_map<LocalSet*, std::pair<LocalSet*, LocalSet*>> mergePhis;
+
+  // Map of loop+index to the phi for that loop+index combination.
+  std::unordered_map<std::pair<Loop, Index>, LocalSet*> loopPhis;
 };
+
+// LocalState implementations.
+LocalSet* LocalState::getSet(LocalGet* get, FunctionState& funcState) {
+  if (indexSets) {
+    auto iter = indexSets.find(get->index);
+    if (iter != indexSets.end()) {
+      auto* set = iter->second;
+      // We never store nullptr in indexSets
+      assert(set);
+      return set;
+    }
+  }
+
+  // No entry was found: either we have no indexSets at all, or we have one but
+  // it lacks that index, so this LocalGet is reading a default value.
+  if (!loop) {
+    // The default value outside of a loop is the value from the function entry,
+    // which is represented as nullptr.
+    return nullptr;
+  }
+
+  // Inside a loop, we are reading a phi.
+  // TODO: We could in theory stash the loop phi in indexSets, to save this call
+  //       later, at the cost of using more memory.
+  return funcState.getLoopPhi(loop, get->index);
+}
+
+void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
+  if (indexSets == other.indexSets) {
+    // We have the same pointer as |other|, so there is no work to do. This is
+    // the common case mentioned before of an If arm with no sets, for
+    // example.
+    return;
+  }
+
+  // We only allocate if we actually find a change to write: two different
+  // indexSets may contain the same data (internalization could save work here,
+  // in theory).
+  auto ensuredSoleOwnership = false;
+  auto ensure = [&]() {
+    if (!ensuredSoleOwnership) {
+      ensureSoleOwnership();
+      ensuredSoleOwnership = true;
+    }
+  };
+
+  for (auto& [index, set] : *other.indexSets) {
+    auto iter = indexSets->find(index);
+    if (iter == indexSets->end()) {
+      // We had nothing for this index: just copy.
+      ensure();
+      (*indexSets)[index] = set;
+      return;
+    }
+
+    if (iter->second == set) {
+      // We had the same value: skip.
+      continue;
+    }
+
+    // We have different values, so this is a merge that creates a new phi.
+    ensure();
+    iter->second = funcState.makePhi(iter->second, set);
+  }
+}
 
 //
 // We use CFGWalker here, which has all the logic to figure out where control
