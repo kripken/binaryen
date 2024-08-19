@@ -336,6 +336,17 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
     return;
   }
 
+  if (!indexSets) {
+    // We have nothing, so just refer to the same data as the other.
+    indexSets = other.indexSets;
+    return;
+  }
+
+  if (!other.indexSets) {
+    // The other has nothing to give us.
+    return;
+  }
+
   // We only allocate if we actually find a change to write: two different
   // indexSets may contain the same data (internalization could save work here,
   // in theory).
