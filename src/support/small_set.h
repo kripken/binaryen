@@ -158,6 +158,18 @@ public:
       insert(item);
     }
   }
+  SmallSetBase(const SmallSetBase& other) : fixed(other.fixed), flexible(other.flexible) {
+  }
+  SmallSetBase(SmallSetBase&& other) {
+    *this = std::move(other);
+  }
+
+  SmallSetBase& operator=(SmallSetBase&& other) {
+    fixed = std::move(other.fixed);
+    flexible = std::move(other.flexible);
+    other.clear();
+    return *this;
+  }
 
   void insert(const T& x) {
     if (usingFixed()) {
