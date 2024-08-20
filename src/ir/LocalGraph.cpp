@@ -164,10 +164,9 @@ public:
     auto* phi = makePhi(a->index);
     // TODO: consider appending more sets to a given phi, and not always making
     //       a new merge of 2?
-    LocalGraph::Sets sets;
-    sets.insert(a);
-    sets.insert(b);
-    mergePhis[phi] = std::move(sets);
+    auto& phiSets = mergePhis[phi];
+    phiSets.insert(a);
+    phiSets.insert(b);
     return phi;
   }
 
@@ -247,7 +246,7 @@ public:
       // |sets| contains phis and may also contain non-phi sets as well. We need
       // to expand the phis while keeping the sets. First, remove the phis,
       // which we've added to |subPhis| already.
-      LocalGraph::Sets copy = std::move(sets);
+      LocalGraph::Sets copy(std::move(sets));
       for (auto* set : copy) {
         if (!isPhi(set)) {
           sets.insert(set);
@@ -283,7 +282,10 @@ public:
       }
 
       // Remove phis from sets.
-      LocalGraph::Sets copy = std::move(sets);
+      std::cout << sets.size() << '\n';
+      LocalGraph::Sets copy(std::move(sets));
+      std::cout << copy.size() << " : " << sets.size() << '\n';
+      assert(sets.empty());
       for (auto* set : copy) {
         if (!isPhi(set)) {
           sets.insert(set);
@@ -293,9 +295,17 @@ public:
       // Add values from phis.
       for (auto* phi : phis) {
         for (auto* phiSet : allPhis[phi]) {
+          assert(!isPhi(phiSet));
           sets.insert(phiSet);
         }
       }
+
+#if !NDEBUG
+      // No phis should remain in the output.
+      for (auto* set : sets) {
+        assert(!isPhi(set));
+      }
+#endif
     }
   }
 

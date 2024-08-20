@@ -59,8 +59,21 @@ struct CFGWalker : public PostWalker<SubType, VisitorType> {
   // this block instead of all the individual returns.
   BasicBlock* exit = nullptr;
 
-  // override this with code to create a BasicBlock if necessary
+  // Override this with code to create a BasicBlock if necessary.
   BasicBlock* makeBasicBlock() { return new BasicBlock(); }
+
+  // Override this to do processing when a basic block is finished, that is,
+  // after we have scanned all its contents and also finished linking it to
+  // other blocks.
+  void doFinishBasicBlock(BasicBlock* block) {}
+
+  // Helper that casts before calling finishBasicBlock.
+  // TODO: Call this. we need to be able to know when block are never linked
+  //       again. Creating forward targets and linking to them, then cleaning
+  //       up, would be better than now where |branches| does the opposite...
+  void finishBasicBlock(BasicBlock* block) {
+    ((SubType*)this)->doFinishbasicBlock(block);
+  }
 
   // internal details
 
@@ -135,6 +148,7 @@ struct CFGWalker : public PostWalker<SubType, VisitorType> {
     ((SubType*)this)->doLink(from, to);
   }
 
+  // Override this to change what we do when two block should be linked.
   void doLink(BasicBlock* from, BasicBlock* to) {
     from->out.push_back(to);
     to->in.push_back(from);
