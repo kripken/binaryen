@@ -519,33 +519,33 @@ struct LocalGraphComputer
   std::vector<Loop*> loopStack;
 
   // Loops must set up the state so that phis are used.
-  static void doStartLoop(SubType* self, Expression** currp) {
+  static void doStartLoop(LocalGraphComputer* self, Expression** currp) {
     Super::doStartLoop(self, currp);
 
     // Update the loop stack.
     auto* loop = (*currp)->cast<Loop>();
-    loopStack.push_back(loop);
+    self->loopStack.push_back(loop);
 
     // We are now in this loop (there must be a block here as our Super has
     // created one). Update the relevent data structures.
-    assert(currBasicBlock);
-    loopEntries[currBasicBlock] = loop;
-    funcState.startLoop(curr, currBasicBlock->contents);
+    assert(self->currBasicBlock);
+    self->loopEntries[self->currBasicBlock] = loop;
+    self->funcState.startLoop(curr, self->currBasicBlock->contents);
   }
 
-  static void doEndLoop(SubType* self, Expression** currp) {
+  static void doEndLoop(LocalGraphComputer* self, Expression** currp) {
     Super::doEndLoop(self, currp);
 
     // Update the loop stack.
     auto* loop = (*currp)->cast<Loop>();
-    assert(!loopStack.empty());
-    assert(loopStack.back() == loop);
-    loopStack.pop_back();
+    assert(!self->loopStack.empty());
+    assert(self->loopStack.back() == loop);
+    self->loopStack.pop_back();
 
     // We are now in the loop before us, if there was one.
-    if (currBasicBlock) {
-      auto* outerLoop = loopStack.empty() ? nullptr : loopStack.back();
-      currBasicBlock->contents.loop = outerLoop;
+    if (self->currBasicBlock) {
+      auto* outerLoop = self->loopStack.empty() ? nullptr : self->loopStack.back();
+      self->currBasicBlock->contents.loop = outerLoop;
     }
   }
 
