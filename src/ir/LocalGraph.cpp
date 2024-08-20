@@ -530,7 +530,7 @@ struct LocalGraphComputer
     // created one). Update the relevent data structures.
     assert(self->currBasicBlock);
     self->loopEntries[self->currBasicBlock] = loop;
-    self->funcState.startLoop(curr, self->currBasicBlock->contents);
+    self->funcState.startLoop(loop, self->currBasicBlock->contents);
   }
 
   static void doEndLoop(LocalGraphComputer* self, Expression** currp) {
@@ -569,7 +569,7 @@ struct LocalGraphComputer
     auto iter = loopEntries.find(to);
     if (iter != loopEntries.end()) {
       // Loops are linked in a special way at the function level.
-      funcState.linkLoop(iter->second, from->contents.indexSets);
+      funcState.linkLoop(iter->second, from->contents);
     } else {
       // Other merges are simple.
       to->contents.mergeIn(from->contents, funcState);
