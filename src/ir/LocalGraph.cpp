@@ -206,9 +206,12 @@ public:
 
     // Clear indexSets, as every value from the start of this loop will become a
     // phi when it is used, and a missing entry in indexSets is how we indicate
-    // that something should become a phi (a missing entry + loop not being
-    // null is the full condition for that).
+    // that something should become a phi: a missing entry + loop not being
+    // null is the full condition for that.
     localState.indexSets.reset();
+
+    // We are now ready to mark the local state as being in this loop.
+    currBasicBlock->contents.loop = loop;
   }
 
   // Adds a link to a loop entry. This is called both to link the basic block
@@ -513,9 +516,8 @@ struct LocalGraphComputer
     loopStack.push_back(loop);
 
     // We are now in this loop (there must be a block here as our Super has
-    // created one).
+    // created one). Update the relevent data structures.
     assert(currBasicBlock);
-    currBasicBlock->contents.loop = loop;
     loopEntries[currBasicBlock] = loop;
     funcState.startLoop(curr, currBasicBlock->contents);
   }
