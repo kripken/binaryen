@@ -1,4 +1,4 @@
-#define LOCAL_GRAPH_DEBUG 1
+//#define LOCAL_GRAPH_DEBUG 1
 
 /*
  * Copyright 2017 WebAssembly Community Group participants
@@ -404,11 +404,11 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
   std::cout << "  do manual merge\n";
 #endif
 
-  for (auto& [index, set] : *indexSets) {
 #ifdef LOCAL_GRAPH_DEBUG
+  for (auto& [index, set] : *indexSets) {
     std::cout << "  I have this set: " << *set << "\n";
-#endif
   }
+#endif
 
   for (auto& [index, set] : *other.indexSets) {
 #ifdef LOCAL_GRAPH_DEBUG
@@ -447,11 +447,11 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
 std::cout << "just wroate " << iter->second << '\n';
   }
 
-  for (auto& [index, set] : *indexSets) {
 #ifdef LOCAL_GRAPH_DEBUG
+  for (auto& [index, set] : *indexSets) {
     std::cout << "  After merge, I have this set: " << *set << '(' << set << ")\n";
-#endif
   }
+#endif
 }
 
 //
