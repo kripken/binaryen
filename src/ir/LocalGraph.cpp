@@ -181,6 +181,7 @@ public:
     auto& loopInfo = loopInfos[loop];
     auto iter = loopInfo.phis.find(index);
     if (iter != loopInfo.phis.end()) {
+      // Use the existing phi for this loop + index.
       return iter->second;
     }
 
@@ -188,6 +189,22 @@ public:
     auto* phi = makePhi(index);
     loopInfo.phis[index] = phi;
     return phi;
+  }
+
+  // Called right after we enter a loop, after CFGWalker has linked the basic
+  // block before us to ourselves. This function sets up the local state
+  // properly.
+  void startLoop(Loop* loop, LocalState& localState) {
+    // As CFGWalker has linked the basic block before us to us, we currently
+    // contain the data arriving from before the loop. Add that as a link to
+    // the loop entry.
+    linkLoop(loop, localState.indexSets);
+
+    // Clear indexSets, as every value from the start of this loop will become a
+    // phi when it is used, and a missing entry in indexSets is how we indicate
+    // that something should become a phi (a missing entry + loop not being
+    // null is the full condition for that).
+    localState.indexSets.reset();
   }
 
   // Adds a link to a loop entry. This is called both to link the basic block
@@ -462,6 +479,9 @@ std::cout << "just wroate " << iter->second << '\n';
 // worthwhile).
 struct LocalGraphComputer
   : public CFGWalker<LocalGraphComputer, Visitor<LocalGraphComputer>, LocalState> {
+
+  using Super = CFGWalker<LocalGraphComputer, Visitor<LocalGraphComputer>, LocalState>;
+
   // The data we fill in (see LocalGraph class).
   LocalGraph::GetSetses& getSetses;
   LocalGraph::Locations& locations;
@@ -477,20 +497,38 @@ struct LocalGraphComputer
   // loops need special handling.
   std::unordered_map<BasicBlock*, Loop*> loopEntries;
 
+  // We track loops so that we can tell in which we are currently in.
+  std::vector<Loop*> loopStack;
+
   // Loops must set up the state so that phis are used.
-  void visitLoop(Loop* curr) {
+  static void doStartLoop(SubType* self, Expression** currp) {
+    Super::doStartLoop(self, currp);
+
+    // Update the loop stack.
+    auto* loop = (*currp)->cast<Loop>();
+    loopStack.push_back(loop);
+
+    // We are now in this loop (there must be a block here as our Super has
+    // created one).
+    assert(currBasicBlock);
+    currBasicBlock->contents.loop = loop;
+    loopEntries[currBasicBlock] = loop;
+    funcState.startLoop(curr, currBasicBlock->contents);
+  }
+
+  static void doEndLoop(SubType* self, Expression** currp) {
+    Super::doEndLoop(self, currp);
+
+    // Update the loop stack.
+    auto* loop = (*currp)->cast<Loop>();
+    assert(!loopStack.empty());
+    assert(loopStack.back() == loop);
+    loopStack.pop_back();
+
+    // We are now in the loop before us, if there was one.
     if (currBasicBlock) {
-      loopEntries[currBasicBlock] = curr;
-
-      currBasicBlock->contents.loop = curr;
-
-      // CFGWalker automatically linked the basic block before us to us, so we
-      // now contain the data arriving from outside the loop. Erase that so that
-      // we are ready to apply phis as needed, after stashing the information
-      // for later.
-      auto& indexSets = currBasicBlock->contents.indexSets;
-      funcState.linkLoop(curr, indexSets);
-      currBasicBlock->contents.indexSets.reset();
+      auto* outerLoop = loopStack.empty() ? nullptr : loopStack.back();
+      currBasicBlock->contents.loop = outerLoop;
     }
   }
 
