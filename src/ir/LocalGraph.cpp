@@ -59,16 +59,6 @@ using Phi = LocalSet;
 // we reach a LocalGet, it will read from that set. Note that the LocalSet*
 // here can be to a phi, which is just a special LocalSet.
 //
-// We do not store nullptr values here, to save space. That is, when a get
-// would read from the parameter of default value at the function entry, then
-// LocalGraph represents that as a nullptr (since there is no explicit
-// LocalSet), and we do not store such nullptrs here. That avoids us needing
-// to fill in nullptrs for all locals, which can waste memory in functions
-// with many locals that are used sparsely. Similarly, when |loop| is not null
-// then an empty entry here means that we would read the "implicit" value,
-// which in a loop is the loop phi. We only construct an actual phi when we
-// see such a get, which once more allows us to avoid filling in values for
-// all locals eagerly.
 // TODO: small map? ordered/unordered?
 using IndexSets = std::unordered_map<Index, LocalSet*>;
 
@@ -78,7 +68,8 @@ struct FunctionState;
 // The core state that we track in each basic block as we do the forward pass.
 struct LocalState {
   // The (top-most, i.e., closest to us) loop we are enclosed in, if there is
-  // one, and nullptr if not.
+  // one, and nullptr if not. This affects the meaning of missing entries in
+  // |indexSets| below us, see below.
   Loop* loop = nullptr;
 
   // A shared reference to a map of index sets. A shared reference is useful to
@@ -102,6 +93,19 @@ struct LocalState {
   // That is, lazily allocating can reduce the maximum memory usage here, which
   // can be important given that we may have thousands of locals and thousands
   // of basic blocks.
+  //
+  // We do not store nullptr values here, to save space. That is, when a get
+  // would read from the parameter of default value at the function entry, then
+  // LocalGraph represents that as a nullptr (since there is no explicit
+  // LocalSet), and we do not store such nullptrs here. That avoids us needing
+  // to fill in nullptrs for all locals, which can waste memory in functions
+  // with many locals that are used sparsely. Similarly, when |loop| is not null
+  // then an empty entry here means that we would read the "implicit" value,
+  // which in a loop is the loop phi. We only construct an actual phi when we
+  // see such a get, which once more allows us to avoid filling in values for
+  // all locals eagerly. That is, a missing entry here means the "default" in
+  // some sense, where the meaning of "default" depends on whether |loop| is
+  // set.
   std::shared_ptr<IndexSets> indexSets;
 
   // Apply a given LocalSet to the state, which tramples all LocalSets before
