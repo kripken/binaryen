@@ -1,3 +1,5 @@
+#define LOCAL_GRAPH_DEBUG 1
+
 /*
  * Copyright 2017 WebAssembly Community Group participants
  *
@@ -121,19 +123,20 @@ struct LocalState {
 private:
   // Ensures |indexSets| exists and that we are the sole owner/referrer, so that
   // it is valid for us to add LocalSets to it (which is the only modification
-  // we ever do).
-  void ensureSoleOwnership() {
+  // we ever do). Returns true if we made any changes.
+  bool ensureSoleOwnership() {
     if (!indexSets) {
       // This is the first set here. Allocate a new IndexSets.
       indexSets = std::make_shared<IndexSets>();
+      return true;
     } else if (indexSets.use_count() > 1) {
       // This has multiple users, so before we write we must make a private
       // copy.
       indexSets = std::make_shared<IndexSets>(*indexSets);
+      return true;
     }
 
-    // We now are the sole owner of this data, and can write to it.
-    assert(indexSets.use_count() == 1);
+    return false;
   }
 };
 
@@ -167,6 +170,9 @@ public:
     auto& phiSets = mergePhis[phi];
     phiSets.insert(a);
     phiSets.insert(b);
+#ifdef LOCAL_GRAPH_DEBUG
+    std::cout << "merge phi " << phi << " points to " << *a << " + " << *b << "\n";
+#endif
     return phi;
   }
 
@@ -194,6 +200,9 @@ public:
   // Given a map of gets to sets, expand the phis: some of the sets are phis,
   // and we must replace them with the sets that we know they refer to.
   void expandPhis(LocalGraph::GetSetses& getSetses) {
+#ifdef LOCAL_GRAPH_DEBUG
+    std::cout << "expand phis\n";
+#endif
     // First, gather all the phis to a single map from each phi to the sets it
     // can reach. We can simply move over the merge phis, but have work to
     // convert the loop phis.
@@ -229,12 +238,18 @@ public:
     // TODO: It may be worth computing strongly-connected components here and
     //       then doing a topological sort, to avoid repeated work.
     for (auto& [phi, sets] : allPhis) {
+#ifdef LOCAL_GRAPH_DEBUG
+      std::cout << "  phi " << phi << "\n";
+#endif
       UniqueNonrepeatingDeferredQueue<Phi*> subPhis;
       for (auto* set : sets) {
+#ifdef LOCAL_GRAPH_DEBUG
+        std::cout << "    phi set: " << *set << "\n";
+#endif
         if (isPhi(set)) {
           // This is another phi, whose items we will need to add.
           subPhis.push(set);
-        }
+        } 
       }
 
       if (subPhis.empty()) {
@@ -270,8 +285,14 @@ public:
 
     // Phis are now expanded, and we can process getSetses.
     for (auto& [_, sets] : getSetses) {
+#ifdef LOCAL_GRAPH_DEBUG
+    std::cout << "Expanding getSetses for " << *_ << "\n";
+#endif
       std::vector<Phi*> phis;
       for (auto* set : sets) {
+#ifdef LOCAL_GRAPH_DEBUG
+        std::cout << "  reads " << *set << '(' << set << ")\n";
+#endif
         if (isPhi(set)) {
           phis.push_back(set);
         }
@@ -280,6 +301,10 @@ public:
       if (phis.empty()) {
         continue;
       }
+
+#ifdef LOCAL_GRAPH_DEBUG
+    std::cout << "  expanding phis for " << *_  << '(' << _ << ")\n";
+#endif
 
       // Remove phis from sets.
       LocalGraph::Sets copy(std::move(sets));
@@ -301,6 +326,9 @@ public:
       // No phis should remain in the output.
       for (auto* set : sets) {
         assert(!isPhi(set));
+#ifdef LOCAL_GRAPH_DEBUG
+        std::cout << "    final set: " << *set << "\n";
+#endif
       }
 #endif
     }
@@ -350,6 +378,10 @@ LocalSet* LocalState::getSet(LocalGet* get, FunctionState& funcState) {
 }
 
 void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
+#ifdef LOCAL_GRAPH_DEBUG
+  std::cout << "mergeIn " << indexSets.get() << " : " << other.indexSets.get() << '\n';
+#endif
+
   if (indexSets == other.indexSets) {
     // We have the same pointer as |other|, so there is no work to do. This is
     // the common case mentioned before of an If arm with no sets, for
@@ -368,34 +400,57 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
     return;
   }
 
-  // We only allocate if we actually find a change to write: two different
-  // indexSets may contain the same data (internalization could save work here,
-  // in theory).
-  auto ensuredSoleOwnership = false;
-  auto ensure = [&]() {
-    if (!ensuredSoleOwnership) {
-      ensureSoleOwnership();
-      ensuredSoleOwnership = true;
-    }
-  };
+#ifdef LOCAL_GRAPH_DEBUG
+  std::cout << "  do manual merge\n";
+#endif
+
+  for (auto& [index, set] : *indexSets) {
+#ifdef LOCAL_GRAPH_DEBUG
+    std::cout << "  I have this set: " << *set << "\n";
+#endif
+  }
 
   for (auto& [index, set] : *other.indexSets) {
+#ifdef LOCAL_GRAPH_DEBUG
+  std::cout << "  looping on other set " << *set << "\n";
+#endif
     auto iter = indexSets->find(index);
     if (iter == indexSets->end()) {
       // We had nothing for this index: just copy.
-      ensure();
+#ifdef LOCAL_GRAPH_DEBUG
+      std::cout << "    just copy\n";
+#endif
+      ensureSoleOwnership();
       (*indexSets)[index] = set;
-      return;
+      continue;
     }
 
     if (iter->second == set) {
+#ifdef LOCAL_GRAPH_DEBUG
+      std::cout << "    just skip\n";
+#endif
       // We had the same value: skip.
       continue;
     }
 
     // We have different values, so this is a merge that creates a new phi.
-    ensure();
-    iter->second = funcState.makeMergePhi(iter->second, set);
+#ifdef LOCAL_GRAPH_DEBUG
+    std::cout << "    make merge phi\n";
+#endif
+    auto* phi = funcState.makeMergePhi(iter->second, set);
+    if (ensureSoleOwnership()) {
+      // The iterator was invalidated.
+      (*indexSets)[index] = phi;
+    } else {
+      iter->second = phi;
+    }
+std::cout << "just wroate " << iter->second << '\n';
+  }
+
+  for (auto& [index, set] : *indexSets) {
+#ifdef LOCAL_GRAPH_DEBUG
+    std::cout << "  After merge, I have this set: " << *set << '(' << set << ")\n";
+#endif
   }
 }
 
@@ -484,9 +539,9 @@ LocalGraph::LocalGraph(Function* func, Module* module) : func(func) {
 #ifdef LOCAL_GRAPH_DEBUG
   std::cout << "LocalGraph::dump\n";
   for (auto& [get, sets] : getSetses) {
-    std::cout << "GET\n" << get << " is influenced by\n";
+    std::cout << "GET\n" << *get << '(' << get << ") is influenced by\n";
     for (auto* set : sets) {
-      std::cout << set << '\n';
+      std::cout << *set << '\n';
     }
   }
   std::cout << "total locations: " << locations.size() << '\n';
