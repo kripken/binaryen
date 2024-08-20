@@ -217,6 +217,14 @@ public:
     localState.loop = loop;
   }
 
+  // Given the current loop, end it. We are also provided the outer loop (or
+  // null, if there is none), and the local state to update.
+  void endLoop(Loop* loop, Loop* outerLoop, LocalState& localState) {
+    // We were in this loop, and are now in the outer one.
+    assert(localState.loop == loop);
+    localState.loop = outerLoop;
+  }
+
   // Adds a link to a loop entry. This is called both to link the basic block
   // before the loop, as well as backedges to it. We store all the arriving data
   // for later, when it is used to compute phis.
@@ -235,16 +243,25 @@ public:
     // convert the loop phis.
     auto allPhis = std::move(mergePhis);
     for (auto& [_, loopInfo] : loopInfos) {
-      // Each phi can reach all values in the indexSetses that arrive at loop
+      // Each phi can reach all values in the indexSetses that arrive at |loop|
       // (of the proper index).
       for (auto& [_, phi] : loopInfo.phis) {
+#ifdef LOCAL_GRAPH_DEBUG
+    std::cout << "  processing loop phi " << *phi << "\n";
+#endif
         auto& loopPhi = allPhis[phi];
         for (auto& arrival : loopInfo.arrivals) {
+#ifdef LOCAL_GRAPH_DEBUG
+          std::cout << "   processing arrivals from loop " << arrival.loop << "\n";
+#endif
           LocalSet* set = nullptr;
           if (arrival.indexSets) {
             auto iter = arrival.indexSets->find(phi->index);
             if (iter != arrival.indexSets->end()) {
               set = iter->second;
+#ifdef LOCAL_GRAPH_DEBUG
+              std::cout << "    found a value " << *set << "\n";
+#endif
             }
           }
           if (!set) {
@@ -255,9 +272,15 @@ public:
               // have already been allocated earlier.
               assert(loopInfos[arrival.loop].phis.count(phi->index));
               set = loopInfos[arrival.loop].phis[phi->index];
+#ifdef LOCAL_GRAPH_DEBUG
+              std::cout << "    found another phi " << *set << "\n";
+#endif
             } else {
               // This is the function entry, which we represent as nullptr, so
               // we already have the right value.
+#ifdef LOCAL_GRAPH_DEBUG
+              std::cout << "    found a nullptr\n";
+#endif
             }
           }
           loopPhi.insert(set);
@@ -274,7 +297,7 @@ public:
     //       then doing a topological sort, to avoid repeated work.
     for (auto& [phi, sets] : allPhis) {
 #ifdef LOCAL_GRAPH_DEBUG
-      std::cout << "  phi " << phi << "\n";
+      std::cout << "  phi " << phi << " : $" << phi->index << "\n";
 #endif
       UniqueNonrepeatingDeferredQueue<Phi*> subPhis;
       for (auto* set : sets) {
@@ -518,6 +541,13 @@ struct LocalGraphComputer
   // We track loops so that we can tell in which we are currently in.
   std::vector<Loop*> loopStack;
 
+  // When we create new blocks, set up their enclosing loops.
+  BasicBlock* makeBasicBlock() {
+    auto* block = new BasicBlock();
+    block->contents.loop = loopStack.empty() ? nullptr : loopStack.back();
+    return block;
+  }
+
   // Loops must set up the state so that phis are used.
   static void doStartLoop(LocalGraphComputer* self, Expression** currp) {
     Super::doStartLoop(self, currp);
@@ -545,7 +575,7 @@ struct LocalGraphComputer
     // We are now in the loop before us, if there was one.
     if (self->currBasicBlock) {
       auto* outerLoop = self->loopStack.empty() ? nullptr : self->loopStack.back();
-      self->currBasicBlock->contents.loop = outerLoop;
+      self->funcState.endLoop(loop, outerLoop, self->currBasicBlock->contents);
     }
   }
 

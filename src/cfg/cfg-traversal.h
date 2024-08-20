@@ -64,7 +64,7 @@ struct CFGWalker : public PostWalker<SubType, VisitorType> {
 
   // Override this to do processing when a basic block is finished, that is,
   // after we have scanned all its contents and also finished linking it to
-  // other blocks.
+  // other blocks. TODO? (and, name..?)
   void doFinishBasicBlock(BasicBlock* block) {}
 
   // Helper that casts before calling finishBasicBlock.
