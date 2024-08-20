@@ -156,8 +156,11 @@ private:
     // Map of indexes to phis for that index in this loop.
     std::unordered_map<Index, Phi*> phis;
 
-    // All incoming data, one indexSets for each branch to the loop top.
-    std::vector<std::shared_ptr<IndexSets>> indexSetses;
+    // All arriving data, one entry for each branch to the loop top. We must
+    // track both indexSets and the loops they are in (since what an empty
+    // entry in an indexSets means depends on whether it is in a loop), so we
+    // store entire LocalStates here.
+    std::vector<LocalState> arrivals;
   };
 
   std::unordered_map<Loop*, LoopInfo> loopInfos;
@@ -197,12 +200,12 @@ public:
 
   // Called right after we enter a loop, after CFGWalker has linked the basic
   // block before us to ourselves. This function sets up the local state
-  // properly.
+  // properly (so it modifies |localState|).
   void startLoop(Loop* loop, LocalState& localState) {
     // As CFGWalker has linked the basic block before us to us, we currently
     // contain the data arriving from before the loop. Add that as a link to
     // the loop entry.
-    linkLoop(loop, localState.indexSets);
+    linkLoop(loop, localState);
 
     // Clear indexSets, as every value from the start of this loop will become a
     // phi when it is used, and a missing entry in indexSets is how we indicate
@@ -211,14 +214,14 @@ public:
     localState.indexSets.reset();
 
     // We are now ready to mark the local state as being in this loop.
-    currBasicBlock->contents.loop = loop;
+    localState.loop = loop;
   }
 
   // Adds a link to a loop entry. This is called both to link the basic block
   // before the loop, as well as backedges to it. We store all the arriving data
   // for later, when it is used to compute phis.
-  void linkLoop(Loop* loop, std::shared_ptr<IndexSets> indexSets) {
-    loopInfos[loop].indexSetses.push_back(indexSets);
+  void linkLoop(Loop* loop, const LocalState& localState) {
+    loopInfos[loop].arrivals.push_back(localState);
   }
 
   // Given a map of gets to sets, expand the phis: some of the sets are phis,
@@ -232,24 +235,32 @@ public:
     // convert the loop phis.
     auto allPhis = std::move(mergePhis);
     for (auto& [_, loopInfo] : loopInfos) {
-      // Each phi can reach all values in the indexSetses that reach this loop
+      // Each phi can reach all values in the indexSetses that arrive at loop
       // (of the proper index).
       for (auto& [_, phi] : loopInfo.phis) {
         auto& loopPhi = allPhis[phi];
-        for (auto& indexSets : loopInfo.indexSetses) {
-          if (!indexSets) {
-            // This is a read of the function entry value (if this were of a
-            // loop value, then a read of a missing element in an indexSet would
-            // lead to us creating a phi and filling in the element).
-            loopPhi.insert(nullptr);
+        for (auto& arrival : loopInfo.arrivals) {
+          LocalSet* set = nullptr;
+          if (arrival.indexSets) {
+            auto iter = arrival.indexSets->find(phi->index);
+            if (iter != arrival.indexSets->end()) {
+              set = iter->second;
+            }
           }
-          auto iter = indexSets->find(phi->index);
-          if (iter == indexSets->end()) {
-            // See above.
-            loopPhi.insert(nullptr);
-          } else {
-            loopPhi.insert(iter->second);
+          if (!set) {
+            // We did not find an entry for this index, so it is either a value
+            // from the function entry or a phi itself.
+            if (arrival.loop) {
+              // This is a another phi (or perhaps ourselves). This phi must
+              // have already been allocated earlier.
+              assert(loopInfos[arrival.loop].phis.count(phi->index));
+              set = loopInfos[arrival.loop].phis[phi->index];
+            } else {
+              // This is the function entry, which we represent as nullptr, so
+              // we already have the right value.
+            }
           }
+          loopPhi.insert(set);
         }
       }
     }
