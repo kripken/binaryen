@@ -1,4 +1,4 @@
-//#define LOCAL_GRAPH_DEBUG 1
+#define LOCAL_GRAPH_DEBUG 1
 
 /*
  * Copyright 2017 WebAssembly Community Group participants
@@ -468,9 +468,11 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
   }
 #endif
 
+  // XXX a missing entry either for us or for them is an entry or a phi! needs merge!!1
+
   for (auto& [index, set] : *other.indexSets) {
 #ifdef LOCAL_GRAPH_DEBUG
-  std::cout << "  looping on other set " << *set << "\n";
+    std::cout << "  looping on other set " << *set << "\n";
 #endif
     auto iter = indexSets->find(index);
     if (iter == indexSets->end()) {
@@ -502,7 +504,6 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
     } else {
       iter->second = phi;
     }
-std::cout << "just wroate " << iter->second << '\n';
   }
 
 #ifdef LOCAL_GRAPH_DEBUG
