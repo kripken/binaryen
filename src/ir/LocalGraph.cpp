@@ -258,7 +258,7 @@ public:
       // repeating queue, so we don't need to handle cycles here.
       while (!subPhis.empty()) {
         auto* subPhi = subPhis.pop();
-        assert(!isPhi(subPhi));
+        assert(isPhi(subPhi));
         for (auto* set : allPhis[subPhi]) {
           if (isPhi(set)) {
             subPhis.push(set);
