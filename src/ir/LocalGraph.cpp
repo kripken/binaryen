@@ -282,10 +282,7 @@ public:
       }
 
       // Remove phis from sets.
-      std::cout << sets.size() << '\n';
       LocalGraph::Sets copy(std::move(sets));
-      std::cout << copy.size() << " : " << sets.size() << '\n';
-      assert(sets.empty());
       for (auto* set : copy) {
         if (!isPhi(set)) {
           sets.insert(set);
