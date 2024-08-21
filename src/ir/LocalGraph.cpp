@@ -469,6 +469,11 @@ void LocalState::mergeIn(const LocalState& other, FunctionState& funcState) {
 #endif
 
   // XXX a missing entry either for us or for them is an entry or a phi! needs merge!!1
+  // Whenever my |loop| differs from other.loop then we must create a new
+  // phi context, which means generalizing phi contexts from "loop" to "loop or
+  // forward merge", leading us to make phis just like SSA. Otherwise, we'd
+  // need to make individial mergePhis when loop != other.loop even for empty
+  // entries (!). Sad stuff
 
   for (auto& [index, set] : *other.indexSets) {
 #ifdef LOCAL_GRAPH_DEBUG
