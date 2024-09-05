@@ -78,6 +78,10 @@ protected:
   Function* func;
   Module* module;
 
+  // Internal API to computed |getInfluences|. This may be called eagerly or
+  // lazily depending on the class, see below.
+  void doComputeGetInfluences(GetInfluencesMap& getInfluences) const;
+
   std::set<Index> SSAIndexes;
 };
 
@@ -112,7 +116,9 @@ struct LocalGraph : public LocalGraphBase {
   // algorithms that propagate changes). Set influences are the gets that can
   // read from it; get influences are the sets that can (directly) read from it.
   void computeSetInfluences();
-  void computeGetInfluences();
+  void computeGetInfluences() {
+    doComputeGetInfluences(getInfluences);
+  }
 
   void computeInfluences() {
     computeSetInfluences();
@@ -200,12 +206,29 @@ struct LazyLocalGraph : public LocalGraphBase {
     }
     return iter->second;
   }
+  const GetInfluences& getGetInfluences(LocalGet* get) const {
+    // We compute get influences on the first request. This is lazy but only at
+    // a very rough grain, since we do them all on that first request.
+    if (!computedGetInfluences) {
+      doComputeGetInfluences(getInfluences);
+      computedGetInfluences = true;
+    }
+    auto iter = getInfluences.find(get);
+    if (iter == getInfluences.end()) {
+      // Use a canonical constant empty set to avoid allocation.
+      static const GetInfluences empty;
+      return empty;
+    }
+    return iter->second;
+  }
 
 private:
   // These data structures are mutable so that we can memoize.
   mutable GetSetsMap getSetsMap;
-
   mutable SetInfluencesMap setInfluences;
+  mutable GetInfluencesMap getInfluences;
+
+  mutable bool computedGetInfluences = false;
 
   // Compute the sets for a get and store them on getSetsMap.
   void computeGetSets(LocalGet* get) const;

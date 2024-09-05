@@ -512,7 +512,7 @@ void LocalGraph::computeSetInfluences() {
   }
 }
 
-void LocalGraph::computeGetInfluences() {
+void LocalGraphBase::doComputeGetInfluences(GetInfluencesMap& getInfluences) const {
   for (auto& [curr, _] : locations) {
     if (auto* set = curr->dynCast<LocalSet>()) {
       FindAll<LocalGet> findAll(set->value);
