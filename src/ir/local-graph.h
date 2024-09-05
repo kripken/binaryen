@@ -78,10 +78,6 @@ protected:
   Function* func;
   Module* module;
 
-  // Internal API to computed |getInfluences|. This may be called eagerly or
-  // lazily depending on the class, see below.
-  void doComputeGetInfluences(GetInfluencesMap& getInfluences) const;
-
   std::set<Index> SSAIndexes;
 };
 
@@ -116,15 +112,15 @@ struct LocalGraph : public LocalGraphBase {
   // algorithms that propagate changes). Set influences are the gets that can
   // read from it; get influences are the sets that can (directly) read from it.
   void computeSetInfluences();
-  void computeGetInfluences() {
-    doComputeGetInfluences(getInfluences);
-  }
+  void computeGetInfluences();
 
   void computeInfluences() {
     computeSetInfluences();
     computeGetInfluences();
   }
 
+  // In this eager local graph, computeSetInfluences (or computeInfluences) must
+  // be called before this.
   const SetInfluences& getSetInfluences(LocalSet* set) const {
     auto iter = setInfluences.find(set);
     if (iter == setInfluences.end()) {
@@ -134,6 +130,8 @@ struct LocalGraph : public LocalGraphBase {
     }
     return iter->second;
   }
+  // In this eager local graph, computeGetInfluences (or computeInfluences) must
+  // be called before this.
   const GetInfluences& getGetInfluences(LocalGet* get) const {
     auto iter = getInfluences.find(get);
     if (iter == getInfluences.end()) {
@@ -210,7 +208,7 @@ struct LazyLocalGraph : public LocalGraphBase {
     // We compute get influences on the first request. This is lazy but only at
     // a very rough grain, since we do them all on that first request.
     if (!computedGetInfluences) {
-      doComputeGetInfluences(getInfluences);
+      computeGetInfluences();
       computedGetInfluences = true;
     }
     auto iter = getInfluences.find(get);
@@ -234,6 +232,8 @@ private:
   void computeGetSets(LocalGet* get) const;
   // Compute influences for a set and store them on setInfluences.
   void computeSetInfluences(LocalSet* set) const;
+  // Compute influences for gets and store them on getInfluences.
+  void computeGetInfluences() const;
 
   // This remains alive as long as we are, so that we can compute things lazily.
   std::unique_ptr<LocalGraphFlower> flower;

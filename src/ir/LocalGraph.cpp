@@ -512,7 +512,8 @@ void LocalGraph::computeSetInfluences() {
   }
 }
 
-void LocalGraphBase::doComputeGetInfluences(GetInfluencesMap& getInfluences) const {
+// Compute get influences, using a list of locations.
+static void doComputeGetInfluences(LocalGraphBase::GetInfluencesMap& getInfluences, const LocalGraphBase::Locations& locations) {
   for (auto& [curr, _] : locations) {
     if (auto* set = curr->dynCast<LocalSet>()) {
       FindAll<LocalGet> findAll(set->value);
@@ -521,6 +522,10 @@ void LocalGraphBase::doComputeGetInfluences(GetInfluencesMap& getInfluences) con
       }
     }
   }
+}
+
+void LocalGraph::computeGetInfluences() {
+  doComputeGetInfluences(getInfluences, locations);
 }
 
 void LocalGraph::computeSSAIndexes() {
@@ -583,6 +588,10 @@ void LazyLocalGraph::computeGetSets(LocalGet* get) const {
 
 void LazyLocalGraph::computeSetInfluences(LocalSet* set) const {
   flower->computeSetInfluences(set, setInfluences);
+}
+
+void LazyLocalGraph::computeGetInfluences() const {
+  doComputeGetInfluences(getInfluences, locations);
 }
 
 } // namespace wasm
