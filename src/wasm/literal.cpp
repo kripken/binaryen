@@ -116,7 +116,7 @@ Literal::Literal(const Literal& other) : type(other.type) {
       case Type::none:
         return;
       case Type::unreachable:
-        break;
+        WASM_UNREACHABLE("literals cannot be unreachable");
     }
   }
   if (other.isNull()) {
