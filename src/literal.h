@@ -760,10 +760,68 @@ struct GCData {
   // The type of this struct, array, or string.
   HeapType type;
 
-  // The element or field values.
+private:
+  // The element or field values. This is handled in a lazy manner: given |type|
+  // we know what the default value is for each value, and we simply do not fill
+  // in default values, potentially letting the array remain very short. For
+  // example, (array.new (i32.const 9999999)) will not actually allocate a huge
+  // array full of default values, instead |values| will remain empty and |size|
+  // will reflect the actual length. This can save a significant amount of
+  // memory.
+  //
+  // We also do not differentiate default values. For example, if an array of
+  // funcrefs begins empty and is then written a value at index 1,000 then we
+  // grow the array to size 1,000 to write that value, but all the values before
+  // it can remain as default Literal values, of type |none|, which avoids us
+  // needing to do anything more than a fast memset of 0s.
   Literals values;
 
+  // The observable size of the data.
+  size_t size;
+
+  // Get the type of the element at an index.
+  Type getType(size_t i) {
+    if (type.isStruct()) {
+      return type.getStruct().fields[i].type;
+    } else if (type.isArray()) {
+      return type.getArray().element.type;
+    } else if (type.isString()) {
+      return Type::i32;
+    } else {
+      WASM_UNREACHABLE("bad GCData type");
+    }
+  }
+
+public:
   GCData(HeapType type, Literals values) : type(type), values(values) {}
+
+  Literal get(size_t i) {
+    if (i < values.size()) {
+      auto value = values[i];
+      if (value.type != Type::none) {
+        return value;
+      }
+      // Otherwise, this is a |none| that indicates the default value is stored
+      // here. Fall through to return a properly-typed value below.
+    }
+
+    // There is nothing stored at |i|, or it is |none|. Return a proper zero.
+    return Literal::makeZero(getType(i));
+  }
+
+  Literal set(size_t i, const Literal value) {
+    // If we are writing a zero, and the value was already zero, there is no
+    // need to do anything (this can avoid growing |values|).
+    if (value.isZero() && get(i).isZero()) {
+      return;
+    }
+
+    // Ensure room, and write.
+    if (i >= values.size()) {
+      values.resize(i + 1);
+    }
+    values[i] = value;
+  }
 };
 
 // The data of a (ref exn) literal.
