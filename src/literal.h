@@ -107,6 +107,11 @@ public:
   bool isNull() const { return type.isNull(); }
 
   bool isZero() const {
+    // Like makeZero, we consider "zero" to mean the default value.
+    if (type.isRef()) {
+      return isNull();
+    }
+
     switch (type.getBasic()) {
       case Type::i32:
         return i32 == 0;
