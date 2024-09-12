@@ -1717,7 +1717,6 @@ public:
       return init;
     }
     auto heapType = curr->type.getHeapType();
-    const auto& element = heapType.getArray().element;
     Index num = size.getSingleValue().geti32();
     if (num >= DataLimit) {
       hostLimit("allocation failure");
