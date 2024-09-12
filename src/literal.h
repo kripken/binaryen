@@ -827,12 +827,32 @@ public:
 
     // Ensure room, and write.
     if (i >= values.size()) {
+      // Note that we do not need to do anything but resize here: we will the
+      // values with default Literal values, which means type none, which we
+      // interpret as the default for the field (no matter its type).
       values.resize(i + 1);
     }
     values[i] = value;
   }
 
   size_t size() const { return size_; }
+
+  bool operator==(const GCData& other) {
+    if (type != other.type) {
+      return false;
+    }
+    if (size_ != other.size_) {
+      return false;
+    }
+    for (size_t i = 0; i < leftSize; i++) {
+      // Note that we use get() to compare, and do not compare |values|
+      // directly, as a null might be represented internally in 2 ways.
+      if (get(i) != other.get(i)) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   // TODO: Iteration? But get returns a Literal, not Literal&, intentionally.
 };

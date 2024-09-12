@@ -1716,7 +1716,6 @@ public:
       assert(init.breaking());
       return init;
     }
-    auto heapType = curr->type.getHeapType();
     Index num = size.getSingleValue().geti32();
     if (num >= DataLimit) {
       hostLimit("allocation failure");
@@ -2103,21 +2102,8 @@ public:
         } else if (!leftData || !rightData) {
           result = 0;
         } else {
-          // Both exist, see if they are identical in size.
-          auto leftSize = leftData->size();
-          auto rightSize = rightData->size();
-          if (leftSize != rightSize) {
-            result = 0;
-          } else {
-            // See if they are identical in contents.
-            result = 1;
-            for (size_t i = 0; i < leftSize; i++) {
-              if (leftData->get(i) != rightData->get(i)) {
-                result = 0;
-                break;
-              }
-            }
-          }
+          // Both exist, see if they are identical in content.
+          result = (*leftData == *rightData);
         }
         break;
       }
