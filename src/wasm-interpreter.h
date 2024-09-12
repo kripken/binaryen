@@ -191,8 +191,8 @@ protected:
   // data, as we don't have a cycle collector. Those leaks are not a serious
   // problem as Binaryen is not really used in long-running tasks, so we ignore
   // this function in LSan.
-  Literal makeGCData(const Literals& data, Type type) {
-    auto allocation = std::make_shared<GCData>(type.getHeapType(), data);
+  Literal makeGCData(Type type, size_t size) {
+    auto allocation = std::make_shared<GCData>(type.getHeapType(), size);
 #if __has_feature(leak_sanitizer) || __has_feature(address_sanitizer)
     // GC data with cycles will leak, since shared_ptrs do not handle cycles.
     // Binaryen is generally not used in long-running programs so we just ignore
@@ -1642,20 +1642,19 @@ public:
     }
     auto heapType = curr->type.getHeapType();
     const auto& fields = heapType.getStruct().fields;
-    Literals data(fields.size());
-    for (Index i = 0; i < fields.size(); i++) {
-      auto& field = fields[i];
-      if (curr->isWithDefault()) {
-        data[i] = Literal::makeZero(field.type);
-      } else {
+    auto ret = makeGCData(curr->type, fields.size());
+    // No need to fill in default values.
+    if (!curr->isWithDefault()) {
+      for (Index i = 0; i < fields.size(); i++) {
+        auto& field = fields[i];
         auto value = self()->visit(curr->operands[i]);
         if (value.breaking()) {
           return value;
         }
-        data[i] = truncateForPacking(value.getSingleValue(), field);
+        data->set(i, truncateForPacking(value.getSingleValue(), field));
       }
     }
-    return makeGCData(data, curr->type);
+    return ret;
   }
   Flow visitStructGet(StructGet* curr) {
     NOTE_ENTER("StructGet");
@@ -1685,8 +1684,8 @@ public:
       trap("null ref");
     }
     auto field = curr->ref->type.getHeapType().getStruct().fields[curr->index];
-    data->values.set(curr->index,
-                     truncateForPacking(value.getSingleValue(), field));
+    data->set(curr->index,
+              truncateForPacking(value.getSingleValue(), field));
     return Flow();
   }
 
@@ -1722,20 +1721,15 @@ public:
     if (num >= DataLimit) {
       hostLimit("allocation failure");
     }
-    Literals data(num);
-    if (curr->isWithDefault()) {
-      auto zero = Literal::makeZero(element.type);
-      for (Index i = 0; i < num; i++) {
-        data[i] = zero;
-      }
-    } else {
+    auto ret = makeGCData(curr->type, num);
+    if (!curr->isWithDefault()) {
       auto field = curr->type.getHeapType().getArray().element;
       auto value = truncateForPacking(init.getSingleValue(), field);
       for (Index i = 0; i < num; i++) {
-        data[i] = value;
+        data->set(i, value);
       }
     }
-    return makeGCData(data, curr->type);
+    return ret;
   }
   Flow visitArrayNewData(ArrayNewData* curr) { WASM_UNREACHABLE("unimp"); }
   Flow visitArrayNewElem(ArrayNewElem* curr) { WASM_UNREACHABLE("unimp"); }
@@ -1758,15 +1752,15 @@ public:
     }
     auto heapType = curr->type.getHeapType();
     auto field = heapType.getArray().element;
-    Literals data(num);
+    auto ret = makeGCData(curr->type, num);
     for (Index i = 0; i < num; i++) {
       auto value = self()->visit(curr->values[i]);
       if (value.breaking()) {
         return value;
       }
-      data[i] = truncateForPacking(value.getSingleValue(), field);
+      data->set(i, truncateForPacking(value.getSingleValue(), field));
     }
-    return makeGCData(data, curr->type);
+    return ret;
   }
   Flow visitArrayGet(ArrayGet* curr) {
     NOTE_ENTER("ArrayGet");
@@ -1783,7 +1777,7 @@ public:
       trap("null ref");
     }
     Index i = index.getSingleValue().geti32();
-    if (i >= data->values.size()) {
+    if (i >= data->size()) {
       trap("array oob");
     }
     auto field = curr->ref->type.getHeapType().getArray().element;
@@ -1808,7 +1802,7 @@ public:
       trap("null ref");
     }
     Index i = index.getSingleValue().geti32();
-    if (i >= data->values.size()) {
+    if (i >= data->size()) {
       trap("array oob");
     }
     auto field = curr->ref->type.getHeapType().getArray().element;
@@ -1905,7 +1899,7 @@ public:
     auto field = curr->ref->type.getHeapType().getArray().element;
     fillVal = truncateForPacking(fillVal, field);
 
-    size_t arraySize = data->values.size();
+    size_t arraySize = data->size();
     if (indexVal > arraySize || sizeVal > arraySize ||
         indexVal + sizeVal > arraySize || indexVal + sizeVal < indexVal) {
       trap("out of bounds array access in array.fill");
@@ -1964,13 +1958,15 @@ public:
           trap("array oob");
         }
         Literals contents;
-        if (endVal > startVal) {
-          contents.reserve(endVal - startVal);
+        if (endVal <= startVal) {
+          return makeGCData(curr->type, 0);
+        } else {
+          auto ret = makeGCData(curr->type, endVal - startVal);
           for (size_t i = startVal; i < endVal; i++) {
-            contents.push_back(ptrData->get(i));
+            ret->set(i - startVal, ptrData->get(i));
           }
+          return ret;
         }
-        return makeGCData(contents, curr->type);
       }
       case StringNewFromCodePoint: {
         uint32_t codePoint = ptr.getSingleValue().getUnsigned();
@@ -2031,18 +2027,16 @@ public:
       hostLimit("allocation failure");
     }
 
-    Literals contents;
     auto leftSize = leftData->size();
     auto rightSize = rightData->size();
-    contents.reserve(leftSize + rightSize);
+    auto ret = makeGCData(curr->type, leftSize + rightSize);
     for (size_t i = 0; i < leftSize; i++) {
-      contents.push_back(leftData->get(i));
+      ret->set(i, leftData->get(i));
     }
     for (size_t i = 0; i < rightSize; i++) {
-      contents.push_back(rightData->get(i));
+      ret->set(leftSize + i, rightData->get(i));
     }
-
-    return makeGCData(contents, curr->type);
+    return ret;
   }
   Flow visitStringEncode(StringEncode* curr) {
     // For now we only support JS-style strings into arrays.
@@ -2076,7 +2070,7 @@ public:
     }
 
     for (Index i = 0; i < strData->size(); i++) {
-      arrayData.set(startVal + i, strData.get(i));
+      arrayData->set(startVal + i, strData->get(i));
     }
 
     return Literal(int32_t(strData->size()));
@@ -2127,24 +2121,22 @@ public:
         if (!leftData || !rightData) {
           trap("null ref");
         }
-        auto& leftValues = leftData->values;
-        auto& rightValues = rightData->values;
         Index i = 0;
         while (1) {
-          if (i == leftValues.size() && i == rightValues.size()) {
+          if (i == leftData->size() && i == rightData->size()) {
             // We reached the end, and they are equal.
             result = 0;
             break;
-          } else if (i == leftValues.size()) {
+          } else if (i == leftData->size()) {
             // The left string is short.
             result = -1;
             break;
-          } else if (i == rightValues.size()) {
+          } else if (i == rightData->size()) {
             result = 1;
             break;
           }
-          auto left = leftValues[i].getInteger();
-          auto right = rightValues[i].getInteger();
+          auto left = leftData->get(i).getInteger();
+          auto right = rightData->get(i).getInteger();
           if (left < right) {
             // The left character is lower.
             result = -1;
@@ -2207,18 +2199,19 @@ public:
     }
     auto startVal = start.getSingleValue().getUnsigned();
     auto endVal = end.getSingleValue().getUnsigned();
-    endVal = std::min<size_t>(endVal, refData.size());
+    endVal = std::min<size_t>(endVal, refData->size());
 
-    Literals contents;
-    if (endVal > startVal) {
-      contents.reserve(endVal - startVal);
-      for (size_t i = startVal; i < endVal; i++) {
-        if (i < refData.size()) {
-          contents.push_back(refData.get(i));
-        }
+    if (endVal <= startVal) {
+      return  makeGCData(curr->type, 0);
+    }
+
+    auto ret = makeGCData(curr->type, endVal - startVal);
+    for (size_t i = startVal; i < endVal; i++) {
+      if (i < refData->size()) {
+        ret->set(i - startVal, refData->get(i));
       }
     }
-    return makeGCData(contents, curr->type);
+    return ret;
   }
 
   virtual void trap(const char* why) { WASM_UNREACHABLE("unimp"); }
@@ -4011,7 +4004,6 @@ public:
 
     auto heapType = curr->type.getHeapType();
     const auto& element = heapType.getArray().element;
-    Literals contents;
 
     const auto& seg = *wasm.getDataSegment(curr->segment);
     auto elemBytes = element.getByteSize();
@@ -4020,12 +4012,13 @@ public:
         end > seg.data.size()) {
       trap("out of bounds segment access in array.new_data");
     }
-    contents.reserve(size);
+
+    auto ret = self()->makeGCData(curr->type, size);
     for (Index i = offset; i < end; i += elemBytes) {
       auto addr = (void*)&seg.data[i];
-      contents.push_back(this->makeFromMemory(addr, element));
+      ret->set(i - offset, this->makeFromMemory(addr, element));
     }
-    return self()->makeGCData(contents, curr->type);
+    return ret;
   }
   Flow visitArrayNewElem(ArrayNewElem* curr) {
     NOTE_ENTER("ArrayNewElem");
@@ -4051,12 +4044,14 @@ public:
     if (end > 0 && droppedElementSegments.count(curr->segment)) {
       trap("out of bounds segment access in array.new_elem");
     }
+
+    auto ret = self()->makeGCData(curr->type, size);
     contents.reserve(size);
     for (Index i = offset; i < end; ++i) {
       auto val = self()->visit(seg.data[i]).getSingleValue();
-      contents.push_back(val);
+      ret->set(i - offset, val);
     }
-    return self()->makeGCData(contents, curr->type);
+    return ret;
   }
   Flow visitArrayInitData(ArrayInitData* curr) {
     NOTE_ENTER("ArrayInit");
