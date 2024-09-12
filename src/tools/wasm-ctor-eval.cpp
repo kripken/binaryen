@@ -847,7 +847,6 @@ public:
     } else {
       // This is the first usage of this data. Generate a struct.new /
       // array.new for it.
-      auto& values = value.getGCData()->values;
       std::vector<Expression*> args;
 
       // The initial values for this allocation may themselves be GC
@@ -869,8 +868,8 @@ public:
         definingGlobals[data] = DefiningGlobalInfo{definingGlobalName, type};
       }
 
-      for (auto& value : values) {
-        args.push_back(getSerialization(value));
+      for (size_t i = 0; i < data->size(); i++) {
+        args.push_back(getSerialization(data->get(i)));
       }
 
       Expression* init;
