@@ -758,9 +758,12 @@ std::ostream& operator<<(std::ostream& o, wasm::Literals literals);
 // should be interpreted.
 struct GCData {
   // The type of this struct, array, or string.
-  HeapType type;
+  const HeapType type;
 
 private:
+  // The observable size of the data.
+  const size_t size_;
+
   // The element or field values. This is handled in a lazy manner: given |type|
   // we know what the default value is for each value, and we simply do not fill
   // in default values, potentially letting the array remain very short. For
@@ -775,9 +778,6 @@ private:
   // it can remain as default Literal values, of type |none|, which avoids us
   // needing to do anything more than a fast memset of 0s.
   Literals values;
-
-  // The observable size of the data.
-  size_t size_;
 
   // Get the type of the element at an index.
   Type getType(size_t i) const {
@@ -799,7 +799,7 @@ public:
   // Literals with the data to be copied, then the caller would need to fill in
   // that array, but our lazy representation of content here tries to avoid
   // exactly that work).
-  GCData(HeapType type, size_t size) : size_(size) {}
+  GCData(HeapType type, size_t size) : type(type), size_(size) {}
 
   Literal get(size_t i) const {
     if (i < values.size()) {
