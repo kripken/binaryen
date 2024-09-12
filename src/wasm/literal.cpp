@@ -92,11 +92,11 @@ Literal::Literal(std::string_view string)
   // Extract individual WTF-16LE code units.
   Literals contents;
   assert(string.size() % 2 == 0);
+  gcData = std::make_shared<GCData>(HeapType::string, string.size());
   for (size_t i = 0; i < string.size(); i += 2) {
     int32_t u = uint8_t(string[i]) | (uint8_t(string[i + 1]) << 8);
-    contents.push_back(Literal(u));
+    gcData->set(i / 2, Literal(u));
   }
-  gcData = std::make_shared<GCData>(HeapType::string, contents);
 }
 
 Literal::Literal(const Literal& other) : type(other.type) {
@@ -436,7 +436,7 @@ bool Literal::operator==(const Literal& other) const {
       return func == other.func;
     }
     if (type.isString()) {
-      return gcData->values == other.gcData->values;
+      return *gcData == *other.gcData;
     }
     if (type.isData()) {
       return gcData == other.gcData;
@@ -665,7 +665,8 @@ std::ostream& operator<<(std::ostream& o, Literal literal) {
             o << "string(";
             // Convert WTF-16 literals to WTF-16 string.
             std::stringstream wtf16;
-            for (auto c : data->values) {
+            for (size_t i = 0; i < data->size(); i++) {
+              auto c = data->get(i);
               auto u = c.getInteger();
               assert(u < 0x10000);
               wtf16 << uint8_t(u & 0xFF);
@@ -686,7 +687,11 @@ std::ostream& operator<<(std::ostream& o, Literal literal) {
       assert(literal.isData());
       auto data = literal.getGCData();
       assert(data);
-      o << "[ref " << data->type << ' ' << data->values << ']';
+      o << "[ref " << data->type;
+      for (size_t i = 0; i < data->size(); i++) {
+        o << ' ' << data->get(i);
+      }
+      o << ']';
     }
   }
   restoreNormalColor(o);
@@ -2829,8 +2834,8 @@ Literal Literal::internalize() const {
     return Literal(std::shared_ptr<GCData>{}, HeapTypes::none.getBasic(share));
   }
   if (gcData->type.isMaybeShared(HeapType::i31)) {
-    assert(gcData->values[0].type.getHeapType().isMaybeShared(HeapType::i31));
-    return gcData->values[0];
+    assert(gcData->get(0).type.getHeapType().isMaybeShared(HeapType::i31));
+    return gcData->get(0);
   }
   return Literal(gcData, gcData->type);
 }
