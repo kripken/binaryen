@@ -793,16 +793,13 @@ private:
   }
 
 public:
+  // The size is an immutable fact of a GCData. The contents should be
+  // immutable as well, but we apply them using individual calls to set(),
+  // below (if we did not do that, say if we had a constructor that accepted a
+  // Literals with the data to be copied, then the caller would need to fill in
+  // that array, but our lazy representation of content here tries to avoid
+  // exactly that work).
   GCData(HeapType type, size_t size) : size_(size) {}
-
-  // TODO: constructor with this? but we want people to avoid filling out a
-  // Literals in the first place. Later, also make set() private, so immutable
-  void apply(const Literals& input) {
-    assert(input.size() == size_);
-    for (size_t i = 0; i < size_; i++) {
-      set(i, input[i]);
-    }
-  }
 
   Literal get(size_t i) const {
     if (i < values.size()) {
@@ -844,7 +841,7 @@ public:
     if (size_ != other.size_) {
       return false;
     }
-    for (size_t i = 0; i < leftSize; i++) {
+    for (size_t i = 0; i < size_; i++) {
       // Note that we use get() to compare, and do not compare |values|
       // directly, as a null might be represented internally in 2 ways.
       if (get(i) != other.get(i)) {
