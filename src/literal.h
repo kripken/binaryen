@@ -777,10 +777,10 @@ private:
   Literals values;
 
   // The observable size of the data.
-  size_t size;
+  size_t size_;
 
   // Get the type of the element at an index.
-  Type getType(size_t i) {
+  Type getType(size_t i) const {
     if (type.isStruct()) {
       return type.getStruct().fields[i].type;
     } else if (type.isArray()) {
@@ -793,9 +793,18 @@ private:
   }
 
 public:
-  GCData(HeapType type, Literals values) : type(type), values(values) {}
+  GCData(HeapType type, size_t size) : size_(size) {}
 
-  Literal get(size_t i) {
+  // TODO: constructor with this? but we want people to avoid filling out a
+  // Literals in the first place. Later, also make set() private, so immutable
+  void apply(const Literals& input) {
+    assert(input.size() == size_);
+    for (size_t i = 0; i < size_; i++) {
+      set(i, input[i]);
+    }
+  }
+
+  Literal get(size_t i) const {
     if (i < values.size()) {
       auto value = values[i];
       if (value.type != Type::none) {
@@ -809,7 +818,7 @@ public:
     return Literal::makeZero(getType(i));
   }
 
-  Literal set(size_t i, const Literal value) {
+  void set(size_t i, const Literal value) {
     // If we are writing a zero, and the value was already zero, there is no
     // need to do anything (this can avoid growing |values|).
     if (value.isZero() && get(i).isZero()) {
@@ -822,6 +831,12 @@ public:
     }
     values[i] = value;
   }
+
+  size_t size() const {
+    return size_;
+  }
+
+  // TODO: Iteration? But get returns a Literal, not Literal&, intentionally.
 };
 
 // The data of a (ref exn) literal.
@@ -879,10 +894,11 @@ template<> struct hash<wasm::Literal> {
         return digest;
       }
       if (a.type.isString()) {
-        auto& values = a.getGCData()->values;
-        wasm::rehash(digest, values.size());
-        for (auto c : values) {
-          wasm::rehash(digest, c.getInteger());
+        auto data = a.getGCData();
+        auto size = data->size();
+        wasm::rehash(digest, size);
+        for (size_t i = 0; i < size; i++) {
+          wasm::rehash(digest, data->get(i).getInteger());
         }
         return digest;
       }

@@ -1668,7 +1668,7 @@ public:
       trap("null ref");
     }
     auto field = curr->ref->type.getHeapType().getStruct().fields[curr->index];
-    return extendForPacking(data->values[curr->index], field, curr->signed_);
+    return extendForPacking(data->get(curr->index), field, curr->signed_);
   }
   Flow visitStructSet(StructSet* curr) {
     NOTE_ENTER("StructSet");
@@ -1685,8 +1685,8 @@ public:
       trap("null ref");
     }
     auto field = curr->ref->type.getHeapType().getStruct().fields[curr->index];
-    data->values[curr->index] =
-      truncateForPacking(value.getSingleValue(), field);
+    data->values.set(curr->index,
+      truncateForPacking(value.getSingleValue(), field));
     return Flow();
   }
 
@@ -1787,7 +1787,7 @@ public:
       trap("array oob");
     }
     auto field = curr->ref->type.getHeapType().getArray().element;
-    return extendForPacking(data->values[i], field, curr->signed_);
+    return extendForPacking(data->get(i), field, curr->signed_);
   }
   Flow visitArraySet(ArraySet* curr) {
     NOTE_ENTER("ArraySet");
@@ -1812,7 +1812,7 @@ public:
       trap("array oob");
     }
     auto field = curr->ref->type.getHeapType().getArray().element;
-    data->values[i] = truncateForPacking(value.getSingleValue(), field);
+    data->set(i, truncateForPacking(value.getSingleValue(), field));
     return Flow();
   }
   Flow visitArrayLen(ArrayLen* curr) {
@@ -1825,7 +1825,7 @@ public:
     if (!data) {
       trap("null ref");
     }
-    return Literal(int32_t(data->values.size()));
+    return Literal(int32_t(data->size()));
   }
   Flow visitArrayCopy(ArrayCopy* curr) {
     NOTE_ENTER("ArrayCopy");
@@ -1860,19 +1860,19 @@ public:
     size_t destVal = destIndex.getSingleValue().getUnsigned();
     size_t srcVal = srcIndex.getSingleValue().getUnsigned();
     size_t lengthVal = length.getSingleValue().getUnsigned();
-    if (destVal + lengthVal > destData->values.size()) {
+    if (destVal + lengthVal > destData->size()) {
       trap("oob");
     }
-    if (srcVal + lengthVal > srcData->values.size()) {
+    if (srcVal + lengthVal > srcData->size()) {
       trap("oob");
     }
     std::vector<Literal> copied;
     copied.resize(lengthVal);
     for (size_t i = 0; i < lengthVal; i++) {
-      copied[i] = srcData->values[srcVal + i];
+      copied[i] = srcData->get(srcVal + i);
     }
     for (size_t i = 0; i < lengthVal; i++) {
-      destData->values[destVal + i] = copied[i];
+      destData->set(destVal + i, copied[i]);
     }
     return Flow();
   }
@@ -1911,7 +1911,7 @@ public:
       trap("out of bounds array access in array.fill");
     }
     for (size_t i = 0; i < sizeVal; ++i) {
-      data->values[indexVal + i] = fillVal;
+      data->set(indexVal + i, fillVal);
     }
     return {};
   }
@@ -1957,10 +1957,9 @@ public:
         if (!ptrData) {
           trap("null ref");
         }
-        const auto& ptrDataValues = ptrData->values;
         size_t startVal = start.getSingleValue().getUnsigned();
         size_t endVal = end.getSingleValue().getUnsigned();
-        if (startVal > ptrDataValues.size() || endVal > ptrDataValues.size() ||
+        if (startVal > ptrData->size() || endVal > ptrData->size() ||
             endVal < startVal) {
           trap("array oob");
         }
@@ -1968,7 +1967,7 @@ public:
         if (endVal > startVal) {
           contents.reserve(endVal - startVal);
           for (size_t i = startVal; i < endVal; i++) {
-            contents.push_back(ptrDataValues[i]);
+            contents.push_back(ptrData->get(i));
           }
         }
         return makeGCData(contents, curr->type);
@@ -2006,7 +2005,7 @@ public:
       trap("null ref");
     }
 
-    return Literal(int32_t(data->values.size()));
+    return Literal(int32_t(data->size()));
   }
   Flow visitStringConcat(StringConcat* curr) {
     NOTE_ENTER("StringConcat");
@@ -2027,18 +2026,20 @@ public:
       trap("null ref");
     }
 
-    auto totalSize = leftData->values.size() + rightData->values.size();
+    auto totalSize = leftData->size() + rightData->size();
     if (totalSize >= DataLimit) {
       hostLimit("allocation failure");
     }
 
     Literals contents;
-    contents.reserve(leftData->values.size() + rightData->values.size());
-    for (Literal& l : leftData->values) {
-      contents.push_back(l);
+    auto leftSize = leftData->size();
+    auto rightSize = rightData->size();
+    contents.reserve(leftSize + rightSize);
+    for (size_t i = 0; i < leftSize; i++) {
+      contents.push_back(leftData->get(i));
     }
-    for (Literal& l : rightData->values) {
-      contents.push_back(l);
+    for (size_t i = 0; i < rightSize; i++) {
+      contents.push_back(rightData->get(i));
     }
 
     return makeGCData(contents, curr->type);
@@ -2068,19 +2069,17 @@ public:
       trap("null ref");
     }
     auto startVal = start.getSingleValue().getUnsigned();
-    auto& strValues = strData->values;
-    auto& arrayValues = arrayData->values;
     size_t end;
-    if (std::ckd_add<size_t>(&end, startVal, strValues.size()) ||
-        end > arrayValues.size()) {
+    if (std::ckd_add<size_t>(&end, startVal, strData->size()) ||
+        end > arrayData->size()) {
       trap("oob");
     }
 
-    for (Index i = 0; i < strValues.size(); i++) {
-      arrayValues[startVal + i] = strValues[i];
+    for (Index i = 0; i < strData->size(); i++) {
+      arrayData.set(startVal + i, strData.get(i));
     }
 
-    return Literal(int32_t(strData->values.size()));
+    return Literal(int32_t(strData->size()));
   }
   Flow visitStringEq(StringEq* curr) {
     NOTE_ENTER("StringEq");
@@ -2101,9 +2100,26 @@ public:
     switch (curr->op) {
       case StringEqEqual: {
         // They are equal if both are null, or both are non-null and equal.
-        result =
-          (!leftData && !rightData) ||
-          (leftData && rightData && leftData->values == rightData->values);
+        if (!leftData && !rightData) {
+          result = 1;
+        } else if (!leftData || !rightData) {
+          result = 0;
+        } else {
+          // Both exist, see if they are identical in size.
+          auto leftSize = leftData->size();
+          auto rightSize = rightData->size();
+          if (leftSize != rightSize) {
+            result = 0;
+          } else {
+            // See if they are identical in contents.
+            result = 1;
+            for (size_t i = 0; i < leftSize; i++) {
+              if (leftData->get(i) != rightData->get(i)) {
+                result = 0;
+                break;
+              }
+            }
+          }
         break;
       }
       case StringEqCompare: {
@@ -2163,13 +2179,12 @@ public:
     if (!data) {
       trap("null ref");
     }
-    auto& values = data->values;
     Index i = pos.getSingleValue().geti32();
-    if (i >= values.size()) {
+    if (i >= data->size()) {
       trap("string oob");
     }
 
-    return Literal(values[i].geti32());
+    return Literal(data->get(i).geti32());
   }
   Flow visitStringSliceWTF(StringSliceWTF* curr) {
     Flow ref = visit(curr->ref);
@@ -2189,17 +2204,16 @@ public:
     if (!refData) {
       trap("null ref");
     }
-    auto& refValues = refData->values;
     auto startVal = start.getSingleValue().getUnsigned();
     auto endVal = end.getSingleValue().getUnsigned();
-    endVal = std::min<size_t>(endVal, refValues.size());
+    endVal = std::min<size_t>(endVal, refData.size());
 
     Literals contents;
     if (endVal > startVal) {
       contents.reserve(endVal - startVal);
       for (size_t i = startVal; i < endVal; i++) {
-        if (i < refValues.size()) {
-          contents.push_back(refValues[i]);
+        if (i < refData.size()) {
+          contents.push_back(refData.get(i));
         }
       }
     }
@@ -4069,7 +4083,7 @@ public:
     size_t offsetVal = offset.getSingleValue().getUnsigned();
     size_t sizeVal = size.getSingleValue().getUnsigned();
 
-    size_t arraySize = data->values.size();
+    size_t arraySize = data->size();
     if ((uint64_t)indexVal + sizeVal > arraySize) {
       trap("out of bounds array access in array.init");
     }
@@ -4088,7 +4102,7 @@ public:
     }
     for (size_t i = 0; i < sizeVal; i++) {
       void* addr = (void*)&seg->data[offsetVal + i * elemSize];
-      data->values[indexVal + i] = this->makeFromMemory(addr, elem);
+      data->set(indexVal + i, this->makeFromMemory(addr, elem));
     }
     return {};
   }
@@ -4118,7 +4132,7 @@ public:
     size_t offsetVal = offset.getSingleValue().getUnsigned();
     size_t sizeVal = size.getSingleValue().getUnsigned();
 
-    size_t arraySize = data->values.size();
+    size_t arraySize = data->size();
     if ((uint64_t)indexVal + sizeVal > arraySize) {
       trap("out of bounds array access in array.init");
     }
@@ -4138,7 +4152,7 @@ public:
       // of references in the table! ArrayNew suffers the same problem.
       // Fixing it will require changing how we represent segments, at least
       // in the interpreter.
-      data->values[indexVal + i] = self()->visit(seg->data[i]).getSingleValue();
+      data->set(indexVal + i, self()->visit(seg->data[i]).getSingleValue());
     }
     return {};
   }
