@@ -834,6 +834,18 @@ public:
 
   size_t size() const { return size_; }
 
+  GCData& operator=(const GCData& other) {
+    assert(type == other.type && size_ == other.size_);
+
+    // We could just copy values, but doing it the slow way will compact it.
+    // TODO: compact the source too?
+    for (size_t i = 0; i < size_; i++) {
+      set(i, other.get(i));
+    }
+
+    return *this;
+  }
+
   bool operator==(const GCData& other) {
     if (type != other.type) {
       return false;
