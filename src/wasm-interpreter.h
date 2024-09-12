@@ -1643,6 +1643,7 @@ public:
     auto heapType = curr->type.getHeapType();
     const auto& fields = heapType.getStruct().fields;
     auto ret = makeGCData(curr->type, fields.size());
+    auto data = ret.getGCData();
     // No need to fill in default values.
     if (!curr->isWithDefault()) {
       for (Index i = 0; i < fields.size(); i++) {
@@ -1722,6 +1723,7 @@ public:
       hostLimit("allocation failure");
     }
     auto ret = makeGCData(curr->type, num);
+    auto data = ret.getGCData();
     if (!curr->isWithDefault()) {
       auto field = curr->type.getHeapType().getArray().element;
       auto value = truncateForPacking(init.getSingleValue(), field);
@@ -1753,6 +1755,7 @@ public:
     auto heapType = curr->type.getHeapType();
     auto field = heapType.getArray().element;
     auto ret = makeGCData(curr->type, num);
+    auto data = ret.getGCData();
     for (Index i = 0; i < num; i++) {
       auto value = self()->visit(curr->values[i]);
       if (value.breaking()) {
@@ -1962,8 +1965,9 @@ public:
           return makeGCData(curr->type, 0);
         } else {
           auto ret = makeGCData(curr->type, endVal - startVal);
+          auto data = ret.getGCData();
           for (size_t i = startVal; i < endVal; i++) {
-            ret->set(i - startVal, ptrData->get(i));
+            data->set(i - startVal, ptrData->get(i));
           }
           return ret;
         }
@@ -2030,11 +2034,12 @@ public:
     auto leftSize = leftData->size();
     auto rightSize = rightData->size();
     auto ret = makeGCData(curr->type, leftSize + rightSize);
+    auto data = ret.getGCData();
     for (size_t i = 0; i < leftSize; i++) {
-      ret->set(i, leftData->get(i));
+      data->set(i, leftData->get(i));
     }
     for (size_t i = 0; i < rightSize; i++) {
-      ret->set(leftSize + i, rightData->get(i));
+      data->set(leftSize + i, rightData->get(i));
     }
     return ret;
   }
@@ -2206,9 +2211,10 @@ public:
     }
 
     auto ret = makeGCData(curr->type, endVal - startVal);
+    auto data = ret.getGCData();
     for (size_t i = startVal; i < endVal; i++) {
       if (i < refData->size()) {
-        ret->set(i - startVal, refData->get(i));
+        data->set(i - startVal, refData->get(i));
       }
     }
     return ret;
@@ -4014,9 +4020,10 @@ public:
     }
 
     auto ret = self()->makeGCData(curr->type, size);
+    auto data = ret.getGCData();
     for (Index i = offset; i < end; i += elemBytes) {
       auto addr = (void*)&seg.data[i];
-      ret->set(i - offset, this->makeFromMemory(addr, element));
+      data->set(i - offset, this->makeFromMemory(addr, element));
     }
     return ret;
   }
@@ -4046,10 +4053,10 @@ public:
     }
 
     auto ret = self()->makeGCData(curr->type, size);
-    contents.reserve(size);
+    auto data = ret.getGCData();
     for (Index i = offset; i < end; ++i) {
       auto val = self()->visit(seg.data[i]).getSingleValue();
-      ret->set(i - offset, val);
+      data->set(i - offset, val);
     }
     return ret;
   }
