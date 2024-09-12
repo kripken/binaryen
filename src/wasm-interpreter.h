@@ -1686,7 +1686,7 @@ public:
     }
     auto field = curr->ref->type.getHeapType().getStruct().fields[curr->index];
     data->values.set(curr->index,
-      truncateForPacking(value.getSingleValue(), field));
+                     truncateForPacking(value.getSingleValue(), field));
     return Flow();
   }
 
@@ -2120,6 +2120,7 @@ public:
               }
             }
           }
+        }
         break;
       }
       case StringEqCompare: {

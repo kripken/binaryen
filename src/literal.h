@@ -832,9 +832,7 @@ public:
     values[i] = value;
   }
 
-  size_t size() const {
-    return size_;
-  }
+  size_t size() const { return size_; }
 
   // TODO: Iteration? But get returns a Literal, not Literal&, intentionally.
 };
