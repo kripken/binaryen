@@ -687,10 +687,14 @@ std::ostream& operator<<(std::ostream& o, Literal literal) {
       assert(literal.isData());
       auto data = literal.getGCData();
       assert(data);
-      o << "[ref " << data->type;
+      o << "[ref " << data->type << ' ';
+      // Print the contents as a Literals, which has handling for very long
+      // sequences.
+      Literals literals;
       for (size_t i = 0; i < data->size(); i++) {
-        o << ' ' << data->get(i);
+        literals.push_back(data->get(i));
       }
+      o << literals;
       o << ']';
     }
   }
