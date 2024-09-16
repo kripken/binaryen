@@ -92,7 +92,7 @@ Literal::Literal(std::string_view string)
   // Extract individual WTF-16LE code units.
   Literals contents;
   assert(string.size() % 2 == 0);
-  gcData = std::make_shared<GCData>(HeapType::string, string.size());
+  gcData = std::make_shared<GCData>(HeapType::string, string.size() / 2);
   for (size_t i = 0; i < string.size(); i += 2) {
     int32_t u = uint8_t(string[i]) | (uint8_t(string[i + 1]) << 8);
     gcData->set(i / 2, Literal(u));
