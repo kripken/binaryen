@@ -262,7 +262,7 @@ struct InliningState {
   std::unordered_map<Name, std::vector<InliningAction>> actionsForFunction;
 };
 
-struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
+struct Planner : public WalkerPass<PostWalker<Planner>> {
   bool isFunctionParallel() override { return true; }
 
   Planner(NameInfoMap& infos, InliningState* state) : infos(infos), state(state) {}
