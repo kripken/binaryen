@@ -71,8 +71,9 @@ enum class InliningMode {
 struct FunctionInfo {
   std::atomic<Index> refs;
   Index size;
-  // All the calls in the function.
-  std::vector<Call*> calls;
+  // All the calls in the function. We track ** here as we use this to replace
+  // them if they get inlined.
+  std::vector<Expression**> calls;
   bool hasLoops;
   bool hasTryDelegate;
   // Something is used globally if there is a reference to it in a table or
@@ -196,7 +197,7 @@ struct FunctionInfoScanner
     assert(infos.count(curr->target) > 0);
     infos[curr->target].refs++;
     // having a call
-    infos[getFunction()->name].calls.push_back(curr);
+    infos[getFunction()->name].calls.push_back(getCurrentPointer());
   }
 
   // N.B.: CallIndirect and CallRef are intentionally omitted here, as we only
@@ -266,36 +267,37 @@ struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
   }
 
   void doWalkFunction(Function* curr) {
-    for (auto* call : infos[curr->name].calls) {
-      handleCall(call);
+    for (auto** call : infos[curr->name].calls) {
+      handleCall(call, curr->name);
     }
   }
 
-  void handleCall(Call* curr) {
+  void handleCall(Expression** callp, Name funcName) {
+    auto* call = (*callp)->cast<Call>();
     // plan to inline if we know this is valid to inline, and if the call is
     // actually performed - if it is dead code, it's pointless to inline.
     // we also cannot inline ourselves.
     bool isUnreachable;
-    if (curr->isReturn) {
+    if (call->isReturn) {
       // Tail calls are only actually unreachable if an argument is
       isUnreachable = std::any_of(
-        curr->operands.begin(), curr->operands.end(), [](Expression* op) {
+        call->operands.begin(), call->operands.end(), [](Expression* op) {
           return op->type == Type::unreachable;
         });
     } else {
-      isUnreachable = curr->type == Type::unreachable;
+      isUnreachable = call->type == Type::unreachable;
     }
-    if (state->inlinableFunctions.count(curr->target) && !isUnreachable &&
-        curr->target != getFunction()->name) {
+    if (state->inlinableFunctions.count(call->target) && !isUnreachable &&
+        call->target != funcName) {
       // nest the call in a block. that way the location of the pointer to the
       // call will not change even if we inline multiple times into the same
       // function, otherwise call1(call2()) might be a problem
-      auto* block = Builder(*getModule()).makeBlock(curr);
-      replaceCurrent(block);
+      auto* block = Builder(*getModule()).makeBlock(call);
+      *callp = block;
       // can't add a new element in parallel
-      assert(state->actionsForFunction.count(getFunction()->name) > 0);
-      state->actionsForFunction[getFunction()->name].emplace_back(
-        &block->list[0], getModule()->getFunction(curr->target), tryDepth > 0);
+      assert(state->actionsForFunction.count(funcName) > 0);
+      state->actionsForFunction[funcName].emplace_back(
+        &block->list[0], getModule()->getFunction(call->target), tryDepth > 0);
     }
   }
 
