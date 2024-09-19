@@ -71,7 +71,8 @@ enum class InliningMode {
 struct FunctionInfo {
   std::atomic<Index> refs;
   Index size;
-  bool hasCalls;
+  // All the calls in the function.
+  std::vector<Call*> calls;
   bool hasLoops;
   bool hasTryDelegate;
   // Something is used globally if there is a reference to it in a table or
@@ -94,7 +95,7 @@ struct FunctionInfo {
   void clear() {
     refs = 0;
     size = 0;
-    hasCalls = false;
+    calls.clear();
     hasLoops = false;
     hasTryDelegate = false;
     usedGlobally = false;
@@ -106,7 +107,7 @@ struct FunctionInfo {
   FunctionInfo& operator=(const FunctionInfo& other) {
     refs = other.refs.load();
     size = other.size;
-    hasCalls = other.hasCalls;
+    calls = other.calls;
     hasLoops = other.hasLoops;
     hasTryDelegate = other.hasTryDelegate;
     usedGlobally = other.usedGlobally;
@@ -143,7 +144,7 @@ struct FunctionInfo {
     if (options.shrinkLevel > 0 || options.optimizeLevel < 3) {
       return false;
     }
-    if (hasCalls) {
+    if (!calls.empty()) {
       // This has calls. If it is just a trivial call itself then inline, as we
       // will save a call that way - basically we skip a trampoline in the
       // middle - but if it is something more complex, leave it alone, as we may
@@ -195,7 +196,7 @@ struct FunctionInfoScanner
     assert(infos.count(curr->target) > 0);
     infos[curr->target].refs++;
     // having a call
-    infos[getFunction()->name].hasCalls = true;
+    infos[getFunction()->name].calls.push_back(curr);
   }
 
   // N.B.: CallIndirect and CallRef are intentionally omitted here, as we only
@@ -258,13 +259,19 @@ struct InliningState {
 struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
   bool isFunctionParallel() override { return true; }
 
-  Planner(InliningState* state) : state(state) {}
+  Planner(NameInfoMap& infos, InliningState* state) : infos(infos), state(state) {}
 
   std::unique_ptr<Pass> create() override {
-    return std::make_unique<Planner>(state);
+    return std::make_unique<Planner>(infos, state);
   }
 
-  void visitCall(Call* curr) {
+  void doWalkFunction(Function* curr) {
+    for (auto* call : infos[curr->name].calls) {
+      handleCall(call);
+    }
+  }
+
+  void handleCall(Call* curr) {
     // plan to inline if we know this is valid to inline, and if the call is
     // actually performed - if it is dead code, it's pointless to inline.
     // we also cannot inline ourselves.
@@ -293,6 +300,7 @@ struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
   }
 
 private:
+  NameInfoMap& infos;
   InliningState* state;
 };
 
@@ -1261,7 +1269,7 @@ struct Inlining : public Pass {
       funcNames.push_back(func->name);
     }
     // find and plan inlinings
-    Planner(&state).run(getPassRunner(), module);
+    Planner(infos, &state).run(getPassRunner(), module);
     // perform inlinings TODO: parallelize
     std::unordered_map<Name, Index> inlinedUses; // how many uses we inlined
     // which functions were inlined into
