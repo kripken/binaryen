@@ -202,7 +202,8 @@ struct FunctionInfoScanner
     assert(infos.count(curr->target) > 0);
     infos[curr->target].refs++;
     // having a call
-    infos[getFunction()->name].calls.push_back(FunctionInfo::CallSite{getCurrentPointer(), tryDepth > 0});
+    infos[getFunction()->name].calls.push_back(
+      FunctionInfo::CallSite{getCurrentPointer(), tryDepth > 0});
   }
 
   // N.B.: CallIndirect and CallRef are intentionally omitted here, as we only
@@ -265,7 +266,8 @@ struct InliningState {
 struct Planner : public WalkerPass<PostWalker<Planner>> {
   bool isFunctionParallel() override { return true; }
 
-  Planner(NameInfoMap& infos, InliningState* state) : infos(infos), state(state) {}
+  Planner(NameInfoMap& infos, InliningState* state)
+    : infos(infos), state(state) {}
 
   std::unique_ptr<Pass> create() override {
     return std::make_unique<Planner>(infos, state);
@@ -302,7 +304,9 @@ struct Planner : public WalkerPass<PostWalker<Planner>> {
       // can't add a new element in parallel
       assert(state->actionsForFunction.count(funcName) > 0);
       state->actionsForFunction[funcName].emplace_back(
-        &block->list[0], getModule()->getFunction(call->target), site.insideATry);
+        &block->list[0],
+        getModule()->getFunction(call->target),
+        site.insideATry);
     }
   }
 
