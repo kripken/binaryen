@@ -71,9 +71,14 @@ enum class InliningMode {
 struct FunctionInfo {
   std::atomic<Index> refs;
   Index size;
-  // All the calls in the function. We track ** here as we use this to replace
-  // them if they get inlined.
-  std::vector<Expression**> calls;
+  // All the calls in the function.
+  struct CallSite {
+    // We track ** here as we use this to replace them if they get inlined.
+    Expression** callp;
+    // Whether we are in a Try, which matters for return calls.
+    bool insideATry;
+  };
+  std::vector<CallSite> calls;
   bool hasLoops;
   bool hasTryDelegate;
   // Something is used globally if there is a reference to it in a table or
@@ -178,7 +183,7 @@ static bool canHandleParams(Function* func) {
 using NameInfoMap = std::unordered_map<Name, FunctionInfo>;
 
 struct FunctionInfoScanner
-  : public WalkerPass<PostWalker<FunctionInfoScanner>> {
+  : public WalkerPass<TryDepthWalker<FunctionInfoScanner>> {
   bool isFunctionParallel() override { return true; }
 
   FunctionInfoScanner(NameInfoMap& infos) : infos(infos) {}
@@ -197,7 +202,7 @@ struct FunctionInfoScanner
     assert(infos.count(curr->target) > 0);
     infos[curr->target].refs++;
     // having a call
-    infos[getFunction()->name].calls.push_back(getCurrentPointer());
+    infos[getFunction()->name].calls.push_back(FunctionInfo::CallSite{getCurrentPointer(), tryDepth > 0});
   }
 
   // N.B.: CallIndirect and CallRef are intentionally omitted here, as we only
@@ -267,13 +272,13 @@ struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
   }
 
   void doWalkFunction(Function* curr) {
-    for (auto** call : infos[curr->name].calls) {
+    for (auto& call : infos[curr->name].calls) {
       handleCall(call, curr->name);
     }
   }
 
-  void handleCall(Expression** callp, Name funcName) {
-    auto* call = (*callp)->cast<Call>();
+  void handleCall(const FunctionInfo::CallSite& site, Name funcName) {
+    auto* call = (*site.callp)->cast<Call>();
     // plan to inline if we know this is valid to inline, and if the call is
     // actually performed - if it is dead code, it's pointless to inline.
     // we also cannot inline ourselves.
@@ -293,11 +298,11 @@ struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
       // call will not change even if we inline multiple times into the same
       // function, otherwise call1(call2()) might be a problem
       auto* block = Builder(*getModule()).makeBlock(call);
-      *callp = block;
+      *site.callp = block;
       // can't add a new element in parallel
       assert(state->actionsForFunction.count(funcName) > 0);
       state->actionsForFunction[funcName].emplace_back(
-        &block->list[0], getModule()->getFunction(call->target), tryDepth > 0);
+        &block->list[0], getModule()->getFunction(call->target), site.insideATry);
     }
   }
 
