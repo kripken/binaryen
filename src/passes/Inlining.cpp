@@ -117,21 +117,6 @@ struct FunctionInfo {
     inliningMode = InliningMode::Unknown;
   }
 
-  FunctionInfo& operator=(const FunctionInfo& other) {
-    newRefs = other.newRefs;
-    refs = other.refs;
-    outgoingRefs = other.outgoingRefs;
-    size = other.size;
-    hasCalls = other.hasCalls;
-    hasLoops = other.hasLoops;
-    hasTryDelegate = other.hasTryDelegate;
-    usedGlobally = other.usedGlobally;
-    isTrivialCall = other.isTrivialCall;
-    inliningMode = other.inliningMode;
-    return *this;
-  }
-
-
   // See pass.h for how defaults for these options were chosen.
   bool worthFullInlining(PassOptions& options) {
     // Until we have proper support for try-delegate, ignore such functions.
