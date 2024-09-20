@@ -1259,7 +1259,6 @@ struct Inlining : public Pass {
       scanner.walkModuleCode(module);
     }
 
-std::cerr << *module << '\n';
     // Combine info from outgoingRefs into refs.
     for (auto& [_, info] : infos) {
       for (auto& [target, count] : info.outgoingRefs) {
@@ -1268,8 +1267,7 @@ std::cerr << *module << '\n';
     }
 
     for (auto& [name, info] : infos) {
-      std::cerr << name << " has refs: " << info.newRefs << " : " << info.refs << '\n';
-      assert(info.refs == info.newRefs);
+      info.refs = info.newRefs;
     }
 
     // Apply global data.
