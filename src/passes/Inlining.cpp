@@ -1175,6 +1175,10 @@ struct Inlining : public Pass {
 
     const size_t MaxIterationsForFunc = 5;
 
+    // Module-level code never changes in this pass, so we only ever scan it
+    // once.
+    scanModuleCode();
+
     while (iterationNumber <= numOriginalFunctions) {
 #ifdef INLINING_DEBUG
       std::cout << "inlining loop iter " << iterationNumber
@@ -1228,22 +1232,27 @@ struct Inlining : public Pass {
     }
   }
 
+  void scanModuleCode() {
+    // Add the null name in infos, which represents module-level code, and scan.
+    infos[Name()];
+    FunctionInfoScanner scanner(infos);
+    scanner.walkModuleCode(module);
+  }
+
   void prepare() {
+std::cerr << "iter " << *module << '\n';
     // Prepare infos, as we operate on it in parallel (each function to its own
     // entry). Note that we do not clear this between runs, so that non-stale
     // info does not need to be recomputed. We do still need to do this loop,
     // as new functions may have been added (by function splitting).
     for (auto& func : module->functions) {
-      infos[func->name].stale = true;
+      infos[func->name];
     }
-    // Also prepare the null name, which is used for module-level code.
-    infos[Name()].stale = true;
 
     // Scan the module to fill in the infos.
     {
       FunctionInfoScanner scanner(infos);
       scanner.run(getPassRunner(), module);
-      scanner.walkModuleCode(module);
     }
 
     // Combine info from outgoingRefs into refs.
@@ -1252,6 +1261,7 @@ struct Inlining : public Pass {
     }
     for (auto& [_, info] : infos) {
       for (auto& [target, count] : info.outgoingRefs) {
+std::cerr << "adding " << count << " to " << target << '\n';
         infos[target].refs += count;
       }
     }
@@ -1269,6 +1279,7 @@ struct Inlining : public Pass {
 {
 
 // FRESH
+std::cerr << "FRESHcals\n";
 NameInfoMap fresh;
 for (auto& func : module->functions) {
   fresh[func->name].stale = true;
@@ -1296,7 +1307,6 @@ if (module->start.is()) {
   fresh[module->start].usedGlobally = true;
 }
 
-std::cerr << "cycle " << *module << '\n';
 for (auto& [name, _] : infos) {
   std::cerr << "compar " << name << " : " << infos[name].refs << " : " << fresh[name].refs << '\n';
   assert(infos[name].refs == fresh[name].refs);
