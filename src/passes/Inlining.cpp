@@ -1188,7 +1188,7 @@ struct Inlining : public Pass {
       // All the functions we inlined into.
       std::unordered_set<Function*> inlinedInto;
       // All the functions we removed.
-      std::unordered_set<Name> removed;
+      std::vector<Name> removed;
 
       prepare();
       iteration(inlinedInto, removed);
@@ -1283,7 +1283,7 @@ struct Inlining : public Pass {
   }
 
   void iteration(std::unordered_set<Function*>& inlinedInto,
-                 std::unordered_set<Name>& removed) {
+                 std::vector<Name>& removed) {
     // decide which to inline
     InliningState state;
     ModuleUtils::iterDefinedFunctions(*module, [&](Function* func) {
@@ -1362,7 +1362,7 @@ struct Inlining : public Pass {
       auto& info = infos[name];
       if (inlinedUses.count(name) && inlinedUses[name] == info.refs &&
           !info.usedGlobally) {
-        removed.insert(name);
+        removed.push_back(name);
         return true;
       }
       return false;
