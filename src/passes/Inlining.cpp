@@ -79,15 +79,15 @@ struct FunctionInfo {
   std::unordered_map<Name, Index> outgoingRefs;
   // The references this function has. After the parallel collection of
   // |outgoingRefs| we combine that information into this.
-  Index refs;
+  Index refs = 0;
 
-  Index size;
-  bool hasCalls;
-  bool hasLoops;
-  bool hasTryDelegate;
+  Index size = 0;
+  bool hasCalls = false;
+  bool hasLoops = false;
+  bool hasTryDelegate = false;
   // Something is used globally if there is a reference to it in a table or
   // export etc.
-  bool usedGlobally;
+  bool usedGlobally = false;
   // We consider a function to be a trivial call if the body is just a call with
   // trivial arguments, like this:
   //
@@ -97,22 +97,10 @@ struct FunctionInfo {
   //
   // Specifically the body must be a call, and the operands to the call must be
   // of size 1 (generally, LocalGet or Const).
-  bool isTrivialCall;
-  InliningMode inliningMode;
+  bool isTrivialCall = false;
+  InliningMode inliningMode = InliningMode::Unknown;
 
-  FunctionInfo() { clear(); }
-
-  void clear() {
-    refs = 0;
-    outgoingRefs.clear();
-    size = 0;
-    hasCalls = false;
-    hasLoops = false;
-    hasTryDelegate = false;
-    usedGlobally = false;
-    isTrivialCall = false;
-    inliningMode = InliningMode::Unknown;
-  }
+  FunctionInfo() {}
 
   // See pass.h for how defaults for these options were chosen.
   bool worthFullInlining(PassOptions& options) {
