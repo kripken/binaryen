@@ -223,6 +223,7 @@ struct FunctionInfoScanner
     // Clear the info and recompute it, which will make it non-stale.
     info.clear();
     info.stale = false;
+std::cerr << "SCAN " << curr->name << '\n';
 
     WalkerPass<PostWalker<FunctionInfoScanner>>::doWalkFunction(curr);
 
@@ -1181,10 +1182,13 @@ struct Inlining : public Pass {
 #endif
       iterationNumber++;
 
+      // All the functions we inlined into.
       std::unordered_set<Function*> inlinedInto;
+      // All the functions we removed.
+      std::unordered_set<Name> removed;
 
       prepare();
-      iteration(inlinedInto);
+      iteration(inlinedInto, removed);
 
       if (inlinedInto.empty()) {
         return;
@@ -1215,6 +1219,12 @@ struct Inlining : public Pass {
           }
         }
       }
+
+      // We will never need the info of removed functions ever again, and should
+      // not see it when we iterate on all of infos in later iterations.
+      for (auto name : removed) {
+        infos.erase(name);
+      }
     }
   }
 
@@ -1224,10 +1234,10 @@ struct Inlining : public Pass {
     // info does not need to be recomputed. We do still need to do this loop,
     // as new functions may have been added (by function splitting).
     for (auto& func : module->functions) {
-      infos[func->name];
+      infos[func->name].stale = true;
     }
     // Also prepare the null name, which is used for module-level code.
-    infos[Name()];
+    infos[Name()].stale = true;
 
     // Scan the module to fill in the infos.
     {
@@ -1237,6 +1247,9 @@ struct Inlining : public Pass {
     }
 
     // Combine info from outgoingRefs into refs.
+    for (auto& [_, info] : infos) {
+      info.refs = 0;
+    }
     for (auto& [_, info] : infos) {
       for (auto& [target, count] : info.outgoingRefs) {
         infos[target].refs += count;
@@ -1253,6 +1266,45 @@ struct Inlining : public Pass {
       infos[module->start].usedGlobally = true;
     }
 
+{
+
+// FRESH
+NameInfoMap fresh;
+for (auto& func : module->functions) {
+  fresh[func->name].stale = true;
+}
+fresh[Name()].stale = true;
+
+{
+  FunctionInfoScanner scanner(fresh);
+  scanner.run(getPassRunner(), module);
+  scanner.walkModuleCode(module);
+}
+
+for (auto& [_, info] : fresh) {
+  for (auto& [target, count] : info.outgoingRefs) {
+    fresh[target].refs += count;
+  }
+}
+
+for (auto& ex : module->exports) {
+  if (ex->kind == ExternalKind::Function) {
+    fresh[ex->value].usedGlobally = true;
+  }
+}
+if (module->start.is()) {
+  fresh[module->start].usedGlobally = true;
+}
+
+std::cerr << "cycle " << *module << '\n';
+for (auto& [name, _] : infos) {
+  std::cerr << "compar " << name << " : " << infos[name].refs << " : " << fresh[name].refs << '\n';
+  assert(infos[name].refs == fresh[name].refs);
+}
+
+}
+
+
     // When optimizing heavily for size, we may potentially split functions in
     // order to inline parts of them, if partialInliningIfs is enabled.
     auto& options = getPassOptions();
@@ -1262,7 +1314,8 @@ struct Inlining : public Pass {
     }
   }
 
-  void iteration(std::unordered_set<Function*>& inlinedInto) {
+  void iteration(std::unordered_set<Function*>& inlinedInto,
+                 std::unordered_set<Name>& removed) {
     // decide which to inline
     InliningState state;
     ModuleUtils::iterDefinedFunctions(*module, [&](Function* func) {
@@ -1339,8 +1392,12 @@ struct Inlining : public Pass {
     module->removeFunctions([&](Function* func) {
       auto name = func->name;
       auto& info = infos[name];
-      return inlinedUses.count(name) && inlinedUses[name] == info.refs &&
-             !info.usedGlobally;
+      if (inlinedUses.count(name) && inlinedUses[name] == info.refs &&
+          !info.usedGlobally) {
+        removed.insert(name);
+        return true;
+      }
+      return false;
     });
   }
 
