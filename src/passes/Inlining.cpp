@@ -79,8 +79,6 @@ struct FunctionInfo {
   std::unordered_map<Name, Index> outgoingRefs;
   // The references this function has. After the parallel collection of
   // |outgoingRefs| we combine that information into this.
-  Index newRefs;
-
   Index refs;
 
   Index size;
@@ -106,7 +104,6 @@ struct FunctionInfo {
 
   void clear() {
     refs = 0;
-    newRefs = 0;
     outgoingRefs.clear();
     size = 0;
     hasCalls = false;
@@ -1237,12 +1234,8 @@ struct Inlining : public Pass {
     // Combine info from outgoingRefs into refs.
     for (auto& [_, info] : infos) {
       for (auto& [target, count] : info.outgoingRefs) {
-        infos[target].newRefs += count;
+        infos[target].refs += count;
       }
-    }
-
-    for (auto& [name, info] : infos) {
-      info.refs = info.newRefs;
     }
 
     // Apply global data.
