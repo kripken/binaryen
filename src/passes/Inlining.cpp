@@ -223,7 +223,6 @@ struct FunctionInfoScanner
     // Clear the info and recompute it, which will make it non-stale.
     info.clear();
     info.stale = false;
-std::cerr << "SCAN " << curr->name << '\n';
 
     WalkerPass<PostWalker<FunctionInfoScanner>>::doWalkFunction(curr);
 
@@ -1240,7 +1239,6 @@ struct Inlining : public Pass {
   }
 
   void prepare() {
-std::cerr << "iter " << *module << '\n';
     // Prepare infos, as we operate on it in parallel (each function to its own
     // entry). Note that we do not clear this between runs, so that non-stale
     // info does not need to be recomputed. We do still need to do this loop,
@@ -1261,7 +1259,6 @@ std::cerr << "iter " << *module << '\n';
     }
     for (auto& [_, info] : infos) {
       for (auto& [target, count] : info.outgoingRefs) {
-std::cerr << "adding " << count << " to " << target << '\n';
         infos[target].refs += count;
       }
     }
@@ -1275,45 +1272,6 @@ std::cerr << "adding " << count << " to " << target << '\n';
     if (module->start.is()) {
       infos[module->start].usedGlobally = true;
     }
-
-{
-
-// FRESH
-std::cerr << "FRESHcals\n";
-NameInfoMap fresh;
-for (auto& func : module->functions) {
-  fresh[func->name].stale = true;
-}
-fresh[Name()].stale = true;
-
-{
-  FunctionInfoScanner scanner(fresh);
-  scanner.run(getPassRunner(), module);
-  scanner.walkModuleCode(module);
-}
-
-for (auto& [_, info] : fresh) {
-  for (auto& [target, count] : info.outgoingRefs) {
-    fresh[target].refs += count;
-  }
-}
-
-for (auto& ex : module->exports) {
-  if (ex->kind == ExternalKind::Function) {
-    fresh[ex->value].usedGlobally = true;
-  }
-}
-if (module->start.is()) {
-  fresh[module->start].usedGlobally = true;
-}
-
-for (auto& [name, _] : infos) {
-  std::cerr << "compar " << name << " : " << infos[name].refs << " : " << fresh[name].refs << '\n';
-  assert(infos[name].refs == fresh[name].refs);
-}
-
-}
-
 
     // When optimizing heavily for size, we may potentially split functions in
     // order to inline parts of them, if partialInliningIfs is enabled.
