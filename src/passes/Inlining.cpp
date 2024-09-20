@@ -100,8 +100,6 @@ struct FunctionInfo {
   bool isTrivialCall = false;
   InliningMode inliningMode = InliningMode::Unknown;
 
-  FunctionInfo() {}
-
   // See pass.h for how defaults for these options were chosen.
   bool worthFullInlining(PassOptions& options) {
     // Until we have proper support for try-delegate, ignore such functions.
