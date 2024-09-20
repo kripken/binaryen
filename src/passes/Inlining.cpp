@@ -69,10 +69,6 @@ enum class InliningMode {
 
 // Useful into on a function, helping us decide if we can inline it
 struct FunctionInfo {
-  // Whether this needs to be recomputed. This begins as true for the first
-  // computation, and we reset it every time we touch the function.
-  bool stale = true;
-
   // The references from this function to others, a mapping of the name of
   // another function and how many references we have to it. We compute this in
   // parallel.
