@@ -81,7 +81,7 @@ struct FunctionInfo {
   // |outgoingRefs| we combine that information into this.
   Index newRefs;
 
-  std::atomic<Index> refs;
+  Index refs;
 
   Index size;
   bool hasCalls;
@@ -119,7 +119,7 @@ struct FunctionInfo {
 
   FunctionInfo& operator=(const FunctionInfo& other) {
     newRefs = other.newRefs;
-    refs = other.refs.load();
+    refs = other.refs;
     outgoingRefs = other.outgoingRefs;
     size = other.size;
     hasCalls = other.hasCalls;
@@ -214,11 +214,6 @@ struct FunctionInfoScanner
     auto& info = infos[funcName];
     info.outgoingRefs[curr->target]++;
     info.hasCalls = true;
-
-{
-    assert(infos.count(curr->target) > 0);
-    infos[curr->target].refs++;
-}
   }
 
   // N.B.: CallIndirect and CallRef are intentionally omitted here, as we only
@@ -244,11 +239,6 @@ struct FunctionInfoScanner
     }
     assert(infos.count(funcName));
     infos[funcName].outgoingRefs[curr->func]++;
-
-{
-    assert(infos.count(curr->func) > 0);
-    infos[curr->func].refs++;
-}
   }
 
   void visitFunction(Function* curr) {
