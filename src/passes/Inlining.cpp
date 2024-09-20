@@ -113,6 +113,7 @@ struct FunctionInfo {
 std::cout << "  sad: 1\n";
       return false;
     }
+std::cout << "size: " << size << " : " << options.inlining.alwaysInlineMaxSize << '\n';
     // If it's small enough that we always want to inline such things, do so.
     if (size <= options.inlining.alwaysInlineMaxSize) {
 std::cout << "  happ: 2\n";
@@ -120,6 +121,7 @@ std::cout << "  happ: 2\n";
     }
     // If it has one use, then inlining it would likely reduce code size, at
     // least for reasonable function sizes.
+std::cout << "refs: " << refs << " : " << usedGlobally << " : " << options.inlining.oneCallerInlineMaxSize << '\n';
     if (refs == 1 && !usedGlobally &&
         size <= options.inlining.oneCallerInlineMaxSize) {
 std::cout << "  happ: 3\n";
@@ -1258,7 +1260,10 @@ struct Inlining : public Pass {
     // info does not need to be recomputed. We do still need to do this loop,
     // as new functions may have been added (by function splitting).
     for (auto& func : module->functions) {
-      infos[func->name];
+      // Set the inlining mode to unknown, because even if we are not stale,
+      // then we need to recompute this: refs to us may have changed.
+      // TODO: separate the stale-aware fields to a substruct?
+      infos[func->name].inliningMode = InliningMode::Unknown;
     }
 
     // Scan the module to fill in the infos.
