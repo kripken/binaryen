@@ -1406,16 +1406,35 @@ class RoundtripText(TestCaseHandler):
         run([in_bin('wasm-opt'), abspath('a.wast')] + FEATURE_OPTS)
 
 
+# Runs our wasm-opt and another, and errors on any differences. This can help
+# validate NFC changes.
+#
+# OTHER should be set in the env to point to the bin dir of another binaryen
+# installation (it should contain wasm-opt).
+class CompareToOther(TestCaseHandler):
+    frequency = 1
+
+    def handle_pair(self, input, before_wasm, after_wasm, opts):
+        run([in_bin('wasm-opt'), before_wasm, '-o', 'mine.wasm'] + opts + FEATURE_OPTS)
+
+        assert os.environ['OTHER'], 'define OTHER in the env, to compare to it'
+        other_wasm_opt = os.path.join(os.environ['OTHER'], 'wasm-opt')
+        run([other_wasm_opt,     before_wasm, '-o', 'other.wasm'] + opts + FEATURE_OPTS)
+
+        assert(open('mine.wasm', 'rb').read() == open('other.wasm', 'rb').read())
+
+
 # The global list of all test case handlers
 testcase_handlers = [
-    FuzzExec(),
-    CompareVMs(),
-    CheckDeterminism(),
-    Wasm2JS(),
-    TrapsNeverHappen(),
-    CtorEval(),
-    Merge(),
-    RoundtripText()
+    #FuzzExec(),
+    #CompareVMs(),
+    #CheckDeterminism(),
+    #Wasm2JS(),
+    #TrapsNeverHappen(),
+    #CtorEval(),
+    #Merge(),
+    #RoundtripText(),
+    CompareToOther()
 ]
 
 
