@@ -69,7 +69,20 @@ enum class InliningMode {
 
 // Useful into on a function, helping us decide if we can inline it
 struct FunctionInfo {
+  // Whether this needs to be recomputed. This begins as true for the first
+  // computation, and we reset it every time we touch the function.
+  bool stale = true;
+
+  // The references from this function to others, a mapping of the name of
+  // another function and how many references we have to it. We compute this in
+  // parallel.
+  std::unordered_map<Name, Index> outgoingRefs;
+  // The references this function has. After the parallel collection of
+  // |outgoingRefs| we combine that information into this.
+  Index newRefs;
+
   std::atomic<Index> refs;
+
   Index size;
   bool hasCalls;
   bool hasLoops;
@@ -93,6 +106,8 @@ struct FunctionInfo {
 
   void clear() {
     refs = 0;
+    newRefs = 0;
+    outgoingRefs.clear();
     size = 0;
     hasCalls = false;
     hasLoops = false;
@@ -102,9 +117,10 @@ struct FunctionInfo {
     inliningMode = InliningMode::Unknown;
   }
 
-  // Provide an explicit = operator as the |refs| field lacks one by default.
   FunctionInfo& operator=(const FunctionInfo& other) {
+    newRefs = other.newRefs;
     refs = other.refs.load();
+    outgoingRefs = other.outgoingRefs;
     size = other.size;
     hasCalls = other.hasCalls;
     hasLoops = other.hasLoops;
@@ -114,6 +130,7 @@ struct FunctionInfo {
     inliningMode = other.inliningMode;
     return *this;
   }
+
 
   // See pass.h for how defaults for these options were chosen.
   bool worthFullInlining(PassOptions& options) {
@@ -186,16 +203,22 @@ struct FunctionInfoScanner
   }
 
   void visitLoop(Loop* curr) {
-    // having a loop
     infos[getFunction()->name].hasLoops = true;
   }
 
   void visitCall(Call* curr) {
-    // can't add a new element in parallel
+    // We can't add a new element in parallel.
+    auto funcName = getFunction()->name;
+    assert(infos.count(funcName));
+
+    auto& info = infos[funcName];
+    info.outgoingRefs[curr->target]++;
+    info.hasCalls = true;
+
+{
     assert(infos.count(curr->target) > 0);
     infos[curr->target].refs++;
-    // having a call
-    infos[getFunction()->name].hasCalls = true;
+}
   }
 
   // N.B.: CallIndirect and CallRef are intentionally omitted here, as we only
@@ -213,8 +236,19 @@ struct FunctionInfoScanner
   }
 
   void visitRefFunc(RefFunc* curr) {
+    // RefFunc may appear in module-level code, where there is no function
+    // context. We use the null name to track that data.
+    Name funcName;
+    if (auto* func = getFunction()) {
+      funcName = func->name;
+    }
+    assert(infos.count(funcName));
+    infos[funcName].outgoingRefs[curr->func]++;
+
+{
     assert(infos.count(curr->func) > 0);
     infos[curr->func].refs++;
+}
   }
 
   void visitFunction(Function* curr) {
@@ -1210,16 +1244,35 @@ struct Inlining : public Pass {
 
   void prepare() {
     infos.clear();
-    // fill in info, as we operate on it in parallel (each function to its own
-    // entry)
+    // Prepare infos, as we operate on it in parallel (each function to its own
+    // entry).
     for (auto& func : module->functions) {
       infos[func->name];
     }
+    // Also prepare the null name, which is used for module-level code.
+    infos[Name()];
+
+    // Scan the module to fill in the infos.
     {
       FunctionInfoScanner scanner(infos);
       scanner.run(getPassRunner(), module);
       scanner.walkModuleCode(module);
     }
+
+std::cerr << *module << '\n';
+    // Combine info from outgoingRefs into refs.
+    for (auto& [_, info] : infos) {
+      for (auto& [target, count] : info.outgoingRefs) {
+        infos[target].newRefs += count;
+      }
+    }
+
+    for (auto& [name, info] : infos) {
+      std::cerr << name << " has refs: " << info.newRefs << " : " << info.refs << '\n';
+      assert(info.refs == info.newRefs);
+    }
+
+    // Apply global data.
     for (auto& ex : module->exports) {
       if (ex->kind == ExternalKind::Function) {
         infos[ex->value].usedGlobally = true;
