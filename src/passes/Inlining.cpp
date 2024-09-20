@@ -69,6 +69,10 @@ enum class InliningMode {
 
 // Useful into on a function, helping us decide if we can inline it
 struct FunctionInfo {
+  // Whether this needs to be recomputed. This begins as true for the first
+  // computation, and we reset it every time we touch the function.
+  bool stale = true;
+
   // The references from this function to others, a mapping of the name of
   // another function and how many references we have to it. We compute this in
   // parallel.
@@ -95,6 +99,10 @@ struct FunctionInfo {
   // of size 1 (generally, LocalGet or Const).
   bool isTrivialCall = false;
   InliningMode inliningMode = InliningMode::Unknown;
+
+  void clear() {
+    *this = FunctionInfo();
+  }
 
   // See pass.h for how defaults for these options were chosen.
   bool worthFullInlining(PassOptions& options) {
@@ -205,8 +213,18 @@ struct FunctionInfoScanner
     infos[funcName].outgoingRefs[curr->func]++;
   }
 
-  void visitFunction(Function* curr) {
+  void doWalkFunction(Function* curr) {
     auto& info = infos[curr->name];
+    if (!info.stale) {
+      // The info is already up to date.
+      return;
+    }
+
+    // Clear the info and recompute it, which will make it non-stale.
+    info.clear();
+    info.stale = false;
+
+    WalkerPass<PostWalker<FunctionInfoScanner>>::doWalkFunction(curr);
 
     if (!canHandleParams(curr)) {
       info.inliningMode = InliningMode::Uninlineable;
@@ -222,6 +240,7 @@ struct FunctionInfoScanner
       }
     }
   }
+
 
 private:
   NameInfoMap& infos;
@@ -1177,6 +1196,9 @@ struct Inlining : public Pass {
 
       for (auto* func : inlinedInto) {
         EHUtils::handleBlockNestedPops(func, *module);
+
+        // Inlining into a function changes it, so its info becomes stale.
+        infos[func->name].stale = true;
       }
 
       for (auto* func : inlinedInto) {
@@ -1197,9 +1219,10 @@ struct Inlining : public Pass {
   }
 
   void prepare() {
-    infos.clear();
     // Prepare infos, as we operate on it in parallel (each function to its own
-    // entry).
+    // entry). Note that we do not clear this between runs, so that non-stale
+    // info does not need to be recomputed. We do still need to do this loop,
+    // as new functions may have been added (by function splitting).
     for (auto& func : module->functions) {
       infos[func->name];
     }
