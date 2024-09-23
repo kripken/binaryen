@@ -1426,15 +1426,15 @@ class CompareToOther(TestCaseHandler):
 
 # The global list of all test case handlers
 testcase_handlers = [
-    #FuzzExec(),
-    #CompareVMs(),
-    #CheckDeterminism(),
-    #Wasm2JS(),
-    #TrapsNeverHappen(),
-    #CtorEval(),
-    #Merge(),
+    FuzzExec(),
+    CompareVMs(),
+    CheckDeterminism(),
+    Wasm2JS(),
+    TrapsNeverHappen(),
+    CtorEval(),
+    Merge(),
     #RoundtripText(),
-    CompareToOther()
+    #CompareToOther()
 ]
 
 
