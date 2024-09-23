@@ -1,4 +1,4 @@
-#define INLINING_DEBUG 2
+//#define INLINING_DEBUG 2
 /*
  * Copyright 2016 WebAssembly Community Group participants
  *
@@ -110,34 +110,34 @@ struct FunctionInfo {
     // Until we have proper support for try-delegate, ignore such functions.
     // FIXME https://github.com/WebAssembly/binaryen/issues/3634
     if (hasTryDelegate) {
-std::cout << "  sad: 1\n";
+//std::cout << "  sad: 1\n";
       return false;
     }
-std::cout << "size: " << size << " : " << options.inlining.alwaysInlineMaxSize << '\n';
+//std::cout << "size: " << size << " : " << options.inlining.alwaysInlineMaxSize << '\n';
     // If it's small enough that we always want to inline such things, do so.
     if (size <= options.inlining.alwaysInlineMaxSize) {
-std::cout << "  happ: 2\n";
+//std::cout << "  happ: 2\n";
       return true;
     }
     // If it has one use, then inlining it would likely reduce code size, at
     // least for reasonable function sizes.
-std::cout << "refs: " << refs << " : " << usedGlobally << " : " << options.inlining.oneCallerInlineMaxSize << '\n';
+//std::cout << "refs: " << refs << " : " << usedGlobally << " : " << options.inlining.oneCallerInlineMaxSize << '\n';
     if (refs == 1 && !usedGlobally &&
         size <= options.inlining.oneCallerInlineMaxSize) {
-std::cout << "  happ: 3\n";
+//std::cout << "  happ: 3\n";
       return true;
     }
     // If it's so big that we have no flexible options that could allow it,
     // do not inline.
     if (size > options.inlining.flexibleInlineMaxSize) {
-std::cout << "  sad: 4\n";
+//std::cout << "  sad: 4\n";
       return false;
     }
     // More than one use, so we can't eliminate it after inlining, and inlining
     // it will hurt code size. Stop if we are focused on size or not heavily
     // focused on speed.
     if (options.shrinkLevel > 0 || options.optimizeLevel < 3) {
-std::cout << "  sad: 5\n";
+//std::cout << "  sad: 5\n";
       return false;
     }
     if (hasCalls) {
@@ -151,10 +151,10 @@ std::cout << "  sad: 5\n";
       // use a parameter more than once (forcing us after inlining to save that
       // value to a local, etc.), but here we are optimizing for speed and not
       // size, so we risk it.
-std::cout << "  sad: 6\n";
+//std::cout << "  sad: 6\n";
       return isTrivialCall;
     }
-std::cout << "  maybe 87\n";
+//std::cout << "  maybe 87\n";
     // This doesn't have calls. Inline if loops do not prevent us (normally, a
     // loop suggests a lot of work and so inlining is less useful).
     return !hasLoops || options.inlining.allowFunctionsWithLoops;
@@ -282,7 +282,7 @@ struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
   }
 
   void visitCall(Call* curr) {
-std::cout << "visiting call " << *curr << '\n';
+//std::cout << "visiting call " << *curr << '\n';
     // plan to inline if we know this is valid to inline, and if the call is
     // actually performed - if it is dead code, it's pointless to inline.
     // we also cannot inline ourselves.
@@ -296,7 +296,7 @@ std::cout << "visiting call " << *curr << '\n';
     } else {
       isUnreachable = curr->type == Type::unreachable;
     }
-std::cout << "  " << state->inlinableFunctions.count(curr->target) << " : " << !isUnreachable << " : " << (curr->target != getFunction()->name) << '\n';
+//std::cout << "  " << state->inlinableFunctions.count(curr->target) << " : " << !isUnreachable << " : " << (curr->target != getFunction()->name) << '\n';
     if (state->inlinableFunctions.count(curr->target) && !isUnreachable &&
         curr->target != getFunction()->name) {
       // nest the call in a block. that way the location of the pointer to the
@@ -308,7 +308,7 @@ std::cout << "  " << state->inlinableFunctions.count(curr->target) << " : " << !
       assert(state->actionsForFunction.count(getFunction()->name) > 0);
       state->actionsForFunction[getFunction()->name].emplace_back(
         &block->list[0], getModule()->getFunction(curr->target), tryDepth > 0);
-std::cout << "  plan on it\n";
+//std::cout << "  plan on it\n";
     }
   }
 
@@ -1307,7 +1307,7 @@ struct Inlining : public Pass {
     InliningState state;
     ModuleUtils::iterDefinedFunctions(*module, [&](Function* func) {
       auto inliningMode = getInliningMode(func->name);
-std::cout << "IM for " << func->name << " : " << int(inliningMode) << '\n';
+//std::cout << "IM for " << func->name << " : " << int(inliningMode) << '\n';
       assert(inliningMode != InliningMode::Unknown);
       if (inliningMode != InliningMode::Uninlineable) {
         state.inlinableFunctions[func->name] = inliningMode;
@@ -1394,18 +1394,18 @@ std::cout << "IM for " << func->name << " : " << int(inliningMode) << '\n';
 
   // Decide for a given function whether to inline, and if so in what mode.
   InliningMode getInliningMode(Name name) {
-std::cout << "Consider inlining " << name << '\n';
+//std::cout << "Consider inlining " << name << '\n';
     auto* func = module->getFunction(name);
     auto& info = infos[name];
 
     if (info.inliningMode != InliningMode::Unknown) {
-std::cout << "  use old\n";
+//std::cout << "  use old\n";
       return info.inliningMode;
     }
 
     // Check if the function itself is worth inlining as it is.
     if (!func->noFullInline && info.worthFullInlining(getPassOptions())) {
-std::cout << "  full\n";
+//std::cout << "  full\n";
       return info.inliningMode = InliningMode::Full;
     }
 
