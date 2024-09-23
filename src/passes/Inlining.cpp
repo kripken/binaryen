@@ -252,8 +252,10 @@ struct FunctionInfoScanner
     auto& info = infos[curr->name];
     if (!info.parallel.stale) {
       // The info is already up to date.
+//std::cout << "save\n";
       return;
     }
+//std::cout << "waste\n";
 
     // Clear the info and recompute it, which will make it non-stale.
     info.clearParallelData();
