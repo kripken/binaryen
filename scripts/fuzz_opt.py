@@ -1415,6 +1415,7 @@ class CompareToOther(TestCaseHandler):
     frequency = 1
 
     def handle_pair(self, input, before_wasm, after_wasm, opts):
+        time.sleep(2)
         run([in_bin('wasm-opt'), before_wasm, '-o', 'mine.wasm'] + opts + FEATURE_OPTS)
 
         assert os.environ['OTHER'], 'define OTHER in the env, to compare to it'
@@ -1424,17 +1425,22 @@ class CompareToOther(TestCaseHandler):
         assert(open('mine.wasm', 'rb').read() == open('other.wasm', 'rb').read())
 
 
+    def can_run_on_feature_opts(self, feature_opts):
+        # ?
+        return not NANS
+
+
 # The global list of all test case handlers
 testcase_handlers = [
-    FuzzExec(),
-    CompareVMs(),
-    CheckDeterminism(),
-    Wasm2JS(),
-    TrapsNeverHappen(),
-    CtorEval(),
-    Merge(),
+    #FuzzExec(),
+    #CompareVMs(),
+    #CheckDeterminism(),
+    #Wasm2JS(),
+    #TrapsNeverHappen(),
+    #CtorEval(),
+    #Merge(),
     #RoundtripText(),
-    #CompareToOther()
+    CompareToOther()
 ]
 
 
@@ -1562,6 +1568,24 @@ opt_choices = [
     ("--duplicate-function-elimination",),
     ("--flatten",),
     # ("--fpcast-emu",), # removes indirect call failures as it makes them go through regardless of type
+    ("--inlining",),
+    ("--inlining-optimizing",),
+    ("--inlining",),
+    ("--inlining-optimizing",),
+    ("--inlining",),
+    ("--inlining-optimizing",),
+    ("--inlining",),
+    ("--inlining-optimizing",),
+    ("--inlining",),
+    ("--inlining-optimizing",),
+    ("--inlining",),
+    ("--inlining-optimizing",),
+    ("--inlining",),
+    ("--inlining-optimizing",),
+    ("--inlining",),
+    ("--inlining-optimizing",),
+    ("--inlining",),
+    ("--inlining-optimizing",),
     ("--inlining",),
     ("--inlining-optimizing",),
     ("--flatten", "--simplify-locals-notee-nostructure", "--local-cse",),

@@ -68,68 +68,93 @@ enum class InliningMode {
   SplitPatternB // 4
 };
 
-// Useful into on a function, helping us decide if we can inline it
+// Useful into on a function, helping us decide if we can inline it.
 struct FunctionInfo {
-  // Whether this needs to be recomputed. This begins as true for the first
-  // computation, and we reset it every time we touch the function.
-  bool stale = true;
+  // We gather information on functions in parallel. To avoid gathering it
+  // unnecessarily, we mark it as stale when the function changes (and so long
+  // as the function does not change, we can use the old data).
+  struct Parallel {
+    // When this is true, we need to re-scan the function. We set it to true
+    // each time we modify the function.
+    bool stale = true;
 
-  // The references from this function to others, a mapping of the name of
-  // another function and how many references we have to it. We compute this in
-  // parallel.
-  std::unordered_map<Name, Index> outgoingRefs;
-  // The references this function has. After the parallel collection of
-  // |outgoingRefs| we combine that information into this.
-  Index refs = 0;
+    // The references from this function to others, a mapping of the name of
+    // another function and how many references we have to it. We compute this in
+    // parallel.
+    std::unordered_map<Name, Index> outgoingRefs;
 
-  Index size = 0;
-  bool hasCalls = false;
-  bool hasLoops = false;
-  bool hasTryDelegate = false;
-  // Something is used globally if there is a reference to it in a table or
-  // export etc.
-  bool usedGlobally = false;
-  // We consider a function to be a trivial call if the body is just a call with
-  // trivial arguments, like this:
+    Index size = 0;
+    bool hasCalls = false;
+    bool hasLoops = false;
+    bool hasTryDelegate = false;
+    // Whether this has a param that we cannot handle.
+    bool hasBadParams = false;
+    // We consider a function to be a trivial call if the body is just a call with
+    // trivial arguments, like this:
+    //
+    //  (func $forward (param $x) (param $y)
+    //    (call $target (local.get $x) (local.get $y))
+    //  )
+    //
+    // Specifically the body must be a call, and the operands to the call must be
+    // of size 1 (generally, LocalGet or Const).
+    bool isTrivialCall = false;
+  } parallel;
+
+  // We also compute data about a function that depends on other functions,
+  // which we evaluate after the parallel scanning phase. This data is fully
+  // recomputed in each iteration.
   //
-  //  (func $forward (param $x) (param $y)
-  //    (call $target (local.get $x) (local.get $y))
-  //  )
-  //
-  // Specifically the body must be a call, and the operands to the call must be
-  // of size 1 (generally, LocalGet or Const).
-  bool isTrivialCall = false;
-  InliningMode inliningMode = InliningMode::Unknown;
+  // We could also store Parallel and Serial in separate objects, but then we'd
+  // have two maps functions functions to their parallel or serial data. For
+  // efficiency, we store all the info on a function in FunctionInfo.
+  struct Serial {
+    // The references this function has. This is combined from |outgoingRefs| of
+    // all functions that refer to this one.
+    Index refs = 0;
 
-  void clear() {
-    *this = FunctionInfo();
+    // Something is used globally if there is a reference to it in a table or
+    // export etc.
+    bool usedGlobally = false;
+
+    // The decision about how to inline this function (computed once per
+    // iteration).
+    InliningMode inliningMode = InliningMode::Unknown;
+  } serial;
+
+  void clearParallelData() {
+    parallel = Parallel();
+  }
+
+  void clearSerialData() {
+    serial = Serial();
   }
 
   // See pass.h for how defaults for these options were chosen.
   bool worthFullInlining(PassOptions& options) {
     // Until we have proper support for try-delegate, ignore such functions.
     // FIXME https://github.com/WebAssembly/binaryen/issues/3634
-    if (hasTryDelegate) {
+    if (parallel.hasTryDelegate) {
 //std::cout << "  sad: 1\n";
       return false;
     }
 //std::cout << "size: " << size << " : " << options.inlining.alwaysInlineMaxSize << '\n';
     // If it's small enough that we always want to inline such things, do so.
-    if (size <= options.inlining.alwaysInlineMaxSize) {
+    if (parallel.size <= options.inlining.alwaysInlineMaxSize) {
 //std::cout << "  happ: 2\n";
       return true;
     }
     // If it has one use, then inlining it would likely reduce code size, at
     // least for reasonable function sizes.
 //std::cout << "refs: " << refs << " : " << usedGlobally << " : " << options.inlining.oneCallerInlineMaxSize << '\n';
-    if (refs == 1 && !usedGlobally &&
-        size <= options.inlining.oneCallerInlineMaxSize) {
+    if (serial.refs == 1 && !serial.usedGlobally &&
+        parallel.size <= options.inlining.oneCallerInlineMaxSize) {
 //std::cout << "  happ: 3\n";
       return true;
     }
     // If it's so big that we have no flexible options that could allow it,
     // do not inline.
-    if (size > options.inlining.flexibleInlineMaxSize) {
+    if (parallel.size > options.inlining.flexibleInlineMaxSize) {
 //std::cout << "  sad: 4\n";
       return false;
     }
@@ -140,7 +165,7 @@ struct FunctionInfo {
 //std::cout << "  sad: 5\n";
       return false;
     }
-    if (hasCalls) {
+    if (parallel.hasCalls) {
       // This has calls. If it is just a trivial call itself then inline, as we
       // will save a call that way - basically we skip a trampoline in the
       // middle - but if it is something more complex, leave it alone, as we may
@@ -152,12 +177,12 @@ struct FunctionInfo {
       // value to a local, etc.), but here we are optimizing for speed and not
       // size, so we risk it.
 //std::cout << "  sad: 6\n";
-      return isTrivialCall;
+      return parallel.isTrivialCall;
     }
 //std::cout << "  maybe 87\n";
     // This doesn't have calls. Inline if loops do not prevent us (normally, a
     // loop suggests a lot of work and so inlining is less useful).
-    return !hasLoops || options.inlining.allowFunctionsWithLoops;
+    return !parallel.hasLoops || options.inlining.allowFunctionsWithLoops;
   }
 };
 
@@ -185,7 +210,7 @@ struct FunctionInfoScanner
   }
 
   void visitLoop(Loop* curr) {
-    infos[getFunction()->name].hasLoops = true;
+    infos[getFunction()->name].parallel.hasLoops = true;
   }
 
   void visitCall(Call* curr) {
@@ -194,8 +219,8 @@ struct FunctionInfoScanner
     assert(infos.count(funcName));
 
     auto& info = infos[funcName];
-    info.outgoingRefs[curr->target]++;
-    info.hasCalls = true;
+    info.parallel.outgoingRefs[curr->target]++;
+    info.parallel.hasCalls = true;
   }
 
   // N.B.: CallIndirect and CallRef are intentionally omitted here, as we only
@@ -208,7 +233,7 @@ struct FunctionInfoScanner
 
   void visitTry(Try* curr) {
     if (curr->isDelegate()) {
-      infos[getFunction()->name].hasTryDelegate = true;
+      infos[getFunction()->name].parallel.hasTryDelegate = true;
     }
   }
 
@@ -220,33 +245,33 @@ struct FunctionInfoScanner
       funcName = func->name;
     }
     assert(infos.count(funcName));
-    infos[funcName].outgoingRefs[curr->func]++;
+    infos[funcName].parallel.outgoingRefs[curr->func]++;
   }
 
   void doWalkFunction(Function* curr) {
     auto& info = infos[curr->name];
-    if (!info.stale) {
+    if (!info.parallel.stale) {
       // The info is already up to date.
       return;
     }
 
     // Clear the info and recompute it, which will make it non-stale.
-    info.clear();
-    info.stale = false;
+    info.clearParallelData();
+    info.parallel.stale = false;
 
     WalkerPass<PostWalker<FunctionInfoScanner>>::doWalkFunction(curr);
 
     if (!canHandleParams(curr)) {
-      info.inliningMode = InliningMode::Uninlineable;
+      info.parallel.hasBadParams = true;
     }
 
-    info.size = Measurer::measure(curr->body);
+    info.parallel.size = Measurer::measure(curr->body);
 
     if (auto* call = curr->body->dynCast<Call>()) {
-      if (info.size == call->operands.size() + 1) {
+      if (info.parallel.size == call->operands.size() + 1) {
         // This function body is a call with some trivial (size 1) operands like
         // LocalGet or Const, so it is a trivial call.
-        info.isTrivialCall = true;
+        info.parallel.isTrivialCall = true;
       }
     }
   }
@@ -826,7 +851,7 @@ struct FunctionSplitter {
       // return), and we would not even attempt to do splitting.
       assert(body->is<Block>());
 
-      auto outlinedFunctionSize = info.size - Measurer::measure(iff);
+      auto outlinedFunctionSize = info.parallel.size - Measurer::measure(iff);
       // If outlined function will be worth normal inline, skip the intermediate
       // state and inline fully now. Note that if full inlining is disabled we
       // will not do this, and instead inline partially.
@@ -996,7 +1021,7 @@ private:
     // it should, but might return false when a more precise analysis would
     // return true. And it is a practical estimation to avoid extra future work.
     info = origin;
-    info.size = sizeEstimate;
+    info.parallel.size = sizeEstimate;
     return info.worthFullInlining(options);
   }
 
@@ -1221,7 +1246,7 @@ struct Inlining : public Pass {
         EHUtils::handleBlockNestedPops(func, *module);
 
         // Inlining into a function changes it, so its info becomes stale.
-        infos[func->name].stale = true;
+        infos[func->name].parallel.stale = true;
       }
 
       for (auto* func : inlinedInto) {
@@ -1260,10 +1285,8 @@ struct Inlining : public Pass {
     // info does not need to be recomputed. We do still need to do this loop,
     // as new functions may have been added (by function splitting).
     for (auto& func : module->functions) {
-      // Set the inlining mode to unknown, because even if we are not stale,
-      // then we need to recompute this: refs to us may have changed.
-      // TODO: separate the stale-aware fields to a substruct?
-      infos[func->name].inliningMode = InliningMode::Unknown;
+      // Clear all serial info. Parallel info may remain, if it is not stale.
+      infos[func->name].clearSerialData();
     }
 
     // Scan the module to fill in the infos.
@@ -1272,24 +1295,28 @@ struct Inlining : public Pass {
       scanner.run(getPassRunner(), module);
     }
 
-    // Combine info from outgoingRefs into refs.
+    // Combine info from outgoingRefs into refs. The refs should have been pre-
+    // zeroes already, by clearSerialData above.
+#ifndef NDEBUG
     for (auto& [_, info] : infos) {
-      info.refs = 0;
+      assert(info.serial.refs == 0);
     }
+#endif
     for (auto& [_, info] : infos) {
-      for (auto& [target, count] : info.outgoingRefs) {
-        infos[target].refs += count;
+      for (auto& [target, count] : info.parallel.outgoingRefs) {
+        infos[target].serial.refs += count;
       }
     }
 
-    // Apply global data.
+    // Apply global data. TODO: As this never changes atm, it could be computed
+    // once for all iterations.
     for (auto& ex : module->exports) {
       if (ex->kind == ExternalKind::Function) {
-        infos[ex->value].usedGlobally = true;
+        infos[ex->value].serial.usedGlobally = true;
       }
     }
     if (module->start.is()) {
-      infos[module->start].usedGlobally = true;
+      infos[module->start].serial.usedGlobally = true;
     }
 
     // When optimizing heavily for size, we may potentially split functions in
@@ -1370,7 +1397,7 @@ struct Inlining : public Pass {
         doInlining(module, func, action, getPassOptions(), inlinedNameHint++);
         inlinedUses[inlinedName]++;
         inlinedInto.insert(func);
-        assert(inlinedUses[inlinedName] <= infos[inlinedName].refs);
+        assert(inlinedUses[inlinedName] <= infos[inlinedName].serial.refs);
       }
     }
     if (optimize && inlinedInto.size() > 0) {
@@ -1380,8 +1407,8 @@ struct Inlining : public Pass {
     module->removeFunctions([&](Function* func) {
       auto name = func->name;
       auto& info = infos[name];
-      if (inlinedUses.count(name) && inlinedUses[name] == info.refs &&
-          !info.usedGlobally) {
+      if (inlinedUses.count(name) && inlinedUses[name] == info.serial.refs &&
+          !info.serial.usedGlobally) {
         removed.push_back(name);
         return true;
       }
@@ -1393,33 +1420,38 @@ struct Inlining : public Pass {
   Index inlinedNameHint = 0;
 
   // Decide for a given function whether to inline, and if so in what mode.
+  // Memoizes the mode on info.
   InliningMode getInliningMode(Name name) {
 //std::cout << "Consider inlining " << name << '\n';
     auto* func = module->getFunction(name);
     auto& info = infos[name];
 
-    if (info.inliningMode != InliningMode::Unknown) {
+    if (info.serial.inliningMode != InliningMode::Unknown) {
 //std::cout << "  use old\n";
-      return info.inliningMode;
+      return info.serial.inliningMode;
+    }
+
+    if (info.parallel.hasBadParams) {
+      return info.serial.inliningMode = InliningMode::Uninlineable;
     }
 
     // Check if the function itself is worth inlining as it is.
     if (!func->noFullInline && info.worthFullInlining(getPassOptions())) {
 //std::cout << "  full\n";
-      return info.inliningMode = InliningMode::Full;
+      return info.serial.inliningMode = InliningMode::Full;
     }
 
     // Otherwise, check if we can at least inline part of it, if we are
     // interested in such things.
     if (!func->noPartialInline && functionSplitter) {
-      info.inliningMode = functionSplitter->getSplitDrivenInliningMode(
+      info.serial.inliningMode = functionSplitter->getSplitDrivenInliningMode(
         module->getFunction(name), info);
-      return info.inliningMode;
+      return info.serial.inliningMode;
     }
 
     // Cannot be fully or partially inlined => uninlineable.
-    info.inliningMode = InliningMode::Uninlineable;
-    return info.inliningMode;
+    info.serial.inliningMode = InliningMode::Uninlineable;
+    return info.serial.inliningMode;
   }
 
   // Gets the actual function to be inlined. Normally this is the function
@@ -1430,7 +1462,7 @@ struct Inlining : public Pass {
   // This is called right before actually performing the inlining, that is, we
   // are guaranteed to inline after this.
   Function* getActuallyInlinedFunction(Function* func) {
-    InliningMode inliningMode = infos[func->name].inliningMode;
+    InliningMode inliningMode = infos[func->name].serial.inliningMode;
     // If we want to inline this function itself, do so.
     if (inliningMode == InliningMode::Full) {
       return func;
@@ -1451,7 +1483,7 @@ struct Inlining : public Pass {
   // https://github.com/emscripten-core/emscripten/issues/13899#issuecomment-825073344
   bool isUnderSizeLimit(Name target, Name source) {
     // Estimate the combined binary size from the number of instructions.
-    auto combinedSize = infos[target].size + infos[source].size;
+    auto combinedSize = infos[target].parallel.size + infos[source].parallel.size;
     auto estimatedBinarySize = Measurer::BytesPerExpr * combinedSize;
     // The limit is arbitrary, but based on the links above. It is a very high
     // value that should appear very rarely in practice (for example, it does
