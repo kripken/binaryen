@@ -46,11 +46,20 @@
 ;; function. This requires us to recompute inlineability fully in each
 ;; iteration, updating after the latest changes.
 (module
+ ;; CHECK:      (type $0 (func (param f32)))
+
+ ;; CHECK:      (type $1 (func))
  (type $1 (func))
  (type $0 (func (param f32)))
+ ;; CHECK:      (func $0 (type $0) (param $0 f32)
+ ;; CHECK-NEXT:  (nop)
+ ;; CHECK-NEXT: )
  (func $0 (type $0) (param $0 f32)
   (call $2)
  )
+ ;; CHECK:      (func $1 (type $1)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
  (func $1 (type $1)
   (if
    (i32.const 1)
