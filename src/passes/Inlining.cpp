@@ -138,7 +138,7 @@ struct FunctionInfo {
 //std::cout << "  sad: 1\n";
       return false;
     }
-//std::cout << "size: " << size << " : " << options.inlining.alwaysInlineMaxSize << '\n';
+//std::cout << "size: " << parallel.size << " : " << options.inlining.alwaysInlineMaxSize << '\n';
     // If it's small enough that we always want to inline such things, do so.
     if (parallel.size <= options.inlining.alwaysInlineMaxSize) {
 //std::cout << "  happ: 2\n";
@@ -146,7 +146,7 @@ struct FunctionInfo {
     }
     // If it has one use, then inlining it would likely reduce code size, at
     // least for reasonable function sizes.
-//std::cout << "refs: " << refs << " : " << usedGlobally << " : " << options.inlining.oneCallerInlineMaxSize << '\n';
+//std::cout << "refs: " << serial.refs << " : " << serial.usedGlobally << " : " << options.inlining.oneCallerInlineMaxSize << '\n';
     if (serial.refs == 1 && !serial.usedGlobally &&
         parallel.size <= options.inlining.oneCallerInlineMaxSize) {
 //std::cout << "  happ: 3\n";
@@ -266,12 +266,14 @@ struct FunctionInfoScanner
     }
 
     info.parallel.size = Measurer::measure(curr->body);
+//std::cout << "measur " << curr->name << " : " << info.parallel.size << '\n';
 
     if (auto* call = curr->body->dynCast<Call>()) {
       if (info.parallel.size == call->operands.size() + 1) {
         // This function body is a call with some trivial (size 1) operands like
         // LocalGet or Const, so it is a trivial call.
         info.parallel.isTrivialCall = true;
+//std::cout << "is trivial " << curr->name << '\n';
       }
     }
   }
@@ -300,10 +302,10 @@ struct InliningState {
 struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
   bool isFunctionParallel() override { return true; }
 
-  Planner(InliningState* state) : state(state) {}
+  Planner(NameInfoMap& infos, InliningState* state) : infos(infos), state(state) {}
 
   std::unique_ptr<Pass> create() override {
-    return std::make_unique<Planner>(state);
+    return std::make_unique<Planner>(infos, state);
   }
 
   void visitCall(Call* curr) {
@@ -328,6 +330,8 @@ struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
       // call will not change even if we inline multiple times into the same
       // function, otherwise call1(call2()) might be a problem
       auto* block = Builder(*getModule()).makeBlock(curr);
+      // Adding a block alters the function, so its info becomes stale.
+      infos[getFunction()->name].parallel.stale = true;
       replaceCurrent(block);
       // can't add a new element in parallel
       assert(state->actionsForFunction.count(getFunction()->name) > 0);
@@ -338,6 +342,7 @@ struct Planner : public WalkerPass<TryDepthWalker<Planner>> {
   }
 
 private:
+  NameInfoMap& infos;
   InliningState* state;
 };
 
@@ -1334,10 +1339,12 @@ struct Inlining : public Pass {
     InliningState state;
     ModuleUtils::iterDefinedFunctions(*module, [&](Function* func) {
       auto inliningMode = getInliningMode(func->name);
-//std::cout << "IM for " << func->name << " : " << int(inliningMode) << '\n';
       assert(inliningMode != InliningMode::Unknown);
       if (inliningMode != InliningMode::Uninlineable) {
         state.inlinableFunctions[func->name] = inliningMode;
+#if INLINING_DEBUG >= 2
+        std::cout << "can inline: " << func->name << " (" << int(inliningMode) << ")\n";
+#endif
       }
     });
     if (state.inlinableFunctions.empty()) {
@@ -1353,7 +1360,7 @@ struct Inlining : public Pass {
       funcNames.push_back(func->name);
     }
     // find and plan inlinings
-    Planner(&state).run(getPassRunner(), module);
+    Planner(infos, &state).run(getPassRunner(), module);
     // perform inlinings TODO: parallelize
     std::unordered_map<Name, Index> inlinedUses; // how many uses we inlined
     // which functions were inlined into
