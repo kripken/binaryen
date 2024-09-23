@@ -80,3 +80,54 @@
   (call $2)
  )
 )
+
+;; $1, $2, $3 are all "trivial calls": functions that just call another
+;; immediately. We inline such functions even though they have a call in them.
+;; In this case multiple cycles are possible.
+(module
+ (type $0 (func (param i32 i32)))
+ ;; CHECK:      (type $2 (func (param i32) (result i32)))
+
+ ;; CHECK:      (type $1 (func (param i32 i32 i32)))
+ (type $1 (func (param i32 i32 i32)))
+ (type $2 (func (param i32) (result i32)))
+ ;; CHECK:      (export "_ZNSt3__29allocatorIcE10deallocateEPcm" (func $3))
+ (export "_ZNSt3__29allocatorIcE10deallocateEPcm" (func $3))
+ ;; CHECK:      (func $0 (type $2) (param $0 i32) (result i32)
+ ;; CHECK-NEXT:  (i32.const 0)
+ ;; CHECK-NEXT: )
+ (func $0 (param $0 i32) (result i32)
+  (call $2
+   (i32.const 0)
+   (i32.const 0)
+   (i32.const 0)
+  )
+  (i32.const 0)
+ )
+ (func $1 (param $0 i32) (param $1 i32)
+  (call $4
+   (i32.const 0)
+   (i32.const 0)
+  )
+ )
+ (func $2 (param $0 i32) (param $1 i32) (param $2 i32)
+  (call $3
+   (i32.const 0)
+   (i32.const 0)
+   (i32.const 0)
+  )
+ )
+ ;; CHECK:      (func $3 (type $1) (param $0 i32) (param $1 i32) (param $2 i32)
+ ;; CHECK-NEXT:  (nop)
+ ;; CHECK-NEXT: )
+ (func $3 (param $0 i32) (param $1 i32) (param $2 i32)
+  (call $1
+   (i32.const 0)
+   (i32.const 0)
+  )
+ )
+ (func $4 (param $0 i32) (param $1 i32)
+  (nop)
+ )
+)
+
