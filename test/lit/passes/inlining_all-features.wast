@@ -139,3 +139,44 @@
   )
  )
 )
+
+;; New testcase, to reduce. fails with PASS_DEBUG=1
+(module
+ (type $0 (sub (shared (struct (field (mut (ref null (shared array))))))))
+ (rec
+  (type $1 (sub (shared (array (ref null $1)))))
+  (type $2 (sub (shared (func (param (ref $2)) (result i64)))))
+  (type $3 (sub (struct (field (mut (ref $1))))))
+ )
+ (rec
+  (type $4 (shared (func (param arrayref f64))))
+  (type $5 (shared (struct (field (ref null (shared extern))) (field i64) (field f32) (field (mut (ref (shared i31)))) (field (mut f32)))))
+  (type $6 (struct (field (mut (ref null $2)))))
+  (type $7 (shared (struct (field (mut i8)) (field (mut (ref null $5))) (field (mut i8)) (field i32) (field i8) (field (ref $11)))))
+  (type $8 (sub (struct (field (mut i16)) (field (mut f32)) (field (ref (shared func))) (field (mut f32)) (field (ref null $11)))))
+  (type $9 (sub (shared (array (ref null (shared eq))))))
+  (type $10 (sub (array i8)))
+  (type $11 (sub (shared (struct (field (ref null $0)) (field i8) (field i16)))))
+  (type $12 (sub $8 (struct (field (mut i16)) (field (mut f32)) (field (ref $2)) (field (mut f32)) (field (ref null (shared none))))))
+  (type $13 (sub final $0 (shared (struct (field (mut (ref null (shared array)))) (field (mut i8))))))
+  (type $14 (sub final $9 (shared (array (ref null (shared none))))))
+ )
+ (type $15 (func))
+ (type $16 (func (result (ref null $11))))
+ (type $17 (func (param arrayref) (result (ref null $11))))
+ (tag $tag$0)
+ (func $0 (result (ref null $11))
+  (unreachable)
+ )
+ (func $1 (param $0 arrayref) (result (ref null $11))
+  (try $label$3 (result (ref $11))
+   (do
+    (return_call $0)
+   )
+   (catch $tag$0
+    (struct.new_default $11)
+   )
+  )
+ )
+)
+
