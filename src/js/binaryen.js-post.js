@@ -2714,6 +2714,12 @@ function wrapModule(module, self = {}) {
   self['copyExpression'] = function(expr) {
     return Module['_BinaryenExpressionCopy'](expr, module);
   };
+  self['addFuzz'] = function(bytes, allowOOB = false) {
+    const buffer = _malloc(bytes.length);
+    HEAP8.set(bytes, buffer);
+    Module['_BinaryenModuleAddFuzz'](module, buffer, bufferSize, allowOOB);
+    _free(buffer);
+  };
 
   return self;
 }
