@@ -10,18 +10,15 @@ const sizes = [];
 for (let oob = 0; oob < 2; oob++) {
   // Create an empty module and add fuzz.
   const module = new binaryen.Module();
-  module.addFuzz(bytes, NUM, oob);
+  module.addFuzz(bytes, oob);
 
   // The output must be valid.
   assert(module.validate());
 
   // The size must be reasonable.
-  const size = binaryen.emitText(module).length;
+  const size = module.emitText().length;
   assert(size >= 20);
   sizes[oob] = size;
-
-console.log(binaryen.emitText(module));
-throw 5;
 
   module.dispose();
 }
