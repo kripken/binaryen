@@ -40,12 +40,15 @@ function fuzzForever() {
     const now = performance.now();
     const module = makeModule(bytes);
     const binary = module.emitBinary();
-    test(module, binary);
+    const output = test(module, binary);
 
     // Generate the optimized binary that corresponds to it, and test that.
     module.optimize();
     const optimizedBinary = module.emitBinary();
-    test(module, optimizedBinary);
+    const optimizedOutput = test(module, optimizedBinary);
+
+    // Any difference in execution is a problem.
+    assert(output == optimizedOutput);
 
     // Log some info.
     iter++;
@@ -91,5 +94,9 @@ function makeModule(bytes) {
 // Given a module (Binaryen IR) and binary bytes that correspond to it, run
 // some tests on it. Returns the expected output.
 function test(module, binary) {
+  // TODO run in binaryen interpreter
+  var lines = [];
+  executeWasmBytes(binary, (line) => { lines.push(line) });
+  return lines.join('\n');
 }
 
