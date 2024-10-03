@@ -5680,7 +5680,7 @@ const char* BinaryenModuleGetDebugInfoFileName(BinaryenModuleRef module,
 }
 
 void BinaryenModuleAddFuzz(BinaryenModuleRef module,
-                           char* input,
+                           const char* input,
                            size_t inputSize,
                            bool allowOOB) {
   std::vector<char> bytes(inputSize);

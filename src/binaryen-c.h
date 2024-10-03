@@ -3148,7 +3148,7 @@ BinaryenModuleGetDebugInfoFileName(BinaryenModuleRef module,
 // @allowOOB: Whether to allow out of bounds loads etc. If disallowed, the
 //            content will be instrumented with bounds checks.
 BINARYEN_API void BinaryenModuleAddFuzz(BinaryenModuleRef module,
-                                        char* input,
+                                        const char* input,
                                         size_t inputSize,
                                         bool allowOOB);
 
