@@ -40,8 +40,8 @@ function fuzzForever() {
 
 function pickRandomSize() {
   const MIN = 1024;
-  const MAX = 5 * 40 * 1024;
-  return MIN + Math.random() * (MAX - MIN);
+  const MAX = 5 * 40 * 1024; // TODO: less than fuzz_opt.py? in-process...
+  return Math.floor(MIN + Math.random() * (MAX - MIN));
 }
 
 function makeBytes(size) {
