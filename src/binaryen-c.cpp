@@ -5679,10 +5679,10 @@ const char* BinaryenModuleGetDebugInfoFileName(BinaryenModuleRef module,
            : nullptr;
 }
 
-BinaryenModuleRef BinaryenModuleAddFuzz(BinaryenModuleRef module,
-                                        char* input,
-                                        size_t inputSize,
-                                        bool allowOOB) {
+void BinaryenModuleAddFuzz(BinaryenModuleRef module,
+                           char* input,
+                           size_t inputSize,
+                           bool allowOOB) {
   std::vector<char> bytes(inputSize);
   std::copy(input, input + inputSize, bytes.begin());
   TranslateToFuzzReader reader(*(Module*)module, std::move(bytes));

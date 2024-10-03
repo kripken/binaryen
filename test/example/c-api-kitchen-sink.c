@@ -2230,6 +2230,42 @@ void test_callref_and_types() {
   BinaryenModuleDispose(module);
 }
 
+// Given a module, return the binary size.
+static size_t getModuleSize(BinaryenModuleRef module) {
+  size_t bufferSize = 1024 * 1024;
+  char* buffer = malloc(bufferSize);
+  return BinaryenModuleWrite(module, buffer, bufferSize);
+}
+
+void test_fuzz() {
+  int oob;
+
+  // Some random data.
+  const char bytes = { 211, 224, 1, 189, 32, 39, 156, 213, 31, 201, 232, 194, 144, 22, 4, 90, 31, 222, 190, 45, 150, 142, 173, 60, 209, 83, 7, 194, 49, 187, 100, 68, 8, 130, 98, 203, 108, 182, 73, 175, 148, 67, 125, 178, 218, 224, 215, 119, 13, 18, 21, 17, 145, 204, 104, 204, 221, 50, 173, 206, 41, 65, 19, 56, 217, 114, 197, 209, 186, 234, 103, 18, 21, 56, 134, 159, 50, 215, 47, 214, 177, 230, 113, 227, 254, 207, 235, 100, 10, 131, 58, 18, 166, 41, 78, 231, 78, 169, 212, 140 };
+
+  // Build with and without allowOOB.
+  size_t sizes[2];
+  for (oob = 0; oob < 2; oob++) {
+    // Create an empty module and add fuzz.
+    BinaryenModuleRef module = BinaryenModuleCreate();
+    BinaryenModuleAddFuzz(module, bytes, sizeof(bytes), oob);
+
+    // The output must be valid.
+    bool didValidate = BinaryenModuleValidate(module);
+    assert(didValidate);
+
+    // The size must be reasonable.
+    size_t size = getModuleSize(module);
+    assert(size >= 20);
+    sizes[oob] = size;
+
+    BinaryenModuleDispose(module);
+  }
+
+  // Test that the OOB mode had an effect.
+  assert(sizes[0] != sizes[1]);
+}
+
 int main() {
   test_types();
   test_features();
@@ -2244,6 +2280,7 @@ int main() {
   test_func_opt();
   test_typebuilder();
   test_callref_and_types();
+  test_fuzz();
 
   return 0;
 }
