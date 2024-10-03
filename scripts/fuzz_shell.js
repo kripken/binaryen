@@ -1,13 +1,13 @@
-// Shell integration.
-if (typeof console === 'undefined') {
-  console = { log: print };
-}
-var tempRet0;
+// If we are called with an argument, that is the filename of a binary file we
+// should read, and we read it into a typed array in |binary|.
 var binary;
 if (typeof process === 'object' && typeof require === 'function' /* node.js detection */) {
   var args = process.argv.slice(2);
-  binary = require('fs').readFileSync(args[0]);
-  if (!binary.buffer) binary = new Uint8Array(binary);
+  var filename = args[0];
+  if (filename) {
+    binary = require('fs').readFileSync(filename);
+    if (!binary.buffer) binary = new Uint8Array(binary);
+  }
 } else {
   var args;
   if (typeof scriptArgs != 'undefined') {
@@ -15,10 +15,13 @@ if (typeof process === 'object' && typeof require === 'function' /* node.js dete
   } else if (typeof arguments != 'undefined') {
     args = arguments;
   }
-  if (typeof readbuffer === 'function') {
-    binary = new Uint8Array(readbuffer(args[0]));
-  } else {
-    binary = read(args[0], 'binary');
+  var filename = args[0];
+  if (filename) {
+    if (typeof readbuffer === 'function') {
+      binary = new Uint8Array(readbuffer(filename));
+    } else {
+      binary = read(filename, 'binary');
+    }
   }
 }
 
@@ -26,17 +29,6 @@ if (typeof process === 'object' && typeof require === 'function' /* node.js dete
 function assert(x, y) {
   if (!x) throw (y || 'assertion failed');// + new Error().stack;
 }
-
-// Deterministic randomness.
-var detrand = (function() {
-  var hash = 5381; // TODO DET_RAND_SEED;
-  var x = 0;
-  return function() {
-    hash = (((hash << 5) + hash) ^ (x & 0xff)) >>> 0;
-    x = (x + 1) % 256;
-    return (hash % 256) / 256;
-  };
-})();
 
 // Print out a value in a way that works well for fuzzing.
 function printed(x, y) {
@@ -118,81 +110,85 @@ function printed(x, y) {
   }
 }
 
-// Fuzzer integration.
-function logValue(x, y) {
-  console.log('[LoggingExternalInterface logging ' + printed(x, y) + ']');
-}
+// Given binary bytes, compile and execute them. Optionally receive a function
+// to call with each line of text output; if none is given we use console.log.
+function executeWasmBytes(binary, log) {
+  // Printing and other imports.
+  function logValue(x, y) {
+    log('[LoggingExternalInterface logging ' + printed(x, y) + ']');
+  }
 
-// Set up the imports.
-var imports = {
-  'fuzzing-support': {
-    'log-i32': logValue,
-    'log-i64': logValue,
-    'log-f32': logValue,
-    'log-f64': logValue,
-    // JS cannot log v128 values (we trap on the boundary), but we must still
-    // provide an import so that we do not trap during linking. (Alternatively,
-    // we could avoid running JS on code with SIMD in it, but it is useful to
-    // fuzz such code as much as we can.)
-    'log-v128': logValue,
-  },
-  'env': {
-    'setTempRet0': function(x) { tempRet0 = x },
-    'getTempRet0': function() { return tempRet0 },
-  },
-};
+  var tempRet0;
 
-// If Tags are available, add the import j2wasm expects.
-if (typeof WebAssembly.Tag !== 'undefined') {
-  imports['imports'] = {
-    'j2wasm.ExceptionUtils.tag': new WebAssembly.Tag({
-      'parameters': ['externref']
-    }),
+  // Set up the imports.
+  var imports = {
+    'fuzzing-support': {
+      'log-i32': logValue,
+      'log-i64': logValue,
+      'log-f32': logValue,
+      'log-f64': logValue,
+      // JS cannot log v128 values (we trap on the boundary), but we must still
+      // provide an import so that we do not trap during linking. (Alternatively,
+      // we could avoid running JS on code with SIMD in it, but it is useful to
+      // fuzz such code as much as we can.)
+      'log-v128': logValue,
+    },
+    'env': {
+      'setTempRet0': function(x) { tempRet0 = x },
+      'getTempRet0': function() { return tempRet0 },
+    },
   };
-}
 
-// Create the wasm.
-var module = new WebAssembly.Module(binary);
-
-var instance;
-try {
-  instance = new WebAssembly.Instance(module, imports);
-} catch (e) {
-  console.log('exception thrown: failed to instantiate module');
-  quit();
-}
-
-// Handle the exports.
-var exports = instance.exports;
-
-var view;
-
-// Recreate the view. This is important both initially and after a growth.
-function refreshView() {
-  if (exports.memory) {
-    view = new Int32Array(exports.memory.buffer);
+  // If Tags are available, add the import j2wasm expects.
+  if (typeof WebAssembly.Tag !== 'undefined') {
+    imports['imports'] = {
+      'j2wasm.ExceptionUtils.tag': new WebAssembly.Tag({
+        'parameters': ['externref']
+      }),
+    };
   }
-}
 
-// Run the wasm.
-for (var e in exports) {
-  if (typeof exports[e] !== 'function') {
-    continue;
-  }
-  // Send the function a null for each parameter. Null can be converted without
-  // error to both a number and a reference.
-  var func = exports[e];
-  var args = [];
-  for (var i = 0; i < func.length; i++) {
-    args.push(null);
-  }
+  // Compile the bytes.
+  var module = new WebAssembly.Module(binary);
+
+  var instance;
   try {
-    console.log('[fuzz-exec] calling ' + e);
-    var result = func.apply(null, args);
-    if (typeof result !== 'undefined') {
-      console.log('[fuzz-exec] note result: ' + e + ' => ' + printed(result));
-    }
+    instance = new WebAssembly.Instance(module, imports);
   } catch (e) {
-    console.log('exception thrown: ' + e);
+    log('exception thrown: failed to instantiate module');
+    quit();
+  }
+
+  // Handle the exports.
+  var exports = instance.exports;
+
+  // Run the wasm.
+  for (var e in exports) {
+    if (typeof exports[e] !== 'function') {
+      continue;
+    }
+    // Send the function a null for each parameter. Null can be converted without
+    // error to both a number and a reference.
+    var func = exports[e];
+    var args = [];
+    for (var i = 0; i < func.length; i++) {
+      args.push(null);
+    }
+    try {
+      log('[fuzz-exec] calling ' + e);
+      var result = func.apply(null, args);
+      if (typeof result !== 'undefined') {
+        log('[fuzz-exec] note result: ' + e + ' => ' + printed(result));
+      }
+    } catch (e) {
+      log('exception thrown: ' + e);
+    }
   }
 }
+
+// If we were given a binary then we are run as the main program. Run that
+// binary and log to the console.
+if (binary) {
+  executeWasmBytes(binary, console.log);
+}
+
