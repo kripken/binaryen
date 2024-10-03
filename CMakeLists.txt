@@ -481,7 +481,7 @@ endif()
 if(EMSCRIPTEN)
   # binaryen.js WebAssembly variant
   add_executable(binaryen_wasm
-                 ${binaryen_SOURCES})
+                 ${binaryen_SOURCES} ${binaryen_objs})
   target_link_libraries(binaryen_wasm wasm asmjs emscripten-optimizer passes ir cfg support analysis parser wasm)
   target_link_libraries(binaryen_wasm "-sFILESYSTEM")
   target_link_libraries(binaryen_wasm "-sEXPORT_NAME=Binaryen")
@@ -511,7 +511,7 @@ if(EMSCRIPTEN)
 
   # binaryen.js JavaScript variant
   add_executable(binaryen_js
-                 ${binaryen_SOURCES})
+                 ${binaryen_SOURCES} ${binaryen_objs})
   target_link_libraries(binaryen_js wasm asmjs emscripten-optimizer passes ir cfg support analysis parser wasm)
   target_link_libraries(binaryen_js "-sWASM=0")
   target_link_libraries(binaryen_js "-sWASM_ASYNC_COMPILATION=0")
