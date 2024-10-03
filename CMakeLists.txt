@@ -409,6 +409,7 @@ add_subdirectory(src/emscripten-optimizer)
 add_subdirectory(src/passes)
 add_subdirectory(src/parser)
 add_subdirectory(src/support)
+add_subdirectory(src/tools/fuzzing)
 add_subdirectory(src/wasm)
 add_subdirectory(src/analysis)
 
@@ -429,15 +430,17 @@ endif()
 
 # Object files
 set(binaryen_objs
-    $<TARGET_OBJECTS:passes>
-    $<TARGET_OBJECTS:wasm>
-    $<TARGET_OBJECTS:asmjs>
-    $<TARGET_OBJECTS:emscripten-optimizer>
-    $<TARGET_OBJECTS:ir>
-    $<TARGET_OBJECTS:cfg>
-    $<TARGET_OBJECTS:support>
-    $<TARGET_OBJECTS:analysis>
-    $<TARGET_OBJECTS:parser>)
+  $<TARGET_OBJECTS:passes>
+  $<TARGET_OBJECTS:wasm>
+  $<TARGET_OBJECTS:asmjs>
+  $<TARGET_OBJECTS:emscripten-optimizer>
+  $<TARGET_OBJECTS:ir>
+  $<TARGET_OBJECTS:cfg>
+  $<TARGET_OBJECTS:support>
+  $<TARGET_OBJECTS:analysis>
+  $<TARGET_OBJECTS:parser>
+  $<TARGET_OBJECTS:fuzzing>
+)
 
 if(BUILD_LLVM_DWARF)
   SET(binaryen_objs ${binaryen_objs} $<TARGET_OBJECTS:llvm_dwarf>)

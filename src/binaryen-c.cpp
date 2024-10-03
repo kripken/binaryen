@@ -6316,11 +6316,6 @@ void BinaryenSetColorsEnabled(bool enabled) { Colors::setEnabled(enabled); }
 
 bool BinaryenAreColorsEnabled() { return Colors::isEnabled(); }
 
-BINARYEN_API BinaryenModuleRef BinaryenModuleAddFuzz(BinaryenModuleRef module,
-                                                     char* input,
-                                                     size_t inputSize,
-                                                     bool allowOOB);
-
 //
 // ========= binaryen.js APIs =========
 //
