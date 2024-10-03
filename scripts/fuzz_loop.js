@@ -22,8 +22,6 @@ import(binaryen_wasm_js_path).then((imported) => {
 }).then((binaryen_) => {
   binaryen = binaryen_;
 
-  binaryen.setDebugInfo(false); // TODO needed?
-
   fuzzForever();
 });
 
@@ -33,19 +31,36 @@ function fuzzForever() {
   const start = performance.now();
   let totalBytes = 0;
   while (1) {
+    // Pick global settings.
+    pickSettings();
+
+    // Generate the main binary for this iteration, and test it.
     const size = pickRandomSize();
     const bytes = makeBytes(size);
     const now = performance.now();
-    iter++;
     const module = makeModule(bytes);
     const binary = module.emitBinary();
-    totalBytes += binary.length;
+    test(module, binary);
+
+    // Generate the optimized binary that corresponds to it, and test that.
+    module.optimize();
+    const optimizedBinary = module.emitBinary();
+    test(module, optimizedBinary);
+
+    // Log some info.
+    iter++;
+    totalBytes += binary.length + optimizedBinary.length;
     const elapsedSeconds = (now - start) / 1000;
     console.log(`ITERATION ${iter} random bytes: ${size} wasm bytes: ${binary.length} speed: ${iter / elapsedSeconds} iters/sec ${totalBytes / elapsedSeconds} wasm bytes/sec`);
-    console.log(totalBytes, elapsedSeconds);
-    testModule(module);
+
+    // Clean up.
     module.dispose();
   }
+}
+
+function pickSettings() {
+  binaryen.setDebugInfo(false); // TODO needed?
+  binaryen.setOptimizeLevel(3); // TODO randomize, and passes
 }
 
 function pickRandomSize() {
@@ -73,6 +88,8 @@ function makeModule(bytes) {
   return module;
 }
 
-function testModule(module) {
+// Given a module (Binaryen IR) and binary bytes that correspond to it, run
+// some tests on it. Returns the expected output.
+function test(module, binary) {
 }
 
