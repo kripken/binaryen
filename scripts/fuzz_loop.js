@@ -14,7 +14,7 @@ arguments.length = 0;
 console.log('fuzz_loop: loading fuzz shell');
 load('scripts/fuzz_shell.js');
 
-console.log(`fuzz_loop: loading binaryen_wasm.js ({binaryen_wasm_js_path})`);
+console.log(`fuzz_loop: loading binaryen_wasm.js (${binaryen_wasm_js_path})`);
 import(binaryen_wasm_js_path).then((imported) => {
   return imported.default();
 }).then((binaryen) => {
