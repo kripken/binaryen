@@ -2717,7 +2717,7 @@ function wrapModule(module, self = {}) {
   self['addFuzz'] = function(bytes, allowOOB = false) {
     const buffer = _malloc(bytes.length);
     HEAP8.set(bytes, buffer);
-    Module['_BinaryenModuleAddFuzz'](module, buffer, bufferSize, allowOOB);
+    Module['_BinaryenModuleAddFuzz'](module, buffer, bytes.length, allowOOB);
     _free(buffer);
   };
 
