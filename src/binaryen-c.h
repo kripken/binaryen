@@ -3142,6 +3142,16 @@ BINARYEN_API const char*
 BinaryenModuleGetDebugInfoFileName(BinaryenModuleRef module,
                                    BinaryenIndex index);
 
+// Given a module, add fuzz contents to it, translating the given input bytes
+// in some deterministic manner into valid additions to the module.
+//
+// @allowOOB: Whether to allow out of bounds loads etc. If disallowed, the
+//            content will be instrumented with bounds checks.
+BINARYEN_API BinaryenModuleRef BinaryenModuleAddFuzz(BinaryenModuleRef module,
+                                                     char* input,
+                                                     size_t inputSize,
+                                                     bool allowOOB);
+
 //
 // ========== Function Operations ==========
 //
@@ -3580,6 +3590,11 @@ BINARYEN_API void BinaryenSetColorsEnabled(bool enabled);
 
 // Query whether color is enable for the Wasm printer
 BINARYEN_API bool BinaryenAreColorsEnabled();
+
+//
+// ========= Fuzzing =========
+//
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

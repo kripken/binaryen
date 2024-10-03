@@ -28,6 +28,7 @@
 #include "shell-interface.h"
 #include "support/colors.h"
 #include "support/string.h"
+#include "tools/fuzzing.h"
 #include "wasm-binary.h"
 #include "wasm-builder.h"
 #include "wasm-interpreter.h"
@@ -5678,6 +5679,17 @@ const char* BinaryenModuleGetDebugInfoFileName(BinaryenModuleRef module,
            : nullptr;
 }
 
+BinaryenModuleRef BinaryenModuleAddFuzz(BinaryenModuleRef module,
+                                        char* input,
+                                        size_t inputSize,
+                                        bool allowOOB) {
+  std::vector<char> bytes(inputSize);
+  std::copy(input, input + inputSize, bytes.begin());
+  TranslateToFuzzReader reader(*(Module*)module, std::move(bytes));
+  reader.setAllowOOB(allowOOB);
+  reader.build();
+}
+
 //
 // ========== Function Operations ==========
 //
@@ -6304,8 +6316,16 @@ void BinaryenSetColorsEnabled(bool enabled) { Colors::setEnabled(enabled); }
 
 bool BinaryenAreColorsEnabled() { return Colors::isEnabled(); }
 
+BINARYEN_API BinaryenModuleRef BinaryenModuleAddFuzz(BinaryenModuleRef module,
+                                                     char* input,
+                                                     size_t inputSize,
+                                                     bool allowOOB);
+
+//
+// ========= binaryen.js APIs =========
+//
+
 #ifdef __EMSCRIPTEN__
-// Internal binaryen.js APIs
 
 // Returns the size of a Literal object.
 EMSCRIPTEN_KEEPALIVE
