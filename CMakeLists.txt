@@ -484,6 +484,8 @@ if(EMSCRIPTEN)
                  ${binaryen_SOURCES} ${binaryen_objs})
   target_link_libraries(binaryen_wasm wasm asmjs emscripten-optimizer passes ir cfg support analysis parser wasm)
   target_link_libraries(binaryen_wasm "-sFILESYSTEM")
+  # Build for all possible targets
+  target_link_libraries(binaryen_wasm "-sENVIRONMENT=web,webview,worker,node,shell") # TODO needed?
   target_link_libraries(binaryen_wasm "-sEXPORT_NAME=Binaryen")
   target_link_libraries(binaryen_wasm "-sNODERAWFS=0")
   # Do not error on the repeated NODERAWFS argument
