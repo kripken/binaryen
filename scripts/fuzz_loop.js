@@ -27,10 +27,12 @@ import(binaryen_wasm_js_path).then((imported) => {
 function fuzzForever() {
   console.log('fuzz loop: fuzzing forever');
   let iter = 0;
+  const start = performance.now();
   while (1) {
     const size = pickRandomSize();
     const bytes = makeBytes(size);
-    console.log(`ITERATION ${iter} size: ${size}`);
+    const now = performance.now();
+    console.log(`ITERATION ${iter} size: ${size} speed: ${(1000 * iter) / (now - start)} iters/sec`);
     iter++;
     const module = makeModule(bytes);
     testModule(module);
@@ -49,6 +51,7 @@ function makeBytes(size) {
   for (let i = 0; i < size; i++) {
     bytes[i] = Math.random() * 256;
   }
+  return bytes;
 }
 
 function makeModule(bytes) {
