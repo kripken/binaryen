@@ -21,6 +21,9 @@ import(binaryen_wasm_js_path).then((imported) => {
   return imported.default();
 }).then((binaryen_) => {
   binaryen = binaryen_;
+
+  binaryen.setDebugInfo(false); // TODO needed?
+
   fuzzForever();
 });
 
@@ -28,13 +31,18 @@ function fuzzForever() {
   console.log('fuzz loop: fuzzing forever');
   let iter = 0;
   const start = performance.now();
+  let totalBytes = 0;
   while (1) {
     const size = pickRandomSize();
     const bytes = makeBytes(size);
     const now = performance.now();
-    console.log(`ITERATION ${iter} size: ${size} speed: ${(1000 * iter) / (now - start)} iters/sec`);
     iter++;
     const module = makeModule(bytes);
+    const binary = module.emitBinary();
+    totalBytes += binary.length;
+    const elapsedSeconds = (now - start) / 1000;
+    console.log(`ITERATION ${iter} random bytes: ${size} wasm bytes: ${binary.length} speed: ${iter / elapsedSeconds} iters/sec ${totalBytes / elapsedSeconds} wasm bytes/sec`);
+    console.log(totalBytes, elapsedSeconds);
     testModule(module);
     module.dispose();
   }
