@@ -48,7 +48,12 @@ function fuzzForever() {
     const optimizedOutput = test(module, optimizedBinary);
 
     // Any difference in execution is a problem.
-    assert(output == optimizedOutput);
+    if (output != optimizedOutput) {
+      console.log('bug!');
+      writeFile('bug.wasm', binary);
+      writeFile('bug.opt.wasm', optimizedBinary);
+      quit();
+    }
 
     // Log some info.
     iter++;
