@@ -39,17 +39,19 @@ function fuzzForever() {
     const bytes = makeBytes(size);
     const now = performance.now();
     const module = makeModule(bytes);
+    fixInitialModule(module);
     const binary = module.emitBinary();
     const output = test(module, binary);
 
     // Generate the optimized binary that corresponds to it, and test that.
     module.optimize();
+    fixOptimizedModule(module);
     const optimizedBinary = module.emitBinary();
     const optimizedOutput = test(module, optimizedBinary);
 
     // Any difference in execution is a problem.
     if (output != optimizedOutput) {
-      console.log('bug!');
+      console.log('Bug! Saving output to bug.wasm, bug.opt.wasm');
       writeFile('bug.wasm', binary);
       writeFile('bug.opt.wasm', optimizedBinary);
       quit();
@@ -73,7 +75,7 @@ function pickSettings() {
 
 function pickRandomSize() {
   const MIN = 1024;
-  const MAX = 5 * 40 * 1024; // TODO: less than fuzz_opt.py? in-process...
+  const MAX = 40 * 1024;
   return Math.floor(MIN + Math.random() * (MAX - MIN));
 }
 
@@ -103,5 +105,17 @@ function test(module, binary) {
   var lines = [];
   executeWasmBytes(binary, (line) => { lines.push(line) });
   return lines.join('\n');
+}
+
+function fixInitialModule(module) {
+  // Remove NaNs, which can cause differences between binaryen and V8.
+  // TODO: Compare V8 to itself, without nans? (but without binaryen opts too)
+  //
+  // Legalize the module so we can call it from JS without issue.
+  module.runPasses(['denan', 'legalize-and-prune-js-interface']);
+}
+
+function fixOptimizedModule(module) {
+  // TODO?
 }
 
