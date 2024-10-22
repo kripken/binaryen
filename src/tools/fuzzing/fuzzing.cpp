@@ -1699,6 +1699,7 @@ Expression* TranslateToFuzzReader::makeTryTable(Type type) {
 
   if (funcContext->breakableStack.empty()) {
     // Nothing to break to, so we can only emit a trivial TryTable.
+    // TODO: Perhaps generate a block wrapping us?
     return builder.makeTryTable(body, {}, {}, {});
   }
 
