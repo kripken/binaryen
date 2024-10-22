@@ -1697,9 +1697,18 @@ Expression* TranslateToFuzzReader::makeTryTable(Type type) {
   auto* body = make(type);
 
   if (funcContext->breakableStack.empty()) {
-    // Nothing to break to, emit a trivial TryTable.
-    // TODO: Perhaps generate a block wrapping us?
-    return builder.makeTryTable(body, {}, {}, {});
+    // Nothing to break to, so we can only emit a trivial TryTable.
+    if (oneIn(2)) {
+      // Emit one without catches at all.
+      return builder.makeTryTable(body, {}, {}, {});
+    } else {
+      // Emit one that catches all exceptions and ignores them by going to a
+      // parent block that we add here. This is useful for swallowing exceptions
+      // from throw, which might be very common otherwise.
+      auto name = makeLabel();
+      auto* tryy = builder.makeTryTable(body, {Name()}, {name}, {false});
+      return builder.makeBlock(name, tryy);
+    }
   }
 
   if (wasm.tags.empty()) {
@@ -3008,6 +3017,22 @@ Expression* TranslateToFuzzReader::makeTrappingRefUse(HeapType type) {
   return makeLocalGet(nonNull);
 }
 
+Expression* TranslateToFuzzReader::wrapTrappingExpr(Expression* expr) {
+  // We should only be called on things that actually halt execution.
+  assert(expr->type == Type::unreachable);
+  // More rarely, emit it without any guard.
+  if (oneIn(3)) {
+    return expr;
+  }
+  // Otherwise, put it in the else of an if, so it happens only if the
+  // condition happens to be zero. To make the if's type unreachable, make the
+  // other arm unreachable as well, using a return (which exits the function but
+  // does not halt execution, at least).
+  auto* condition = make(Type::i32);
+  auto* ifTrue = makeReturn(Type::unreachable);
+  return builder.makeIf(condition, ifTrue, expr);
+}
+
 Expression* TranslateToFuzzReader::buildUnary(const UnaryArgs& args) {
   return builder.makeUnary(args.a, args.b);
 }
@@ -4282,7 +4307,7 @@ Expression* TranslateToFuzzReader::makeThrow(Type type) {
   for (auto t : tagType) {
     operands.push_back(make(t));
   }
-  return builder.makeThrow(tag, operands);
+  return wrapTrappingExpr(builder.makeThrow(tag, operands));
 }
 
 Expression* TranslateToFuzzReader::makeMemoryInit() {

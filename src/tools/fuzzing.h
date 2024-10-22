@@ -341,6 +341,11 @@ private:
   // struct.get or array.set would use this.
   Expression* makeTrappingRefUse(HeapType type);
 
+  // Given an expression that traps or throws - something that halts the
+  // execution of the program - wrap it in a form that will halt execution less
+  // frequently.
+  Expression* wrapTrappingExpr(Expression* expr);
+
   Expression* buildUnary(const UnaryArgs& args);
   Expression* makeUnary(Type type);
   Expression* buildBinary(const BinaryArgs& args);
