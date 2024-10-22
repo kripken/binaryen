@@ -1341,7 +1341,6 @@ Expression* TranslateToFuzzReader::make(Type type) {
     ret = _makeunreachable();
   }
   // We should create the right type of thing.
-  if (!Type::isSubType(ret->type, type)) { std::cout << "wanted " << type << " but got " << ret->type << " : " << *ret << '\n'; }
   assert(Type::isSubType(ret->type, type));
   nesting--;
   return ret;
