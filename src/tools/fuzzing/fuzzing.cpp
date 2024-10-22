@@ -3566,7 +3566,7 @@ Expression* TranslateToFuzzReader::makeNop(Type type) {
 
 Expression* TranslateToFuzzReader::makeUnreachable(Type type) {
   assert(type == Type::unreachable);
-  return builder.makeUnreachable();
+  return wrapTrappingExpr(builder.makeUnreachable());
 }
 
 Expression* TranslateToFuzzReader::makeAtomic(Type type) {
