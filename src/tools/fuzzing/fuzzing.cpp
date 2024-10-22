@@ -1341,6 +1341,7 @@ Expression* TranslateToFuzzReader::make(Type type) {
     ret = _makeunreachable();
   }
   // We should create the right type of thing.
+  if (!Type::isSubType(ret->type, type)) { std::cout << "wanted " << type << " but got " << ret->type << " : " << *ret << '\n'; }
   assert(Type::isSubType(ret->type, type));
   nesting--;
   return ret;
@@ -1698,17 +1699,7 @@ Expression* TranslateToFuzzReader::makeTryTable(Type type) {
 
   if (funcContext->breakableStack.empty()) {
     // Nothing to break to, so we can only emit a trivial TryTable.
-    if (oneIn(2)) {
-      // Emit one without catches at all.
-      return builder.makeTryTable(body, {}, {}, {});
-    } else {
-      // Emit one that catches all exceptions and ignores them by going to a
-      // parent block that we add here. This is useful for swallowing exceptions
-      // from throw, which might be very common otherwise.
-      auto name = makeLabel();
-      auto* tryy = builder.makeTryTable(body, {Name()}, {name}, {false});
-      return builder.makeBlock(name, tryy);
-    }
+    return builder.makeTryTable(body, {}, {}, {});
   }
 
   if (wasm.tags.empty()) {
@@ -3030,6 +3021,7 @@ Expression* TranslateToFuzzReader::wrapTrappingExpr(Expression* expr) {
   // does not halt execution, at least).
   auto* condition = make(Type::i32);
   auto* ifTrue = makeReturn(Type::unreachable);
+std::cout << *builder.makeIf(condition, ifTrue, expr) << '\n';
   return builder.makeIf(condition, ifTrue, expr);
 }
 
