@@ -3021,7 +3021,6 @@ Expression* TranslateToFuzzReader::wrapTrappingExpr(Expression* expr) {
   // does not halt execution, at least).
   auto* condition = make(Type::i32);
   auto* ifTrue = makeReturn(Type::unreachable);
-std::cout << *builder.makeIf(condition, ifTrue, expr) << '\n';
   return builder.makeIf(condition, ifTrue, expr);
 }
 
