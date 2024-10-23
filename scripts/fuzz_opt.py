@@ -1599,13 +1599,13 @@ def test_one(random_input, given_wasm):
         # the command failed when run normally. re-run without erroring on
         # errors, and see from the text if we should ignore it.
         error_text = do_command(run_unchecked)
-        print('waka')
         print(error_text)
-        1/0
-        for signal, explanation in IGNORABLE_OPT_ERRORS:
+        for signal, explanation in IGNORABLE_OPT_ERRORS.items():
             if signal in error_text:
                 note_ignored_vm_run(explanation)
-        return
+                return
+        # otherwise, this is un-ignorable
+        raise Exception('opt error from a.wasm to b.wasm')
 
     wasm_size = os.stat('b.wasm').st_size
     bytes += wasm_size
