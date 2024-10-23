@@ -1535,6 +1535,10 @@ unit_tests = shared.get_tests(shared.get_test_dir(os.path.join('unit', 'input'))
 lit_tests = shared.get_tests(shared.get_test_dir('lit'), test_suffixes, recursive=True)
 all_tests = core_tests + passes_tests + spec_tests + wasm2js_tests + lld_tests + unit_tests + lit_tests
 
+IGNORABLE_OPT_ERRORS = {
+    'unknown successor value': 'https://github.com/WebAssembly/binaryen/issues/7023',
+}
+
 
 # Do one test, given an input file for -ttf and some optimizations to run
 def test_one(random_input, given_wasm):
@@ -1576,12 +1580,33 @@ def test_one(random_input, given_wasm):
 
     # create a second (optimized) wasm for handlers that want to look at pairs.
     generate_command = [in_bin('wasm-opt'), abspath('a.wasm'), '-o', abspath('b.wasm')] + opts + FUZZ_OPTS + FEATURE_OPTS
-    if PRINT_WATS:
-        printed = run(generate_command + ['--print'])
-        with open('b.printed.wast', 'w') as f:
-            f.write(printed)
-    else:
-        run(generate_command)
+
+    # given a way to run the command, run it.
+    def do_command(runner):
+        if PRINT_WATS:
+            printed = runner(generate_command + ['--print'])
+            with open('b.printed.wast', 'w') as f:
+                f.write(printed)
+            return printed
+        else:
+            return runner(generate_command)
+
+
+    # execute the command, skipping known errors
+    try:
+        do_command(run)
+    except subprocess.CalledProcessError:
+        # the command failed when run normally. re-run without erroring on
+        # errors, and see from the text if we should ignore it.
+        error_text = do_command(run_unchecked)
+        print('waka')
+        print(error_text)
+        1/0
+        for signal, explanation in IGNORABLE_OPT_ERRORS:
+            if signal in error_text:
+                note_ignored_vm_run(explanation)
+        return
+
     wasm_size = os.stat('b.wasm').st_size
     bytes += wasm_size
     print('post wasm size:', wasm_size)
