@@ -1603,7 +1603,8 @@ def test_one(random_input, given_wasm):
         for signal, explanation in IGNORABLE_OPT_ERRORS.items():
             if signal in error_text:
                 note_ignored_vm_run(explanation)
-                return
+                # report 0 bytes from this wasm
+                return 0
         # otherwise, this is un-ignorable
         raise Exception('opt error from a.wasm to b.wasm')
 
