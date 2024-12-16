@@ -962,24 +962,68 @@ struct Reducer
       if (!shouldTryToReduce(std::max((factor / 100) + 1, 1000))) {
         continue;
       }
-      std::vector<Export> currExports;
-      for (size_t j = 0; currExports.size() < skip && i + j < exports.size();
+      // Remove the exports in the range [i, i + skip). Stash the ones we
+      // remove on the side.
+      std::vector<Export> stashed;
+      for (size_t j = 0; stashed.size() < skip && i + j < exports.size();
            j++) {
         auto exp = exports[i + j];
         if (module->getExportOrNull(exp.name)) {
-          currExports.push_back(exp);
+          stashed.push_back(exp);
           module->removeExport(exp.name);
         }
       }
+      auto num = stashed.size();
+      if (!num) {
+        // We found nothing to stash in this iteration.
+        continue;
+      }
+
       ProgramResult result;
       if (!writeAndTestReduction(result)) {
-        for (auto exp : currExports) {
+        // We failed to reduce. Re-add the stashed exports.
+        for (auto exp : stashed) {
           module->addExport(new Export(exp));
         }
+
+        // Sort them back to their original positions, which were [i, i + num)
+        // That is, before all this, we had
+        //
+        //  [A_1..A_a, B_1..Bb, C_1..C_c]
+        //
+        // where the range of Bs starts at index i, b=num. After removing the
+        // Bs, seeing the failure to reduce, and re-adding them at the end, we
+        // have
+        //
+        //  [A_1..A_a, C_1..C_c, B_1..Bb]
+        //
+        // So we need to swap the Bs and Cs. First, save the Bs on the side.
+        auto numAs = i;
+        auto numBs = num;
+        auto numCs = size - numAs - numBs;
+        std::vector<std::unique_ptr<Export>> Bs(numBs);
+        auto size = module->exports.size();
+        for (size_t k = 0; k < numBs; k++) {
+          Bs[k] = std::move(module->exports[size - numBs + k]);
+        }
+        // There are now |numBs| free slots at the end,
+        //
+        //  [A_1..A_a, C_1..C_c, 0..0]
+        //
+        // Push the Cs forward.
+        for (size_t k = 0; k < numCs; k++) {
+          module->exports[size - 1 - k] = std::move(module->exports[numAs + numCs - 1 - k]);
+        }
+        // Place the saved Bs in their original spot.
+        for (size_t k = 0; k < numBs; k++) {
+          module->exports[numAs + k] = std::move(Bs[k]);
+        }
+
+        // Skip less after this failure to reduce.
         skip = std::max(skip / 2, size_t(1)); // or 1?
       } else {
-        std::cerr << "|      removed " << currExports.size() << " exports\n";
-        noteReduction(currExports.size());
+        std::cerr << "|      removed " << num << " exports\n";
+        noteReduction(num);
         i += skip;
         skip = std::min(size_t(factor), 2 * skip);
       }
