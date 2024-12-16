@@ -998,13 +998,13 @@ struct Reducer
         //  [A_1..A_a, C_1..C_c, B_1..Bb]
         //
         // So we need to swap the Bs and Cs. First, save the Bs on the side.
+        auto total = module->exports.size();
         auto numAs = i;
         auto numBs = num;
-        auto numCs = size - numAs - numBs;
+        auto numCs = total - numAs - numBs;
         std::vector<std::unique_ptr<Export>> Bs(numBs);
-        auto size = module->exports.size();
         for (size_t k = 0; k < numBs; k++) {
-          Bs[k] = std::move(module->exports[size - numBs + k]);
+          Bs[k] = std::move(module->exports[total - numBs + k]);
         }
         // There are now |numBs| free slots at the end,
         //
@@ -1012,7 +1012,7 @@ struct Reducer
         //
         // Push the Cs forward.
         for (size_t k = 0; k < numCs; k++) {
-          module->exports[size - 1 - k] = std::move(module->exports[numAs + numCs - 1 - k]);
+          module->exports[total - 1 - k] = std::move(module->exports[numAs + numCs - 1 - k]);
         }
         // Place the saved Bs in their original spot.
         for (size_t k = 0; k < numBs; k++) {
