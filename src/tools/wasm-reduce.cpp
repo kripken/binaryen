@@ -965,8 +965,7 @@ struct Reducer
       // Remove the exports in the range [i, i + skip). Stash the ones we
       // remove on the side.
       std::vector<Export> stashed;
-      for (size_t j = 0; stashed.size() < skip && i + j < exports.size();
-           j++) {
+      for (size_t j = 0; stashed.size() < skip && i + j < exports.size(); j++) {
         auto exp = exports[i + j];
         if (module->getExportOrNull(exp.name)) {
           stashed.push_back(exp);
@@ -1012,7 +1011,8 @@ struct Reducer
         //
         // Push the Cs forward.
         for (size_t k = 0; k < numCs; k++) {
-          module->exports[total - 1 - k] = std::move(module->exports[numAs + numCs - 1 - k]);
+          module->exports[total - 1 - k] =
+            std::move(module->exports[numAs + numCs - 1 - k]);
         }
         // Place the saved Bs in their original spot.
         for (size_t k = 0; k < numBs; k++) {
