@@ -1,5 +1,8 @@
 ;; We can remove the non-function exports, which do not show up in the
-;; output that we keep fixed while reducing
+;; output that we keep fixed while reducing.
+;;
+;; XXX but this is not a full test, as we don't check the order among functions.
+;;     current test/reduce/ running doesn't allow that, need a unit test maybe.
 (module
   (memory $m 10 20)
 
