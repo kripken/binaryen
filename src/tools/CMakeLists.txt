@@ -22,4 +22,8 @@ if(NOT BUILD_EMSCRIPTEN_TOOLS_ONLY)
   binaryen_add_executable(wasm-fuzz-lattices "${fuzzing_SOURCES};wasm-fuzz-lattices.cpp")
 endif()
 
+if(BUILD_FUZZER)
+  binaryen_add_executable(wasm-fuzzer wasm-fuzzer.cpp)
+endif()
+
 add_subdirectory(wasm-split)

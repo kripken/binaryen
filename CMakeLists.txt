@@ -75,6 +75,8 @@ option(EMSCRIPTEN_ENABLE_PTHREADS "Enable pthreads in emscripten build" OFF)
 # This is useful for debugging, performance analysis, and other testing.
 option(EMSCRIPTEN_ENABLE_SINGLE_FILE "Enable SINGLE_FILE mode in emscripten build" ON)
 
+option(BUILD_FUZZER "Build in-process wasm-fuzzer" ON)
+
 option(ENABLE_WERROR "Enable -Werror" ON)
 
 # For git users, attempt to generate a more useful version string
@@ -355,6 +357,18 @@ if(UNIX AND CMAKE_GENERATOR STREQUAL "Ninja")
   elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     add_compile_flag("-fcolor-diagnostics")
   endif()
+endif()
+
+if(BUILD_FUZZER)
+  # This requires clang (6+), use something like
+  #
+  #   cmake . -DCMAKE_BUILD_TYPE=Release -G Ninja -DBUILD_FUZZER=on -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+  #   ninja wasm-fuzzer
+  #
+  message(STATUS "Building fuzzer")
+  # TODO: Sanitizers too
+  add_compile_flag("-fsanitize=fuzzer")
+  add_link_flag("-fsanitize=fuzzer")
 endif()
 
 # Add targets and sources for 3P code.
