@@ -31,6 +31,7 @@ namespace {
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   Module wasm;
+  wasm.features.setAll();
 
   // Null-terminate the input data so it is a valid string to parse.
   std::vector<char> bytes;
