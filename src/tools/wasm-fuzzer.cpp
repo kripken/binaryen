@@ -45,12 +45,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     return -1;
   }
 
-  auto options = PassOptions::getWithDefaultOptimizationOptions();
-  if (!WasmValidator().validate(wasm, options)) {
+  if (!WasmValidator().validate(wasm, WasmValidator::Globally | WasmValidator::Quiet)) {
     return -1;
   }
 
   // Optimize.
+  auto options = PassOptions::getWithDefaultOptimizationOptions();
+  options.optimizeLevel = 3;
   PassRunner runner(&wasm, options);
   runner.addDefaultOptimizationPasses();
   runner.run();
