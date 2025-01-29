@@ -20,8 +20,10 @@
 //
 
 #include <algorithm>
+#include <iostream>
 
 #include "parser/wat-parser.h"
+#include "support/file.h"
 #include "wasm-validator.h"
 #include "wasm.h"
 
@@ -29,26 +31,49 @@
 
 using namespace wasm;
 
-namespace {
-}
-
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   Module wasm;
   wasm.features.setAll();
 
-  // Null-terminate the input data so it is a valid string to parse.
   std::vector<char> bytes;
-  bytes.resize(size + 1);
-  std::copy(data, data + size, bytes.data());
-  bytes[size] = 0;
+
+  // Allow setting the testcase using an env var. This lets us use the normal
+  // wasm-fuzzer executable to test individual testcases, that is,
+  //
+  //   wasm-fuzzer
+  //
+  // will fuzz and look for things, and if it finds a crash crash-foo then we
+  // can run that crash with
+  //
+  //   BYN_FUZZER_FORCE=crash-foo wasm-fuzzer
+  auto* forcedFilename = getenv("BYN_FUZZER_FORCE");
+  if (forcedFilename) {
+    std::cout << "<<< using forced file: " << forcedFilename << " >>>\n";
+    auto input(read_file<std::vector<char>>(forcedFilename, Flags::Binary));
+    bytes = std::move(input);
+    // Null-terminate the data.
+    bytes.push_back(0);
+  } else {
+    // Use |data|, |size|. Null-terminate the input data so it is a valid
+    // string to parse.
+    bytes.resize(size + 1);
+    std::copy(data, data + size, bytes.data());
+    bytes[size] = 0;
+  }
 
   // Reject invalid inputs.
   auto parsed = WATParser::parseModule(wasm, bytes.data());
   if (parsed.getErr()) {
+    if (forcedFilename) {
+      exit(1);
+    }
     return -1;
   }
 
   if (!WasmValidator().validate(wasm, WasmValidator::Globally | WasmValidator::Quiet)) {
+    if (forcedFilename) {
+      exit(1);
+    }
     return -1;
   }
 
@@ -60,8 +85,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   runner.run();
   if (!WasmValidator().validate(wasm, options)) {
     // A validation error is an error we want the fuzzer to catch, so halt.
+    if (forcedFilename) {
+      exit(1);
+    }
     abort();
   }
 
+  if (forcedFilename) {
+    exit(0);
+  }
   return 0;
 }
