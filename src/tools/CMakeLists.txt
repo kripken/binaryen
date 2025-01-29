@@ -24,6 +24,7 @@ endif()
 
 if(BUILD_FUZZER)
   binaryen_add_executable(wasm-fuzzer wasm-fuzzer.cpp)
+  target_link_libraries(wasm-fuzzer "-fsanitize=fuzzer")
 endif()
 
 add_subdirectory(wasm-split)

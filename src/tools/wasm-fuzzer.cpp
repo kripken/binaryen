@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-// In-process fuzzing.
+// In-process fuzzing. Run with e.g.
+//
+// bin/wasm-fuzzer -only_ascii=1 -max_len=8196 wats
+//
 
 #include <algorithm>
 
