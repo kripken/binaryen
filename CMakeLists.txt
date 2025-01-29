@@ -363,7 +363,7 @@ if(BUILD_FUZZER)
   #
   message(STATUS "Building fuzzer")
   # TODO: Sanitizers too
-  add_compile_flag("-fsanitize=fuzzer")
+  add_compile_flag("-fsanitize=fuzzer-no-link")
 endif()
 
 # Add targets and sources for 3P code.
