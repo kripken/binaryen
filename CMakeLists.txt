@@ -278,7 +278,7 @@ else() # MSVC
     # explicitly undefine it:
     add_nondebug_compile_flag("-UNDEBUG")
   endif()
-  if(NOT APPLE AND NOT "${CMAKE_CXX_FLAGS}" MATCHES "-fsanitize")
+  if(NOT APPLE AND NOT "${CMAKE_CXX_FLAGS}" MATCHES "-fsanitize" AND NOT BUILD_FUZZER)
     # This flag only applies to shared libraries so don't use add_link_flag
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
   endif()
