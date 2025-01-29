@@ -24,7 +24,11 @@ endif()
 
 if(BUILD_FUZZER)
   binaryen_add_executable(wasm-fuzzer wasm-fuzzer.cpp)
+
+  # The fuzzer tool itself needs full support, all other tools we want usable in
+  # this mode need fuzzer-no-link, since we compiled with that sanitizer.
   target_link_libraries(wasm-fuzzer "-fsanitize=fuzzer")
+  target_link_libraries(wasm-opt "-fsanitize=fuzzer-no-link")
 endif()
 
 add_subdirectory(wasm-split)
