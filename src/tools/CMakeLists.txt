@@ -27,8 +27,8 @@ if(BUILD_FUZZER)
 
   # The fuzzer tool itself needs full support, all other tools we want usable in
   # this mode need fuzzer-no-link, since we compiled with that sanitizer.
-  target_link_libraries(wasm-fuzzer "-fsanitize=fuzzer")
-  target_link_libraries(wasm-opt "-fsanitize=fuzzer-no-link")
+  target_link_libraries(wasm-fuzzer PRIVATE "-fsanitize=fuzzer")
+  target_link_libraries(wasm-opt PRIVATE "-fsanitize=fuzzer-no-link")
 endif()
 
 add_subdirectory(wasm-split)
