@@ -19,6 +19,7 @@
 
 #include <variant>
 
+#include "ir/gc-type-utils.h"
 #include "ir/possible-constant.h"
 #include "ir/subtypes.h"
 #include "support/hash.h"
@@ -103,13 +104,22 @@ class PossibleContents {
 
   // Internal convenience for creating a cone type with depth 0, i.e,, an exact
   // type.
-  static ConeType ExactType(Type type) { return ConeType{type, 0}; }
+  static ConeType ExactType(Type type) {
+    // We never use exact types on uninhabitable content (see below).
+    assert(!GCTypeUtils::isUninhabitable(type));
+    return ConeType{type, 0};
+  }
 
+  // Cones of full depth are marked as having this depth.
   static constexpr Index FullDepth = -1;
 
   // Internal convenience for creating a cone type of unbounded depth, i.e., the
   // full cone of all subtypes for that type.
-  static ConeType FullConeType(Type type) { return ConeType{type, FullDepth}; }
+  static ConeType FullConeType(Type type) {
+    // We never use cone types on uninhabitable content (see below).
+    assert(!GCTypeUtils::isUninhabitable(type));
+    return ConeType{type, FullDepth};
+  }
 
   template<typename T> PossibleContents(T value) : value(value) {}
 
@@ -123,18 +133,32 @@ public:
   static PossibleContents none() { return PossibleContents{None()}; }
   static PossibleContents literal(Literal c) { return PossibleContents{c}; }
   static PossibleContents global(Name name, Type type) {
+    // Uninhabitable types are empty ("none") contents, as nothing can possibly
+    // be there.
+    if (GCTypeUtils::isUninhabitable(type)) {
+      return none();
+    }
     return PossibleContents{GlobalInfo{name, type}};
   }
   // Helper for a cone type with depth 0, i.e., an exact type.
   static PossibleContents exactType(Type type) {
+    if (GCTypeUtils::isUninhabitable(type)) {
+      return none();
+    }
     return PossibleContents{ExactType(type)};
   }
   // Helper for a cone with unbounded depth, i.e., the full cone of all subtypes
   // for that type.
   static PossibleContents fullConeType(Type type) {
+    if (GCTypeUtils::isUninhabitable(type)) {
+      return none();
+    }
     return PossibleContents{FullConeType(type)};
   }
   static PossibleContents coneType(Type type, Index depth) {
+    if (GCTypeUtils::isUninhabitable(type)) {
+      return none();
+    }
     return PossibleContents{ConeType{type, depth}};
   }
   static PossibleContents many() { return PossibleContents{Many()}; }

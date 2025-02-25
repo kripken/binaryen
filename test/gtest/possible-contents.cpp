@@ -960,3 +960,20 @@ TEST_F(PossibleContentsTest, TestTupleItems) {
   EXPECT_EQ(tuple.getTupleItem(0), PossibleContents::fullConeType(Type::i32));
   EXPECT_EQ(tuple.getTupleItem(1), PossibleContents::fullConeType(funcref));
 }
+
+TEST_F(PossibleContentsTest, TestUninhabitable) {
+  // Uninhabitable types are empty ("none") contents, always.
+  auto nonNullNull = Type(HeapType::nofunc, NonNullable);
+
+  auto global = PossibleContents::global("global", nonNullNull);
+  EXPECT_TRUE(global.isNone());
+
+  auto exact = PossibleContents::exactType(nonNullNull);
+  EXPECT_TRUE(exact.isNone());
+
+  auto full = PossibleContents::fullConeType(nonNullNull);
+  EXPECT_TRUE(full.isNone());
+
+  auto cone = PossibleContents::coneType(nonNullNull, 42);
+  EXPECT_TRUE(cone.isNone());
+}
