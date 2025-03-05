@@ -2070,6 +2070,12 @@ private:
   // all inputs and compute the output, then apply it using updateContents.
   void computeContents(LocationIndex locationIndex);
 
+  // TODO
+  void filterContents(PossibleContents& contents, const Location& location);
+
+  // TODO
+  void postUpdate(const Location& location);
+
   // Add a new connection while the flow is happening. If the link already
   // exists it is not added.
   void connectDuringFlow(Location from, Location to);
@@ -2426,11 +2432,40 @@ bool Flower::updateContents(LocationIndex locationIndex,
   for (auto target : targets) {
     workQueue.insert(target);    
   }
+
+  // We are mostly done, except for handling interesting/special cases in the
+  // flow, additional operations that we need to do aside from sending the new
+  // contents to the normal (statically linked) targets.
+  postUpdate(location);
+
+  // TODO: optimize when it is not worth sending any more, prune from graph etc
 }
 
-XXX
-  auto location = getLocation(locationIndex);
+void Flower::computeContents(LocationIndex locationIndex) {
+  const auto location = getLocation(locationIndex);
 
+  // Fetch and combine all the incoming values.
+  auto newContents = PossibleContents::none();
+  auto& sources = getSources(locationIndex);
+  for (auto source : sources) {
+    auto sourceContents = getContents(source);
+
+    // Filter this content for the target, as we may have more refined type
+    // information for it than for |source|.
+    filterContents(sourceContents, location);
+
+    newContents.combine(sourceContents);
+  }
+
+  // Filter the combination. TODO comment
+  filterContents(newContents, location);
+
+  // Apply the result.
+  updateContents(locationIndex, newContents);
+}
+
+void Flower::filterContents(PossibleContents& contents,
+                            const Location& location) {
   // Handle special cases: Some locations can only contain certain contents, so
   // filter accordingly. For example, if anyref arrives to a non-nullable
   // location, we know it must be (ref any). As a result, each time we update
@@ -2461,10 +2496,10 @@ XXX
     // combine 0 and 0x100 first and get "unknown integer"; only by filtering
     // 0x100 to 0 beforehand (since 0x100 & 0xff => 0) will we combine 0 and 0
     // and not change anything, which is best.
-    filterDataContents(newContents, *dataLoc);
+    filterDataContents(contents, *dataLoc);
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
     std::cout << "  pre-filtered data contents:\n";
-    newContents.dump(std::cout, &wasm);
+    contents.dump(std::cout, &wasm);
     std::cout << '\n';
 #endif
   } else if (auto* exprLoc = std::get_if<ExpressionLocation>(&location)) {
@@ -2472,148 +2507,27 @@ XXX
       // As mentioned above, data locations can have packed reads, which require
       // filtering before. Note that there is no need to filter atomic RMW
       // operations here because they always do unsigned reads.
-      filterPackedDataReads(newContents, *exprLoc);
+      filterPackedDataReads(contents, *exprLoc);
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
       std::cout << "  pre-filtered packed read contents:\n";
-      newContents.dump(std::cout, &wasm);
+      contents.dump(std::cout, &wasm);
       std::cout << '\n';
 #endif
     }
 
-    // Generic filtering. We do this both before and after.
+    // Generic filtering. We do this both before and after. XXX comment
     //
     // The outcome of this filtering does not affect whether it is worth sending
     // more later (we compute that at the end), so use a temp out var for that.
     bool worthSendingMoreTemp = true;
-    filterExpressionContents(newContents, *exprLoc, worthSendingMoreTemp);
+    filterExpressionContents(contents, *exprLoc, worthSendingMoreTemp);
   } else if (auto* globalLoc = std::get_if<GlobalLocation>(&location)) {
-    // Generic filtering. We do this both before and after.
-    filterGlobalContents(newContents, *globalLoc);
-  }
-
-  // After filtering newContents, combine it onto the existing contents.
-  contents.combine(newContents);
-
-  if (contents.isNone()) {
-    // There is still nothing here. There is nothing more to do here but to
-    // return that it is worth sending more.
-    return true;
-  }
-
-  // It is not worth sending any more to this location if we are now in the
-  // worst possible case, as no future value could cause any change.
-  bool worthSendingMore = true;
-  if (contents.isConeType()) {
-    if (!contents.getType().isRef()) {
-      // A cone type of a non-reference is the worst case, since subtyping is
-      // not relevant there, and so if we only know something about the type
-      // then we already know nothing beyond what the type in the wasm tells us
-      // (and from there we can only go to Many).
-      worthSendingMore = false;
-    } else {
-      // Normalize all reference cones. There is never a point to flow around
-      // anything non-normalized, which might lead to extra work. For example,
-      // if A has no subtypes, then a full cone for A is really the same as one
-      // with depth 0 (an exact type). And we don't want to see the full cone
-      // arrive and think it was an improvement over the one with depth 0 and do
-      // more flowing based on that.
-      normalizeConeType(contents);
-    }
-  }
-
-  // Check if anything changed.
-  if (contents == oldContents) {
-    // Nothing actually changed, so just return.
-    return worthSendingMore;
-  }
-
-  // Handle filtering (see comment earlier, this is the later filtering stage).
-  bool filtered = false;
-  if (auto* exprLoc = std::get_if<ExpressionLocation>(&location)) {
-    // TODO: Replace this with specific filterFoo or flowBar methods like we
-    //       have for filterGlobalContents. That could save a little wasted work
-    //       here. Might be best to do that after the spec is fully stable.
-    filterExpressionContents(contents, *exprLoc, worthSendingMore);
-    filtered = true;
-  } else if (auto* globalLoc = std::get_if<GlobalLocation>(&location)) {
+    // Generic filtering. We do this both before and after. XXX comment
     filterGlobalContents(contents, *globalLoc);
-    filtered = true;
   }
-
-  // Check if anything changed after filtering, if we did so.
-  if (filtered) {
-#if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
-    std::cout << "  filtered contents:\n";
-    contents.dump(std::cout, &wasm);
-    std::cout << '\n';
-#endif
-
-    if (contents == oldContents) {
-      return worthSendingMore;
-    }
-  }
-
-#if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
-  std::cout << "  updateContents has something new\n";
-  contents.dump(std::cout, &wasm);
-  std::cout << '\n';
-#endif
-
-  // After filtering we should always have more precise information than "many"
-  // - in the worst case, we can have the type declared in the wasm.
-  assert(!contents.isMany());
-
-  // Add a work item if there isn't already.
-  workQueue.insert(locationIndex);
-
-  return worthSendingMore;
 }
 
-void Flower::computeContents(LocationIndex locationIndex) {
-  const auto location = getLocation(locationIndex);
-
-  // Fetch and combine all the incoming values.
-  auto newContents = PossibleContents::none();
-  auto& sources = getSources(locationIndex);
-  for (auto source : sources) {
-    auto sourceContents = getContents(source);
-
-    // Filter this content for the target, as we may have more refined type
-    // information for it than for |source|.
-    filterContent(sourceContents, location);
-
-    newContents.combine(sourceContents);
-  }
-
-  // Filter the combination. TODO comment
-  filterContent(newContents, location);
-
-  // Apply the result.
-  updateContents(locationIndex, newContents);
-}
-
-  auto& contents = getContents(locationIndex);
-
-  // We are called after a change at a location. A change means that some
-  // content has arrived, since we never send empty values around. Assert on
-  // that.
-  assert(!contents.isNone());
-
-#if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
-  std::cout << "\nflowAfterUpdate to:\n";
-  dump(location);
-  std::cout << "  arriving:\n";
-  contents.dump(std::cout, &wasm);
-  std::cout << '\n';
-#endif
-
-  // Flow the contents to the normal targets of this location.
-  flowToTargetsAfterUpdate(locationIndex, contents);
-
-  // We are mostly done, except for handling interesting/special cases in the
-  // flow, additional operations that we need to do aside from sending the new
-  // contents to the normal (statically linked) targets.
-
+void Flower::postUpdate(const Location& location) {
   if (auto* exprLoc = std::get_if<ExpressionLocation>(&location)) {
     auto iter = childParents.find(locationIndex);
     if (iter == childParents.end()) {
@@ -2653,35 +2567,6 @@ void Flower::computeContents(LocationIndex locationIndex) {
   }
 }
 
-void Flower::flowToTargetsAfterUpdate(LocationIndex locationIndex,
-                                      const PossibleContents& contents) {
-// XXX waka the big work
-  // Send the new contents to all the targets of this location. As we do so,
-  // prune any targets that we do not need to bother sending content to in the
-  // future, to save space and work later.
-  auto& targets = getTargets(locationIndex);
-  targets.erase(std::remove_if(targets.begin(),
-                               targets.end(),
-                               [&](LocationIndex targetIndex) {
-#if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
-                                 std::cout << "  send to target\n";
-                                 dump(getLocation(targetIndex));
-#endif
-                                 return !updateContents(targetIndex, contents);
-                               }),
-                targets.end());
-
-  if (contents.isMany()) {
-    // We contain Many, and just called updateContents on our targets to send
-    // that value to them. We'll never need to send anything from here ever
-    // again, since we sent the worst case possible already, so we can just
-    // clear our targets vector. But we should have already removed all the
-    // targets in the above remove_if operation, since they should have all
-    // notified us that we do not need to send them any more updates.
-    assert(targets.empty());
-  }
-}
-
 void Flower::connectDuringFlow(Location from, Location to) {
   auto newLink = LocationLink{from, to};
   auto newIndexLink = getIndexes(newLink);
@@ -2704,8 +2589,9 @@ void Flower::connectDuringFlow(Location from, Location to) {
 #endif
 
     // In addition to adding the link, which will ensure new contents appearing
-    // later will be sent along, we also update with the current contents. XXX
-    updateContents(to, getContents(getIndex(from)));
+    // later will be sent along, we also need to update the target with the
+    // current contents. TODO do we really?
+    workQueue.insert(newIndexLink.to);
   }
 }
 
