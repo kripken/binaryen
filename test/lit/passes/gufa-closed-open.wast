@@ -6,63 +6,142 @@
 ;; funcrefs, for example, can be called from outside.
 
 (module
- ;; OPEND:      (type $0 (func (param funcref)))
+  ;; OPEND:      (type $0 (func (param funcref)))
 
- ;; OPEND:      (type $1 (func))
+  ;; OPEND:      (type $1 (func))
 
- ;; OPEND:      (type $2 (func (param i32)))
+  ;; OPEND:      (type $2 (func (param i32)))
 
- ;; OPEND:      (import "outside" "call-ref-catch" (func $external-caller (type $0) (param funcref)))
- ;; CLOSE:      (type $0 (func (param funcref)))
+  ;; OPEND:      (import "outside" "call-ref-catch" (func $external-caller (type $0) (param funcref)))
+  ;; CLOSE:      (type $0 (func (param funcref)))
 
- ;; CLOSE:      (type $1 (func))
+  ;; CLOSE:      (type $1 (func))
 
- ;; CLOSE:      (type $2 (func (param i32)))
+  ;; CLOSE:      (type $2 (func (param i32)))
 
- ;; CLOSE:      (import "outside" "call-ref-catch" (func $external-caller (type $0) (param funcref)))
- (import "outside" "call-ref-catch" (func $external-caller (param funcref)))
+  ;; CLOSE:      (import "outside" "call-ref-catch" (func $external-caller (type $0) (param funcref)))
+  (import "outside" "call-ref-catch" (func $external-caller (param funcref)))
 
- ;; OPEND:      (elem declare func $func)
+  ;; OPEND:      (elem declare func $func)
 
- ;; OPEND:      (export "call-import" (func $call-import))
+  ;; OPEND:      (export "call-import" (func $call-import))
 
- ;; OPEND:      (func $call-import (type $1)
- ;; OPEND-NEXT:  (call $external-caller
- ;; OPEND-NEXT:   (ref.func $func)
- ;; OPEND-NEXT:  )
- ;; OPEND-NEXT: )
- ;; CLOSE:      (elem declare func $func)
+  ;; OPEND:      (func $call-import (type $1)
+  ;; OPEND-NEXT:  (call $external-caller
+  ;; OPEND-NEXT:   (ref.func $func)
+  ;; OPEND-NEXT:  )
+  ;; OPEND-NEXT: )
+  ;; CLOSE:      (elem declare func $func)
 
- ;; CLOSE:      (export "call-import" (func $call-import))
+  ;; CLOSE:      (export "call-import" (func $call-import))
 
- ;; CLOSE:      (func $call-import (type $1)
- ;; CLOSE-NEXT:  (call $external-caller
- ;; CLOSE-NEXT:   (ref.func $func)
- ;; CLOSE-NEXT:  )
- ;; CLOSE-NEXT: )
- (func $call-import (export "call-import")
-  ;; Send a reference to $func to the outside, which may call it.
-  (call $external-caller
-   (ref.func $func)
+  ;; CLOSE:      (func $call-import (type $1)
+  ;; CLOSE-NEXT:  (call $external-caller
+  ;; CLOSE-NEXT:   (ref.func $func)
+  ;; CLOSE-NEXT:  )
+  ;; CLOSE-NEXT: )
+  (func $call-import (export "call-import")
+    ;; Send a reference to $func to the outside, which may call it.
+    (call $external-caller
+      (ref.func $func)
+    )
   )
- )
 
- ;; OPEND:      (func $func (type $2) (param $0 i32)
- ;; OPEND-NEXT:  (drop
- ;; OPEND-NEXT:   (local.get $0)
- ;; OPEND-NEXT:  )
- ;; OPEND-NEXT: )
- ;; CLOSE:      (func $func (type $2) (param $0 i32)
- ;; CLOSE-NEXT:  (drop
- ;; CLOSE-NEXT:   (unreachable)
- ;; CLOSE-NEXT:  )
- ;; CLOSE-NEXT: )
- (func $func (param $0 i32)
-  ;; This is called from the outside, so this is not dead code, and nothing
-  ;; should change here in open world. In closed world, this can become an
-  ;; unreachable, since nothing can call it.
-  (drop
-   (local.get $0)
+  ;; OPEND:      (func $func (type $2) (param $0 i32)
+  ;; OPEND-NEXT:  (drop
+  ;; OPEND-NEXT:   (local.get $0)
+  ;; OPEND-NEXT:  )
+  ;; OPEND-NEXT: )
+  ;; CLOSE:      (func $func (type $2) (param $0 i32)
+  ;; CLOSE-NEXT:  (drop
+  ;; CLOSE-NEXT:   (unreachable)
+  ;; CLOSE-NEXT:  )
+  ;; CLOSE-NEXT: )
+  (func $func (param $0 i32)
+    ;; This is called from the outside, so this is not dead code, and nothing
+    ;; should change here in open world. In closed world, this can become an
+    ;; unreachable, since nothing can call it.
+    (drop
+      (local.get $0)
+    )
   )
- )
 )
+
+(module
+  ;; OPEND:      (type $i (func (param i32)))
+  ;; CLOSE:      (type $i (func (param i32)))
+  (type $i (func (param i32)))
+
+  (table 10 funcref)
+  (elem (i32.const 0) funcref
+    (ref.func $reffed)
+  )
+
+  (export "table" (table 0))
+
+  ;; OPEND:      (type $1 (func))
+
+  ;; OPEND:      (table $0 10 funcref)
+
+  ;; OPEND:      (elem $0 (i32.const 0) $reffed)
+
+  ;; OPEND:      (export "table" (table $0))
+
+  ;; OPEND:      (func $reffed (type $i) (param $x i32)
+  ;; OPEND-NEXT:  (drop
+  ;; OPEND-NEXT:   (local.get $x)
+  ;; OPEND-NEXT:  )
+  ;; OPEND-NEXT: )
+  ;; CLOSE:      (type $1 (func))
+
+  ;; CLOSE:      (table $0 10 funcref)
+
+  ;; CLOSE:      (elem $0 (i32.const 0) $reffed)
+
+  ;; CLOSE:      (export "table" (table $0))
+
+  ;; CLOSE:      (func $reffed (type $i) (param $x i32)
+  ;; CLOSE-NEXT:  (drop
+  ;; CLOSE-NEXT:   (i32.const 42)
+  ;; CLOSE-NEXT:  )
+  ;; CLOSE-NEXT: )
+  (func $reffed (param $x i32)
+    ;; This function is in the table, and the table is exported. Whether we can
+    ;; inger the value of 42 here depends on closed world: in that mode,
+    ;; ref.funcs are assumed to not be called from the outside, including ones
+    ;; in the table, so we can infer. In open world, we cannot assume that and
+    ;; cannot optimize.
+    (drop
+      (local.get $x)
+    )
+  )
+
+  ;; OPEND:      (func $do-calls (type $1)
+  ;; OPEND-NEXT:  (call $reffed
+  ;; OPEND-NEXT:   (i32.const 42)
+  ;; OPEND-NEXT:  )
+  ;; OPEND-NEXT:  (call_indirect $0 (type $i)
+  ;; OPEND-NEXT:   (i32.const 42)
+  ;; OPEND-NEXT:   (i32.const 0)
+  ;; OPEND-NEXT:  )
+  ;; OPEND-NEXT: )
+  ;; CLOSE:      (func $do-calls (type $1)
+  ;; CLOSE-NEXT:  (call $reffed
+  ;; CLOSE-NEXT:   (i32.const 42)
+  ;; CLOSE-NEXT:  )
+  ;; CLOSE-NEXT:  (call_indirect $0 (type $i)
+  ;; CLOSE-NEXT:   (i32.const 42)
+  ;; CLOSE-NEXT:   (i32.const 0)
+  ;; CLOSE-NEXT:  )
+  ;; CLOSE-NEXT: )
+  (func $do-calls
+    (call $reffed
+      (i32.const 42)
+    )
+    (call_indirect (type $i)
+      (i32.const 42)
+      (i32.const 0)
+    )
+  )
+)
+
