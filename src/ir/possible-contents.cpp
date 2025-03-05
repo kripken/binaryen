@@ -1940,6 +1940,11 @@ struct Flower {
     // A list of the sources we receive from.
     std::vector<LocationIndex> sources;
 
+    // Marked as true when we are "done" - when no further changes are possible
+    // here, so there is no point in doing any computation. That is the case
+    // when we have the maximum possible value at this location.
+    bool done = false;
+
     LocationInfo(Location location) : location(location) {}
   };
 
@@ -1980,6 +1985,11 @@ private:
   std::vector<LocationIndex>& getSources(LocationIndex index) {
     assert(index < locations.size());
     return locations[index].sources;
+  }
+
+  bool& getDone(LocationIndex index) {
+    assert(index < locations.size());
+    return locations[index].done;
   }
 
   // Convert the data into the efficient LocationIndex form we will use during
@@ -2076,6 +2086,10 @@ private:
   // TODO
   void postUpdate(LocationIndex locationIndex,
                   const PossibleContents& contents);
+
+  // Queue work for a location. This is done when a source of the location
+  // changes.
+  void queueWork(LocationIndex locationIndex);
 
   // Add a new connection while the flow is happening. If the link already
   // exists it is not added.
@@ -2379,6 +2393,9 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     // etc., so just update it. This also queues work in workQueue, starting the
     // flow.
     updateContents(location, value);
+
+    // Roots cannot change any further; they are fixed.
+    getDone(getIndex(location)) = true;
   }
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
@@ -2431,7 +2448,7 @@ void Flower::updateContents(LocationIndex locationIndex,
   // Inform targets of the update.
   auto& targets = getTargets(locationIndex);
   for (auto target : targets) {
-    workQueue.insert(target);
+    queueWork(target);
   }
 
   // We are mostly done, except for handling interesting/special cases in the
@@ -2445,11 +2462,24 @@ void Flower::updateContents(LocationIndex locationIndex,
 void Flower::computeContents(LocationIndex locationIndex) {
   const auto location = getLocation(locationIndex);
 
+#if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
+  std::cout << "\ncomputeContents\n";
+  dump(getLocation(locationIndex));
+#endif
+
   // Fetch and combine all the incoming values.
   auto newContents = PossibleContents::none();
   auto& sources = getSources(locationIndex);
   for (auto source : sources) {
     auto sourceContents = getContents(source);
+
+#if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
+    std::cout << "source: \n";
+    dump(getLocation(source));
+    std::cout << "  with: \n";
+    sourceContents.dump(std::cout, &wasm);
+    std::cout << "\n";
+#endif
 
     // Filter this content for the target, as we may have more refined type
     // information for it than for |source|.
@@ -2571,6 +2601,15 @@ void Flower::postUpdate(LocationIndex locationIndex,
   }
 }
 
+void Flower::queueWork(LocationIndex locationIndex) {
+  if (getDone(locationIndex)) {
+    // Locations that are done updating do not need to be sent anything new.
+    return;
+  }
+
+  workQueue.insert(locationIndex);
+}
+
 void Flower::connectDuringFlow(Location from, Location to) {
   auto newLink = LocationLink{from, to};
   auto newIndexLink = getIndexes(newLink);
@@ -2595,7 +2634,7 @@ void Flower::connectDuringFlow(Location from, Location to) {
     // In addition to adding the link, which will ensure new contents appearing
     // later will be sent along, we also need to update the target with the
     // current contents. TODO do we really?
-    workQueue.insert(newIndexLink.to);
+    queueWork(newIndexLink.to);
   }
 }
 
