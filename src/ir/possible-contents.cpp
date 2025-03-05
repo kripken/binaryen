@@ -2074,7 +2074,8 @@ private:
   void filterContents(PossibleContents& contents, const Location& location);
 
   // TODO
-  void postUpdate(LocationIndex locationIndex, const PossibleContents& contents);
+  void postUpdate(LocationIndex locationIndex,
+                  const PossibleContents& contents);
 
   // Add a new connection while the flow is happening. If the link already
   // exists it is not added.
@@ -2430,7 +2431,7 @@ void Flower::updateContents(LocationIndex locationIndex,
   // Inform targets of the update.
   auto& targets = getTargets(locationIndex);
   for (auto target : targets) {
-    workQueue.insert(target);    
+    workQueue.insert(target);
   }
 
   // We are mostly done, except for handling interesting/special cases in the
@@ -2527,7 +2528,8 @@ void Flower::filterContents(PossibleContents& contents,
   }
 }
 
-void Flower::postUpdate(LocationIndex locationIndex, const PossibleContents& contents) {
+void Flower::postUpdate(LocationIndex locationIndex,
+                        const PossibleContents& contents) {
   const auto location = getLocation(locationIndex);
 
   if (auto* exprLoc = std::get_if<ExpressionLocation>(&location)) {
