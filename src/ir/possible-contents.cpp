@@ -2074,7 +2074,7 @@ private:
   void filterContents(PossibleContents& contents, const Location& location);
 
   // TODO
-  void postUpdate(const Location& location);
+  void postUpdate(LocationIndex locationIndex);
 
   // Add a new connection while the flow is happening. If the link already
   // exists it is not added.
@@ -2406,7 +2406,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   //       including multiple levels of depth (necessary for itables in j2wasm).
 }
 
-bool Flower::updateContents(LocationIndex locationIndex,
+void Flower::updateContents(LocationIndex locationIndex,
                             PossibleContents newContents) {
   auto& contents = getContents(locationIndex);
 
@@ -2436,7 +2436,7 @@ bool Flower::updateContents(LocationIndex locationIndex,
   // We are mostly done, except for handling interesting/special cases in the
   // flow, additional operations that we need to do aside from sending the new
   // contents to the normal (statically linked) targets.
-  postUpdate(location);
+  postUpdate(locationIndex);
 
   // TODO: optimize when it is not worth sending any more, prune from graph etc
 }
@@ -2527,7 +2527,9 @@ void Flower::filterContents(PossibleContents& contents,
   }
 }
 
-void Flower::postUpdate(const Location& location) {
+void Flower::postUpdate(LocationIndex locationIndex) {
+  const auto location = getLocation(locationIndex);
+
   if (auto* exprLoc = std::get_if<ExpressionLocation>(&location)) {
     auto iter = childParents.find(locationIndex);
     if (iter == childParents.end()) {
