@@ -415,13 +415,13 @@ using LocationIndex = uint32_t;
 
 #ifndef NDEBUG
 // Assert on not having duplicates in a vector.
-template<typename T> void disallowDuplicates(const T& targets) {
+template<typename T> void disallowDuplicates(const T& vec) {
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
-  std::unordered_set<LocationIndex> uniqueTargets;
-  for (const auto& target : targets) {
-    uniqueTargets.insert(target);
+  std::unordered_set<LocationIndex> unique;
+  for (const auto& target : vec) {
+    unique.insert(target);
   }
-  assert(uniqueTargets.size() == targets.size());
+  assert(unique.size() == vec.size());
 #endif
 }
 #endif
@@ -1937,6 +1937,9 @@ struct Flower {
     //       target (an expression has one parent)
     std::vector<LocationIndex> targets;
 
+    // A list of the sources we receive from.
+    std::vector<LocationIndex> sources;
+
     LocationInfo(Location location) : location(location) {}
   };
 
@@ -1972,6 +1975,11 @@ private:
   std::vector<LocationIndex>& getTargets(LocationIndex index) {
     assert(index < locations.size());
     return locations[index].targets;
+  }
+
+  std::vector<LocationIndex>& getSources(LocationIndex index) {
+    assert(index < locations.size());
+    return locations[index].sources;
   }
 
   // Convert the data into the efficient LocationIndex form we will use during
@@ -2036,41 +2044,31 @@ private:
   // later would be the final result. This would not happen if our operations
   // were precise, but we only make approximations here to avoid unacceptable
   // overhead, such as cone types but not arbitrary unions, etc.
+  // XXX this no longer needs to be ordered!!1
   InsertOrderedSet<LocationIndex> workQueue;
 
   // All existing links in the graph. We keep this to know when a link we want
   // to add is new or not.
   std::unordered_set<IndexLink> links;
 
-  // Update a location with new contents that are added to everything already
-  // present there. If the update changes the contents at that location (if
-  // there was anything new) then we also need to flow from there, which we will
-  // do by adding the location to the work queue, and eventually flowAfterUpdate
-  // will be called on this location.
-  //
-  // Returns whether it is worth sending new contents to this location in the
-  // future. If we return false, the sending location never needs to do that
-  // ever again.
-  bool updateContents(LocationIndex locationIndex,
+  // Update a location with new contents that we computed are correct for that
+  // location (after filtering and transferring and anything else). This sets
+  // the content in the location and updates targets that they should check
+  // their sources and recompute themselves.
+  void updateContents(LocationIndex locationIndex,
                       PossibleContents newContents);
 
   // Slow helper that converts a Location to a LocationIndex. This should be
   // avoided. TODO: remove the remaining uses of this.
-  bool updateContents(const Location& location,
+  void updateContents(const Location& location,
                       const PossibleContents& newContents) {
-    return updateContents(getIndex(location), newContents);
+    updateContents(getIndex(location), newContents);
   }
 
-  // Flow contents from a location where a change occurred. This sends the new
-  // contents to all the normal targets of this location (using
-  // flowToTargetsAfterUpdate), and also handles special cases of flow after.
-  void flowAfterUpdate(LocationIndex locationIndex);
-
-  // Internal part of flowAfterUpdate that handles sending new values to the
-  // given location index's normal targets (that is, the ones listed in the
-  // |targets| vector).
-  void flowToTargetsAfterUpdate(LocationIndex locationIndex,
-                                const PossibleContents& contents);
+  // Given a location for whom we know some source has changed, recompute it.
+  // In abstract interpretation terms, this is the transfer function: we read
+  // all inputs and compute the output, then apply it using updateContents.
+  void computeContents(LocationIndex locationIndex);
 
   // Add a new connection while the flow is happening. If the link already
   // exists it is not added.
@@ -2344,13 +2342,15 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   // use during the flow.
   for (auto& link : links) {
     getTargets(link.from).push_back(link.to);
+    getSources(link.to).push_back(link.from);
   }
 
 #ifndef NDEBUG
-  // Each vector of targets (which is a vector for efficiency) must have no
-  // duplicates.
+  // Each vector of targets/sources (which are vectors for efficiency) must have
+  // no duplicates.
   for (auto& info : locations) {
     disallowDuplicates(info.targets);
+    disallowDuplicates(info.sources);
   }
 #endif
 
@@ -2368,6 +2368,9 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     std::cout << '\n';
 #endif
 
+    // The root value is the initial value (and it takes into account filtering
+    // etc., so just update it. This also queues work in workQueue, starting the
+    // flow.
     updateContents(location, value);
   }
 
@@ -2389,7 +2392,8 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     auto locationIndex = *iter;
     workQueue.erase(iter);
 
-    flowAfterUpdate(locationIndex);
+    // Recompute this index, continuing the flow.
+    computeContents(locationIndex);
   }
 
   // TODO: Add analysis and retrieval logic for fields of immutable globals,
@@ -2399,7 +2403,6 @@ Flower::Flower(Module& wasm, const PassOptions& options)
 bool Flower::updateContents(LocationIndex locationIndex,
                             PossibleContents newContents) {
   auto& contents = getContents(locationIndex);
-  auto oldContents = contents;
 
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
   std::cout << "\nupdateContents\n";
@@ -2410,6 +2413,22 @@ bool Flower::updateContents(LocationIndex locationIndex,
   std::cout << '\n';
 #endif
 
+  if (newContents == contents) {
+    // Nothing actually changed, so just return.
+    return;
+  }
+
+  // Update the contents.
+  contents = newContents;
+
+  // Inform targets of the update.
+  auto& targets = getTargets(locationIndex);
+  for (auto target : targets) {
+    workQueue.insert(target);    
+  }
+}
+
+XXX
   auto location = getLocation(locationIndex);
 
   // Handle special cases: Some locations can only contain certain contents, so
@@ -2550,8 +2569,29 @@ bool Flower::updateContents(LocationIndex locationIndex,
   return worthSendingMore;
 }
 
-void Flower::flowAfterUpdate(LocationIndex locationIndex) {
+void Flower::computeContents(LocationIndex locationIndex) {
   const auto location = getLocation(locationIndex);
+
+  // Fetch and combine all the incoming values.
+  auto newContents = PossibleContents::none();
+  auto& sources = getSources(locationIndex);
+  for (auto source : sources) {
+    auto sourceContents = getContents(source);
+
+    // Filter this content for the target, as we may have more refined type
+    // information for it than for |source|.
+    filterContent(sourceContents, location);
+
+    newContents.combine(sourceContents);
+  }
+
+  // Filter the combination. TODO comment
+  filterContent(newContents, location);
+
+  // Apply the result.
+  updateContents(locationIndex, newContents);
+}
+
   auto& contents = getContents(locationIndex);
 
   // We are called after a change at a location. A change means that some
@@ -2615,6 +2655,7 @@ void Flower::flowAfterUpdate(LocationIndex locationIndex) {
 
 void Flower::flowToTargetsAfterUpdate(LocationIndex locationIndex,
                                       const PossibleContents& contents) {
+// XXX waka the big work
   // Send the new contents to all the targets of this location. As we do so,
   // prune any targets that we do not need to bother sending content to in the
   // future, to save space and work later.
@@ -2655,8 +2696,15 @@ void Flower::connectDuringFlow(Location from, Location to) {
     disallowDuplicates(targets);
 #endif
 
+    // Add it to the |sources| vector.
+    auto& sources = getSources(newIndexLink.to);
+    sources.push_back(newIndexLink.from);
+#ifndef NDEBUG
+    disallowDuplicates(sources);
+#endif
+
     // In addition to adding the link, which will ensure new contents appearing
-    // later will be sent along, we also update with the current contents.
+    // later will be sent along, we also update with the current contents. XXX
     updateContents(to, getContents(getIndex(from)));
   }
 }
