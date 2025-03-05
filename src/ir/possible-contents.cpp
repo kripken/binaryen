@@ -1943,6 +1943,7 @@ struct Flower {
     // Marked as true when we are "done" - when no further changes are possible
     // here, so there is no point in doing any computation. That is the case
     // when we have the maximum possible value at this location.
+    // TODO: use this not only for roots
     bool done = false;
 
     LocationInfo(Location location) : location(location) {}
