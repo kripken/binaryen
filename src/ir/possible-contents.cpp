@@ -1,4 +1,3 @@
-#define POSSIBLE_CONTENTS_DEBUG 2
 /*
  * Copyright 2022 WebAssembly Community Group participants
  *
@@ -27,7 +26,7 @@
 #include "ir/local-graph.h"
 #include "ir/module-utils.h"
 #include "ir/possible-contents.h"
-#include "support/insert_ordered.h"
+#include "support/unique_deferring_queue.h"
 #include "wasm.h"
 
 namespace std {
@@ -2056,8 +2055,7 @@ private:
   // later would be the final result. This would not happen if our operations
   // were precise, but we only make approximations here to avoid unacceptable
   // overhead, such as cone types but not arbitrary unions, etc.
-  // XXX this no longer needs to be ordered!!1
-  InsertOrderedSet<LocationIndex> workQueue;
+  UniqueDeferredQueue<LocationIndex> workQueue;
 
   // All existing links in the graph. We keep this to know when a link we want
   // to add is new or not.
@@ -2420,9 +2418,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     }
 #endif
 
-    auto iter = workQueue.begin();
-    auto locationIndex = *iter;
-    workQueue.erase(iter);
+    auto locationIndex = workQueue.pop();
 
     // Recompute this index, continuing the flow.
     computeContents(locationIndex);
@@ -2623,7 +2619,7 @@ void Flower::queueWork(LocationIndex locationIndex) {
     return;
   }
 
-  workQueue.insert(locationIndex);
+  workQueue.push(locationIndex);
 }
 
 void Flower::connectDuringFlow(Location from, Location to) {
