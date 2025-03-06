@@ -2085,7 +2085,8 @@ private:
   // TODO
   void filterContents(PossibleContents& contents, const Location& location);
 
-  // TODO
+  // After we update the contents of a location, some situations require special
+  // handling. All that is done in this function.
   void postUpdate(LocationIndex locationIndex,
                   const PossibleContents& contents);
 
@@ -2589,7 +2590,10 @@ void Flower::postUpdate(LocationIndex locationIndex,
 #endif
 
     if (auto* get = parent->dynCast<StructGet>()) {
-      // |child| is the reference child of a struct.get.
+      // |child| is the reference child of a struct.get. That is, we have
+      // updateContents()'d the reference of a struct.get, and that may imply
+      // changes in the struct.get itself (if the reference contains more types
+      // now then we may get more values).
       assert(get->ref == child);
       readFromData(get->ref->type, get->index, contents, get);
     } else if (auto* set = parent->dynCast<StructSet>()) {
@@ -2970,6 +2974,7 @@ void Flower::writeToData(Expression* ref, Expression* value, Index fieldIndex) {
   // reference and value.)
 
 XXX This is the problem!!!11
+  do we need a ConeWriteLocation?
 
   auto valueContents = getContents(getIndex(ExpressionLocation{value, 0}));
 
