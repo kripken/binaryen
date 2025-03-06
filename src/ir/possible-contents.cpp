@@ -1,3 +1,4 @@
+#define POSSIBLE_CONTENTS_DEBUG 2
 /*
  * Copyright 2022 WebAssembly Community Group participants
  *
@@ -3018,9 +3019,13 @@ void Flower::dump(Location location) {
   } else if (auto* loc = std::get_if<SignatureResultLocation>(&location)) {
     std::cout << "  sigresultloc " << loc->type << " : " << loc->index << '\n';
   } else if (auto* loc = std::get_if<NullLocation>(&location)) {
-    std::cout << "  Nullloc " << loc->type << '\n';
+    std::cout << "  nullloc " << loc->type << '\n';
+  } else if (auto* loc = std::get_if<ConeReadLocation>(&location)) {
+    std::cout << "  conereadloc " << loc->type << " : " << loc->depth << " : " << loc->index << '\n';
+  } else if (auto* loc = std::get_if<CaughtExnRefLocation>(&location)) {
+    std::cout << "  caughtexnrefloc\n";
   } else {
-    std::cout << "  (other)\n";
+    WASM_UNREACHABLE("bad loc");
   }
 }
 #endif
