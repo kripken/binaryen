@@ -1940,12 +1940,6 @@ struct Flower {
     // A list of the sources we receive from.
     std::vector<LocationIndex> sources;
 
-    // Marked as true when we are "done" - when no further changes are possible
-    // here, so there is no point in doing any computation. That is the case
-    // when we have the maximum possible value at this location.
-    // TODO: use this not only for roots
-    bool done = false;
-
     LocationInfo(Location location) : location(location) {}
   };
 
@@ -1986,11 +1980,6 @@ private:
   std::vector<LocationIndex>& getSources(LocationIndex index) {
     assert(index < locations.size());
     return locations[index].sources;
-  }
-
-  bool& getDone(LocationIndex index) {
-    assert(index < locations.size());
-    return locations[index].done;
   }
 
   // Convert the data into the efficient LocationIndex form we will use during
@@ -2385,7 +2374,19 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   // initial value (not even updates from other roots, which |updateContents|
   // could send).
   for (const auto& [location, value] : roots) {
-    getDone(getIndex(location)) = true;
+    // We don't need to send anything else here. Remove incoming links.
+    auto locationIndex = getIndex(location);
+    auto& sources = getSources(locationIndex);
+    for (auto source : sources) {
+      auto& sourceTargets = getTargets(source);
+      sourceTargets.erase(std::remove_if(sourceTargets.begin(),
+                               sourceTargets.end(),
+                               [&](LocationIndex targetIndex) {
+                                 return targetIndex == locationIndex;
+                               }),
+                sourceTargets.end());
+    }
+    sources.clear();
   }
   for (const auto& [location, value] : roots) {
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
@@ -2470,9 +2471,6 @@ void Flower::computeContents(LocationIndex locationIndex) {
   std::cout << "\ncomputeContents\n";
   dump(location);
 #endif
-
-  // We must never recompute something that is already done.
-  assert(!getDone(locationIndex));
 
   // Fetch and combine all the incoming values.
   auto newContents = PossibleContents::none();
@@ -2612,11 +2610,6 @@ void Flower::handleParentChildInteractions(LocationIndex locationIndex,
 }
 
 void Flower::queueWork(LocationIndex locationIndex) {
-  if (getDone(locationIndex)) {
-    // Locations that are done updating do not need to be sent anything new.
-    return;
-  }
-
   workQueue.push(locationIndex);
 }
 
