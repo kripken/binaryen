@@ -281,8 +281,11 @@
   )
   ;; CHECK:      (func $get (type $1)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $struct 0
-  ;; CHECK-NEXT:    (call $create)
+  ;; CHECK-NEXT:   (block (result f32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (call $create)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (f32.const 1337)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -883,10 +886,13 @@
   ;; CHECK-NEXT:   (i32.const 10)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $substruct 0
-  ;; CHECK-NEXT:    (ref.cast (ref $substruct)
-  ;; CHECK-NEXT:     (local.get $ref)
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (ref.cast (ref $substruct)
+  ;; CHECK-NEXT:      (local.get $ref)
+  ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 10)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -1873,8 +1879,11 @@
   ;; CHECK-NEXT:   (i32.const 1234)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $struct2 0
-  ;; CHECK-NEXT:    (call $create2)
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (call $create2)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 1234)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
@@ -2073,8 +2082,11 @@
   )
   ;; CHECK:      (func $get (type $0)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $C 0
-  ;; CHECK-NEXT:    (call $create-C)
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (call $create-C)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 20)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -2107,19 +2119,19 @@
   ;; CHECK:      (func $test (type $2)
   ;; CHECK-NEXT:  (struct.set $struct 0
   ;; CHECK-NEXT:   (call $create)
-  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:   (block
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (call $create)
   ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:    (unreachable)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:   (block
   ;; CHECK-NEXT:    (drop
   ;; CHECK-NEXT:     (call $create)
   ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:    (unreachable)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -2269,8 +2281,11 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $struct 1
-  ;; CHECK-NEXT:    (call $create-struct)
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (call $create-struct)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 1337)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -2324,8 +2339,11 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $struct 0
-  ;; CHECK-NEXT:    (call $create)
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (call $create)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (i32.const 1337)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
@@ -2378,16 +2396,21 @@
 ;; As above, but with an imported global, which we can also optimize (since it
 ;; is still immutable).
 (module
+  ;; CHECK:      (type $struct (struct (field i32)))
   (type $struct (struct i32))
 
-  ;; CHECK:      (type $0 (func))
+  ;; CHECK:      (type $1 (func))
 
   ;; CHECK:      (import "a" "b" (global $global i32))
   (import "a" "b" (global $global i32))
 
-  ;; CHECK:      (func $test (type $0)
+  ;; CHECK:      (func $test (type $1)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (global.get $global)
+  ;; CHECK-NEXT:   (struct.get $struct 0
+  ;; CHECK-NEXT:    (struct.new $struct
+  ;; CHECK-NEXT:     (global.get $global)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
@@ -2550,11 +2573,7 @@
   ;; CHECK-NEXT:   (i32.const 1337)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $struct 0
-  ;; CHECK-NEXT:    (struct.new $struct
-  ;; CHECK-NEXT:     (i32.const 42)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (i32.const 42)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
@@ -2593,11 +2612,7 @@
   ;; CHECK-NEXT:   (i32.const 1337)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $struct 0
-  ;; CHECK-NEXT:    (struct.new $struct
-  ;; CHECK-NEXT:     (i32.const 42)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (i32.const 42)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
