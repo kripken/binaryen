@@ -2952,30 +2952,7 @@ void Flower::writeToData(Expression* ref, Expression* value, Index fieldIndex) {
   assert(PossibleContents::isSubContents(refContents, maximalContents));
 #endif
 
-  // We could set up links here as we do for reads, but as we get to this code
-  // in any case, we can just flow the values forward directly. This avoids
-  // adding any links (edges) to the graph (and edges are what we want to avoid
-  // adding, as there can be a quadratic number of them). In other words, we'll
-  // loop over the places we need to send info to, which we can figure out in a
-  // simple way, and by doing so we avoid materializing edges into the graph.
-  //
-  // Note that this is different from readFromData, above, which does add edges
-  // to the graph (and works hard to add as few as possible, see the "canonical
-  // cone reads" logic). The difference is because readFromData must "subscribe"
-  // to get notifications from the relevant DataLocations. But when writing that
-  // is not a problem: whenever a change happens in the reference or the value
-  // of a struct.set then this function will get called, and those are the only
-  // things we care about. And we can then just compute the values we are
-  // sending (based on the current contents of the reference and the value), and
-  // where we should send them to, and do that right here. (And as commented in
-  // readFromData, that is guaranteed to give us the right result in the end: at
-  // every point in time we send the right data, so when the flow is finished
-  // we've sent information based on the final and correct information about our
-  // reference and value.)
-
-XXX This is the problem!!!11
-  do we need a ConeWriteLocation?
-
+  // As with readFromData(), we set up a cone.
   auto valueContents = getContents(getIndex(ExpressionLocation{value, 0}));
 
   // See the related comment in readFromData() as to why these are the only
@@ -2990,11 +2967,20 @@ XXX This is the problem!!!11
   auto cone = refContents.getCone();
   auto normalizedDepth = getNormalizedConeDepth(cone.type, cone.depth);
 
-  subTypes->iterSubTypes(
-    cone.type.getHeapType(), normalizedDepth, [&](HeapType type, Index depth) {
-      auto heapLoc = DataLocation{type, fieldIndex};
-      updateContents(heapLoc, valueContents);
-    });
+  auto coneWriteLocation =
+    ConeWriteLocation{cone.type.getHeapType(), normalizedDepth, fieldIndex};
+
+  if (!hasIndex(coneWriteLocation)) {
+    // This is the first time we use this location, so create the links for it
+    // in the graph.
+    subTypes->iterSubTypes(
+      cone.type.getHeapType(), normalizedDepth, [&](HeapType type, Index depth) {
+        connectDuringFlow(coneWriteLocation, DataLocation{type, fieldIndex});
+      });
+  }
+
+  // Link to the canonical location.
+  connectDuringFlow(ExpressionLocation{value, 0}, coneWriteLocation);
 }
 
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
@@ -3031,6 +3017,8 @@ void Flower::dump(Location location) {
     std::cout << "  nullloc " << loc->type << '\n';
   } else if (auto* loc = std::get_if<ConeReadLocation>(&location)) {
     std::cout << "  conereadloc " << loc->type << " : " << loc->depth << " : " << loc->index << '\n';
+  } else if (auto* loc = std::get_if<ConeWriteLocation>(&location)) {
+    std::cout << "  conewriteloc " << loc->type << " : " << loc->depth << " : " << loc->index << '\n';
   } else if (auto* loc = std::get_if<CaughtExnRefLocation>(&location)) {
     std::cout << "  caughtexnrefloc\n";
   } else {

@@ -521,6 +521,16 @@ struct ConeReadLocation {
   }
 };
 
+// Similar to read, but for a write.
+struct ConeWriteLocation {
+  HeapType type;
+  Index depth;
+  Index index;
+  bool operator==(const ConeWriteLocation& other) const {
+    return type == other.type && depth == other.depth && index == other.index;
+  }
+};
+
 // A location is a variant over all the possible flavors of locations that we
 // have.
 using Location = std::variant<ExpressionLocation,
@@ -534,7 +544,8 @@ using Location = std::variant<ExpressionLocation,
                               TagLocation,
                               CaughtExnRefLocation,
                               NullLocation,
-                              ConeReadLocation>;
+                              ConeReadLocation,
+                              ConeWriteLocation>;
 
 } // namespace wasm
 
@@ -628,6 +639,13 @@ template<> struct hash<wasm::NullLocation> {
 
 template<> struct hash<wasm::ConeReadLocation> {
   size_t operator()(const wasm::ConeReadLocation& loc) const {
+    return std::hash<std::tuple<wasm::HeapType, wasm::Index, wasm::Index>>{}(
+      {loc.type, loc.depth, loc.index});
+  }
+};
+
+template<> struct hash<wasm::ConeWriteLocation> {
+  size_t operator()(const wasm::ConeWriteLocation& loc) const {
     return std::hash<std::tuple<wasm::HeapType, wasm::Index, wasm::Index>>{}(
       {loc.type, loc.depth, loc.index});
   }
