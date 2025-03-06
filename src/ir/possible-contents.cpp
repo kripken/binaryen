@@ -2380,8 +2380,13 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   std::cout << "roots phase\n";
 #endif
 
-  // Set up the roots, which are the starting state for the flow analysis: send
-  // their initial content to them to start the flow.
+  // Set up the roots, which are the starting state for the flow analysis.
+  // First, mark them all as done: they should never receive updates, after the
+  // initial value (not even updates from other roots, which |updateContents|
+  // could send).
+  for (const auto& [location, value] : roots) {
+    getDone(getIndex(location)) = true;
+  }
   for (const auto& [location, value] : roots) {
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
     std::cout << "  init root\n";
@@ -2394,9 +2399,6 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     // etc., so just update it. This also queues work in workQueue, starting the
     // flow.
     updateContents(location, value);
-
-    // Roots cannot change any further; they are fixed.
-    getDone(getIndex(location)) = true;
   }
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
@@ -2467,6 +2469,9 @@ void Flower::computeContents(LocationIndex locationIndex) {
   std::cout << "\ncomputeContents\n";
   dump(getLocation(locationIndex));
 #endif
+
+  // We must never recompute something that is already done.
+  assert(!getDone(locationIndex));
 
   // Fetch and combine all the incoming values.
   auto newContents = PossibleContents::none();
