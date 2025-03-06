@@ -2969,6 +2969,8 @@ void Flower::writeToData(Expression* ref, Expression* value, Index fieldIndex) {
   // we've sent information based on the final and correct information about our
   // reference and value.)
 
+XXX This is the problem!!!11
+
   auto valueContents = getContents(getIndex(ExpressionLocation{value, 0}));
 
   // See the related comment in readFromData() as to why these are the only
