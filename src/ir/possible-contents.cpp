@@ -2464,11 +2464,13 @@ void Flower::updateContents(LocationIndex locationIndex,
 }
 
 void Flower::computeContents(LocationIndex locationIndex) {
+  // TODO: we could do normal transfer function stuff here, like i32.add
+
   const auto location = getLocation(locationIndex);
 
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
   std::cout << "\ncomputeContents\n";
-  dump(getLocation(locationIndex));
+  dump(location);
 #endif
 
   // We must never recompute something that is already done.
