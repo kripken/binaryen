@@ -2378,21 +2378,16 @@
 ;; As above, but with an imported global, which we can also optimize (since it
 ;; is still immutable).
 (module
-  ;; CHECK:      (type $struct (struct (field i32)))
   (type $struct (struct i32))
 
-  ;; CHECK:      (type $1 (func))
+  ;; CHECK:      (type $0 (func))
 
   ;; CHECK:      (import "a" "b" (global $global i32))
   (import "a" "b" (global $global i32))
 
-  ;; CHECK:      (func $test (type $1)
+  ;; CHECK:      (func $test (type $0)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (struct.get $struct 0
-  ;; CHECK-NEXT:    (struct.new $struct
-  ;; CHECK-NEXT:     (global.get $global)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (global.get $global)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test

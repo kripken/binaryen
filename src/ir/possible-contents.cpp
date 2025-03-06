@@ -2400,7 +2400,10 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     // The root value is the initial value (and it takes into account filtering
     // etc., so just update it. This also queues work in workQueue, starting the
     // flow.
-    updateContents(location, value);
+    auto filtered = value;
+    // TODO reorder params so these match?
+    filterContents(filtered, location);
+    updateContents(location, filtered);
   }
 
 #ifdef POSSIBLE_CONTENTS_DEBUG

@@ -1060,9 +1060,7 @@
 
   ;; CHECK:      (func $caller (type $3)
   ;; CHECK-NEXT:  (call $called
-  ;; CHECK-NEXT:   (struct.new $A
-  ;; CHECK-NEXT:    (i32.const 10)
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (call $called
   ;; CHECK-NEXT:   (struct.new $B
@@ -1382,9 +1380,7 @@
 
   ;; CHECK:      (func $caller (type $5) (param $any anyref)
   ;; CHECK-NEXT:  (call $called
-  ;; CHECK-NEXT:   (struct.new $A
-  ;; CHECK-NEXT:    (i32.const 10)
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (call $called
   ;; CHECK-NEXT:   (struct.new $B1
@@ -1397,9 +1393,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (call $called
-  ;; CHECK-NEXT:   (struct.new $B2
-  ;; CHECK-NEXT:    (i32.const 40)
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $caller (export "caller") (param $any anyref)
