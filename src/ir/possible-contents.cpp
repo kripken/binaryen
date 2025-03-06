@@ -2977,7 +2977,9 @@ void Flower::writeToData(Expression* ref, Expression* value, Index fieldIndex) {
     // This is the first time we use this location, so create the links for it
     // in the graph.
     subTypes->iterSubTypes(
-      cone.type.getHeapType(), normalizedDepth, [&](HeapType type, Index depth) {
+      cone.type.getHeapType(),
+      normalizedDepth,
+      [&](HeapType type, Index depth) {
         connectDuringFlow(coneWriteLocation, DataLocation{type, fieldIndex});
       });
   }
@@ -3019,9 +3021,11 @@ void Flower::dump(Location location) {
   } else if (auto* loc = std::get_if<NullLocation>(&location)) {
     std::cout << "  nullloc " << loc->type << '\n';
   } else if (auto* loc = std::get_if<ConeReadLocation>(&location)) {
-    std::cout << "  conereadloc " << loc->type << " : " << loc->depth << " : " << loc->index << '\n';
+    std::cout << "  conereadloc " << loc->type << " : " << loc->depth << " : "
+              << loc->index << '\n';
   } else if (auto* loc = std::get_if<ConeWriteLocation>(&location)) {
-    std::cout << "  conewriteloc " << loc->type << " : " << loc->depth << " : " << loc->index << '\n';
+    std::cout << "  conewriteloc " << loc->type << " : " << loc->depth << " : "
+              << loc->index << '\n';
   } else if (auto* loc = std::get_if<CaughtExnRefLocation>(&location)) {
     std::cout << "  caughtexnrefloc\n";
   } else {
