@@ -2083,9 +2083,12 @@ private:
   // TODO
   void filterContents(PossibleContents& contents, const Location& location);
 
+  void pruneIfMaximal(LocationIndex locationIndex,
+                  const PossibleContents& contents);
+
   // After we update the contents of a location, some situations require special
   // handling. All that is done in this function.
-  void postUpdate(LocationIndex locationIndex,
+  void handleParentChildInteractions(LocationIndex locationIndex,
                   const PossibleContents& contents);
 
   // Queue work for a location. This is done when a source of the location
@@ -2455,12 +2458,14 @@ void Flower::updateContents(LocationIndex locationIndex,
     queueWork(target);
   }
 
+  // If the new contents maxed us out, then there is no point to receiving any
+  // data later.
+  pruneIfMaximal(locationIndex, contents);
+
   // We are mostly done, except for handling interesting/special cases in the
   // flow, additional operations that we need to do aside from sending the new
   // contents to the normal (statically linked) targets.
-  postUpdate(locationIndex, contents);
-
-  // TODO: optimize when it is not worth sending any more, prune from graph etc
+  handleParentChildInteractions(locationIndex, contents);
 }
 
 void Flower::computeContents(LocationIndex locationIndex) {
@@ -2559,7 +2564,7 @@ void Flower::filterContents(PossibleContents& contents,
     //
     // The outcome of this filtering does not affect whether it is worth sending
     // more later (we compute that at the end), so use a temp out var for that.
-    bool worthSendingMoreTemp = true;
+    bool worthSendingMoreTemp = true; // XXX do this in the proper place
     filterExpressionContents(contents, *exprLoc, worthSendingMoreTemp);
   } else if (auto* globalLoc = std::get_if<GlobalLocation>(&location)) {
     // Generic filtering. We do this both before and after. XXX comment
@@ -2567,7 +2572,54 @@ void Flower::filterContents(PossibleContents& contents,
   }
 }
 
-void Flower::postUpdate(LocationIndex locationIndex,
+void Flower::pruneIfMaximal(LocationIndex locationIndex,
+                  const PossibleContents& contents) {
+  // Many is the absolute maximum. In some situations we can also infer that
+  // a lesser value is the maximum at a particular location.
+  auto maximal = contents.isMany();
+
+  if (contents.isConeType() && !contents.getType().isRef()) {
+    // A cone type of a non-reference is the worst case, since subtyping is
+    // not relevant there, and so if we only know something about the type
+    // then we already know nothing beyond what the type in the wasm tells us
+    // (and from there we can only go to Many).
+    maximal = true;
+  } else {
+    const auto location = getLocation(locationIndex);
+    if (auto* exprLoc = std::get_if<ExpressionLocation>(&location)) {
+      if (exprLoc->expr->type.isRef()) {
+        // The TNH oracle informs us of the maximal contents possible here
+        // (usually based on the type of the expression, but perhaps more precise).
+        auto maximalContents = getTNHContents(exprLoc->expr);
+        if (maximalContents.isConeType()) {
+          normalizeConeType(maximalContents);
+        }
+        if (contents == maximalContents) {
+          // The contents are at the maximum for this expression location.
+          maximal = true;
+          // TODO: test abort() here and above. or perf of each
+        }
+      }
+    }
+  }
+
+  if (maximal) {
+    // We don't need to send anything else here. Remove incoming links.
+    auto& sources = getSources(locationIndex);
+    for (auto source : sources) {
+      auto& sourceTargets = getTargets(source);
+      sourceTargets.erase(std::remove_if(sourceTargets.begin(),
+                               sourceTargets.end(),
+                               [&](LocationIndex targetIndex) {
+                                 return targetIndex == locationIndex;
+                               }),
+                sourceTargets.end());
+    }
+    sources.clear();
+  }
+}
+
+void Flower::handleParentChildInteractions(LocationIndex locationIndex,
                         const PossibleContents& contents) {
   const auto location = getLocation(locationIndex);
 
@@ -2712,6 +2764,7 @@ void Flower::filterExpressionContents(PossibleContents& contents,
     return;
   }
 
+  // TODO: do we need this in another place? old code did
   normalizeConeType(contents);
 
   // There is a chance that the intersection is equal to the maximal contents,
