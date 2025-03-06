@@ -2086,12 +2086,9 @@ private:
   void connectDuringFlow(Location from, Location to);
 
   // Contents sent to certain locations can be filtered in a special way during
-  // the flow, which is handled in these helpers. These may update
-  // |worthSendingMore| which is whether it is worth sending any more content to
-  // this location in the future.
+  // the flow, which is handled in these helpers.
   void filterExpressionContents(PossibleContents& contents,
-                                const ExpressionLocation& exprLoc,
-                                bool& worthSendingMore);
+                                const ExpressionLocation& exprLoc);
   void filterGlobalContents(PossibleContents& contents,
                             const GlobalLocation& globalLoc);
   void filterDataContents(PossibleContents& contents,
@@ -2555,8 +2552,7 @@ void Flower::filterContents(PossibleContents& contents,
     //
     // The outcome of this filtering does not affect whether it is worth sending
     // more later (we compute that at the end), so use a temp out var for that.
-    bool worthSendingMoreTemp = true; // XXX do this in the proper place
-    filterExpressionContents(contents, *exprLoc, worthSendingMoreTemp);
+    filterExpressionContents(contents, *exprLoc);
   } else if (auto* globalLoc = std::get_if<GlobalLocation>(&location)) {
     // Generic filtering. We do this both before and after. XXX comment
     filterGlobalContents(contents, *globalLoc);
@@ -2642,8 +2638,7 @@ void Flower::connectDuringFlow(Location from, Location to) {
 }
 
 void Flower::filterExpressionContents(PossibleContents& contents,
-                                      const ExpressionLocation& exprLoc,
-                                      bool& worthSendingMore) {
+                                      const ExpressionLocation& exprLoc) {
   auto type = exprLoc.expr->type;
 
   if (type.isTuple()) {
@@ -2652,13 +2647,6 @@ void Flower::filterExpressionContents(PossibleContents& contents,
     return;
   }
 
-  // The caller cannot know of a situation where it might not be worth sending
-  // more to a reference - all that logic is in here. That is, the rest of this
-  // function is the only place we can mark |worthSendingMore| as false for a
-  // reference.
-  bool isRef = type.isRef();
-  assert(!isRef || worthSendingMore);
-
   // The TNH oracle informs us of the maximal contents possible here.
   auto maximalContents = getTNHContents(exprLoc.expr);
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
@@ -2666,53 +2654,15 @@ void Flower::filterExpressionContents(PossibleContents& contents,
             << maximalContents << "\n";
 #endif
   contents.intersect(maximalContents);
-  if (contents.isNone()) {
-    // Nothing was left here at all.
-    return;
-  }
 
   // For references we need to normalize the intersection, see below. For non-
   // references, we are done (we did all the relevant work in the intersect()
   // call).
-  if (!isRef) {
-    return;
-  }
-
-  // Normalize the intersection. We want to check later if any more content can
-  // arrive here, and also we want to avoid flowing around anything non-
-  // normalized, as explained earlier.
-  //
-  // Note that this normalization is necessary even though |contents| was
-  // normalized before the intersection, e.g.:
-  /*
-  //      A
-  //     / \
-  //    B   C
-  //        |
-  //        D
-  */
-  // Consider the case where |maximalContents| is Cone(B, Infinity) and the
-  // original |contents| was Cone(A, 2) (which is normalized). The naive
-  // intersection is Cone(B, 1), since the core intersection logic makes no
-  // assumptions about the rest of the types. That is then normalized to
-  // Cone(B, 0) since there happens to be no subtypes for B.
-  //
-  // Note that the intersection may also not be a cone type, if it is a global
-  // or literal. In that case we don't have anything more to do here.
-  if (!contents.isConeType()) {
-    return;
-  }
-
-  // TODO: do we need this in another place? old code did
-  normalizeConeType(contents);
-
-  // There is a chance that the intersection is equal to the maximal contents,
-  // which would mean nothing more can arrive here.
-  normalizeConeType(maximalContents);
-
-  if (contents == maximalContents) {
-    // We already contain everything possible, so this is the worst case.
-    worthSendingMore = false;
+  if (type.isRef() && contents.isConeType()) {
+    // Normalize the intersection. We want to check later if any more content can
+    // arrive here, and also we want to avoid flowing around anything non-
+    // normalized, as explained earlier.
+    normalizeConeType(contents);
   }
 }
 
