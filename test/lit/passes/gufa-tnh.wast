@@ -1748,7 +1748,10 @@
   ;; CHECK-NEXT:   (i32.const 0)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (i32.const 3)
+  ;; CHECK-NEXT:   (array.get $B
+  ;; CHECK-NEXT:    (local.get $array.get)
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (array.set $B
   ;; CHECK-NEXT:   (local.get $array.set)
