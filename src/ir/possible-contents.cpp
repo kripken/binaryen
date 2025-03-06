@@ -2642,7 +2642,7 @@ void Flower::connectDuringFlow(Location from, Location to) {
 
     // In addition to adding the link, which will ensure new contents appearing
     // later will be sent along, we also need to update the target with the
-    // current contents. TODO do we really?
+    // current contents.
     queueWork(newIndexLink.to);
   }
 }
