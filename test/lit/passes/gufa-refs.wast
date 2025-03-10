@@ -6193,3 +6193,61 @@
     )
   )
 )
+
+;; TODO: this seems to hang with just --gufa
+
+(module
+ (type $0 (array (mut i8)))
+ (type $1 (func))
+ (data $0 "")
+ (func $0 (type $1)
+  (drop
+   (array.new_data $0 $0
+    (i32.const 0)
+    (i32.const 0)
+   )
+  )
+ )
+ (func $1 (type $1)
+  (local $0 (ref $0))
+  (local $1 (ref $0))
+  (if
+   (array.len
+    (local.tee $0
+     (if (result (ref $0))
+      (i32.const 0)
+      (then
+       (unreachable)
+      )
+      (else
+       (array.new_default $0
+        (i32.const 0)
+       )
+      )
+     )
+    )
+   )
+   (then
+    (if
+     (array.len
+      (local.tee $1
+       (array.new_default $0
+        (i32.const 0)
+       )
+      )
+     )
+     (then
+      (array.copy $0 $0
+       (local.get $0)
+       (i32.const 0)
+       (local.get $1)
+       (i32.const 0)
+       (i32.const 0)
+      )
+     )
+    )
+   )
+  )
+  (unreachable)
+ )
+)
