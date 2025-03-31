@@ -563,13 +563,6 @@ struct OptimizeInstructions
           c->type = Type::i32;
           return replaceCurrent(c);
         }
-        // unsigned(x) < 0   =>   i32(0)
-        if (matches(curr, binary(LtU, pure(&x), ival(&c))) &&
-            c->value.isZero()) {
-          c->value = Literal::makeZero(Type::i32);
-          c->type = Type::i32;
-          return replaceCurrent(c);
-        }
       }
     }
     if (auto* ext = Properties::getAlmostSignExt(curr)) {
