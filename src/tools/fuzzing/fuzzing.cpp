@@ -1107,8 +1107,9 @@ void TranslateToFuzzReader::addHashMemorySupport() {
   }
   contents.push_back(builder.makeLocalGet(0, Type::i32));
   auto* body = builder.makeBlock(contents);
+  auto name = Names::getValidFunctionName(wasm, "hashMemory");
   auto* hasher = wasm.addFunction(builder.makeFunction(
-    "hashMemory", Signature(Type::none, Type::i32), {Type::i32}, body));
+    name, Signature(Type::none, Type::i32), {Type::i32}, body));
 
   if (!preserveImportsAndExports) {
     wasm.addExport(
@@ -1411,7 +1412,7 @@ void TranslateToFuzzReader::processFunctions() {
     for (Index i = 0; i < numInitialExports; i++) {
       auto& exp = wasm.exports[i];
       if (exp->kind == ExternalKind::Function && upTo(RESOLUTION) < chance) {
-        auto* func = wasm.getFunction(exp->value);
+        auto* func = wasm.getFunction(*exp->getInternalName());
         if (!func->imported()) {
           auto* call =
             builder.makeCall(pick(noParamsOrResultFuncs), {}, Type::none);
@@ -1482,11 +1483,7 @@ Function* TranslateToFuzzReader::addFunction() {
     });
   if (validExportParams && (numAddedFunctions == 0 || oneIn(2)) &&
       !wasm.getExportOrNull(func->name) && !preserveImportsAndExports) {
-    auto* export_ = new Export;
-    export_->name = func->name;
-    export_->value = func->name;
-    export_->kind = ExternalKind::Function;
-    wasm.addExport(export_);
+    wasm.addExport(new Export(func->name, ExternalKind::Function, func->name));
   }
   // add some to an elem segment
   while (oneIn(3) && !random.finished()) {
@@ -3400,6 +3397,10 @@ Expression* TranslateToFuzzReader::makeBasicRef(Type type) {
   auto share = heapType.getShared();
   switch (heapType.getBasic(Unshared)) {
     case HeapType::ext: {
+      if (wasm.features.hasStrings() && share == Unshared && oneIn(2)) {
+        // Shared strings not yet supported.
+        return makeConst(Type(HeapType::string, NonNullable));
+      }
       auto null = builder.makeRefNull(HeapTypes::ext.getBasic(share));
       // TODO: support actual non-nullable externrefs via imported globals or
       // similar.
@@ -3430,10 +3431,6 @@ Expression* TranslateToFuzzReader::makeBasicRef(Type type) {
         HeapType::i31,
         HeapType::struct_,
         HeapType::array);
-      if (share == Unshared) {
-        // Shared strings not yet supported.
-        subtypeOpts.add(FeatureSet::Strings, HeapType::string);
-      }
       auto subtype = pick(subtypeOpts).getBasic(share);
       return makeConst(Type(subtype, nullability));
     }
@@ -5345,11 +5342,16 @@ HeapType TranslateToFuzzReader::getSubType(HeapType type) {
           .getBasic(share);
       case HeapType::cont:
         return pick(HeapTypes::cont, HeapTypes::nocont).getBasic(share);
-      case HeapType::ext:
-        return pick(FeatureOptions<HeapType>()
-                      .add(FeatureSet::ReferenceTypes, HeapType::ext)
-                      .add(FeatureSet::GC, HeapType::noext))
-          .getBasic(share);
+      case HeapType::ext: {
+        auto options = FeatureOptions<HeapType>()
+                         .add(FeatureSet::ReferenceTypes, HeapType::ext)
+                         .add(FeatureSet::GC, HeapType::noext);
+        if (share == Unshared) {
+          // Shared strings not yet supported.
+          options.add(FeatureSet::Strings, HeapType::string);
+        }
+        return pick(options).getBasic(share);
+      }
       case HeapType::any: {
         assert(wasm.features.hasReferenceTypes());
         assert(wasm.features.hasGC());
@@ -5360,10 +5362,6 @@ HeapType TranslateToFuzzReader::getSubType(HeapType type) {
                                                       HeapType::struct_,
                                                       HeapType::array,
                                                       HeapType::none);
-        if (share == Unshared) {
-          // Shared strings not yet supported.
-          options.add(FeatureSet::Strings, HeapType::string);
-        }
         return pick(options).getBasic(share);
       }
       case HeapType::eq:

@@ -151,8 +151,12 @@ def randomize_feature_opts():
 
         # The shared-everything feature is new and we want to fuzz it, but it
         # also currently disables fuzzing V8, so disable it most of the time.
+        # Same with custom descriptors and strings - all these cannot be run in
+        # V8 for now.
         if random.random() < 0.9:
             FEATURE_OPTS.append('--disable-shared-everything')
+            FEATURE_OPTS.append('--disable-custom-descriptors')
+            FEATURE_OPTS.append('--disable-strings')
 
     print('randomized feature opts:', '\n  ' + '\n  '.join(FEATURE_OPTS))
 
@@ -813,8 +817,9 @@ class CompareVMs(TestCaseHandler):
             def can_run(self, wasm):
                 # V8 does not support shared memories when running with
                 # shared-everything enabled, so do not fuzz shared-everything
-                # for now.
-                return all_disallowed(['shared-everything'])
+                # for now. It also does not yet support custom descriptors, nor
+                # strings.
+                return all_disallowed(['shared-everything', 'custom-descriptors', 'strings'])
 
             def can_compare_to_self(self):
                 # With nans, VM differences can confuse us, so only very simple VMs
@@ -864,7 +869,7 @@ class CompareVMs(TestCaseHandler):
                 if random.random() < 0.5:
                     return False
                 # wasm2c doesn't support most features
-                return all_disallowed(['exception-handling', 'simd', 'threads', 'bulk-memory', 'nontrapping-float-to-int', 'tail-call', 'sign-ext', 'reference-types', 'multivalue', 'gc'])
+                return all_disallowed(['exception-handling', 'simd', 'threads', 'bulk-memory', 'nontrapping-float-to-int', 'tail-call', 'sign-ext', 'reference-types', 'multivalue', 'gc', 'custom-descriptors'])
 
             def run(self, wasm):
                 run([in_bin('wasm-opt'), wasm, '--emit-wasm2c-wrapper=main.c'] + FEATURE_OPTS)
@@ -1165,7 +1170,7 @@ class Wasm2JS(TestCaseHandler):
         # implement wasm suspending using JS async/await.
         if JSPI:
             return False
-        return all_disallowed(['exception-handling', 'simd', 'threads', 'bulk-memory', 'nontrapping-float-to-int', 'tail-call', 'sign-ext', 'reference-types', 'multivalue', 'gc', 'multimemory', 'memory64'])
+        return all_disallowed(['exception-handling', 'simd', 'threads', 'bulk-memory', 'nontrapping-float-to-int', 'tail-call', 'sign-ext', 'reference-types', 'multivalue', 'gc', 'multimemory', 'memory64', 'custom-descriptors'])
 
 
 # given a wasm, find all the exports of particular kinds (for example, kinds
@@ -1571,7 +1576,7 @@ class Split(TestCaseHandler):
             return False
 
         # see D8.can_run
-        return all_disallowed(['shared-everything'])
+        return all_disallowed(['shared-everything', 'custom-descriptors', 'strings'])
 
 
 # Check that the text format round-trips without error.
@@ -1752,7 +1757,11 @@ class Two(TestCaseHandler):
         # mode. We also cannot run shared-everything code in d8 yet. We also
         # cannot compare if there are NaNs (as optimizations can lead to
         # different outputs).
-        return not CLOSED_WORLD and all_disallowed(['shared-everything']) and not NANS
+        if CLOSED_WORLD:
+            return False
+        if NANS:
+            return False
+        return all_disallowed(['shared-everything', 'custom-descriptors', 'strings'])
 
 
 # Test --fuzz-preserve-imports-exports, which never modifies imports or exports.

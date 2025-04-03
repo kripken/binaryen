@@ -59,7 +59,7 @@ public:
     : loggings(loggings), wasm(wasm) {
     for (auto& exp : wasm.exports) {
       if (exp->kind == ExternalKind::Table && exp->name == "table") {
-        exportedTable = exp->value;
+        exportedTable = *exp->getInternalName();
         break;
       }
     }
@@ -205,7 +205,7 @@ public:
       // No callable export.
       throwJSException();
     }
-    return callFunctionAsJS(exp->value);
+    return callFunctionAsJS(*exp->getInternalName());
   }
 
   Literals callRefAsJS(Literal ref) {
@@ -279,7 +279,7 @@ struct ExecutionResults {
           continue;
         }
         std::cout << "[fuzz-exec] calling " << exp->name << "\n";
-        auto* func = wasm.getFunction(exp->value);
+        auto* func = wasm.getFunction(*exp->getInternalName());
         FunctionResult ret = run(func, wasm, instance);
         results[exp->name] = ret;
         if (auto* values = std::get_if<Literals>(&ret)) {
@@ -303,9 +303,17 @@ struct ExecutionResults {
   }
 
   void printValue(Literal value) {
-    // Unwrap an externalized value to get the actual value.
-    if (Type::isSubType(value.type, Type(HeapType::ext, Nullable))) {
+    // Unwrap an externalized GC value to get the actual value, but not strings,
+    // which are normally a subtype of ext.
+    if (Type::isSubType(value.type, Type(HeapType::ext, Nullable)) &&
+        !value.type.isString()) {
       value = value.internalize();
+    }
+
+    // An anyref literal is a string.
+    if (value.type.isRef() &&
+        value.type.getHeapType().isMaybeShared(HeapType::any)) {
+      value = value.externalize();
     }
 
     // Don't print most reference values, as e.g. funcref(N) contains an index,

@@ -1545,6 +1545,22 @@ void TNHOracle::scan(Function* func,
       self->inEntryBlock = false;
     }
 
+    // We note params that are written to, as local changes prevent us from
+    // inferences:
+    //
+    //  (func $foo (param $x)
+    //    (local.set $x ..)
+    //    (ref.cast (local.get $x)) ;; this is no longer casting the actual
+    //                              ;; parameter
+    //
+    std::unordered_set<Index> writtenParams;
+
+    void visitLocalSet(LocalSet* curr) {
+      if (getFunction()->isParam(curr->index)) {
+        writtenParams.insert(curr->index);
+      }
+    }
+
     void visitCall(Call* curr) { info.calls.push_back(curr); }
 
     void visitCallRef(CallRef* curr) {
@@ -1570,13 +1586,15 @@ void TNHOracle::scan(Function* func,
 
       auto* fallthrough = Properties::getFallthrough(expr, options, wasm);
       if (auto* get = fallthrough->dynCast<LocalGet>()) {
-        // To optimize, this needs to be a param, and of a useful type.
+        // To optimize, this needs to be an unmodified param, and of a useful
+        // type.
         //
         // Note that if we see more than one cast we keep the first one. This is
         // not important in optimized code, as the most refined cast would be
         // the only one to exist there, so it's ok to keep things simple here.
         if (getFunction()->isParam(get->index) && type != get->type &&
-            info.castParams.count(get->index) == 0) {
+            info.castParams.count(get->index) == 0 &&
+            !writtenParams.count(get->index)) {
           info.castParams[get->index] = type;
         }
       }
@@ -2171,7 +2189,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
 
   for (auto& ex : wasm.exports) {
     if (ex->kind == ExternalKind::Table) {
-      shared.publicTables.insert(ex->value);
+      shared.publicTables.insert(*ex->getInternalName());
     }
   }
 
@@ -2283,7 +2301,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   // Exports can be modified from the outside.
   for (auto& ex : wasm.exports) {
     if (ex->kind == ExternalKind::Function) {
-      calledFromOutside(ex->value);
+      calledFromOutside(*ex->getInternalName());
     } else if (ex->kind == ExternalKind::Table) {
       // If any table is exported, assume any function in any table (including
       // other tables) can be called from the outside.
@@ -2307,7 +2325,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     } else if (ex->kind == ExternalKind::Global) {
       // Exported mutable globals are roots, since the outside may write any
       // value to them.
-      auto name = ex->value;
+      auto name = *ex->getInternalName();
       auto* global = wasm.getGlobal(name);
       if (global->mutable_) {
         roots[GlobalLocation{name}] = PossibleContents::fromType(global->type);
@@ -2325,7 +2343,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   }
   for (auto& ex : wasm.exports) {
     if (ex->kind == ExternalKind::Tag) {
-      publicTags.insert(ex->value);
+      publicTags.insert(*ex->getInternalName());
     }
   }
   for (auto tag : publicTags) {

@@ -285,7 +285,15 @@ void WasmBinaryWriter::writeTypes() {
       }
     }
     if (type.isShared()) {
-      o << uint8_t(BinaryConsts::EncodedType::SharedDef);
+      o << uint8_t(BinaryConsts::EncodedType::Shared);
+    }
+    if (auto desc = type.getDescribedType()) {
+      o << uint8_t(BinaryConsts::EncodedType::Describes);
+      writeHeapType(*desc);
+    }
+    if (auto desc = type.getDescriptorType()) {
+      o << uint8_t(BinaryConsts::EncodedType::Descriptor);
+      writeHeapType(*desc);
     }
     switch (type.getKind()) {
       case HeapTypeKind::Func: {
@@ -603,19 +611,19 @@ void WasmBinaryWriter::writeExports() {
     o << U32LEB(int32_t(curr->kind));
     switch (curr->kind) {
       case ExternalKind::Function:
-        o << U32LEB(getFunctionIndex(curr->value));
+        o << U32LEB(getFunctionIndex(*curr->getInternalName()));
         break;
       case ExternalKind::Table:
-        o << U32LEB(getTableIndex(curr->value));
+        o << U32LEB(getTableIndex(*curr->getInternalName()));
         break;
       case ExternalKind::Memory:
-        o << U32LEB(getMemoryIndex(curr->value));
+        o << U32LEB(getMemoryIndex(*curr->getInternalName()));
         break;
       case ExternalKind::Global:
-        o << U32LEB(getGlobalIndex(curr->value));
+        o << U32LEB(getGlobalIndex(*curr->getInternalName()));
         break;
       case ExternalKind::Tag:
-        o << U32LEB(getTagIndex(curr->value));
+        o << U32LEB(getTagIndex(*curr->getInternalName()));
         break;
       default:
         WASM_UNREACHABLE("unexpected extern kind");
@@ -1551,12 +1559,6 @@ void WasmBinaryWriter::writeInlineBuffer(const char* data, size_t size) {
 
 void WasmBinaryWriter::writeType(Type type) {
   if (type.isRef()) {
-    // Exact references are introduced by the custom descriptors feature, but
-    // can be used internally even when it is not enabled. In that case, we have
-    // to generalize the types to be inexact before writing them.
-    if (!wasm->features.hasCustomDescriptors()) {
-      type = Type(type.getHeapType(), type.getNullability(), Inexact);
-    }
     // The only reference types allowed without GC are funcref, externref, and
     // exnref. We internally use more refined versions of those types, but we
     // cannot emit those without GC.
@@ -1572,12 +1574,6 @@ void WasmBinaryWriter::writeType(Type type) {
         // nullable version.
         type = Type(type.getHeapType().getTop(), Nullable);
       }
-    }
-    // If the type is exact, emit the exact prefix and continue on without
-    // considering exactness.
-    if (type.isExact()) {
-      o << S32LEB(BinaryConsts::EncodedType::exact);
-      type = Type(type.getHeapType(), type.getNullability(), Inexact);
     }
     auto heapType = type.getHeapType();
     if (type.isNullable() && heapType.isBasic() && !heapType.isShared()) {
@@ -1680,7 +1676,7 @@ void WasmBinaryWriter::writeHeapType(HeapType type) {
 
   int ret = 0;
   if (type.isShared()) {
-    o << S32LEB(BinaryConsts::EncodedType::Shared);
+    o << uint8_t(BinaryConsts::EncodedType::Shared);
   }
   switch (type.getBasic(Unshared)) {
     case HeapType::ext:
@@ -2167,7 +2163,7 @@ Signature WasmBinaryReader::getBlockType() {
   return Signature(Type::none, getType(code));
 }
 
-Type WasmBinaryReader::getTypeNoExact(int code) {
+Type WasmBinaryReader::getType(int code) {
   Type type;
   if (getBasicType(code, type)) {
     return type;
@@ -2183,17 +2179,6 @@ Type WasmBinaryReader::getTypeNoExact(int code) {
   WASM_UNREACHABLE("unexpected type");
 }
 
-Type WasmBinaryReader::getType(int code) {
-  if (code == BinaryConsts::EncodedType::exact) {
-    auto type = getTypeNoExact(getS32LEB());
-    if (!type.isRef()) {
-      throwError("invalid exact prefix on non-reference type");
-    }
-    return Type(type.getHeapType(), type.getNullability(), Exact);
-  }
-  return getTypeNoExact(code);
-}
-
 Type WasmBinaryReader::getType() { return getType(getS32LEB()); }
 
 HeapType WasmBinaryReader::getHeapType() {
@@ -2206,7 +2191,7 @@ HeapType WasmBinaryReader::getHeapType() {
     return types[type];
   }
   auto share = Unshared;
-  if (type == BinaryConsts::EncodedType::Shared) {
+  if (type == BinaryConsts::EncodedType::SharedLEB) {
     share = Shared;
     type = getS64LEB(); // TODO: Actually s33
   }
@@ -2341,7 +2326,7 @@ void WasmBinaryReader::readTypes() {
   auto readHeapType = [&]() -> HeapType {
     int64_t htCode = getS64LEB(); // TODO: Actually s33
     auto share = Unshared;
-    if (htCode == BinaryConsts::EncodedType::Shared) {
+    if (htCode == BinaryConsts::EncodedType::SharedLEB) {
       share = Shared;
       htCode = getS64LEB(); // TODO: Actually s33
     }
@@ -2354,7 +2339,7 @@ void WasmBinaryReader::readTypes() {
     }
     return builder.getTempHeapType(size_t(htCode));
   };
-  auto makeTypeNoExact = [&](int32_t typeCode) {
+  auto makeType = [&](int32_t typeCode) {
     Type type;
     if (getBasicType(typeCode, type)) {
       return type;
@@ -2378,17 +2363,6 @@ void WasmBinaryReader::readTypes() {
         throwError("unexpected type index: " + std::to_string(typeCode));
     }
     WASM_UNREACHABLE("unexpected type");
-  };
-  auto makeType = [&](int32_t typeCode) {
-    if (typeCode == BinaryConsts::EncodedType::exact) {
-      auto type = makeTypeNoExact(getS32LEB());
-      if (!type.isRef()) {
-        throwError("unexpected exact prefix on non-reference type");
-      }
-      return builder.getTempRefType(
-        type.getHeapType(), type.getNullability(), Exact);
-    }
-    return makeTypeNoExact(typeCode);
   };
   auto readType = [&]() { return makeType(getS32LEB()); };
 
@@ -2467,7 +2441,6 @@ void WasmBinaryReader::readTypes() {
       builder.createRecGroup(i, groupSize);
       form = getInt8();
     }
-    std::optional<uint32_t> superIndex;
     if (form == BinaryConsts::EncodedType::Sub ||
         form == BinaryConsts::EncodedType::SubFinal) {
       if (form == BinaryConsts::EncodedType::Sub) {
@@ -2479,12 +2452,32 @@ void WasmBinaryReader::readTypes() {
           throwError("Invalid type definition with " + std::to_string(supers) +
                      " supertypes");
         }
-        superIndex = getU32LEB();
+        auto superIdx = getU32LEB();
+        if (superIdx >= builder.size()) {
+          throwError("invalid supertype index: " + std::to_string(superIdx));
+        }
+        builder[i].subTypeOf(builder[superIdx]);
       }
       form = getInt8();
     }
-    if (form == BinaryConsts::SharedDef) {
+    if (form == BinaryConsts::EncodedType::Shared) {
       builder[i].setShared();
+      form = getInt8();
+    }
+    if (form == BinaryConsts::EncodedType::Describes) {
+      auto descIdx = getU32LEB();
+      if (descIdx >= builder.size()) {
+        throwError("invalid described type index: " + std::to_string(descIdx));
+      }
+      builder[i].describes(builder[descIdx]);
+      form = getInt8();
+    }
+    if (form == BinaryConsts::EncodedType::Descriptor) {
+      auto descIdx = getU32LEB();
+      if (descIdx >= builder.size()) {
+        throwError("invalid descriptor type index: " + std::to_string(descIdx));
+      }
+      builder[i].descriptor(builder[descIdx]);
       form = getInt8();
     }
     if (form == BinaryConsts::EncodedType::Func) {
@@ -2497,13 +2490,6 @@ void WasmBinaryReader::readTypes() {
       builder[i] = Array(readFieldDef());
     } else {
       throwError("Bad type form " + std::to_string(form));
-    }
-    if (superIndex) {
-      if (*superIndex > builder.size()) {
-        throwError("Out of bounds supertype index " +
-                   std::to_string(*superIndex));
-      }
-      builder[i].subTypeOf(builder[*superIndex]);
     }
   }
 
@@ -3537,7 +3523,7 @@ Result<> WasmBinaryReader::readInst() {
           return builder.makeStructCmpxchg(type, field, order);
         }
       }
-      return Err{"unknown atomic operation"};
+      return Err{"unknown atomic operation " + std::to_string(op)};
     }
     case BinaryConsts::MiscPrefix: {
       auto op = getU32LEB();
@@ -3597,7 +3583,7 @@ Result<> WasmBinaryReader::readInst() {
           return builder.makeStore(2, offset, align, Type::f32, mem);
         }
       }
-      return Err{"unknown misc operation"};
+      return Err{"unknown misc operation: " + std::to_string(op)};
     }
     case BinaryConsts::SIMDPrefix: {
       auto op = getU32LEB();
@@ -4234,7 +4220,7 @@ Result<> WasmBinaryReader::readInst() {
             Store64LaneVec128, offset, align, getLaneIndex(2), mem);
         }
       }
-      return Err{"unknown SIMD operation"};
+      return Err{"unknown SIMD operation " + std::to_string(op)};
     }
     case BinaryConsts::GCPrefix: {
       auto op = getU32LEB();
@@ -4363,44 +4349,43 @@ Result<> WasmBinaryReader::readInst() {
         case BinaryConsts::ExternConvertAny:
           return builder.makeRefAs(ExternConvertAny);
       }
-      return Err{"unknown GC operation"};
+      return Err{"unknown GC operation " + std::to_string(op)};
     }
   }
-  return Err{"unknown operation"};
+  return Err{"unknown operation " + std::to_string(code)};
 }
 
 void WasmBinaryReader::readExports() {
   size_t num = getU32LEB();
   std::unordered_set<Name> names;
   for (size_t i = 0; i < num; i++) {
-    auto curr = std::make_unique<Export>();
-    curr->name = getInlineString();
-    if (!names.emplace(curr->name).second) {
+    Name name = getInlineString();
+    if (!names.emplace(name).second) {
       throwError("duplicate export name");
     }
-    curr->kind = (ExternalKind)getU32LEB();
-    auto* ex = wasm.addExport(std::move(curr));
+    ExternalKind kind = (ExternalKind)getU32LEB();
+    std::variant<Name, HeapType> value;
     auto index = getU32LEB();
-    switch (ex->kind) {
+    switch (kind) {
       case ExternalKind::Function:
-        ex->value = getFunctionName(index);
-        continue;
-      case ExternalKind::Table:
-        ex->value = getTableName(index);
-        continue;
-      case ExternalKind::Memory:
-        ex->value = getMemoryName(index);
-        continue;
-      case ExternalKind::Global:
-        ex->value = getGlobalName(index);
-        continue;
-      case ExternalKind::Tag:
-        ex->value = getTagName(index);
-        continue;
-      case ExternalKind::Invalid:
+        value = getFunctionName(index);
         break;
+      case ExternalKind::Table:
+        value = getTableName(index);
+        break;
+      case ExternalKind::Memory:
+        value = getMemoryName(index);
+        break;
+      case ExternalKind::Global:
+        value = getGlobalName(index);
+        break;
+      case ExternalKind::Tag:
+        value = getTagName(index);
+        break;
+      case ExternalKind::Invalid:
+        throwError("invalid export kind");
     }
-    throwError("invalid export kind");
+    wasm.addExport(new Export(name, kind, value));
   }
 }
 

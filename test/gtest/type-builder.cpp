@@ -428,30 +428,91 @@ TEST_F(TypeTest, CanonicalizeUses) {
   EXPECT_NE(built[4], built[6]);
 }
 
-TEST_F(TypeTest, CanonicalizeExactRefs) {
-  TypeBuilder builder(4);
+TEST_F(TypeTest, CanonicalizeExactHeapTypes) {
+  TypeBuilder builder(8);
 
-  // Types that vary in exactness or nullability of references are different.
-  Type a = builder.getTempRefType(builder[0], Nullable, Inexact);
-  Type b = builder.getTempRefType(builder[1], NonNullable, Inexact);
-  Type c = builder.getTempRefType(builder[2], Nullable, Exact);
-  Type d = builder.getTempRefType(builder[3], NonNullable, Exact);
+  HeapType inexact = HeapType(builder[0]).with(Inexact);
+  HeapType exact = HeapType(builder[1]).with(Exact);
 
-  builder[0] = Struct({Field(a, Mutable)});
-  builder[1] = Struct({Field(b, Mutable)});
-  builder[2] = Struct({Field(c, Mutable)});
-  builder[3] = Struct({Field(d, Mutable)});
+  Type inexactRef = builder.getTempRefType(inexact, Nullable);
+  Type exactRef = builder.getTempRefType(exact, Nullable);
+
+  // Types that vary in exactness of the referenced heap type are different.
+  builder[0] = Struct({Field(inexactRef, Mutable)});
+  builder[1] = Struct({Field(exactRef, Mutable)});
+  builder[2] = Signature(Type({inexactRef, exactRef}), Type::none);
+  builder[3] = Signature(Type::none, Type({exactRef, inexactRef}));
+
+  auto translate = [&](HeapType t) {
+    for (int i = 0; i < 4; ++i) {
+      if (t.with(Inexact) == builder[i]) {
+        return HeapType(builder[4 + i]).with(t.getExactness());
+      }
+    }
+    WASM_UNREACHABLE("unexpected type");
+  };
+
+  builder[4].copy(builder[0], translate);
+  builder[5].copy(builder[1], translate);
+  builder[6].copy(builder[2], translate);
+  builder[7].copy(builder[3], translate);
 
   auto result = builder.build();
   ASSERT_TRUE(result);
   auto built = *result;
 
+  // Different types should be different.
   EXPECT_NE(built[0], built[1]);
   EXPECT_NE(built[0], built[2]);
   EXPECT_NE(built[0], built[3]);
   EXPECT_NE(built[1], built[2]);
   EXPECT_NE(built[1], built[3]);
   EXPECT_NE(built[2], built[3]);
+
+  // Copies of the types should match.
+  EXPECT_EQ(built[0], built[4]);
+  EXPECT_EQ(built[1], built[5]);
+  EXPECT_EQ(built[2], built[6]);
+  EXPECT_EQ(built[3], built[7]);
+
+  // A type is inexact by default.
+  EXPECT_EQ(built[0], built[0].with(Inexact));
+  EXPECT_EQ(built[1], built[1].with(Inexact));
+  EXPECT_EQ(built[2], built[2].with(Inexact));
+  EXPECT_EQ(built[3], built[3].with(Inexact));
+
+  // We can freely convert between exact and inexact.
+  EXPECT_EQ(built[0], built[0].with(Exact).with(Inexact));
+  EXPECT_EQ(built[0].with(Exact),
+            built[0].with(Exact).with(Inexact).with(Exact));
+
+  // Conversions are idempotent.
+  EXPECT_EQ(built[0].with(Exact), built[0].with(Exact).with(Exact));
+  EXPECT_EQ(built[0], built[0].with(Inexact));
+
+  // An exact version of a type is not the same as its inexact version.
+  EXPECT_NE(built[0].with(Exact), built[0].with(Inexact));
+
+  // But they have the same rec group.
+  EXPECT_EQ(built[0].with(Exact).getRecGroup(),
+            built[0].with(Inexact).getRecGroup());
+
+  // Looking up the inner structure works either way.
+  ASSERT_TRUE(built[0].with(Exact).isStruct());
+  ASSERT_TRUE(built[0].with(Inexact).isStruct());
+  EXPECT_EQ(built[0].with(Exact).getStruct(),
+            built[0].with(Inexact).getStruct());
+
+  // The exactness of children types is preserved.
+  EXPECT_EQ(built[0], built[0].getStruct().fields[0].type.getHeapType());
+  EXPECT_EQ(built[1].with(Exact),
+            built[1].getStruct().fields[0].type.getHeapType());
+  EXPECT_EQ(built[0], built[2].getSignature().params[0].getHeapType());
+  EXPECT_EQ(built[1].with(Exact),
+            built[2].getSignature().params[1].getHeapType());
+  EXPECT_EQ(built[0], built[3].getSignature().results[1].getHeapType());
+  EXPECT_EQ(built[1].with(Exact),
+            built[3].getSignature().results[0].getHeapType());
 }
 
 TEST_F(TypeTest, CanonicalizeSelfReferences) {
@@ -502,6 +563,57 @@ TEST_F(TypeTest, CanonicalizeSupertypes) {
   EXPECT_NE(built[3], built[4]);
   EXPECT_NE(built[3], built[5]);
   EXPECT_NE(built[4], built[5]);
+}
+
+TEST_F(TypeTest, CanonicalizeDescriptors) {
+  constexpr int numGroups = 3;
+  constexpr int groupSize = 4;
+  TypeBuilder builder(numGroups * groupSize);
+
+  for (int i = 0; i < numGroups; ++i) {
+    builder.createRecGroup(i * groupSize, groupSize);
+  }
+  for (int i = 0; i < numGroups * groupSize; ++i) {
+    builder[i] = Struct();
+  }
+
+  // A B A' B'
+  builder[0].descriptor(builder[1]);
+  builder[1].describes(builder[0]);
+  builder[2].descriptor(builder[3]);
+  builder[3].describes(builder[2]);
+
+  // A' A B B'
+  builder[4].descriptor(builder[7]);
+  builder[5].descriptor(builder[6]);
+  builder[6].describes(builder[5]);
+  builder[7].describes(builder[4]);
+
+  auto translate = [&](HeapType t) -> HeapType {
+    for (int i = 0; i < groupSize; ++i) {
+      if (t == builder[i]) {
+        return builder[2 * groupSize + i];
+      }
+    }
+    WASM_UNREACHABLE("unexpected type");
+  };
+
+  // A B A' B' again
+  builder[8].copy(builder[0], translate);
+  builder[9].copy(builder[1], translate);
+  builder[10].copy(builder[2], translate);
+  builder[11].copy(builder[3], translate);
+
+  auto result = builder.build();
+  ASSERT_TRUE(result);
+  auto built = *result;
+
+  EXPECT_EQ(built[0], built[8]);
+  EXPECT_EQ(built[1], built[9]);
+  EXPECT_EQ(built[2], built[10]);
+  EXPECT_EQ(built[3], built[11]);
+
+  EXPECT_NE(built[0].getRecGroup(), built[4].getRecGroup());
 }
 
 TEST_F(TypeTest, CanonicalizeFinal) {
@@ -589,9 +701,16 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   HeapType nofunc = HeapType::nofunc;
   HeapType nocont = HeapType::nocont;
   HeapType defFunc = Signature();
+  HeapType exactDefFunc = defFunc.with(Exact);
   HeapType defCont = Continuation(defFunc);
-  HeapType defStruct = Struct();
+  HeapType defStruct;
+  HeapType exactDefStruct;
+  HeapType subStruct;
+  HeapType exactSubStruct;
+  HeapType subStruct2;
+  HeapType exactSubStruct2;
   HeapType defArray = Array(Field(Type::i32, Immutable));
+  HeapType exactDefArray = defArray.with(Exact);
   HeapType sharedAny = any.getBasic(Shared);
   HeapType sharedEq = eq.getBasic(Shared);
   HeapType sharedI31 = i31.getBasic(Shared);
@@ -602,16 +721,25 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   HeapType sharedDefStruct;
   HeapType sharedDefFunc;
   {
-    TypeBuilder builder(2);
-    builder[0] = Struct{};
-    builder[1] = Signature();
-    builder[0].setShared();
-    builder[1].setShared();
+    TypeBuilder builder(5);
+    builder[0].setShared() = Struct{};
+    builder[1].setShared() = Signature();
+    builder[2].setOpen() = Struct{};
+    builder[3].subTypeOf(builder[2]) = Struct{};
+    builder[4].copy(builder[3]);
+    builder.createRecGroup(3, 2);
     auto results = builder.build();
     ASSERT_TRUE(results);
     auto built = *results;
     sharedDefStruct = built[0];
     sharedDefFunc = built[1];
+    defStruct = built[2];
+    subStruct = built[3];
+    subStruct2 = built[4];
+    ASSERT_NE(subStruct, subStruct2);
+    exactDefStruct = defStruct.with(Exact);
+    exactSubStruct = subStruct.with(Exact);
+    exactSubStruct2 = subStruct2.with(Exact);
   }
 
   auto assertLUB = [](HeapType a, HeapType b, std::optional<HeapType> lub) {
@@ -655,14 +783,19 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(ext, i31, {});
   assertLUB(ext, struct_, {});
   assertLUB(ext, array, {});
-  assertLUB(ext, string, {});
+  assertLUB(ext, string, ext);
   assertLUB(ext, none, {});
   assertLUB(ext, noext, ext);
   assertLUB(ext, nofunc, {});
   assertLUB(ext, nocont, {});
   assertLUB(ext, defFunc, {});
+  assertLUB(ext, exactDefFunc, {});
   assertLUB(ext, defStruct, {});
+  assertLUB(ext, exactDefStruct, {});
+  assertLUB(ext, subStruct, {});
+  assertLUB(ext, exactSubStruct, {});
   assertLUB(ext, defArray, {});
+  assertLUB(ext, exactDefArray, {});
   assertLUB(ext, sharedAny, {});
   assertLUB(ext, sharedEq, {});
   assertLUB(ext, sharedI31, {});
@@ -685,9 +818,14 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(func, nofunc, func);
   assertLUB(func, nocont, {});
   assertLUB(func, defFunc, func);
+  assertLUB(func, exactDefFunc, func);
   assertLUB(func, defCont, {});
   assertLUB(func, defStruct, {});
+  assertLUB(func, exactDefStruct, {});
+  assertLUB(func, subStruct, {});
+  assertLUB(func, exactSubStruct, {});
   assertLUB(func, defArray, {});
+  assertLUB(func, exactDefArray, {});
   assertLUB(func, sharedAny, {});
   assertLUB(func, sharedEq, {});
   assertLUB(func, sharedI31, {});
@@ -710,9 +848,14 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(cont, nofunc, {});
   assertLUB(cont, nocont, cont);
   assertLUB(cont, defFunc, {});
+  assertLUB(cont, exactDefFunc, {});
   assertLUB(cont, defCont, cont);
   assertLUB(cont, defStruct, {});
+  assertLUB(cont, exactDefStruct, {});
+  assertLUB(cont, subStruct, {});
+  assertLUB(cont, exactSubStruct, {});
   assertLUB(cont, defArray, {});
+  assertLUB(cont, exactDefArray, {});
   assertLUB(cont, sharedAny, {});
   assertLUB(cont, sharedEq, {});
   assertLUB(cont, sharedI31, {});
@@ -728,15 +871,20 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(any, i31, any);
   assertLUB(any, struct_, any);
   assertLUB(any, array, any);
-  assertLUB(any, string, any);
+  assertLUB(any, string, {});
   assertLUB(any, none, any);
   assertLUB(any, noext, {});
   assertLUB(any, nofunc, {});
   assertLUB(any, nocont, {});
   assertLUB(any, defFunc, {});
+  assertLUB(any, exactDefFunc, {});
   assertLUB(any, defCont, {});
   assertLUB(any, defStruct, any);
+  assertLUB(any, exactDefStruct, any);
+  assertLUB(any, subStruct, any);
+  assertLUB(any, exactSubStruct, any);
   assertLUB(any, defArray, any);
+  assertLUB(any, exactDefArray, any);
   assertLUB(any, sharedAny, {});
   assertLUB(any, sharedEq, {});
   assertLUB(any, sharedI31, {});
@@ -751,15 +899,20 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(eq, i31, eq);
   assertLUB(eq, struct_, eq);
   assertLUB(eq, array, eq);
-  assertLUB(eq, string, any);
+  assertLUB(eq, string, {});
   assertLUB(eq, none, eq);
   assertLUB(eq, noext, {});
   assertLUB(eq, nofunc, {});
   assertLUB(eq, nocont, {});
   assertLUB(eq, defFunc, {});
+  assertLUB(eq, exactDefFunc, {});
   assertLUB(eq, defCont, {});
   assertLUB(eq, defStruct, eq);
+  assertLUB(eq, exactDefStruct, eq);
+  assertLUB(eq, subStruct, eq);
+  assertLUB(eq, exactSubStruct, eq);
   assertLUB(eq, defArray, eq);
+  assertLUB(eq, exactDefArray, eq);
   assertLUB(eq, sharedAny, {});
   assertLUB(eq, sharedEq, {});
   assertLUB(eq, sharedI31, {});
@@ -773,15 +926,20 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(i31, cont, {});
   assertLUB(i31, struct_, eq);
   assertLUB(i31, array, eq);
-  assertLUB(i31, string, any);
+  assertLUB(i31, string, {});
   assertLUB(i31, none, i31);
   assertLUB(i31, noext, {});
   assertLUB(i31, nofunc, {});
   assertLUB(i31, nocont, {});
   assertLUB(i31, defFunc, {});
+  assertLUB(i31, exactDefFunc, {});
   assertLUB(i31, defCont, {});
   assertLUB(i31, defStruct, eq);
+  assertLUB(i31, exactDefStruct, eq);
+  assertLUB(i31, subStruct, eq);
+  assertLUB(i31, exactSubStruct, eq);
   assertLUB(i31, defArray, eq);
+  assertLUB(i31, exactDefArray, eq);
   assertLUB(i31, sharedAny, {});
   assertLUB(i31, sharedEq, {});
   assertLUB(i31, sharedI31, {});
@@ -794,15 +952,20 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(struct_, struct_, struct_);
   assertLUB(struct_, cont, {});
   assertLUB(struct_, array, eq);
-  assertLUB(struct_, string, any);
+  assertLUB(struct_, string, {});
   assertLUB(struct_, none, struct_);
   assertLUB(struct_, noext, {});
   assertLUB(struct_, nofunc, {});
   assertLUB(struct_, nocont, {});
   assertLUB(struct_, defFunc, {});
+  assertLUB(struct_, exactDefFunc, {});
   assertLUB(struct_, defCont, {});
   assertLUB(struct_, defStruct, struct_);
+  assertLUB(struct_, exactDefStruct, struct_);
+  assertLUB(struct_, subStruct, struct_);
+  assertLUB(struct_, exactSubStruct, struct_);
   assertLUB(struct_, defArray, eq);
+  assertLUB(struct_, exactDefArray, eq);
   assertLUB(struct_, sharedAny, {});
   assertLUB(struct_, sharedEq, {});
   assertLUB(struct_, sharedI31, {});
@@ -814,15 +977,20 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
 
   assertLUB(array, array, array);
   assertLUB(array, cont, {});
-  assertLUB(array, string, any);
+  assertLUB(array, string, {});
   assertLUB(array, none, array);
   assertLUB(array, noext, {});
   assertLUB(array, nofunc, {});
   assertLUB(array, nocont, {});
   assertLUB(array, defFunc, {});
+  assertLUB(array, exactDefFunc, {});
   assertLUB(array, defCont, {});
   assertLUB(array, defStruct, eq);
+  assertLUB(array, exactDefStruct, eq);
+  assertLUB(array, subStruct, eq);
+  assertLUB(array, exactSubStruct, eq);
   assertLUB(array, defArray, array);
+  assertLUB(array, exactDefArray, array);
   assertLUB(array, sharedAny, {});
   assertLUB(array, sharedEq, {});
   assertLUB(array, sharedI31, {});
@@ -834,14 +1002,19 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
 
   assertLUB(string, string, string);
   assertLUB(string, cont, {});
-  assertLUB(string, none, string);
-  assertLUB(string, noext, {});
+  assertLUB(string, none, {});
+  assertLUB(string, noext, string);
   assertLUB(string, nofunc, {});
   assertLUB(string, nocont, {});
   assertLUB(string, defFunc, {});
+  assertLUB(string, exactDefFunc, {});
   assertLUB(string, defCont, {});
-  assertLUB(string, defStruct, any);
-  assertLUB(string, defArray, any);
+  assertLUB(string, defStruct, {});
+  assertLUB(string, exactDefStruct, {});
+  assertLUB(string, subStruct, {});
+  assertLUB(string, exactSubStruct, {});
+  assertLUB(string, defArray, {});
+  assertLUB(string, exactDefArray, {});
   assertLUB(string, sharedAny, {});
   assertLUB(string, sharedEq, {});
   assertLUB(string, sharedI31, {});
@@ -856,9 +1029,14 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(none, nofunc, {});
   assertLUB(none, nocont, {});
   assertLUB(none, defFunc, {});
+  assertLUB(none, exactDefFunc, {});
   assertLUB(none, defCont, {});
   assertLUB(none, defStruct, defStruct);
+  assertLUB(none, exactDefStruct, exactDefStruct);
+  assertLUB(none, subStruct, subStruct);
+  assertLUB(none, exactSubStruct, exactSubStruct);
   assertLUB(none, defArray, defArray);
+  assertLUB(none, exactDefArray, exactDefArray);
   assertLUB(none, sharedAny, {});
   assertLUB(none, sharedEq, {});
   assertLUB(none, sharedI31, {});
@@ -872,9 +1050,14 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(noext, nofunc, {});
   assertLUB(noext, nocont, {});
   assertLUB(noext, defFunc, {});
+  assertLUB(noext, exactDefFunc, {});
   assertLUB(noext, defCont, {});
   assertLUB(noext, defStruct, {});
+  assertLUB(noext, exactDefStruct, {});
+  assertLUB(noext, subStruct, {});
+  assertLUB(noext, exactSubStruct, {});
   assertLUB(noext, defArray, {});
+  assertLUB(noext, exactDefArray, {});
   assertLUB(noext, sharedAny, {});
   assertLUB(noext, sharedEq, {});
   assertLUB(noext, sharedI31, {});
@@ -887,9 +1070,14 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(nofunc, nofunc, nofunc);
   assertLUB(nofunc, nocont, {});
   assertLUB(nofunc, defFunc, defFunc);
+  assertLUB(nofunc, exactDefFunc, exactDefFunc);
   assertLUB(nofunc, defCont, {});
   assertLUB(nofunc, defStruct, {});
+  assertLUB(nofunc, exactDefStruct, {});
+  assertLUB(nofunc, subStruct, {});
+  assertLUB(nofunc, exactSubStruct, {});
   assertLUB(nofunc, defArray, {});
+  assertLUB(nofunc, exactDefArray, {});
   assertLUB(nofunc, sharedAny, {});
   assertLUB(nofunc, sharedEq, {});
   assertLUB(nofunc, sharedI31, {});
@@ -904,9 +1092,14 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(nocont, cont, cont);
   assertLUB(nocont, nofunc, {});
   assertLUB(nocont, defFunc, {});
+  assertLUB(nocont, exactDefFunc, {});
   assertLUB(nocont, defCont, defCont);
   assertLUB(nocont, defStruct, {});
+  assertLUB(nocont, exactDefStruct, {});
+  assertLUB(nocont, subStruct, {});
+  assertLUB(nocont, exactSubStruct, {});
   assertLUB(nocont, defArray, {});
+  assertLUB(nocont, exactDefArray, {});
   assertLUB(nocont, sharedAny, {});
   assertLUB(nocont, sharedEq, {});
   assertLUB(nocont, sharedI31, {});
@@ -917,9 +1110,14 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(nocont, sharedDefFunc, {});
 
   assertLUB(defFunc, defFunc, defFunc);
+  assertLUB(defFunc, exactDefFunc, defFunc);
   assertLUB(defFunc, defCont, {});
   assertLUB(defFunc, defStruct, {});
+  assertLUB(defFunc, exactDefStruct, {});
+  assertLUB(defFunc, subStruct, {});
+  assertLUB(defFunc, exactSubStruct, {});
   assertLUB(defFunc, defArray, {});
+  assertLUB(defFunc, exactDefArray, {});
   assertLUB(defFunc, sharedAny, {});
   assertLUB(defFunc, sharedEq, {});
   assertLUB(defFunc, sharedI31, {});
@@ -929,10 +1127,31 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(defFunc, sharedDefStruct, {});
   assertLUB(defFunc, sharedDefFunc, {});
 
+  assertLUB(exactDefFunc, exactDefFunc, exactDefFunc);
+  assertLUB(exactDefFunc, defCont, {});
+  assertLUB(exactDefFunc, defStruct, {});
+  assertLUB(exactDefFunc, exactDefStruct, {});
+  assertLUB(exactDefFunc, subStruct, {});
+  assertLUB(exactDefFunc, exactSubStruct, {});
+  assertLUB(exactDefFunc, defArray, {});
+  assertLUB(exactDefFunc, exactDefArray, {});
+  assertLUB(exactDefFunc, sharedAny, {});
+  assertLUB(exactDefFunc, sharedEq, {});
+  assertLUB(exactDefFunc, sharedI31, {});
+  assertLUB(exactDefFunc, sharedStruct, {});
+  assertLUB(exactDefFunc, sharedNone, {});
+  assertLUB(exactDefFunc, sharedFunc, {});
+  assertLUB(exactDefFunc, sharedDefStruct, {});
+  assertLUB(exactDefFunc, sharedDefFunc, {});
+
   assertLUB(defCont, defCont, defCont);
   assertLUB(defCont, defFunc, {});
   assertLUB(defCont, defStruct, {});
+  assertLUB(defCont, exactDefStruct, {});
+  assertLUB(defCont, subStruct, {});
+  assertLUB(defCont, exactSubStruct, {});
   assertLUB(defCont, defArray, {});
+  assertLUB(defCont, exactDefArray, {});
   assertLUB(defCont, sharedAny, {});
   assertLUB(defCont, sharedEq, {});
   assertLUB(defCont, sharedI31, {});
@@ -943,7 +1162,11 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(defCont, sharedDefFunc, {});
 
   assertLUB(defStruct, defStruct, defStruct);
+  assertLUB(defStruct, exactDefStruct, defStruct);
+  assertLUB(defStruct, subStruct, defStruct);
+  assertLUB(defStruct, exactSubStruct, defStruct);
   assertLUB(defStruct, defArray, eq);
+  assertLUB(defStruct, exactDefArray, eq);
   assertLUB(defStruct, sharedAny, {});
   assertLUB(defStruct, sharedEq, {});
   assertLUB(defStruct, sharedI31, {});
@@ -953,7 +1176,51 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(defStruct, sharedDefStruct, {});
   assertLUB(defStruct, sharedDefFunc, {});
 
+  assertLUB(exactDefStruct, exactDefStruct, exactDefStruct);
+  assertLUB(exactDefStruct, subStruct, defStruct);
+  assertLUB(exactDefStruct, exactSubStruct, defStruct);
+  assertLUB(exactDefStruct, defArray, eq);
+  assertLUB(exactDefStruct, exactDefArray, eq);
+  assertLUB(exactDefStruct, sharedAny, {});
+  assertLUB(exactDefStruct, sharedEq, {});
+  assertLUB(exactDefStruct, sharedI31, {});
+  assertLUB(exactDefStruct, sharedStruct, {});
+  assertLUB(exactDefStruct, sharedNone, {});
+  assertLUB(exactDefStruct, sharedFunc, {});
+  assertLUB(exactDefStruct, sharedDefStruct, {});
+  assertLUB(exactDefStruct, sharedDefFunc, {});
+
+  assertLUB(subStruct, subStruct, subStruct);
+  assertLUB(subStruct, exactSubStruct, subStruct);
+  assertLUB(subStruct, subStruct2, defStruct);
+  assertLUB(subStruct, exactSubStruct2, defStruct);
+  assertLUB(subStruct, defArray, eq);
+  assertLUB(subStruct, exactDefArray, eq);
+  assertLUB(subStruct, sharedAny, {});
+  assertLUB(subStruct, sharedEq, {});
+  assertLUB(subStruct, sharedI31, {});
+  assertLUB(subStruct, sharedStruct, {});
+  assertLUB(subStruct, sharedNone, {});
+  assertLUB(subStruct, sharedFunc, {});
+  assertLUB(subStruct, sharedDefStruct, {});
+  assertLUB(subStruct, sharedDefFunc, {});
+
+  assertLUB(exactSubStruct, exactSubStruct, exactSubStruct);
+  assertLUB(exactSubStruct, subStruct2, defStruct);
+  assertLUB(exactSubStruct, exactSubStruct2, defStruct);
+  assertLUB(exactSubStruct, defArray, eq);
+  assertLUB(exactSubStruct, exactDefArray, eq);
+  assertLUB(exactSubStruct, sharedAny, {});
+  assertLUB(exactSubStruct, sharedEq, {});
+  assertLUB(exactSubStruct, sharedI31, {});
+  assertLUB(exactSubStruct, sharedStruct, {});
+  assertLUB(exactSubStruct, sharedNone, {});
+  assertLUB(exactSubStruct, sharedFunc, {});
+  assertLUB(exactSubStruct, sharedDefStruct, {});
+  assertLUB(exactSubStruct, sharedDefFunc, {});
+
   assertLUB(defArray, defArray, defArray);
+  assertLUB(defArray, exactDefArray, defArray);
   assertLUB(defArray, sharedAny, {});
   assertLUB(defArray, sharedEq, {});
   assertLUB(defArray, sharedI31, {});
@@ -962,6 +1229,16 @@ TEST_F(TypeTest, TestHeapTypeRelations) {
   assertLUB(defArray, sharedFunc, {});
   assertLUB(defArray, sharedDefStruct, {});
   assertLUB(defArray, sharedDefFunc, {});
+
+  assertLUB(exactDefArray, exactDefArray, exactDefArray);
+  assertLUB(exactDefArray, sharedAny, {});
+  assertLUB(exactDefArray, sharedEq, {});
+  assertLUB(exactDefArray, sharedI31, {});
+  assertLUB(exactDefArray, sharedStruct, {});
+  assertLUB(exactDefArray, sharedNone, {});
+  assertLUB(exactDefArray, sharedFunc, {});
+  assertLUB(exactDefArray, sharedDefStruct, {});
+  assertLUB(exactDefArray, sharedDefFunc, {});
 
   assertLUB(sharedAny, sharedAny, sharedAny);
   assertLUB(sharedAny, sharedEq, sharedAny);
@@ -1122,244 +1399,124 @@ FUZZ_TEST(TypeFuzzTest, TestHeapTypeRelationsFuzz)
 #endif // FUZZTEST
 
 TEST_F(TypeTest, TestTypeRelations) {
-  Type any = Type(HeapType::any, NonNullable, Inexact);
-  Type nullAny = Type(HeapType::any, Nullable, Inexact);
-  Type exactAny = Type(HeapType::any, NonNullable, Exact);
-  Type nullExactAny = Type(HeapType::any, Nullable, Exact);
+  Type any = Type(HeapType::any, NonNullable);
+  Type nullAny = Type(HeapType::any, Nullable);
 
   HeapType defined = Struct();
-  Type def = Type(defined, NonNullable, Inexact);
-  Type nullDef = Type(defined, Nullable, Inexact);
-  Type exactDef = Type(defined, NonNullable, Exact);
-  Type nullExactDef = Type(defined, Nullable, Exact);
+  Type def = Type(defined, NonNullable);
+  Type nullDef = Type(defined, Nullable);
 
-  Type none = Type(HeapType::none, NonNullable, Inexact);
-  Type nullNone = Type(HeapType::none, Nullable, Inexact);
-  Type exactNone = Type(HeapType::none, NonNullable, Exact);
-  Type nullExactNone = Type(HeapType::none, Nullable, Exact);
+  Type none = Type(HeapType::none, NonNullable);
+  Type nullNone = Type(HeapType::none, Nullable);
 
-  Type func = Type(HeapType::func, NonNullable, Inexact);
-  Type nullFunc = Type(HeapType::func, Nullable, Inexact);
-  Type exactFunc = Type(HeapType::func, NonNullable, Exact);
-  Type nullExactFunc = Type(HeapType::func, Nullable, Exact);
+  Type func = Type(HeapType::func, NonNullable);
+  Type nullFunc = Type(HeapType::func, Nullable);
 
   Type i32 = Type::i32;
   Type unreachable = Type::unreachable;
 
-#define assertLUB(a, b, lub, glb)                                              \
-  {                                                                            \
-    auto lub1 = Type::getLeastUpperBound(a, b);                                \
-    auto lub2 = Type::getLeastUpperBound(b, a);                                \
-    EXPECT_EQ(lub, lub1);                                                      \
-    EXPECT_EQ(lub1, lub2);                                                     \
-    if (lub != Type::none) {                                                   \
-      EXPECT_TRUE(Type::isSubType(a, lub));                                    \
-      EXPECT_TRUE(Type::isSubType(b, lub));                                    \
-    }                                                                          \
-    auto glb1 = Type::getGreatestLowerBound(a, b);                             \
-    auto glb2 = Type::getGreatestLowerBound(b, a);                             \
-    EXPECT_EQ(glb, glb1);                                                      \
-    EXPECT_EQ(glb, glb2);                                                      \
-    EXPECT_TRUE(Type::isSubType(glb, a));                                      \
-    EXPECT_TRUE(Type::isSubType(glb, b));                                      \
-    if (a == b) {                                                              \
-      EXPECT_TRUE(Type::isSubType(a, b));                                      \
-      EXPECT_TRUE(Type::isSubType(b, a));                                      \
-      EXPECT_EQ(lub, a);                                                       \
-      EXPECT_EQ(glb, a);                                                       \
-    } else if (lub == b) {                                                     \
-      EXPECT_TRUE(Type::isSubType(a, b));                                      \
-      EXPECT_FALSE(Type::isSubType(b, a));                                     \
-      EXPECT_EQ(glb, a);                                                       \
-    } else if (lub == a) {                                                     \
-      EXPECT_FALSE(Type::isSubType(a, b));                                     \
-      EXPECT_TRUE(Type::isSubType(b, a));                                      \
-      EXPECT_EQ(glb, b);                                                       \
-    } else if (lub != Type::none) {                                            \
-      EXPECT_FALSE(Type::isSubType(a, b));                                     \
-      EXPECT_FALSE(Type::isSubType(b, a));                                     \
-      EXPECT_NE(glb, a);                                                       \
-      EXPECT_NE(glb, b);                                                       \
-    } else {                                                                   \
-      EXPECT_FALSE(Type::isSubType(a, b));                                     \
-      EXPECT_FALSE(Type::isSubType(b, a));                                     \
-    }                                                                          \
-                                                                               \
-    if (a.isRef() && b.isRef()) {                                              \
-      auto htA = a.getHeapType();                                              \
-      auto htB = b.getHeapType();                                              \
-                                                                               \
-      if (lub == Type::none) {                                                 \
-        EXPECT_NE(htA.getTop(), htB.getTop());                                 \
-        EXPECT_NE(htA.getBottom(), htB.getBottom());                           \
-      } else {                                                                 \
-        EXPECT_EQ(htA.getTop(), htB.getTop());                                 \
-        EXPECT_EQ(htA.getBottom(), htB.getBottom());                           \
-      }                                                                        \
-    }                                                                          \
-  }
+  auto assertLUB = [](Type a, Type b, Type lub, Type glb) {
+    auto lub1 = Type::getLeastUpperBound(a, b);
+    auto lub2 = Type::getLeastUpperBound(b, a);
+    EXPECT_EQ(lub, lub1);
+    EXPECT_EQ(lub1, lub2);
+    if (lub != Type::none) {
+      EXPECT_TRUE(Type::isSubType(a, lub));
+      EXPECT_TRUE(Type::isSubType(b, lub));
+    }
+    auto glb1 = Type::getGreatestLowerBound(a, b);
+    auto glb2 = Type::getGreatestLowerBound(b, a);
+    EXPECT_EQ(glb, glb1);
+    EXPECT_EQ(glb, glb2);
+    EXPECT_TRUE(Type::isSubType(glb, a));
+    EXPECT_TRUE(Type::isSubType(glb, b));
+    if (a == b) {
+      EXPECT_TRUE(Type::isSubType(a, b));
+      EXPECT_TRUE(Type::isSubType(b, a));
+      EXPECT_EQ(lub, a);
+      EXPECT_EQ(glb, a);
+    } else if (lub == b) {
+      EXPECT_TRUE(Type::isSubType(a, b));
+      EXPECT_FALSE(Type::isSubType(b, a));
+      EXPECT_EQ(glb, a);
+    } else if (lub == a) {
+      EXPECT_FALSE(Type::isSubType(a, b));
+      EXPECT_TRUE(Type::isSubType(b, a));
+      EXPECT_EQ(glb, b);
+    } else if (lub != Type::none) {
+      EXPECT_FALSE(Type::isSubType(a, b));
+      EXPECT_FALSE(Type::isSubType(b, a));
+      EXPECT_NE(glb, a);
+      EXPECT_NE(glb, b);
+    } else {
+      EXPECT_FALSE(Type::isSubType(a, b));
+      EXPECT_FALSE(Type::isSubType(b, a));
+    }
+
+    if (a.isRef() && b.isRef()) {
+      auto htA = a.getHeapType();
+      auto htB = b.getHeapType();
+
+      if (lub == Type::none) {
+        EXPECT_NE(htA.getTop(), htB.getTop());
+        EXPECT_NE(htA.getBottom(), htB.getBottom());
+      } else {
+        EXPECT_EQ(htA.getTop(), htB.getTop());
+        EXPECT_EQ(htA.getBottom(), htB.getBottom());
+      }
+    }
+  };
 
   assertLUB(any, any, any, any);
   assertLUB(any, nullAny, nullAny, any);
-  assertLUB(any, exactAny, any, exactAny);
-  assertLUB(any, nullExactAny, nullAny, exactAny);
   assertLUB(any, def, any, def);
   assertLUB(any, nullDef, nullAny, def);
-  assertLUB(any, exactDef, any, exactDef);
-  assertLUB(any, nullExactDef, nullAny, exactDef);
   assertLUB(any, none, any, none);
   assertLUB(any, nullNone, nullAny, none);
-  assertLUB(any, exactNone, any, exactNone);
-  assertLUB(any, nullExactNone, nullAny, exactNone);
   assertLUB(any, func, Type(Type::none), unreachable);
   assertLUB(any, nullFunc, Type(Type::none), unreachable);
-  assertLUB(any, exactFunc, Type(Type::none), unreachable);
-  assertLUB(any, nullExactFunc, Type(Type::none), unreachable);
   assertLUB(any, i32, Type(Type::none), unreachable);
   assertLUB(any, unreachable, any, unreachable);
 
   assertLUB(nullAny, nullAny, nullAny, nullAny);
-  assertLUB(nullAny, exactAny, nullAny, exactAny);
-  assertLUB(nullAny, nullExactAny, nullAny, nullExactAny);
   assertLUB(nullAny, def, nullAny, def);
   assertLUB(nullAny, nullDef, nullAny, nullDef);
-  assertLUB(nullAny, exactDef, nullAny, exactDef);
-  assertLUB(nullAny, nullExactDef, nullAny, nullExactDef);
   assertLUB(nullAny, none, nullAny, none);
   assertLUB(nullAny, nullNone, nullAny, nullNone);
-  assertLUB(nullAny, exactNone, nullAny, exactNone);
-  assertLUB(nullAny, nullExactNone, nullAny, nullExactNone);
   assertLUB(nullAny, func, Type(Type::none), unreachable);
   assertLUB(nullAny, nullFunc, Type(Type::none), unreachable);
-  assertLUB(nullAny, exactFunc, Type(Type::none), unreachable);
-  assertLUB(nullAny, nullExactFunc, Type(Type::none), unreachable);
   assertLUB(nullAny, i32, Type(Type::none), unreachable);
   assertLUB(nullAny, unreachable, nullAny, unreachable);
 
-  assertLUB(exactAny, exactAny, exactAny, exactAny);
-  assertLUB(exactAny, nullExactAny, nullExactAny, exactAny);
-  assertLUB(exactAny, def, any, exactNone);
-  assertLUB(exactAny, nullDef, nullAny, exactNone);
-  assertLUB(exactAny, exactDef, any, exactNone);
-  assertLUB(exactAny, nullExactDef, nullAny, exactNone);
-  assertLUB(exactAny, none, any, exactNone);
-  assertLUB(exactAny, nullNone, nullAny, exactNone);
-  assertLUB(exactAny, exactNone, exactAny, exactNone);
-  assertLUB(exactAny, nullExactNone, nullExactAny, exactNone);
-  assertLUB(exactAny, func, Type(Type::none), unreachable);
-  assertLUB(exactAny, nullFunc, Type(Type::none), unreachable);
-  assertLUB(exactAny, exactFunc, Type(Type::none), unreachable);
-  assertLUB(exactAny, nullExactFunc, Type(Type::none), unreachable);
-  assertLUB(exactAny, i32, Type(Type::none), unreachable);
-  assertLUB(exactAny, unreachable, exactAny, unreachable);
-
-  assertLUB(nullExactAny, nullExactAny, nullExactAny, nullExactAny);
-  assertLUB(nullExactAny, def, nullAny, exactNone);
-  assertLUB(nullExactAny, nullDef, nullAny, nullExactNone);
-  assertLUB(nullExactAny, exactDef, nullAny, exactNone);
-  assertLUB(nullExactAny, nullExactDef, nullAny, nullExactNone);
-  assertLUB(nullExactAny, none, nullAny, exactNone);
-  assertLUB(nullExactAny, nullNone, nullAny, nullExactNone);
-  assertLUB(nullExactAny, exactNone, nullExactAny, exactNone);
-  assertLUB(nullExactAny, nullExactNone, nullExactAny, nullExactNone);
-  assertLUB(nullExactAny, func, Type(Type::none), unreachable);
-  assertLUB(nullExactAny, nullFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactAny, exactFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactAny, nullExactFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactAny, i32, Type(Type::none), unreachable);
-  assertLUB(nullExactAny, unreachable, nullExactAny, unreachable);
-
   assertLUB(def, def, def, def);
   assertLUB(def, nullDef, nullDef, def);
-  assertLUB(def, exactDef, def, exactDef);
-  assertLUB(def, nullExactDef, nullDef, exactDef);
   assertLUB(def, none, def, none);
   assertLUB(def, nullNone, nullDef, none);
-  assertLUB(def, exactNone, def, exactNone);
-  assertLUB(def, nullExactNone, nullDef, exactNone);
   assertLUB(def, func, Type(Type::none), unreachable);
   assertLUB(def, nullFunc, Type(Type::none), unreachable);
-  assertLUB(def, exactFunc, Type(Type::none), unreachable);
-  assertLUB(def, nullExactFunc, Type(Type::none), unreachable);
   assertLUB(def, i32, Type(Type::none), unreachable);
   assertLUB(def, unreachable, def, unreachable);
 
   assertLUB(nullDef, nullDef, nullDef, nullDef);
-  assertLUB(nullDef, exactDef, nullDef, exactDef);
-  assertLUB(nullDef, nullExactDef, nullDef, nullExactDef);
   assertLUB(nullDef, none, nullDef, none);
   assertLUB(nullDef, nullNone, nullDef, nullNone);
-  assertLUB(nullDef, exactNone, nullDef, exactNone);
-  assertLUB(nullDef, nullExactNone, nullDef, nullExactNone);
   assertLUB(nullDef, func, Type(Type::none), unreachable);
   assertLUB(nullDef, nullFunc, Type(Type::none), unreachable);
-  assertLUB(nullDef, exactFunc, Type(Type::none), unreachable);
-  assertLUB(nullDef, nullExactFunc, Type(Type::none), unreachable);
   assertLUB(nullDef, i32, Type(Type::none), unreachable);
   assertLUB(nullDef, unreachable, nullDef, unreachable);
 
-  assertLUB(exactDef, exactDef, exactDef, exactDef);
-  assertLUB(exactDef, nullExactDef, nullExactDef, exactDef);
-  assertLUB(exactDef, none, def, exactNone);
-  assertLUB(exactDef, nullNone, nullDef, exactNone);
-  assertLUB(exactDef, exactNone, exactDef, exactNone);
-  assertLUB(exactDef, nullExactNone, nullExactDef, exactNone);
-  assertLUB(exactDef, func, Type(Type::none), unreachable);
-  assertLUB(exactDef, nullFunc, Type(Type::none), unreachable);
-  assertLUB(exactDef, exactFunc, Type(Type::none), unreachable);
-  assertLUB(exactDef, nullExactFunc, Type(Type::none), unreachable);
-  assertLUB(exactDef, i32, Type(Type::none), unreachable);
-  assertLUB(exactDef, unreachable, exactDef, unreachable);
-
-  assertLUB(nullExactDef, nullExactDef, nullExactDef, nullExactDef);
-  assertLUB(nullExactDef, none, nullDef, exactNone);
-  assertLUB(nullExactDef, nullNone, nullDef, nullExactNone);
-  assertLUB(nullExactDef, exactNone, nullExactDef, exactNone);
-  assertLUB(nullExactDef, nullExactNone, nullExactDef, nullExactNone);
-  assertLUB(nullExactDef, func, Type(Type::none), unreachable);
-  assertLUB(nullExactDef, nullFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactDef, exactFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactDef, nullExactFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactDef, i32, Type(Type::none), unreachable);
-  assertLUB(nullExactDef, unreachable, nullExactDef, unreachable);
-
   assertLUB(none, none, none, none);
   assertLUB(none, nullNone, nullNone, none);
-  assertLUB(none, exactNone, none, exactNone);
-  assertLUB(none, nullExactNone, nullNone, exactNone);
   assertLUB(none, func, Type(Type::none), unreachable);
   assertLUB(none, nullFunc, Type(Type::none), unreachable);
-  assertLUB(none, exactFunc, Type(Type::none), unreachable);
-  assertLUB(none, nullExactFunc, Type(Type::none), unreachable);
   assertLUB(none, i32, Type(Type::none), unreachable);
   assertLUB(none, unreachable, none, unreachable);
 
   assertLUB(nullNone, nullNone, nullNone, nullNone);
-  assertLUB(nullNone, exactNone, nullNone, exactNone);
-  assertLUB(nullNone, nullExactNone, nullNone, nullExactNone);
   assertLUB(nullNone, func, Type(Type::none), unreachable);
   assertLUB(nullNone, nullFunc, Type(Type::none), unreachable);
-  assertLUB(nullNone, exactFunc, Type(Type::none), unreachable);
-  assertLUB(nullNone, nullExactFunc, Type(Type::none), unreachable);
   assertLUB(nullNone, i32, Type(Type::none), unreachable);
   assertLUB(nullNone, unreachable, nullNone, unreachable);
-
-  assertLUB(exactNone, exactNone, exactNone, exactNone);
-  assertLUB(exactNone, nullExactNone, nullExactNone, exactNone);
-  assertLUB(exactNone, func, Type(Type::none), unreachable);
-  assertLUB(exactNone, nullFunc, Type(Type::none), unreachable);
-  assertLUB(exactNone, exactFunc, Type(Type::none), unreachable);
-  assertLUB(exactNone, nullExactFunc, Type(Type::none), unreachable);
-  assertLUB(exactNone, i32, Type(Type::none), unreachable);
-  assertLUB(exactNone, unreachable, exactNone, unreachable);
-
-  assertLUB(nullExactNone, nullExactNone, nullExactNone, nullExactNone);
-  assertLUB(nullExactNone, func, Type(Type::none), unreachable);
-  assertLUB(nullExactNone, nullFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactNone, exactFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactNone, nullExactFunc, Type(Type::none), unreachable);
-  assertLUB(nullExactNone, i32, Type(Type::none), unreachable);
-  assertLUB(nullExactNone, unreachable, nullExactNone, unreachable);
 }
 
 TEST_F(TypeTest, TestSubtypeErrors) {
@@ -1599,7 +1756,7 @@ TEST_F(TypeTest, TestDepth) {
   EXPECT_EQ(HeapTypes::ext.getDepth(), 0U);
 
   EXPECT_EQ(HeapTypes::i31.getDepth(), 2U);
-  EXPECT_EQ(HeapTypes::string.getDepth(), 2U);
+  EXPECT_EQ(HeapTypes::string.getDepth(), 1U);
 
   EXPECT_EQ(HeapTypes::none.getDepth(), size_t(-1));
   EXPECT_EQ(HeapTypes::nofunc.getDepth(), size_t(-1));
@@ -1680,7 +1837,7 @@ TEST_F(TypeTest, TestSupertypes) {
   ASSERT_EQ(HeapTypes::i31.getSuperType(), HeapType::eq);
   ASSERT_EQ(HeapTypes::struct_.getSuperType(), HeapType::eq);
   ASSERT_EQ(HeapTypes::array.getSuperType(), HeapType::eq);
-  ASSERT_FALSE(HeapTypes::string.getSuperType());
+  ASSERT_EQ(HeapTypes::string.getSuperType(), HeapType::ext);
   ASSERT_FALSE(HeapTypes::none.getSuperType());
   ASSERT_FALSE(HeapTypes::noext.getSuperType());
   ASSERT_FALSE(HeapTypes::nofunc.getSuperType());
