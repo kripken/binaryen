@@ -821,7 +821,9 @@ void RefFunc::finalize() {
   assert(type.isSignature());
 }
 
-void RefFunc::finalize(Type type_) { type = type_; }
+void RefFunc::finalize(HeapType heapType) {
+  type = Type(heapType, NonNullable);
+}
 
 void RefEq::finalize() {
   if (left->type == Type::unreachable || right->type == Type::unreachable) {
@@ -1443,8 +1445,12 @@ void StackSwitch::finalize() {
   }
 
   assert(this->cont->type.isContinuation());
-  type =
+  Type params =
     this->cont->type.getHeapType().getContinuation().type.getSignature().params;
+  assert(params.size() > 0);
+  Type cont = params[params.size() - 1];
+  assert(cont.isContinuation());
+  type = cont.getHeapType().getContinuation().type.getSignature().params;
 }
 
 size_t Function::getNumParams() { return getParams().size(); }
