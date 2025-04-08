@@ -393,43 +393,44 @@ void TranslateToFuzzReader::setupMemory() {
     wasm.addMemory(std::move(memory));
   }
 
-  auto& memory = wasm.memories[0];
-  if (wasm.features.hasBulkMemory()) {
-    size_t memCovered = 0;
-    // need at least one segment for memory.inits
-    size_t numSegments = upTo(8) + 1;
-    for (size_t i = 0; i < numSegments; i++) {
-      auto segment = builder.makeDataSegment();
-      segment->setName(Names::getValidDataSegmentName(wasm, Name::fromInt(i)),
-                       false);
-      segment->isPassive = bool(upTo(2));
-      size_t segSize = upTo(fuzzParams->USABLE_MEMORY * 2);
-      segment->data.resize(segSize);
-      for (size_t j = 0; j < segSize; j++) {
-        segment->data[j] = upTo(512);
+  if (oneIn(2)) {
+    auto& memory = wasm.memories[0];
+    if (wasm.features.hasBulkMemory()) {
+      size_t memCovered = 0;
+      size_t numSegments = upTo(8) + 1;
+      for (size_t i = 0; i < numSegments; i++) {
+        auto segment = builder.makeDataSegment();
+        segment->setName(Names::getValidDataSegmentName(wasm, Name::fromInt(i)),
+                         false);
+        segment->isPassive = bool(upTo(2));
+        size_t segSize = upTo(fuzzParams->USABLE_MEMORY * 2);
+        segment->data.resize(segSize);
+        for (size_t j = 0; j < segSize; j++) {
+          segment->data[j] = upTo(512);
+        }
+        if (!segment->isPassive) {
+          segment->offset = builder.makeConst(
+            Literal::makeFromInt32(memCovered, memory->addressType));
+          memCovered += segSize;
+          segment->memory = memory->name;
+        }
+        wasm.addDataSegment(std::move(segment));
       }
-      if (!segment->isPassive) {
-        segment->offset = builder.makeConst(
-          Literal::makeFromInt32(memCovered, memory->addressType));
-        memCovered += segSize;
-        segment->memory = memory->name;
+    } else {
+      // init some data
+      auto segment = builder.makeDataSegment();
+      segment->memory = memory->name;
+      segment->offset =
+        builder.makeConst(Literal::makeFromInt32(0, memory->addressType));
+      segment->setName(Names::getValidDataSegmentName(wasm, Name::fromInt(0)),
+                       false);
+      auto num = upTo(fuzzParams->USABLE_MEMORY * 2);
+      for (size_t i = 0; i < num; i++) {
+        auto value = upTo(512);
+        segment->data.push_back(value >= 256 ? 0 : (value & 0xff));
       }
       wasm.addDataSegment(std::move(segment));
     }
-  } else {
-    // init some data
-    auto segment = builder.makeDataSegment();
-    segment->memory = memory->name;
-    segment->offset =
-      builder.makeConst(Literal::makeFromInt32(0, memory->addressType));
-    segment->setName(Names::getValidDataSegmentName(wasm, Name::fromInt(0)),
-                     false);
-    auto num = upTo(fuzzParams->USABLE_MEMORY * 2);
-    for (size_t i = 0; i < num; i++) {
-      auto value = upTo(512);
-      segment->data.push_back(value >= 256 ? 0 : (value & 0xff));
-    }
-    wasm.addDataSegment(std::move(segment));
   }
 }
 
@@ -5192,7 +5193,7 @@ Expression* TranslateToFuzzReader::makeThrowRef(Type type) {
 }
 
 Expression* TranslateToFuzzReader::makeMemoryInit() {
-  if (!allowMemory) {
+  if (!allowMemory || wasm.dataSegments.empty()) {
     return makeTrivial(Type::none);
   }
   Index segIdx = upTo(wasm.dataSegments.size());
@@ -5208,7 +5209,7 @@ Expression* TranslateToFuzzReader::makeMemoryInit() {
 }
 
 Expression* TranslateToFuzzReader::makeDataDrop() {
-  if (!allowMemory) {
+  if (!allowMemory || wasm.dataSegments.empty()) {
     return makeTrivial(Type::none);
   }
   Index segIdx = upTo(wasm.dataSegments.size());
