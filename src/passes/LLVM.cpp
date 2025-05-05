@@ -15,9 +15,7 @@
  */
 
 //
-// Write the module to binary, and load it from there. This is useful in
-// testing to check for the effects of roundtripping in a single wasm-opt
-// parameter.
+// Run LLVM to optimize the wasm.
 //
 
 #include "ir/module-utils.h"
