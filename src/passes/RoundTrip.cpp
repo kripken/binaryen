@@ -50,6 +50,7 @@ struct RoundTrip : public Pass {
     ModuleUtils::clearModule(*module);
     auto input = buffer.getAsChars();
     WasmBinaryReader parser(*module, features, input);
+    parser.setDebugInfo(getPassOptions().debugInfo);
     parser.setDWARF(getPassOptions().debugInfo);
     try {
       parser.read();

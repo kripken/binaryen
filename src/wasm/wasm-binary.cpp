@@ -1986,6 +1986,13 @@ void WasmBinaryReader::preScan() {
 
   bool foundDWARF = false;
 
+  // TOO MUCH, need new opt. But in this branch,
+  // bin/wasm-opt test/hello_world.wat --roundtrip --print -g
+  // prints code offsets, nice for debugging...
+  if (debugInfo) {
+    needCodeLocations = true;
+  }
+
   while (more()) {
     uint8_t sectionCode = getInt8();
     uint32_t payloadLen = getU32LEB();
