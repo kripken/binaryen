@@ -51,8 +51,13 @@ assert sys.version_info.major == 3, 'requires Python 3!'
 # parameters
 
 # feature options that are always passed to the tools.
-# XXX fp16 is not yet stable, remove from here when it is
-CONSTANT_FEATURE_OPTS = ['--all-features', '--disable-fp16']
+CONSTANT_FEATURE_OPTS = [
+    '--all-features',
+    # TODO fp16 is not yet stable, remove from here when it is
+    '--disable-fp16',
+    # TODO
+    '--disable-string-builtins',
+]
 
 INPUT_SIZE_MIN = 1024
 INPUT_SIZE_MEAN = 40 * 1024
