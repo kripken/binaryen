@@ -30,7 +30,9 @@
 #include "ir/module-utils.h"
 #include "ir/stack-utils.h"
 #include "ir/utils.h"
+#include "passes/string-utils.h"
 #include "support/colors.h"
+#include "support/string.h"
 #include "wasm-validator.h"
 #include "wasm.h"
 
@@ -4057,6 +4059,16 @@ static void validateImports(Module& module, ValidationInfo& info) {
     }
     info.shouldBeFalse(
       curr->type.isTuple(), curr->name, "Imported global cannot be tuple");
+
+    if (module.features.hasStringBuiltins()) {
+      // Validate imported strings are utf-8.
+      if (curr->module == WasmStringConstsModule) {
+        std::stringstream utf8;
+        info.shouldBeTrue(String::convertUTF16ToUTF8(utf8, curr->base.str),
+                          curr,
+                          "Non-UTF8 string builtin import");
+      }
+    }
   });
 }
 
