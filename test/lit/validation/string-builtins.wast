@@ -6,5 +6,9 @@
 ;; SB: validation errar
 
 (module
-  (import "\'" "unpaired high surrogate \ED\A0\80 " (global $bad (ref extern)))
+  (func $string
+    (drop
+      (string.const "unpaired high surrogate \ED\A0\80 ")
+    )
+  )
 )

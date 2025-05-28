@@ -3662,43 +3662,52 @@ void FunctionValidator::visitStringNew(StringNew* curr) {
 void FunctionValidator::visitStringConst(StringConst* curr) {
   shouldBeTrue(!getModule() || getModule()->features.hasStrings(),
                curr,
-               "string operations require reference-types [--enable-strings]");
+               "string operations require strings [--enable-strings]");
+
+  if (getModule()->features.hasStringBuiltins()) {
+    // Validate the strings are utf-8, so they remain valid after lowering to
+    // string builtins.
+    std::stringstream utf8;
+    info.shouldBeTrue(String::convertUTF16ToUTF8(utf8, curr->string.str),
+                      curr,
+                      "Non-UTF8 (unlowerable) string constant");
+  }
 }
 
 void FunctionValidator::visitStringMeasure(StringMeasure* curr) {
   shouldBeTrue(!getModule() || getModule()->features.hasStrings(),
                curr,
-               "string operations require reference-types [--enable-strings]");
+               "string operations require strings [--enable-strings]");
 }
 
 void FunctionValidator::visitStringEncode(StringEncode* curr) {
   shouldBeTrue(!getModule() || getModule()->features.hasStrings(),
                curr,
-               "string operations require reference-types [--enable-strings]");
+               "string operations require strings [--enable-strings]");
 }
 
 void FunctionValidator::visitStringConcat(StringConcat* curr) {
   shouldBeTrue(!getModule() || getModule()->features.hasStrings(),
                curr,
-               "string operations require reference-types [--enable-strings]");
+               "string operations require strings [--enable-strings]");
 }
 
 void FunctionValidator::visitStringEq(StringEq* curr) {
   shouldBeTrue(!getModule() || getModule()->features.hasStrings(),
                curr,
-               "string operations require reference-types [--enable-strings]");
+               "string operations require strings [--enable-strings]");
 }
 
 void FunctionValidator::visitStringWTF16Get(StringWTF16Get* curr) {
   shouldBeTrue(!getModule() || getModule()->features.hasStrings(),
                curr,
-               "string operations require reference-types [--enable-strings]");
+               "string operations require strings [--enable-strings]");
 }
 
 void FunctionValidator::visitStringSliceWTF(StringSliceWTF* curr) {
   shouldBeTrue(!getModule() || getModule()->features.hasStrings(),
                curr,
-               "string operations require reference-types [--enable-strings]");
+               "string operations require strings [--enable-strings]");
 }
 
 void FunctionValidator::visitContNew(ContNew* curr) {
@@ -4059,16 +4068,6 @@ static void validateImports(Module& module, ValidationInfo& info) {
     }
     info.shouldBeFalse(
       curr->type.isTuple(), curr->name, "Imported global cannot be tuple");
-
-    if (module.features.hasStringBuiltins()) {
-      // Validate imported strings are utf-8.
-      if (curr->module == WasmStringConstsModule) {
-        std::stringstream utf8;
-        info.shouldBeTrue(String::convertUTF16ToUTF8(utf8, curr->base.str),
-                          curr,
-                          "Non-UTF8 string builtin import");
-      }
-    }
   });
 }
 
