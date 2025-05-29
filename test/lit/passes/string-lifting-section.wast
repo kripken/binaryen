@@ -2,7 +2,7 @@
 
 ;; Lower first to generate the string.consts custom section, then lift it back.
 
-;; RUN: wasm-opt %s -all --string-lowering --string-lifting -S -o - | filecheck %s
+;; RUN: wasm-opt %s -all --disable-string-builtins --string-lowering --string-lifting -S -o - | filecheck %s
 
 (module
   ;; CHECK:      (type $0 (array (mut i16)))

@@ -3707,12 +3707,15 @@ Expression* TranslateToFuzzReader::makeStringConst() {
         wtf8 << "\xF0\x90\x8D\x88";
         break;
       case 4:
-        // The leading surrogate in '𐍈'
-        wtf8 << "\xED\xA0\x80";
-        lastWasLeadingSurrogate = true;
+        // Without string builtins, allow invalid UTF-8.
+        if (!wasm.features.hasStringBuiltins()) {
+          // The leading surrogate in '𐍈'
+          wtf8 << "\xED\xA0\x80";
+          lastWasLeadingSurrogate = true;
+        }
         continue;
       case 5:
-        if (lastWasLeadingSurrogate) {
+        if (lastWasLeadingSurrogate || !wasm.features.hasStringBuiltins()) {
           // Avoid invalid WTF-8.
           continue;
         }

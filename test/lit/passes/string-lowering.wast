@@ -32,16 +32,16 @@
 ;; The custom section should contain foo and bar, and foo only once, and the
 ;; string with \t should be escaped.
 ;;
-;; RUN: wasm-opt %s --string-lowering -all -S -o - | filecheck %s
+;; RUN: wasm-opt %s --string-lowering -all --disable-string-builtins -S -o - | filecheck %s
 ;;
 ;; If we use magic imports, only invalid strings should be present in the JSON.
 ;;
-;; RUN: wasm-opt %s --string-lowering-magic-imports -all -S -o - \
+;; RUN: wasm-opt %s --string-lowering-magic-imports -all --disable-string-builtins -S -o - \
 ;; RUN:     | filecheck %s --check-prefix=MAGIC
 ;;
 ;; If we use magic imports with asserts, we should get an error.
 ;;
-;; RUN: not wasm-opt %s --string-lowering-magic-imports-assert -all -S -o - \
+;; RUN: not wasm-opt %s --string-lowering-magic-imports-assert -all --disable-string-builtins -S -o - \
 ;; RUN:     2>&1 | filecheck %s --check-prefix=ASSERT
 ;;
 ;; CHECK: custom section "string.consts", size 167, contents: "[\"bar\",\"foo\",\"needs\\tescaping\\u0000.'#%\\\"- .\\r\\n\\\\08\\f\\n\\r\\t.\\ua66e\",\"surrogate pair \\ud800\\udf48 \",\"unpaired high surrogate \\ud800 \",\"unpaired low surrogate \\udf48 \"]"
@@ -54,7 +54,7 @@
 ;; (Note we run --remove-unused-module-elements to remove externref-using
 ;; imports, which require a newer version of node.)
 ;;
-;; RUN: wasm-opt %s --string-lowering --remove-unused-module-elements -all -o %t.wasm
+;; RUN: wasm-opt %s --string-lowering --remove-unused-module-elements -all --disable-string-builtins -o %t.wasm
 ;; RUN: node %S/string-lowering.js %t.wasm | filecheck %s --check-prefix=CHECK-JS
 ;;
 ;; CHECK-JS: string: ["bar","foo","needs\tescaping\x00.'#%\"- .\r\n\\08\f\n\r\t.\ua66e","surrogate pair \ud800\udf48 ","unpaired high surrogate \ud800 ","unpaired low surrogate \udf48 "]
