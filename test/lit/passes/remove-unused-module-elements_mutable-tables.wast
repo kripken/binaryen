@@ -431,5 +431,124 @@
   )
 )
 
+;; Flip the call_indirect types.
+(module
+  (rec
+   ;; CHECK:      (rec
+   ;; CHECK-NEXT:  (type $A (func))
+   ;; CLOSD:      (rec
+   ;; CLOSD-NEXT:  (type $A (func))
+   (type $A (func))
+   ;; CHECK:       (type $B (func))
+   ;; CLOSD:       (type $B (func))
+   (type $B (func))
+  )
+
+  ;; CHECK:      (type $2 (func))
+
+  ;; CHECK:      (table $table 22 funcref)
+  ;; CLOSD:      (type $2 (func))
+
+  ;; CLOSD:      (table $table 22 funcref)
+  (table $table 22 funcref)
+
+  ;; CHECK:      (table $other 22 funcref)
+  ;; CLOSD:      (table $other 22 funcref)
+  (table $other 22 funcref)
+
+  ;; CHECK:      (elem declare func $bar $func)
+
+  ;; CHECK:      (export "run" (func $run))
+
+  ;; CHECK:      (func $run (type $2)
+  ;; CHECK-NEXT:  (table.copy $table $other
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:   (i32.const 1)
+  ;; CHECK-NEXT:   (i32.const 2)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call_indirect $table (type $B)
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call_indirect $other (type $A)
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.func $func)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.func $bar)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (elem declare func $bar $func)
+
+  ;; CLOSD:      (export "run" (func $run))
+
+  ;; CLOSD:      (func $run (type $2)
+  ;; CLOSD-NEXT:  (table.copy $table $other
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:   (i32.const 1)
+  ;; CLOSD-NEXT:   (i32.const 2)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (call_indirect $table (type $B)
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (call_indirect $other (type $A)
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (ref.func $func)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (ref.func $bar)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT: )
+  (func $run (export "run")
+    (table.copy $table $other
+      (i32.const 0)
+      (i32.const 1)
+      (i32.const 2)
+    )
+    (call_indirect $table (type $B) ;; this flipped
+      (i32.const 0)
+    )
+    (call_indirect $other (type $A) ;; this flipped
+      (i32.const 0)
+    )
+    ;; Refer to both, to avoid trivial optimization.
+    (drop (ref.func $func))
+    (drop (ref.func $bar))
+  )
+
+  ;; CHECK:      (func $func (type $A)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 42)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (func $func (type $A)
+  ;; CLOSD-NEXT:  (unreachable)
+  ;; CLOSD-NEXT: )
+  (func $func (type $A)
+    ;; No call_indirect of $A exists, so despite the mutable table, we can
+    ;; optimize here.
+    (drop (i32.const 42))
+  )
+
+  ;; CHECK:      (func $bar (type $B)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 1337)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (func $bar (type $B)
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (i32.const 1337)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT: )
+  (func $bar (type $B)
+    ;; This can be optimized: the table is immutable, and anyhow no
+    ;; call_indirect of $B exists.
+    (drop (i32.const 1337))
+  )
+)
+
 ;; todo init
 
