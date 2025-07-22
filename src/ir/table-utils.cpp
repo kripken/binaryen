@@ -129,6 +129,7 @@ std::unordered_set<Name> getMutableTables(Module& wasm) {
           names.insert(curr->table);
         }
       } finder(names);
+      finder.walk(func->body);
     });
 
   for (auto& [_, names] : analysis.map) {
