@@ -1856,7 +1856,7 @@ class PreserveImportsExports(TestCaseHandler):
 # Note that bugs found by this fuzzer tend to require the following during
 # reducing: BINARYEN_TRUST_GIVEN_WASM=1 in the env, and --text as a parameter.
 class BranchHintPreservation(TestCaseHandler):
-    frequency = 0.1
+    frequency = 1 # XXX
 
     def handle(self, wasm):
         # Generate an instrumented wasm.
@@ -2026,8 +2026,8 @@ class BranchHintPreservation(TestCaseHandler):
                     assert hint == actual, 'Bad hint after optimizations'
 
 
-# The global list of all test case handlers
-testcase_handlers = [
+# The global list of all test case handlers XXX
+'''
     FuzzExec(),
     CompareVMs(),
     CheckDeterminism(),
@@ -2041,6 +2041,8 @@ testcase_handlers = [
     ClusterFuzz(),
     Two(),
     PreserveImportsExports(),
+'''
+testcase_handlers = [
     BranchHintPreservation(),
 ]
 
