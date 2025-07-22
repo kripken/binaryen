@@ -550,5 +550,80 @@
   )
 )
 
-;; todo init
+;; A table.init prevents optimization.
+(module
+  ;; CHECK:      (type $A (func))
+  ;; CLOSD:      (type $A (func))
+  (type $A (func))
+
+  ;; CHECK:      (table $table 22 funcref)
+  ;; CLOSD:      (table $table 22 funcref)
+  (table $table 22 funcref)
+
+  ;; CHECK:      (elem $elem func)
+  ;; CLOSD:      (elem $elem func)
+  (elem $elem funcref)
+
+  ;; CHECK:      (elem declare func $func)
+
+  ;; CHECK:      (export "run" (func $run))
+
+  ;; CHECK:      (func $run (type $A)
+  ;; CHECK-NEXT:  (table.init $table $elem
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:   (i32.const 1)
+  ;; CHECK-NEXT:   (i32.const 2)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call_indirect $table (type $A)
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.func $func)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (elem declare func $func)
+
+  ;; CLOSD:      (export "run" (func $run))
+
+  ;; CLOSD:      (func $run (type $A)
+  ;; CLOSD-NEXT:  (table.init $table $elem
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:   (i32.const 1)
+  ;; CLOSD-NEXT:   (i32.const 2)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (call_indirect $table (type $A)
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (ref.func $func)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT: )
+  (func $run (export "run")
+    (table.init $table $elem
+      (i32.const 0)
+      (i32.const 1)
+      (i32.const 2)
+    )
+    (call_indirect $table (type $A)
+      (i32.const 0)
+    )
+    (drop
+      (ref.func $func)
+    )
+  )
+
+  ;; CHECK:      (func $func (type $A)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 42)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (func $func (type $A)
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (i32.const 42)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT: )
+  (func $func (type $A)
+    (drop (i32.const 42))
+  )
+)
 
