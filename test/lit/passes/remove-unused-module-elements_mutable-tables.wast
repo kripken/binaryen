@@ -126,3 +126,62 @@
   )
 )
 
+;; As above, but move the elem to $table. Now $func is callable, and
+;; unoptimizable.
+(module
+  ;; CHECK:      (type $A (func))
+  ;; CLOSD:      (type $A (func))
+  (type $A (func))
+
+  ;; CHECK:      (type $1 (func (result funcref)))
+
+  ;; CHECK:      (table $table 22 funcref)
+  ;; CLOSD:      (type $1 (func (result funcref)))
+
+  ;; CLOSD:      (table $table 22 funcref)
+  (table $table 22 funcref)
+
+  (table $other 22 funcref)
+
+  ;; CHECK:      (elem $elem (i32.const 0) $func)
+  ;; CLOSD:      (elem $elem (i32.const 0) $func)
+  (elem $elem (table $table) (i32.const 0) func $func)
+
+  ;; CHECK:      (export "run" (func $run))
+
+  ;; CHECK:      (func $run (type $1) (result funcref)
+  ;; CHECK-NEXT:  (call_indirect $table (type $A)
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (ref.func $func)
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (export "run" (func $run))
+
+  ;; CLOSD:      (func $run (type $1) (result funcref)
+  ;; CLOSD-NEXT:  (call_indirect $table (type $A)
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (ref.func $func)
+  ;; CLOSD-NEXT: )
+  (func $run (export "run") (result funcref)
+    (call_indirect $table (type $A)
+      (i32.const 0)
+    )
+    (ref.func $func)
+  )
+
+  ;; CHECK:      (func $func (type $A)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 42)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (func $func (type $A)
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (i32.const 42)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT: )
+  (func $func (type $A)
+    (drop (i32.const 42))
+  )
+)
+
