@@ -45,6 +45,7 @@
 #include "ir/module-utils.h"
 #include "ir/struct-utils.h"
 #include "ir/subtypes.h"
+#include "ir/table-utils.h"
 #include "ir/utils.h"
 #include "pass.h"
 #include "support/insert_ordered.h"
@@ -70,6 +71,11 @@ using IndirectCall = std::pair<Name, HeapType>;
 struct ReferenceFinder
   : public PostWalker<ReferenceFinder,
                       UnifiedExpressionVisitor<ReferenceFinder>> {
+
+  const std::unordered_set<Name>& mutableTables;
+
+  ReferenceFinder(const std::unordered_set<Name>& mutableTables) : mutableTables(mutableTables) {}
+
   // Our findings are placed in these data structures, which the user of this
   // code can then process. We mark both uses and references, and also note
   // uses of specific things that require special handling, like refFuncs.
@@ -155,11 +161,11 @@ struct ReferenceFinder
     // the heap type we call with.
     reference({ModuleElementKind::Table, curr->table});
     useIndirectCall(curr->table, curr->heapType);
-    // Note a possible call of a function reference as well, as something might
-    // be written into the table during runtime. With precise tracking of what
-    // is written into the table we could do better here; we could also see
-    // which tables are immutable. TODO
-    useCallRef(curr->heapType);
+    if (mutableTables.count(curr->table)) {
+      // More things might be written into this table at runtime, so we must
+      // consider any function taken by reference, similar to call_ref.
+      useCallRef(curr->heapType);
+    }
   }
 
   void visitCallRef(CallRef* curr) {
@@ -186,6 +192,8 @@ struct ReferenceFinder
 struct Analyzer {
   Module* module;
   const PassOptions& options;
+  // Which tables are mutable affects which functions call_indirect can reach.
+  std::unordered_set<Name> mutableTables;
 
   // The set of all used things we've seen used so far.
   std::unordered_set<ModuleElement> used;
@@ -251,7 +259,7 @@ struct Analyzer {
   Analyzer(Module* module,
            const PassOptions& options,
            const std::vector<ModuleElement>& roots)
-    : module(module), options(options) {
+    : module(module), options(options), mutableTables(TableUtils::getMutableTables(*module)) {
 
     // All roots are used.
     for (auto& element : roots) {
@@ -276,7 +284,7 @@ struct Analyzer {
 
       // Find references in this expression, and apply them. Anything found here
       // is used.
-      ReferenceFinder finder;
+      ReferenceFinder finder(mutableTables);
       finder.setModule(module);
       finder.visit(curr);
       for (auto element : finder.used) {
@@ -604,7 +612,7 @@ struct Analyzer {
   // here).
   void addReferences(Expression* curr) {
     // Find references anywhere in this expression so we can apply them.
-    ReferenceFinder finder;
+    ReferenceFinder finder(mutableTables);
     finder.setModule(module);
     finder.walk(curr);
 

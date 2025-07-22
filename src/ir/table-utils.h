@@ -120,6 +120,10 @@ std::set<Name> getFunctionsNeedingElemDeclare(Module& wasm);
 // do so, and some do not, depending on their type and use.)
 bool usesExpressions(ElementSegment* curr, Module* module);
 
+// Find the tables that are mutable: some writing operations exists for them, or
+// they are imported or exported.
+std::unordered_set<Name> getMutableTables(Module& wasm);
+
 } // namespace wasm::TableUtils
 
 #endif // wasm_ir_table_h

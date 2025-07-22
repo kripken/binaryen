@@ -50,8 +50,7 @@ std::set<Name> getFunctionsNeedingElemDeclare(Module& wasm) {
 
   std::set<Name> ret;
 
-  for (auto& kv : analysis.map) {
-    auto& names = kv.second;
+  for (auto& [_, names] : analysis.map) {
     for (auto name : names) {
       if (!tableNames.count(name)) {
         ret.insert(name);
@@ -77,6 +76,68 @@ bool usesExpressions(ElementSegment* curr, Module* module) {
   bool hasSpecializedType = curr->type != Type(HeapType::func, Nullable);
 
   return !allElementsRefFunc || hasSpecializedType;
+}
+
+std::unordered_set<Name> getMutableTables(Module& wasm) {
+  // Start with imports and exports.
+  std::unordered_set<Name> mutable_;
+  for (auto& table : wasm.tables) {
+    if (table->imported()) {
+      mutable_.insert(table->name);
+    }
+  }
+  for (auto& exp : wasm.exports) {
+    if (exp->kind == ExternalKind::Table) {
+      mutable_.insert(*exp->getInternalName());
+    }
+  }
+
+  // Without reference types, table.set etc. do not exist, so no instruction can
+  // write to the table.
+  if (!wasm.features.hasReferenceTypes()) {
+    return mutable_;
+  }
+  // Avoid wastefully scanning the module if all tables are already mutable.
+  if (mutable_.size() == wasm.tables.size()) {
+    return mutable_;
+  }
+
+  // Scan the module for mutating table instructions.
+  using Names = std::unordered_set<Name>;
+
+  ModuleUtils::ParallelFunctionAnalysis<Names> analysis(
+    wasm, [&](Function* func, Names& names) {
+      if (func->imported()) {
+        return;
+      }
+
+      struct Finder : PostWalker<Finder> {
+        Names& names;
+
+        Finder(Names& names) : names(names) {}
+
+        void visitTableSet(TableSet* curr) {
+          names.insert(curr->table);
+        }
+        void visitTableFill(TableFill* curr) {
+          names.insert(curr->table);
+        }
+        void visitTableCopy(TableCopy* curr) {
+          names.insert(curr->destTable);
+        }
+        void visitTableInit(TableInit* curr) {
+          names.insert(curr->table);
+        }
+      } finder(names);
+    });
+
+  for (auto& [_, names] : analysis.map) {
+    for (auto& name : names) {
+      mutable_.insert(name);
+    }
+  }
+
+  return mutable_;
 }
 
 } // namespace wasm::TableUtils
