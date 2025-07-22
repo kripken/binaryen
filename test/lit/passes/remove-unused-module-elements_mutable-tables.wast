@@ -310,7 +310,126 @@
   )
 )
 
-;; todo copy
+;; A table.copy prevents optimization, but only in the written table, and
+;; depending on the type: we write to $table but not to $other.
+(module
+  (rec
+   ;; CHECK:      (rec
+   ;; CHECK-NEXT:  (type $A (func))
+   ;; CLOSD:      (rec
+   ;; CLOSD-NEXT:  (type $A (func))
+   (type $A (func))
+   ;; CHECK:       (type $B (func))
+   ;; CLOSD:       (type $B (func))
+   (type $B (func))
+  )
+
+  ;; CHECK:      (type $2 (func))
+
+  ;; CHECK:      (table $table 22 funcref)
+  ;; CLOSD:      (type $2 (func))
+
+  ;; CLOSD:      (table $table 22 funcref)
+  (table $table 22 funcref)
+
+  ;; CHECK:      (table $other 22 funcref)
+  ;; CLOSD:      (table $other 22 funcref)
+  (table $other 22 funcref)
+
+  ;; CHECK:      (elem declare func $bar $func)
+
+  ;; CHECK:      (export "run" (func $run))
+
+  ;; CHECK:      (func $run (type $2)
+  ;; CHECK-NEXT:  (table.copy $table $other
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:   (i32.const 1)
+  ;; CHECK-NEXT:   (i32.const 2)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call_indirect $table (type $A)
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call_indirect $other (type $B)
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.func $func)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.func $bar)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (elem declare func $bar $func)
+
+  ;; CLOSD:      (export "run" (func $run))
+
+  ;; CLOSD:      (func $run (type $2)
+  ;; CLOSD-NEXT:  (table.copy $table $other
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:   (i32.const 1)
+  ;; CLOSD-NEXT:   (i32.const 2)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (call_indirect $table (type $A)
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (call_indirect $other (type $B)
+  ;; CLOSD-NEXT:   (i32.const 0)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (ref.func $func)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (ref.func $bar)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT: )
+  (func $run (export "run")
+    (table.copy $table $other
+      (i32.const 0)
+      (i32.const 1)
+      (i32.const 2)
+    )
+    (call_indirect $table (type $A)
+      (i32.const 0)
+    )
+    (call_indirect $other (type $B)
+      (i32.const 0)
+    )
+    ;; Refer to both, to avoid trivial optimization.
+    (drop (ref.func $func))
+    (drop (ref.func $bar))
+  )
+
+  ;; CHECK:      (func $func (type $A)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 42)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (func $func (type $A)
+  ;; CLOSD-NEXT:  (drop
+  ;; CLOSD-NEXT:   (i32.const 42)
+  ;; CLOSD-NEXT:  )
+  ;; CLOSD-NEXT: )
+  (func $func (type $A)
+    ;; This cannot be optimized to unreachable because the table is mutable, a
+    ;; reference was taken of it, and a call of the right type exists to that
+    ;; table.
+    (drop (i32.const 42))
+  )
+
+  ;; CHECK:      (func $bar (type $B)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 1337)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CLOSD:      (func $bar (type $B)
+  ;; CLOSD-NEXT:  (unreachable)
+  ;; CLOSD-NEXT: )
+  (func $bar (type $B)
+    ;; This can be optimized to unreachable because, while all other conditions
+    ;; exist, the table is immutable.
+    (drop (i32.const 1337))
+  )
+)
 
 ;; todo init
-;; gufa?
+
