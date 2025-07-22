@@ -246,3 +246,9 @@
   )
 )
 
+;; todo table.fill
+
+;; todo copy
+
+;; todo init
+
