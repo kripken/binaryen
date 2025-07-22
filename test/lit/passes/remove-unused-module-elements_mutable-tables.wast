@@ -84,7 +84,7 @@
 
   (table $other 22 funcref)
 
-  (elem $elem (i32.const 0) (table $other) $func)
+  (elem $elem (table $other) (i32.const 0) func $func)
 
   ;; CHECK:      (elem declare func $func)
 
