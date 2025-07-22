@@ -161,11 +161,10 @@ struct ReferenceFinder
     // the heap type we call with.
     reference({ModuleElementKind::Table, curr->table});
     useIndirectCall(curr->table, curr->heapType);
-std::cerr << "rh? " << curr->table << "\n";
+
     if (mutableTables.count(curr->table)) {
       // More things might be written into this table at runtime, so we must
       // consider any function taken by reference, similar to call_ref.
-std::cerr << "  yah\n";
       useCallRef(curr->heapType);
     }
   }
