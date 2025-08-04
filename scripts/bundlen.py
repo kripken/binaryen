@@ -44,8 +44,8 @@ def bundle_files():
         found_files = sorted(p for p in dir_path.glob(pattern) if p.is_file())
 
         if not found_files:
-            print("   -> No matching files found.", file=sys.stderr)
-            continue
+            print("   -> ❌ No matching files found.", file=sys.stderr)
+            sys.exit(1)
 
         for file_path in found_files:
             # Use as_posix() to ensure file paths use forward slashes for consistency
@@ -70,6 +70,7 @@ def bundle_files():
                 
             except Exception as e:
                 print(f"   -> ❌ Error reading file {path}: {e}", file=sys.stderr)
+                raise
 
     print(f"\n✅ Success! Bundled {bundled_file_count} files.", file=sys.stderr)
 
