@@ -77,7 +77,6 @@ if __name__ == "__main__":
     for arg in sys.argv[1:]:
         parts = os.path.split(arg)
         entry = {"path": parts[0], "pattern": "**/" + parts[1]}
-        print('adding entry', entry)
         print(f"🚀 Adding directory entry {entry}", file=sys.stderr)
         DIRECTORIES_TO_BUNDLE.append(entry)
 
