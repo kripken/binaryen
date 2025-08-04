@@ -17,7 +17,6 @@ OUTPUT_FILENAME = "context_bundle.txt"
 # - "pattern": The pattern for files to include. '**/*' matches all files recursively.
 DIRECTORIES_TO_BUNDLE = [
     {"path": "src", "pattern": "**/*.h"},
-    # {"path": "test", "pattern": "**/*"},
 ]
 
 # --- Main Script ---
@@ -50,14 +49,14 @@ def bundle_files():
 
         for file_path in found_files:
             # Use as_posix() to ensure file paths use forward slashes for consistency
-            header = file_path.as_posix()
-            print(f"   -> Adding {header}", file=sys.stderr)
+            path = file_path.as_posix()
+            print(f"   -> Adding {path}", file=sys.stderr)
             
             try:
                 content = file_path.read_text(encoding="utf-8")
                 
-                # Write the file header and content to the bundle
-                print(f">>>> {header}\n")
+                # Write the file path and content to the bundle
+                print(f">>>> {path}\n")
                 print(content)
                 
                 # Ensure there's a newline at the end of the content
@@ -70,7 +69,7 @@ def bundle_files():
                 bundled_file_count += 1
                 
             except Exception as e:
-                print(f"   -> ❌ Error reading file {header}: {e}", file=sys.stderr)
+                print(f"   -> ❌ Error reading file {path}: {e}", file=sys.stderr)
 
     print(f"\n✅ Success! Bundled {bundled_file_count} files.", file=sys.stderr)
 
