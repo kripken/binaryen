@@ -760,7 +760,7 @@ private:
       return Flow(NONCONSTANT_FLOW);
     }
     // If we are replacing the expression, then the resulting value must be of
-    // a type we can emit a constant for.
+    // a type we can emit a constant for. TODO remove
     if (!flow.breaking() && (&precomputer != valuePrecomputer.get()) &&
         !canEmitConstantFor(flow.values)) {
       return Flow(NONCONSTANT_FLOW);
