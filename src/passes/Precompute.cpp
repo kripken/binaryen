@@ -739,6 +739,13 @@ private:
   // |heapValues| (that is, we do not use the normal heap value cache).
   Flow doPrecompute(Expression* curr,
                     PrecomputingExpressionRunner& precomputer) {
+    // Clear the local and global cached values. We have our own local-tracking
+    // mechanism which we use in propagation, and this one is only meant for
+    // straightline code, so in between branches etc. we need to clear it. For
+    // simplicity, just clear it entirely each time.
+    precomputer.clearLocalValues.clear();
+    precomputer.clearGlobalValues.clear();
+
     Flow flow;
     try {
       flow = precomputer.visit(curr);

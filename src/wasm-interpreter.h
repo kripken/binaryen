@@ -2968,6 +2968,14 @@ public:
     globalValues[name] = values;
   }
 
+  void clearLocalValues() {
+    localValues.clear();
+  }
+
+  void clearGlobalValues() {
+    globalValues.clear();
+  }
+
   Flow visitLocalGet(LocalGet* curr) {
     // Check if a constant value has been set in the context of this runner.
     auto iter = localValues.find(curr->index);
