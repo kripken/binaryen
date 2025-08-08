@@ -86,7 +86,7 @@ class PrecomputingExpressionRunner
   // know about since it only records values of sets it visits.
   const GetValues& getValues;
 
-  HeapValues& heapValues;
+  HeapValues heapValues;
 
   // Limit evaluation depth for 2 reasons: first, it is highly unlikely
   // that we can do anything useful to precompute a hugely nested expression
@@ -103,7 +103,6 @@ class PrecomputingExpressionRunner
 public:
   PrecomputingExpressionRunner(Module* module,
                                const GetValues& getValues,
-                               HeapValues& heapValues,
                                bool replaceExpression)
     : ConstantExpressionRunner<PrecomputingExpressionRunner>(
         module,
@@ -111,7 +110,7 @@ public:
                           : FlagValues::DEFAULT,
         MAX_DEPTH,
         MAX_LOOP_ITERATIONS),
-      getValues(getValues), heapValues(heapValues) {}
+      getValues(getValues) {}
 
   Flow visitLocalGet(LocalGet* curr) {
     auto iter = getValues.find(curr);
@@ -200,14 +199,7 @@ public:
     if (flow.breaking()) {
       return flow;
     }
-    // If we preserve side effects then we can cache the results, but if we
-    // ignore them then the result we compute does not contain them, and later
-    // reads from the cache that do care about side effects would be wrong.
-    // TODO: use a separate cache for the two modes, but the other mode is
-    //       only used in propagateLocals, which is far less used
-    if (flags & FlagValues::PRESERVE_SIDEEFFECTS) {
-      heapValues[curr] = flow.getSingleValue().getGCData();
-    }
+    heapValues[curr] = flow.getSingleValue().getGCData();
     return flow;
   }
 
@@ -253,14 +245,25 @@ struct Precompute
 
   bool propagate = false;
 
-  Precompute(bool propagate) : propagate(propagate) {}
-
   GetValues getValues;
-  HeapValues heapValues;
+
+  // Instantiate a single PrecomputingExpressionRunner for each of the main
+  // modes we will use. In one mode we care about effects, as we want to
+  // replace an entire expression (so we can't make its effects vanish), and in
+  // the other we compute just a value, used to propagate onwards, so effects
+  // can be ignored.
+  std::unique_ptr<PrecomputingExpressionRunner> expressionPrecomputer, valuePrecomputer;
+
+  Precompute(bool propagate) : propagate(propagate) {}
 
   bool canPartiallyPrecompute;
 
   void doWalkFunction(Function* func) {
+    // Generate our precomputers, now that we are walking and we have access to
+    // the module.
+    expressionPrecomputer = std::make_unique<PrecomputingExpressionRunner>(getModule(), getValues, true /* replaceExpression */);
+    valuePrecomputer = std::make_unique<PrecomputingExpressionRunner>(getModule(), getValues, false /* replaceExpression */);
+
     // Perform partial precomputing only when the optimization level is non-
     // trivial, as it is slower and less likely to help.
     canPartiallyPrecompute = getPassOptions().optimizeLevel >= 2;
@@ -682,12 +685,13 @@ struct Precompute
         // When we perform these speculative precomputations, we must not use
         // the normal heapValues, as we are testing modified versions of
         // |parent|. Results here must not be cached for later.
-        HeapValues temp;
-        auto ifTrue = precomputeExpression(parent, true, &temp);
-        temp.clear();
+
+PrecomputingExpressionRunner tempPrecomputer(getModule(), getValues, true /* replaceExpression */);
+
+        auto ifTrue = doPrecompute(parent, tempPrecomputer);
         if (isValidPrecomputation(ifTrue)) {
           *pointerToSelect = select->ifFalse;
-          auto ifFalse = precomputeExpression(parent, true, &temp);
+          auto ifFalse = doPrecompute(parent, tempPrecomputer);
           if (isValidPrecomputation(ifFalse)) {
             // Wonderful, we can precompute here! The select can now contain the
             // computed values in its arms.
@@ -729,27 +733,26 @@ private:
   // (that we can replace the expression with if replaceExpression is set). When
   // |usedHeapValues| is provided, we use those values instead of the normal
   // |heapValues| (that is, we do not use the normal heap value cache).
-  Flow precomputeExpression(Expression* curr,
-                            bool replaceExpression = true,
-                            HeapValues* usedHeapValues = nullptr) {
-    if (!usedHeapValues) {
-      usedHeapValues = &heapValues;
-    }
+  Flow doPrecompute(Expression* curr, PrecomputingExpressionRunner& precomputer) {
     Flow flow;
     try {
-      flow = PrecomputingExpressionRunner(
-               getModule(), getValues, *usedHeapValues, replaceExpression)
-               .visit(curr);
+      flow = precomputer.visit(curr);
     } catch (NonconstantException&) {
       return Flow(NONCONSTANT_FLOW);
     }
+#if 0
     // If we are replacing the expression, then the resulting value must be of
     // a type we can emit a constant for.
     if (!flow.breaking() && replaceExpression &&
         !canEmitConstantFor(flow.values)) {
       return Flow(NONCONSTANT_FLOW);
     }
+#endif
     return flow;
+  }
+
+  Flow precomputeExpression(Expression* curr) {
+    return doPrecompute(curr, *expressionPrecomputer);
   }
 
   // Precomputes the value of an expression, as opposed to the expression
@@ -762,7 +765,7 @@ private:
   Literals precomputeValue(Expression* curr) {
     // Note that we set replaceExpression to false, as we just care about
     // the value here.
-    Flow flow = precomputeExpression(curr, false /* replaceExpression */);
+    Flow flow = doPrecompute(curr, *valuePrecomputer);
     if (flow.breaking()) {
       return {};
     }
