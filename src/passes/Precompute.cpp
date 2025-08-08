@@ -743,8 +743,8 @@ private:
     // mechanism which we use in propagation, and this one is only meant for
     // straightline code, so in between branches etc. we need to clear it. For
     // simplicity, just clear it entirely each time.
-    precomputer.clearLocalValues.clear();
-    precomputer.clearGlobalValues.clear();
+    precomputer.clearLocalValues();
+    precomputer.clearGlobalValues();
 
     Flow flow;
     try {
