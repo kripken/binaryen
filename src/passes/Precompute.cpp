@@ -254,6 +254,8 @@ struct Precompute
 
   GetValues getValues;
 
+  Precompute(bool propagate) : propagate(propagate) {}
+
   // Instantiate a single PrecomputingExpressionRunner for each of the main
   // modes we will use. In one mode we care about effects, as we want to
   // replace an entire expression (so we can't make its effects vanish), and in
@@ -261,8 +263,6 @@ struct Precompute
   // can be ignored.
   std::unique_ptr<PrecomputingExpressionRunner> expressionPrecomputer,
     valuePrecomputer;
-
-  Precompute(bool propagate) : propagate(propagate) {}
 
   bool canPartiallyPrecompute;
 
