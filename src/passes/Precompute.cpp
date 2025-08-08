@@ -745,14 +745,12 @@ private:
     } catch (NonconstantException&) {
       return Flow(NONCONSTANT_FLOW);
     }
-#if 0
     // If we are replacing the expression, then the resulting value must be of
     // a type we can emit a constant for.
-    if (!flow.breaking() && replaceExpression &&
+    if (!flow.breaking() && (&precomputer != valuePrecomputer.get()) &&
         !canEmitConstantFor(flow.values)) {
       return Flow(NONCONSTANT_FLOW);
     }
-#endif
     return flow;
   }
 
