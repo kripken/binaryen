@@ -252,7 +252,8 @@ struct Precompute
   // replace an entire expression (so we can't make its effects vanish), and in
   // the other we compute just a value, used to propagate onwards, so effects
   // can be ignored.
-  std::unique_ptr<PrecomputingExpressionRunner> expressionPrecomputer, valuePrecomputer;
+  std::unique_ptr<PrecomputingExpressionRunner> expressionPrecomputer,
+    valuePrecomputer;
 
   Precompute(bool propagate) : propagate(propagate) {}
 
@@ -261,8 +262,10 @@ struct Precompute
   void doWalkFunction(Function* func) {
     // Generate our precomputers, now that we are walking and we have access to
     // the module.
-    expressionPrecomputer = std::make_unique<PrecomputingExpressionRunner>(getModule(), getValues, true /* replaceExpression */);
-    valuePrecomputer = std::make_unique<PrecomputingExpressionRunner>(getModule(), getValues, false /* replaceExpression */);
+    expressionPrecomputer = std::make_unique<PrecomputingExpressionRunner>(
+      getModule(), getValues, true /* replaceExpression */);
+    valuePrecomputer = std::make_unique<PrecomputingExpressionRunner>(
+      getModule(), getValues, false /* replaceExpression */);
 
     // Perform partial precomputing only when the optimization level is non-
     // trivial, as it is slower and less likely to help.
@@ -686,7 +689,8 @@ struct Precompute
         // the normal heapValues, as we are testing modified versions of
         // |parent|. Results here must not be cached for later.
 
-PrecomputingExpressionRunner tempPrecomputer(getModule(), getValues, true /* replaceExpression */);
+        PrecomputingExpressionRunner tempPrecomputer(
+          getModule(), getValues, true /* replaceExpression */);
 
         auto ifTrue = doPrecompute(parent, tempPrecomputer);
         if (isValidPrecomputation(ifTrue)) {
@@ -733,7 +737,8 @@ private:
   // (that we can replace the expression with if replaceExpression is set). When
   // |usedHeapValues| is provided, we use those values instead of the normal
   // |heapValues| (that is, we do not use the normal heap value cache).
-  Flow doPrecompute(Expression* curr, PrecomputingExpressionRunner& precomputer) {
+  Flow doPrecompute(Expression* curr,
+                    PrecomputingExpressionRunner& precomputer) {
     Flow flow;
     try {
       flow = precomputer.visit(curr);
