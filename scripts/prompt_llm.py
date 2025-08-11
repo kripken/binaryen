@@ -24,9 +24,9 @@ import shutil
 import subprocess
 import sys
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
-test_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'test')
+script_dir = 'scripts'
+src_dir = 'src'
+test_dir = 'test'
 
 '''
 print('importing...')
@@ -144,7 +144,10 @@ be useful as well, and please mention that too.
         # that name in them.
         files += get_tests_with_names(get_commandline_pass_names(code))
 
-        print(files)
+        print('🚀 Files to bundle:')
+        for f in files:
+            print('   ' + f)
+        1/0
 
         # Bundle them up in an LLM-friendly manner.
         1/0
