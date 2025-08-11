@@ -151,7 +151,7 @@ be useful as well, and please mention that too.
             print('   ' + f)
 
         # Bundle them up in an LLM-friendly manner.
-        subprocess.check_call(['python', os.path.join(script_dir, 'bundle_llm.py')] + files)
+        bundled = subprocess.check_output(['python', os.path.join(script_dir, 'bundle_llm.py')] + files)
         1/0
         do_prompt(prompt)
     else:
