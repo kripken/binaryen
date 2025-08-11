@@ -11,7 +11,11 @@ GOOGLE_API_KEY=... python prompt_llm.py bugfind src/passes/OptimizeInstructions.
 
 Setup: You may need
 
-$ pip install google-generativeai
+$ pip install google-genai
+
+Uses
+
+https://googleapis.github.io/python-genai/
 """
 
 import os
@@ -21,19 +25,12 @@ import sys
 
 print('importing...')
 
-import google.generativeai as genai
+from google import genai
 
 print('configuring...')
 
 key = os.getenv('GOOGLE_API_KEY')
-genai.configure(api_key=key)
-
-generation_config = {
-    "temperature": 1,
-    # "top_p": 0.95,
-    # "top_k": 64,
-    # "max_output_tokens": 65536/8192?
-}
+client = genai.Client(api_key=key)
 
 model_name = 'gemini-2.5-pro'
 
@@ -41,31 +38,10 @@ model = genai.GenerativeModel(model_name=model_name,
                               generation_config=generation_config)
 
 
-def do_prompt(prompt, outfile, promptfile='b.txt'):
-    print(f'Prompting {len(prompt)} bytes, stashed to {promptfile}, writing to {outfile}')
-    open(promptfile, 'w').write(prompt)
-
-    print('  generating...')
-    response = model.generate_content(prompt, stream=True, request_options={"timeout": 600})
-
-    with open(outfile, 'w') as f:
-        f.write('')
-
-    total = 0
-    for chunk in response:
-        try:
-            text = chunk.text
-        except:
-            print('  warning: blocked or missing chunk')
-            raise
-            #text = '[ERROR: Blocked or missing chunk]'
-        with open(outfile, 'a') as f:
-            f.write(text)
-        total += len(text)
-        print(f'  ({total} bytes so far)')
-    print()
-
-    print(f'  wrote {total} bytes to {outfile}')
+def do_prompt(prompt):
+    print(f'Prompting {len(prompt)} bytes...')
+    response = client.models.generate_content(model=model_name, contents=prompt)
+    print(response.text)
 
 
 if __name__ == "__main__":
@@ -77,7 +53,7 @@ if __name__ == "__main__":
 '''
         prompt += open(arg).read()
         subprocess.check_call(['python3', 'bundle.py', arg])
-        do_prompt(prompt, f'c.txt', promptfile=f'b.txt')
+        do_prompt(prompt)
     else:
         print('invalid command')
         sys.exit(1)
