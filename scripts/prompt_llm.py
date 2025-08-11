@@ -50,7 +50,7 @@ def do_prompt(prompt):
 # Files we always want to include, for context.
 def get_core_files():
     return [
-        os.path.join(src_dir, 'wasm-types.h'),
+        os.path.join(src_dir, 'wasm-type.h'),
         os.path.join(src_dir, 'literal.h'),
         os.path.join(src_dir, 'wasm.h'),
         os.path.join(src_dir, 'wasm-traversal.h'),
@@ -61,7 +61,9 @@ def get_core_files():
 
 # Given C++ code, find the headers mentioned there.
 def get_headers_used_by(code):
-    return re.findall(r'^#include\s*"([^"]+)"', code, re.MULTILINE)
+    includes = re.findall(r'^#include\s*"([^"]+)"', code, re.MULTILINE)
+    # Add 'src/' prefix
+    return [os.path.join('src', include) for include in includes]
 
 
 # Given a string, find all tests that contain it in their basename. This helps
@@ -147,11 +149,10 @@ be useful as well, and please mention that too.
         print('🚀 Files to bundle:')
         for f in files:
             print('   ' + f)
-        1/0
 
         # Bundle them up in an LLM-friendly manner.
+        subprocess.check_call(['python', os.path.join(script_dir, 'bundle_llm.py')] + files)
         1/0
-        subprocess.check_call(['python3', os.path.join(script_dir, 'bundle_llm.py')] + files)
         do_prompt(prompt)
     else:
         print('invalid command')
