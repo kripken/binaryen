@@ -19,14 +19,16 @@ https://googleapis.github.io/python-genai/
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(os.path.dirname(os.path_dirname(os.path.abspath(__file__))), 'src')
-test_dir = os.path.join(os.path.dirname(os.path_dirname(os.path.abspath(__file__))), 'test')
+src_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
+test_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'test')
 
+'''
 print('importing...')
 
 from google import genai
@@ -37,10 +39,7 @@ key = os.getenv('GOOGLE_API_KEY')
 client = genai.Client(api_key=key)
 
 model_name = 'gemini-2.5-pro'
-
-model = genai.GenerativeModel(model_name=model_name,
-                              generation_config=generation_config)
-
+'''
 
 def do_prompt(prompt):
     print(f'Prompting {len(prompt)} bytes...')
@@ -50,32 +49,34 @@ def do_prompt(prompt):
 
 # Files we always want to include, for context.
 def get_core_files():
-    return [
+    return set([
         os.path.join(src_dir, 'wasm-types.h'),
         os.path.join(src_dir, 'literal.h'),
         os.path.join(src_dir, 'wasm.h'),
         os.path.join(src_dir, 'wasm-traversal.h'),
         os.path.join(src_dir, 'pass.h'),
         os.path.join(src_dir, 'ir', 'effects.h'),
-    ]
+    ])
 
 
 # Given C++ code, find the headers mentioned there.
 def get_headers_used_by(code):
-    pattern = re.findall(r'^#include\s*"([^"]+)"', code, re.MULTILINE)
-    return pattern.findall(content)
+    return re.findall(r'^#include\s*"([^"]+)"', code, re.MULTILINE)
 
 
 # Given a string, find all tests that contain it in their basename. This helps
 # find all tests for a particular pass.
-def get_tests_with_name(name):
+def get_tests_with_names(search_names):
     files = []
     for dirpath, _, filenames in os.walk(test_dir):
         for filename in filenames:
-            if search_string in filename:
-                # Create the full path to the file
-                full_path = os.path.join(dirpath, filename)
-                files.append(full_path)
+            if not filename.endswith('.wast'):
+                continue
+            for search_name in search_names:
+                if search_name in filename:
+                    # Create the full path to the file
+                    full_path = os.path.join(dirpath, filename)
+                    files.append(full_path)
     return files
 
 
@@ -92,10 +93,15 @@ def get_commandline_pass_names(code):
     #
     creators = re.findall(r'^Pass\* (\w+)\(', code, re.MULTILINE)
 
-    pass_cpp_code = open(os.path.join(src_dir, 'pass', 'pass.cpp')).read()
-    flags = re.findall(r'^\s*registerPass[(]"(\w+)", "[^"]+", (\w+)[)]',
-                       pass_cpp_code,
-                       re.MULTILINE)
+    pass_cpp_code = open(os.path.join(src_dir, 'passes', 'pass.cpp')).read()
+    pairs = re.findall(r'registerPass[(]\s*"([\w-]+)",\s*"[^"]+",\s*(\w+)[)]',
+                       pass_cpp_code)
+
+    # Find matches among them.
+    flags = []
+    for flag, creator in pairs:
+        if creator in creators:
+            flags.append(flag)
     return flags
 
 
@@ -105,7 +111,7 @@ if __name__ == "__main__":
 
     if cmd == 'bugfind':
         main = arg
-        code = open(filename).read()
+        code = open(main).read()
 
         prompt = f'''
 You are an expert in compilers. Please look through the attached code and
@@ -133,13 +139,13 @@ be useful as well, and please mention that too.
 
         # Find the commandline name of the pass, and find all test files with
         # that name in them.
-        files.update(get_tests_with_name(get_commandline_pass_name(code)))
+        files.update(get_tests_with_names(get_commandline_pass_names(code)))
 
         print(files)
 
         # Bundle them up in an LLM-friendly manner.
         1/0
-        subprocess.check_call(['python3', os.path.join(script_dir, 'bundle_llm.py'] + files)
+        subprocess.check_call(['python3', os.path.join(script_dir, 'bundle_llm.py')] + files)
         do_prompt(prompt)
     else:
         print('invalid command')
