@@ -25,6 +25,7 @@ import sys
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 src_dir = os.path.join(os.path.dirname(os.path_dirname(os.path.abspath(__file__))), 'src')
+test_dir = os.path.join(os.path.dirname(os.path_dirname(os.path.abspath(__file__))), 'test')
 
 print('importing...')
 
@@ -61,21 +62,41 @@ def get_core_files():
 
 # Given C++ code, find the headers mentioned there.
 def get_headers_used_by(code):
-    pattern = re.compile(r'^#include\s*"([^"]+)"', re.MULTILINE)
+    pattern = re.findall(r'^#include\s*"([^"]+)"', code, re.MULTILINE)
     return pattern.findall(content)
 
 
-# Given the code of a Binaryen pass, find the commandline flag to use it.
-def get_commandline_pass_name(code):
+# Given a string, find all tests that contain it in their basename. This helps
+# find all tests for a particular pass.
+def get_tests_with_name(name):
+    files = []
+    for dirpath, _, filenames in os.walk(test_dir):
+        for filename in filenames:
+            if search_string in filename:
+                # Create the full path to the file
+                full_path = os.path.join(dirpath, filename)
+                files.append(full_path)
+    return files
+
+
+# Given the code of a Binaryen pass, find the commandline flag(s) to use it.
+def get_commandline_pass_names(code):
     # The pass creates itself using something like
     #
     #   Pass* createFoo() { ..
     #
     # Using that function name, we can look in pass.cpp to find the commandline
-    # argument.
-    pattern = re.compile(r'^Pass[*] (\w+)[(]', re.MULTILINE)
-    creators = pattern.findall(content)
-    
+    # argument, where it will appear as something like
+    #
+    #   registerPass("foo", "description of foo", createFoo);
+    #
+    creators = re.findall(r'^Pass\* (\w+)\(', code, re.MULTILINE)
+
+    pass_cpp_code = open(os.path.join(src_dir, 'pass', 'pass.cpp')).read()
+    flags = re.findall(r'^\s*registerPass[(]"(\w+)", "[^"]+", (\w+)[)]',
+                       pass_cpp_code,
+                       re.MULTILINE)
+    return flags
 
 
 if __name__ == "__main__":
@@ -115,6 +136,8 @@ be useful as well, and please mention that too.
         files.update(get_tests_with_name(get_commandline_pass_name(code)))
 
         print(files)
+
+        # Bundle them up in an LLM-friendly manner.
         1/0
         subprocess.check_call(['python3', os.path.join(script_dir, 'bundle_llm.py'] + files)
         do_prompt(prompt)
