@@ -200,7 +200,14 @@ public:
     if (flow.breaking()) {
       return flow;
     }
-    heapValues[curr] = flow.getSingleValue().getGCData();
+    // If we preserve side effects then we can cache the results, but if we
+    // ignore them then the result we compute does not contain them, and later
+    // reads from the cache that do care about side effects would be wrong.
+    // TODO: use a separate cache for the two modes, but the other mode is
+    //       only used in propagateLocals, which is far less used
+    if (flags & FlagValues::PRESERVE_SIDEEFFECTS) {
+      heapValues[curr] = flow.getSingleValue().getGCData();
+    }
     return flow;
   }
 
@@ -210,19 +217,19 @@ public:
       return Flow(NONCONSTANT_FLOW);
     }
 
-    // string.encode_wtf16_array is effectively an Array read operation, so
-    // just like ArrayGet above we must check for immutability.
+    // string.new_wtf16_array is effectively an Array read operation, so
+    // we cannot optimize mutable arrays. Unfortunately, it is only valid with
+    // mutable arrays, so we cannot generally precompute it. As a special
+    // exception, we can precompute if the child is an array allocation because
+    // then we know the allocation will not escape anywhere else.
     auto refType = curr->ref->type;
-    if (refType.isRef()) {
-      auto heapType = refType.getHeapType();
-      if (heapType.isArray()) {
-        if (heapType.getArray().element.mutable_ == Immutable) {
-          return Super::visitStringNew(curr);
-        }
-      }
+    if (refType.isRef() &&
+        (curr->ref->is<ArrayNew>() || curr->ref->is<ArrayNewData>() ||
+         curr->ref->is<ArrayNewFixed>())) {
+      return Super::visitStringNew(curr);
     }
 
-    // Otherwise, this is mutable or unreachable or otherwise uninteresting.
+    // TODO: Handle more general cases as well.
     return Flow(NONCONSTANT_FLOW);
   }
 

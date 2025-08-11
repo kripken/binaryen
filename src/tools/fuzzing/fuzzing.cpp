@@ -446,11 +446,8 @@ void TranslateToFuzzReader::setupHeapTypes() {
 
   // For GC, also generate random types.
   if (wasm.features.hasGC()) {
-    // TODO: Support custom descriptors.
-    auto features = wasm.features;
-    features.setCustomDescriptors(false);
     auto generator = HeapTypeGenerator::create(
-      random, features, upTo(fuzzParams->MAX_NEW_GC_TYPES));
+      random, wasm.features, upTo(fuzzParams->MAX_NEW_GC_TYPES));
     auto result = generator.builder.build();
     if (auto* err = result.getError()) {
       Fatal() << "Failed to build heap types: " << err->reason << " at index "
@@ -2069,12 +2066,13 @@ Expression* TranslateToFuzzReader::make(Type type) {
       nesting >= 5 * fuzzParams->NESTING_LIMIT || // hard limit
       (nesting >= fuzzParams->NESTING_LIMIT && !oneIn(3))) {
     if (type.isConcrete()) {
-      if (oneIn(2)) {
+      if (!funcContext || oneIn(2)) {
         return makeConst(type);
       } else {
         return makeLocalGet(type);
       }
     } else if (type == Type::none) {
+      assert(funcContext);
       if (oneIn(2)) {
         return makeNop(type);
       } else {
@@ -3655,7 +3653,11 @@ Expression* TranslateToFuzzReader::makeCompoundRef(Type type) {
           nester.add(values.size() - 1);
         }
       }
-      return builder.makeStructNew(heapType, values);
+      Expression* descriptor = nullptr;
+      if (auto descType = heapType.getDescriptorType()) {
+        descriptor = make(Type(*descType, Nullable, Exact));
+      }
+      return builder.makeStructNew(heapType, values, descriptor);
     }
     case HeapTypeKind::Array: {
       auto element = heapType.getArray().element;
@@ -3676,7 +3678,7 @@ Expression* TranslateToFuzzReader::makeCompoundRef(Type type) {
 }
 
 Expression* TranslateToFuzzReader::makeStringNewArray() {
-  auto* array = makeTrappingRefUse(getArrayTypeForString());
+  auto* array = makeTrappingRefUse(HeapTypes::getMutI16Array());
   auto* start = make(Type::i32);
   auto* end = make(Type::i32);
   return builder.makeStringNew(StringNewWTF16Array, array, start, end);
@@ -5160,7 +5162,7 @@ Expression* TranslateToFuzzReader::makeStringEncode(Type type) {
   assert(type == Type::i32);
 
   auto* ref = makeTrappingRefUse(HeapType::string);
-  auto* array = makeTrappingRefUse(getArrayTypeForString());
+  auto* array = makeTrappingRefUse(HeapTypes::getMutI16Array());
   auto* start = make(Type::i32);
 
   // Only rarely emit without a bounds check, which might trap. See related
@@ -5576,9 +5578,11 @@ Type TranslateToFuzzReader::getSubType(Type type) {
     auto subType = Type(heapType, nullability, exactness);
     // We don't want to emit lots of uninhabitable types like (ref none), so
     // avoid them with high probability. Specifically, if the original type was
-    // inhabitable then return that; avoid adding more uninhabitability.
+    // inhabitable then return that; avoid adding more uninhabitability. We can
+    // never add new uninhabitability outside of functions, where we cannot
+    // use casts to generate something valid.
     if (GCTypeUtils::isUninhabitable(subType) &&
-        !GCTypeUtils::isUninhabitable(type) && !oneIn(20)) {
+        !GCTypeUtils::isUninhabitable(type) && (!funcContext || !oneIn(20))) {
       return type;
     }
     return subType;
@@ -5620,12 +5624,6 @@ Type TranslateToFuzzReader::getSuperType(Type type) {
     superType = Type(heapType, Nullable);
   }
   return superType;
-}
-
-HeapType TranslateToFuzzReader::getArrayTypeForString() {
-  // Emit an array that can be used with JS-style strings, containing 16-bit
-  // elements. For now, this must be a mutable type as that is all V8 accepts.
-  return HeapType(Array(Field(Field::PackedType::i16, Mutable)));
 }
 
 Name TranslateToFuzzReader::getTargetName(Expression* target) {

@@ -401,6 +401,11 @@ struct IRBuilder::ChildPopper
       // condition.
       children.push_back({&curr->condition, {Subtype{Type::i32}}});
     }
+
+    // It is a bug if we ever have insufficient type information.
+    void noteUnknown() {
+      WASM_UNREACHABLE("unexpected insufficient type information");
+    }
   };
 
   IRBuilder& builder;
@@ -411,6 +416,49 @@ private:
   Result<> popConstrainedChildren(std::vector<Child>& children) {
     auto& scope = builder.getScope();
 
+    // The index of the shallowest unreachable instruction on the stack, found
+    // by checkNeedsUnreachableFallback.
+    std::optional<size_t> unreachableIndex;
+
+    // Whether popping the children past the unreachable would produce a type
+    // mismatch or try to pop from an empty stack.
+    bool needUnreachableFallback = false;
+
+    // We only need to check requirements if there is an unreachable.
+    // Otherwise the validator will catch any problems.
+    if (scope.unreachable) {
+      needUnreachableFallback =
+        checkNeedsUnreachableFallback(children, unreachableIndex);
+    }
+
+    // We have checked all the constraints, so we are ready to pop children.
+    for (int i = children.size() - 1; i >= 0; --i) {
+      if (needUnreachableFallback &&
+          scope.exprStack.size() == *unreachableIndex + 1 && i > 0) {
+        // The next item on the stack is the unreachable instruction we must
+        // not pop past. We cannot insert unreachables in front of it because
+        // it might be a branch we actually have to execute, so this next item
+        // must be child 0. But we are not ready to pop child 0 yet, so
+        // synthesize an unreachable instead of popping. The deeper
+        // instructions that would otherwise have been popped will remain on
+        // the stack to become prior children of future expressions or to be
+        // implicitly dropped at the end of the scope.
+        *children[i].childp = builder.builder.makeUnreachable();
+        continue;
+      }
+
+      // Pop a child normally.
+      auto val = pop(children[i].constraint.size());
+      CHECK_ERR(val);
+      *children[i].childp = *val;
+    }
+    return Ok{};
+  }
+
+  bool checkNeedsUnreachableFallback(const std::vector<Child>& children,
+                                     std::optional<size_t>& unreachableIndex) {
+    auto& scope = builder.getScope();
+
     // Two-part indices into the stack of available expressions and the vector
     // of requirements, allowing them to move independently with the granularity
     // of a single tuple element.
@@ -418,19 +466,6 @@ private:
     size_t stackTupleIndex = 0;
     size_t childIndex = children.size();
     size_t childTupleIndex = 0;
-
-    // The index of the shallowest unreachable instruction on the stack.
-    std::optional<size_t> unreachableIndex;
-
-    // Whether popping the children past the unreachable would produce a type
-    // mismatch or try to pop from an empty stack.
-    bool needUnreachableFallback = false;
-
-    if (!scope.unreachable) {
-      // We only need to check requirements if there is an unreachable.
-      // Otherwise the validator will catch any problems.
-      goto pop;
-    }
 
     // Check whether the values on the stack will be able to meet the given
     // requirements.
@@ -458,8 +493,7 @@ private:
             // the input unreachable instruction is executed first. If we are
             // not reaching past an unreachable, the error will be caught when
             // we pop.
-            needUnreachableFallback = true;
-            goto pop;
+            return true;
           }
           --stackIndex;
           stackTupleIndex = scope.exprStack[stackIndex]->type.size() - 1;
@@ -483,33 +517,11 @@ private:
           // Always succeeds.
         } else if (constraint.isAnyReference()) {
           if (!type.isRef() && type != Type::unreachable) {
-            needUnreachableFallback = true;
-            break;
+            return true;
           }
         } else if (auto bound = constraint.getSubtype()) {
           if (!Type::isSubType(type, *bound)) {
-            needUnreachableFallback = true;
-            break;
-          }
-        } else if (constraint.isAnyI8ArrayReference()) {
-          bool isI8Array =
-            type.isRef() && type.getHeapType().isArray() &&
-            type.getHeapType().getArray().element.packedType == Field::i8;
-          bool isNone =
-            type.isRef() && type.getHeapType().isMaybeShared(HeapType::none);
-          if (!isI8Array && !isNone && type != Type::unreachable) {
-            needUnreachableFallback = true;
-            break;
-          }
-        } else if (constraint.isAnyI16ArrayReference()) {
-          bool isI16Array =
-            type.isRef() && type.getHeapType().isArray() &&
-            type.getHeapType().getArray().element.packedType == Field::i16;
-          bool isNone =
-            type.isRef() && type.getHeapType().isMaybeShared(HeapType::none);
-          if (!isI16Array && !isNone && type != Type::unreachable) {
-            needUnreachableFallback = true;
-            break;
+            return true;
           }
         } else {
           WASM_UNREACHABLE("unexpected constraint");
@@ -518,34 +530,10 @@ private:
 
       // No problems for children after this unreachable.
       if (type == Type::unreachable) {
-        assert(!needUnreachableFallback);
         unreachableIndex = stackIndex;
       }
     }
-
-  pop:
-    // We have checked all the constraints, so we are ready to pop children.
-    for (int i = children.size() - 1; i >= 0; --i) {
-      if (needUnreachableFallback &&
-          scope.exprStack.size() == *unreachableIndex + 1 && i > 0) {
-        // The next item on the stack is the unreachable instruction we must
-        // not pop past. We cannot insert unreachables in front of it because
-        // it might be a branch we actually have to execute, so this next item
-        // must be child 0. But we are not ready to pop child 0 yet, so
-        // synthesize an unreachable instead of popping. The deeper
-        // instructions that would otherwise have been popped will remain on
-        // the stack to become prior children of future expressions or to be
-        // implicitly dropped at the end of the scope.
-        *children[i].childp = builder.builder.makeUnreachable();
-        continue;
-      }
-
-      // Pop a child normally.
-      auto val = pop(children[i].constraint.size());
-      CHECK_ERR(val);
-      *children[i].childp = *val;
-    }
-    return Ok{};
+    return false;
   }
 
   Result<Expression*> pop(size_t size) {
@@ -682,13 +670,6 @@ public:
                              std::optional<HeapType> ht = std::nullopt) {
     std::vector<Child> children;
     ConstraintCollector{builder, children}.visitArrayCmpxchg(curr, ht);
-    return popConstrainedChildren(children);
-  }
-
-  Result<> visitStringEncode(StringEncode* curr,
-                             std::optional<HeapType> ht = std::nullopt) {
-    std::vector<Child> children;
-    ConstraintCollector{builder, children}.visitStringEncode(curr, ht);
     return popConstrainedChildren(children);
   }
 
@@ -2487,11 +2468,7 @@ Result<> IRBuilder::makeStringMeasure(StringMeasureOp op) {
 Result<> IRBuilder::makeStringEncode(StringEncodeOp op) {
   StringEncode curr;
   curr.op = op;
-  // There's no type annotation on these instructions due to a bug in the
-  // stringref proposal, so we just fudge it and pass `array` instead of a
-  // defined heap type. This will allow us to pop a child with an invalid
-  // array type, but that's just too bad.
-  CHECK_ERR(ChildPopper{*this}.visitStringEncode(&curr, HeapType::array));
+  CHECK_ERR(visitStringEncode(&curr));
   push(builder.makeStringEncode(op, curr.str, curr.array, curr.start));
   return Ok{};
 }

@@ -133,7 +133,7 @@ struct ShellExternalInterface : ModuleRunner::ExternalInterface {
     });
   }
 
-  Literals callImport(Function* import, const Literals& arguments) override {
+  Flow callImport(Function* import, const Literals& arguments) override {
     if (import->module == SPECTEST && import->base.startsWith(PRINT)) {
       for (auto argument : arguments) {
         std::cout << argument << " : " << argument.type << '\n';
@@ -144,59 +144,10 @@ struct ShellExternalInterface : ModuleRunner::ExternalInterface {
       std::cout << "exit()\n";
       throw ExitException();
     } else if (auto* inst = getImportInstance(import)) {
-      auto flow = inst->callExport(import->base, arguments);
-      assert(!flow.suspendTag); // TODO: support stack switching on calls
-      return flow.values;
+      return inst->callExport(import->base, arguments);
     }
     Fatal() << "callImport: unknown import: " << import->module.str << "."
             << import->name.str;
-  }
-
-  Literals callTable(Name tableName,
-                     Address index,
-                     HeapType sig,
-                     Literals& arguments,
-                     Type results,
-                     ModuleRunner& instance) override {
-
-    auto it = tables.find(tableName);
-    if (it == tables.end()) {
-      trap("callTable on non-existing table");
-    }
-
-    auto& table = it->second;
-    if (index >= table.size()) {
-      trap("callTable overflow");
-    }
-    Function* func = nullptr;
-    if (table[index].isFunction() && !table[index].isNull()) {
-      func = instance.wasm.getFunctionOrNull(table[index].getFunc());
-    }
-    if (!func) {
-      trap("uninitialized table element");
-    }
-    if (sig != func->type) {
-      trap("callIndirect: function types don't match");
-    }
-    if (func->getParams().size() != arguments.size()) {
-      trap("callIndirect: bad # of arguments");
-    }
-    size_t i = 0;
-    for (const auto& param : func->getParams()) {
-      if (!Type::isSubType(arguments[i++].type, param)) {
-        trap("callIndirect: bad argument type");
-      }
-    }
-    if (func->getResults() != results) {
-      trap("callIndirect: bad result type");
-    }
-    if (func->imported()) {
-      return callImport(func, arguments);
-    } else {
-      auto flow = instance.callFunction(func->name, arguments);
-      assert(!flow.suspendTag); // TODO: support stack switching on calls
-      return flow.values;
-    }
   }
 
   int8_t load8s(Address addr, Name memoryName) override {

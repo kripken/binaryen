@@ -591,6 +591,11 @@ constexpr HeapType nofunc = HeapType::nofunc;
 constexpr HeapType nocont = HeapType::nocont;
 constexpr HeapType noexn = HeapType::noexn;
 
+// Certain heap types are used by standard operations. Provide central accessors
+// for them to avoid having to build them everywhere they are used.
+HeapType getMutI8Array();
+HeapType getMutI16Array();
+
 } // namespace HeapTypes
 
 // A recursion group consisting of one or more HeapTypes. HeapTypes with single
@@ -717,7 +722,7 @@ struct TypeBuilder {
   struct Impl;
   std::unique_ptr<Impl> impl;
 
-  TypeBuilder(size_t n);
+  TypeBuilder(size_t n, FeatureSet features = FeatureSet::All);
   TypeBuilder() : TypeBuilder(0) {}
   ~TypeBuilder();
 
@@ -862,6 +867,8 @@ struct TypeBuilder {
     InvalidUnsharedDescriptor,
     // A non-shared type described by a shared type.
     InvalidUnsharedDescribes,
+    // The custom descriptors feature is missing.
+    RequiresCustomDescriptors,
   };
 
   struct Error {
