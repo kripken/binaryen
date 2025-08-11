@@ -146,12 +146,12 @@ be useful as well, and please mention that too.
         # that name in them.
         files += get_tests_with_names(get_commandline_pass_names(code))
 
-        print('🚀 Files to bundle:')
-        for f in files:
-            print('   ' + f)
+        print('🚀 Invoking bundler:')
 
         # Bundle them up in an LLM-friendly manner.
         bundled = subprocess.check_output(['python', os.path.join(script_dir, 'bundle_llm.py')] + files)
+
+        print(f'🚀 Bundle size: {len(bundled)} bytes')
         1/0
         do_prompt(prompt)
     else:

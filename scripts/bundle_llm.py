@@ -4,7 +4,7 @@ import sys
 
 def bundle_files(files):
     bundled_file_count = 0
-    print("🚀 Starting to bundle files into stdout...", file=sys.stderr)
+    print("🚀 Bundling files...", file=sys.stderr)
 
     for filename in files:
         # Use as_posix() to ensure file paths use forward slashes for consistency
