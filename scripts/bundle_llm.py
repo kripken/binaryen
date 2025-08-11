@@ -2,15 +2,11 @@ import os
 import pathlib
 import sys
 
-# --- Configuration ---
-# The name of the final bundled file.
-OUTPUT_FILENAME = "context_bundle.txt"
-
-# A list of directories to scan.
+# A list of directories and files to scan.
 #
 # Additional ones can be passed on the commandline, e.g.
 #
-#   python3 bundlen.py "test/gtest/*"
+#   python3 bundle_llm.py "test/gtest/*"
 #
 # Each entry is a dictionary specifying the path and the glob pattern to match files.
 # - "path": The directory to search in.

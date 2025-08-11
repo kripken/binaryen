@@ -23,6 +23,9 @@ import shutil
 import subprocess
 import sys
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(os.path.dirname(os.path_dirname(os.path.abspath(__file__))), 'src')
+
 print('importing...')
 
 from google import genai
@@ -49,10 +52,39 @@ if __name__ == "__main__":
     arg = sys.argv[2]
 
     if cmd == 'bugfind':
-        prompt = '''
+        prompt = f'''
+You are an expert in compilers. Please look through the attached code and
+try to find bugs in it.
+
+The main source file I would like you to focus on is {arg}. I will provide other
+files too, for context, and if you happen to find a bug there, please report it.
+
+Report only one bug. Try to be sure that it is a bug, or at least that it is
+likely to be done.
+
+This code has been heavily tested and fuzzed, so trivial bugs are very unlikely,
+but due to the complexity of the code, bugs probably exist.
+
+If you do not find bugs but do find missing corner cases in the tests, that can
+be useful as well, and please mention that too.
 '''
-        prompt += open(arg).read()
-        subprocess.check_call(['python3', 'bundle.py', arg])
+
+        # Files to bundle.
+        files = set([
+            # The main file.
+            arg,
+            # Several important core files that we always want.
+            os.path.join(src_dir, 'wasm-types.h'),
+            os.path.join(src_dir, 'literal.h'),
+            os.path.join(src_dir, 'wasm.h'),
+            os.path.join(src_dir, 'wasm-traversal.h'),
+            os.path.join(src_dir, 'pass.h'),
+            os.path.join(src_dir, 'ir', 'effects.h'),
+        ])
+
+        # Add all headers that the main file refers to
+
+        subprocess.check_call(['python3', os.path.join(script_dir, 'bundle_llm.py', arg])
         do_prompt(prompt)
     else:
         print('invalid command')
