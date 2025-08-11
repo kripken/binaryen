@@ -49,14 +49,14 @@ def do_prompt(prompt):
 
 # Files we always want to include, for context.
 def get_core_files():
-    return set([
+    return [
         os.path.join(src_dir, 'wasm-types.h'),
         os.path.join(src_dir, 'literal.h'),
         os.path.join(src_dir, 'wasm.h'),
         os.path.join(src_dir, 'wasm-traversal.h'),
         os.path.join(src_dir, 'pass.h'),
         os.path.join(src_dir, 'ir', 'effects.h'),
-    ])
+    ]
 
 
 # Given C++ code, find the headers mentioned there.
@@ -130,16 +130,19 @@ If you do not find bugs but do find missing corner cases in the tests, that can
 be useful as well, and please mention that too.
 '''
 
-        # Files to bundle. Start with core files, plus the main one.
-        files = get_core_files()
-        files.add(main)
+        # Files to bundle. Start with main.
+        files = [main]
 
-        # Add all headers that the main file refers to.
-        files.update(get_headers_used_by(code))
+        # Next, add core files and headers used by main.
+        others = get_core_files()
+        for header in get_headers_used_by(code):
+            if header not in others:
+                others.append(header)
+        files += others
 
         # Find the commandline name of the pass, and find all test files with
         # that name in them.
-        files.update(get_tests_with_names(get_commandline_pass_names(code)))
+        files += get_tests_with_names(get_commandline_pass_names(code))
 
         print(files)
 
