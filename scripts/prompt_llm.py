@@ -47,17 +47,12 @@ def do_prompt(prompt):
     print(f'🚀 Prompting {len(prompt)} bytes...', file=sys.stderr)
     start = time.time()
 
-    num = 0
-    for chunk in client.models.generate_content_stream(model=model_name,
-                                                       contents=prompt):
-        print(chunk.text,)
-        num += 1
-    print()
-
-    if num > 0:
-        print(f'🚀 Done ({time.time() - start} seconds)', file=sys.stderr)
-    else:
-        print('❌ No response', file=sys.stderr)
+    response = client.models.generate_content(model=model_name,
+                                              contents=prompt)
+    print(response.text)
+    print(f'🚀 Done ({len(response.text) bytes output in {time.time() - start} seconds)',
+          file=sys.stderr)
+    # print('❌ No response', file=sys.stderr)
 
 
 # Files we always want to include, for context.
