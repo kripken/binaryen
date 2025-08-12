@@ -50,8 +50,9 @@ def do_prompt(prompt):
     num = 0
     for chunk in client.models.generate_content_stream(model=model_name,
                                                        contents=prompt):
-        print(chunk.text)
+        print(chunk.text,)
         num += 1
+    print()
 
     if num > 0:
         print(f'🚀 Done ({time.time() - start} seconds)', file=sys.stderr)
