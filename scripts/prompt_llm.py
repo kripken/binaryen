@@ -23,6 +23,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 script_dir = 'scripts'
 src_dir = 'src'
@@ -39,13 +40,23 @@ print('configuring...')
 key = os.getenv('GOOGLE_API_KEY')
 client = genai.Client(api_key=key)
 
-model_name = 'gemini-2.5-pro'
+model_name = 'gemini-2.5-flash'
+#model_name = 'gemini-2.5-pro'
 
 def do_prompt(prompt):
-    print(f'Prompting {len(prompt)} bytes...', file=sys.stderr)
+    print(f'🚀 Prompting {len(prompt)} bytes...', file=sys.stderr)
+    start = time.time()
 
-    response = client.models.generate_content(model=model_name, contents=prompt)
-    print(response.text)
+    num = 0
+    for chunk in client.models.generate_content_stream(model=model_name,
+                                                       contents=prompt):
+        print(chunk.text)
+        num += 1
+
+    if num > 0:
+        print(f'🚀 Done ({time.time() - start} seconds)', file=sys.stderr)
+    else:
+        print('❌ No response', file=sys.stderr)
 
 
 # Files we always want to include, for context.
