@@ -30,7 +30,6 @@ test_dir = 'test'
 
 bundler = ['python', os.path.join(script_dir, 'bundle_llm.py')]
 
-'''
 print('importing...')
 
 from google import genai
@@ -41,10 +40,10 @@ key = os.getenv('GOOGLE_API_KEY')
 client = genai.Client(api_key=key)
 
 model_name = 'gemini-2.5-pro'
-'''
 
 def do_prompt(prompt):
-    print(f'Prompting {len(prompt)} bytes...')
+    print(f'Prompting {len(prompt)} bytes...', file=sys.stderr)
+
     response = client.models.generate_content(model=model_name, contents=prompt)
     print(response.text)
 
@@ -162,8 +161,6 @@ add.
 '''
 
         prompt += bundle
-        print(prompt)
-        1/0
         do_prompt(prompt)
     else:
         print('invalid command')
