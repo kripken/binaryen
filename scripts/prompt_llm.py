@@ -43,16 +43,31 @@ client = genai.Client(api_key=key)
 model_name = 'gemini-2.5-flash'
 #model_name = 'gemini-2.5-pro'
 
+
 def do_prompt(prompt):
     print(f'🚀 Prompting {len(prompt)} bytes...', file=sys.stderr)
     start = time.time()
-
     response = client.models.generate_content(model=model_name,
                                               contents=prompt)
     print(response.text)
     print(f'🚀 Done ({len(response.text)} bytes output in {time.time() - start} seconds)',
           file=sys.stderr)
-    # print('❌ No response', file=sys.stderr)
+    return response.text
+
+
+def start_chat():
+    print(f'🚀 Starting a new chat', file=sys.stderr)
+    return client.chats.create(model=model_name)
+
+
+def continue_chat(chat, prompt):
+    print(f'🚀 Prompting {len(prompt)} bytes in chat...', file=sys.stderr)
+    start = time.time()
+    response = chat.send_message(prompt)
+    print(response.text)
+    print(f'🚀 Done ({len(response.text)} bytes output in {time.time() - start} seconds)',
+          file=sys.stderr)
+    return response.text
 
 
 # Files we always want to include, for context.
@@ -91,6 +106,10 @@ def get_tests_with_names(search_names):
     return files
 
 
+# Given an LLM response, process it: see if the finding is valid, and if not,
+def process_testcase(response):
+
+
 # Given the code of a Binaryen pass, find the commandline flag(s) to use it.
 def get_commandline_pass_names(code):
     # The pass creates itself using something like
@@ -118,34 +137,32 @@ def get_commandline_pass_names(code):
 
 if __name__ == "__main__":
     cmd = sys.argv[1]
-    arg = sys.argv[2]
+    main = sys.argv[2]
 
-    if cmd == 'bugfind':
-        main = arg
-        code = open(main).read()
+    code = open(main).read()
 
-        # Files to bundle. Start with main.
-        files = [main]
+    # Files to bundle. Start with main.
+    files = [main]
 
-        # Next, add core files and headers used by main.
-        others = get_core_files()
-        for header in get_headers_used_by(code):
-            if header not in others:
-                others.append(header)
-        files += others
+    # Next, add core files and headers used by main.
+    others = get_core_files()
+    for header in get_headers_used_by(code):
+        if header not in others:
+            others.append(header)
+    files += others
 
-        # Find the commandline name of the pass, and find all test files with
-        # that name in them.
-        files += get_tests_with_names(get_commandline_pass_names(code))
+    # Find the commandline name of the pass, and find all test files with
+    # that name in them.
+    files += get_tests_with_names(get_commandline_pass_names(code))
 
-        print('🚀 Invoking bundler:', file=sys.stderr)
+    print('🚀 Invoking bundler:', file=sys.stderr)
 
-        # Bundle them up in an LLM-friendly manner.
-        bundle = subprocess.check_output(bundler + files, encoding='utf-8')
+    # Bundle them up in an LLM-friendly manner.
+    bundle = subprocess.check_output(bundler + files, encoding='utf-8')
 
-        print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
+    print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
 
-        prompt = f'''
+    prompt = f'''
 You are an expert in compilers. Please look through the attached code and
 try to find a bug in it, of one of these types:
 
@@ -189,12 +206,26 @@ code before and after running `--pass-name`, and it will check for any
 difference (and any difference in the observable output would be a compiler
 correctness bug).
 '''
+    # TODO: maybe look for missing test coverage too?
 
-        # TODO: maybe look for missing test coverage too?
+    prompt += bundle
 
-        prompt += bundle
-        do_prompt(prompt)
-    else:
-        print('invalid command')
-        sys.exit(1)
+    # Start the conversation.
+    chat = start_chat()
+    response = continue_chat(chat, prompt)
+
+    # Check if the given testcase shows an actual bug, and if not, tell the
+    # AI and see if it can fix things. Give it several chances to do so
+    # before giving up.
+    for i in range(5):
+        # If the testcase is not valid, we get a prompt to issue.
+        response = process_testcase(response)
+        if not next_prompt:
+            print(f'🚀 Success!', file=sys.stderr)
+            sys.exit(0)
+
+        # Not so great, but keep hoping...
+        print(f'❌ Not valid in iteration {i}', file=sys.stderr)
+
+    print(f'❌ Giving up.', file=sys.stderr)
 
