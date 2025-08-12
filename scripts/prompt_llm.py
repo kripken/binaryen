@@ -147,7 +147,12 @@ if __name__ == "__main__":
 
         prompt = f'''
 You are an expert in compilers. Please look through the attached code and
-try to find a bug in it.
+try to find a bug in it, of one of these types:
+
+1. A crash or internal error in the optimizer.
+2. A correctness error, where the optimizer generates incorrect code.
+
+This code is from Binaryen, an optimizer for WebAssembly.
 
 The main source file I would like you to focus on is
 
@@ -156,17 +161,36 @@ The main source file I would like you to focus on is
 I will provide other files too, for context, and if you happen to find a bug in
 them there, please report it.
 
-Report only one bug. Try to be sure that it is a bug, or at least that it is
-likely to be one.
-
 This code has been heavily tested and fuzzed, so trivial bugs are very unlikely,
 but due to the complexity of the code, bugs probably exist. Look very carefully.
 
-If you do not find bugs but do find missing corner cases in the tests, that can
-be useful as well, and please mention them, with suggestions for what testing to
-add.
+Report only one bug. Try to be sure that it is a bug, or at least that it is
+likely to be one.
 
+For the bug you find, provide a full testcase, and the command to run it, in the
+following format, at the end of your output:
+
+```
+;; COMMAND: wasm-opt t.wat -all
+
+;; FILE: t.wat
+
+(module
+..
+```
+
+In this format, the command to run is written in a comment, after which is the
+code to run it on.
+
+If you find a crash or internal error, a command like `wasm-opt t.wat -all` is
+probably all that is needed. If you find a correctness error, use something like
+`wasm-opt t.wat -all --pass-name --fuzz-exec`: `--fuzz-exec` will execute the
+code before and after running `--pass-name`, and it will check for any
+difference (and any difference in the observable output would be a compiler
+correctness bug).
 '''
+
+        # TODO: maybe look for missing test coverage too?
 
         prompt += bundle
         do_prompt(prompt)
