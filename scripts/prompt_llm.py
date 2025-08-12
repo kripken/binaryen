@@ -58,7 +58,7 @@ def do_prompt(prompt):
 
 
 def start_chat():
-    print(f'🚀 Starting a new chat', file=sys.stderr)
+    print(f'🚀 Starting a new chat ({model_name})', file=sys.stderr)
     return client.chats.create(model=model_name)
 
 
@@ -143,7 +143,7 @@ your output.
 
     # Try to run the command on the passes we were given, looking for bugs.
     for pass_name in pass_names:
-        result = run_wasm_opt(['-all', 't.wat', '--' + pass_name, '--fuzz-exec'])
+        result = run_wasm_opt(['-all', 't.wat', '--' + pass_name, '--print', '--fuzz-exec'])
         if result.returncode:
             # Success! An error means we found a bug; nothing more to prompt
             return ''
@@ -151,13 +151,16 @@ your output.
     # No bug found. Report the last output.
     return f'''
 The testcase you provided does not seem to show a bug. Here is what I get when I
-run wasm-opt -all --fuzz-exec on the pass whose source code we are focused on:
+run `wasm-opt -all --print --{pass_names[-1]} --print --fuzz-exec`, which
+prints the module before and after the optimization, in addition to executing it
+before and after, so you can see exactly what happened:
 
 ```
 {result.stdout}
 {result.stderr}
 ```
 
+That prints out
 Is there no bug here? Or perhaps your testcase needs adjustment? If so, please
 attach the fixed testcase at the end of your output.
 '''
@@ -168,8 +171,8 @@ attach the fixed testcase at the end of your output.
 # earlier (in the explanation, say) can be ignored.
 def extract_testcase(response):
     start = response.rfind('(module')
-    end = response.rfind(')')
-    return response[start:end + 1]
+    end = response.find('\n)', start)
+    return response[start:end + 2]
 
 
 # Given the code of a Binaryen pass, find the commandline flag(s) to use it.
@@ -276,7 +279,7 @@ The code follows:
     for i in range(5):
         # If the testcase is not valid, we get a prompt to issue.
         response = process_testcase(response, pass_names)
-        if not next_prompt:
+        if not response:
             print(f'🚀 Success!', file=sys.stderr)
             sys.exit(0)
 
