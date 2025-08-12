@@ -62,11 +62,11 @@ def start_chat():
     return client.chats.create(model=model_name)
 
 
-def continue_chat(chat, prompt, bundled_files):
-    print(f'🚀 Prompting {len(prompt)} bytes in chat...', file=sys.stderr)
+def continue_chat(chat, prompt, bundle):
+    print(f'🚀 Prompting {len(prompt)}+{len(bundle)} bytes in chat...', file=sys.stderr)
     print(prompt, file=sys.stderr)
     start = time.time()
-    response = chat.send_message(prompt + '\n' + bundled_files)
+    response = chat.send_message(prompt + '\n' + bundle)
     print(response.text)
     print(f'🚀 Done ({len(response.text)} bytes output in {time.time() - start} seconds)',
           file=sys.stderr)
@@ -121,7 +121,7 @@ def process_testcase(response, pass_names):
     wat = extract_testcase(response)
     open('t.wat', 'w').write(wat)
     print(f'🚀 Extracted testcase:', file=sys.stderr)
-    print(wat', file=sys.stderr)
+    print(wat, file=sys.stderr)
 
     # See if it is even a valid wat file.
     result = run_wasm_opt(['-all', 't.wat'])
@@ -225,6 +225,9 @@ if __name__ == "__main__":
 
     print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
 
+    # The commands we hope to find a bug using.
+    commands = '\n'.join(['wasm-opt -all --fuzz-exec ' + name for name in pass_names])
+
     prompt = f'''
 You are an expert in compilers. Please look through the attached code and
 try to find a bug in it, of one of these types:
@@ -253,7 +256,7 @@ code I asked you to focus on. If it crashes, or if it behaves differently after
 optimizations then it is a valid bug. Specifically, I will be running
 
 ```
-{'\n'.join(['wasm-opt -all --fuzz-exec ' + pass for pass in pass_names])}
+{commands}
 ```
 
 The code follows:
