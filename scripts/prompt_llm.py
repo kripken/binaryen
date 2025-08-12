@@ -50,7 +50,7 @@ def do_prompt(prompt):
     response = client.models.generate_content(model=model_name,
                                               contents=prompt)
     print(response.text)
-    print(f'🚀 Done ({len(response.text) bytes output in {time.time() - start} seconds)',
+    print(f'🚀 Done ({len(response.text)} bytes output in {time.time() - start} seconds)',
           file=sys.stderr)
     # print('❌ No response', file=sys.stderr)
 
@@ -62,6 +62,7 @@ def get_core_files():
         os.path.join(src_dir, 'literal.h'),
         os.path.join(src_dir, 'wasm.h'),
         os.path.join(src_dir, 'wasm-traversal.h'),
+        os.path.join(src_dir, 'wasm-interpreter.h'),
         os.path.join(src_dir, 'pass.h'),
         os.path.join(src_dir, 'ir', 'effects.h'),
     ]
