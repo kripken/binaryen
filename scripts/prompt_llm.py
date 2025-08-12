@@ -28,6 +28,8 @@ script_dir = 'scripts'
 src_dir = 'src'
 test_dir = 'test'
 
+bundler = ['python', os.path.join(script_dir, 'bundle_llm.py')]
+
 '''
 print('importing...')
 
@@ -132,11 +134,11 @@ if __name__ == "__main__":
         print('🚀 Invoking bundler:')
 
         # Bundle them up in an LLM-friendly manner.
-        bundle = subprocess.check_output(['python', os.path.join(script_dir, 'bundle_llm.py')] + files)
+        bundle = subprocess.check_output(bundler + files, encoding='utf-8')
 
         print(f'🚀 Bundle size: {len(bundle)} bytes')
 
-        prompt = f'''
+        prompt = '''
 You are an expert in compilers. Please look through the attached code and
 try to find bugs in it.
 

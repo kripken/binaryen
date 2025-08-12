@@ -12,7 +12,7 @@ def bundle_files(files):
         print(f"   -> Adding {path}", file=sys.stderr)
         
         try:
-            content = open(filename).read()
+            content = open(filename, encoding='utf-8').read()
             
             # Write the file path and content to the bundle
             print(f">>>> {path}\n")
