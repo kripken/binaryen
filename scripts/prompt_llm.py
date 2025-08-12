@@ -27,9 +27,11 @@ import time
 
 script_dir = 'scripts'
 src_dir = 'src'
+bin_dir = 'bin'
 test_dir = 'test'
 
 bundler = ['python', os.path.join(script_dir, 'bundle_llm.py')]
+wasm_opt = [os.path.join(bin_dir, 'wasm-opt')]
 
 print('importing...')
 
@@ -60,10 +62,11 @@ def start_chat():
     return client.chats.create(model=model_name)
 
 
-def continue_chat(chat, prompt):
+def continue_chat(chat, prompt, bundled_files):
     print(f'🚀 Prompting {len(prompt)} bytes in chat...', file=sys.stderr)
+    print(prompt, file=sys.stderr)
     start = time.time()
-    response = chat.send_message(prompt)
+    response = chat.send_message(prompt + '\n' + bundled_files)
     print(response.text)
     print(f'🚀 Done ({len(response.text)} bytes output in {time.time() - start} seconds)',
           file=sys.stderr)
@@ -106,8 +109,38 @@ def get_tests_with_names(search_names):
     return files
 
 
+def run_wasm_opt(args):
+    print(f'🚀 Running {' '.join(args)}', file=sys.stderr)
+    return subprocess.run(wasm_opt + args,  capture_output=True, text=True)
+    print("Stdout:", result.stdout)
+    print("Stderr:", result.stderr)
+    print("Return code:", result.returncode)
+
+
+
 # Given an LLM response, process it: see if the finding is valid, and if not,
-def process_testcase(response):
+# return a prompt that requests improvements. (If it is valid, return nothing.)
+# Receives the last response + the pass names we are looking for bugs in.
+def process_testcase(response, pass_names):
+    wat = extract_testcase(response)
+    open('t.wat', 'w').write(wat)
+
+    # See if it is even a valid wat file.
+    result = run_wasm_opt(['-all', 't.wat'])
+    if result.returncode:
+        return f'''
+The testcase you provided does not seem to be valid. Here is what I get when I
+run wasm-opt -all on it:
+
+```
+{result.stdout}
+{result.stderr}
+```
+
+Perhaps you can fix it up?
+'''
+
+    # Try to run the command
 
 
 # Given the code of a Binaryen pass, find the commandline flag(s) to use it.
@@ -151,9 +184,10 @@ if __name__ == "__main__":
             others.append(header)
     files += others
 
-    # Find the commandline name of the pass, and find all test files with
+    # Find the commandline name(s) of the pass, and find all test files with
     # that name in them.
-    files += get_tests_with_names(get_commandline_pass_names(code))
+    pass_names = get_commandline_pass_names(code)
+    files += get_tests_with_names(pass_names)
 
     print('🚀 Invoking bundler:', file=sys.stderr)
 
@@ -184,42 +218,29 @@ but due to the complexity of the code, bugs probably exist. Look very carefully.
 Report only one bug. Try to be sure that it is a bug, or at least that it is
 likely to be one.
 
-For the bug you find, provide a full testcase, and the command to run it, in the
-following format, at the end of your output:
+For the bug you find, provide a full wat testcase at the end of your output. I
+will run that testcase through `wasm-opt` to see what happens when it runs the
+code I asked you to focus on. If it crashes, or if it behaves differently after
+optimizations then it is a valid bug. Specifically, I will be running
 
 ```
-;; COMMAND: wasm-opt t.wat -all
-
-;; FILE: t.wat
-
-(module
-..
+{'\n'.join(['wasm-opt -all --fuzz-exec ' + pass for pass in pass_names])}
 ```
 
-In this format, the command to run is written in a comment, after which is the
-code to run it on.
-
-If you find a crash or internal error, a command like `wasm-opt t.wat -all` is
-probably all that is needed. If you find a correctness error, use something like
-`wasm-opt t.wat -all --pass-name --fuzz-exec`: `--fuzz-exec` will execute the
-code before and after running `--pass-name`, and it will check for any
-difference (and any difference in the observable output would be a compiler
-correctness bug).
+The code follows:
 '''
     # TODO: maybe look for missing test coverage too?
 
-    prompt += bundle
-
     # Start the conversation.
     chat = start_chat()
-    response = continue_chat(chat, prompt)
+    response = continue_chat(chat, prompt, bundle)
 
     # Check if the given testcase shows an actual bug, and if not, tell the
     # AI and see if it can fix things. Give it several chances to do so
     # before giving up.
     for i in range(5):
         # If the testcase is not valid, we get a prompt to issue.
-        response = process_testcase(response)
+        response = process_testcase(response, pass_names)
         if not next_prompt:
             print(f'🚀 Success!', file=sys.stderr)
             sys.exit(0)
