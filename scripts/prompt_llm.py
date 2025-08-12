@@ -140,19 +140,20 @@ if __name__ == "__main__":
 
         prompt = '''
 You are an expert in compilers. Please look through the attached code and
-try to find bugs in it.
+try to find a bug in it.
 
 The main source file I would like you to focus on is {main}. I will provide other
 files too, for context, and if you happen to find a bug there, please report it.
 
 Report only one bug. Try to be sure that it is a bug, or at least that it is
-likely to be done.
+likely to be one.
 
 This code has been heavily tested and fuzzed, so trivial bugs are very unlikely,
-but due to the complexity of the code, bugs probably exist.
+but due to the complexity of the code, bugs probably exist. Look very carefully.
 
 If you do not find bugs but do find missing corner cases in the tests, that can
-be useful as well, and please mention that too.
+be useful as well, and please mention them, with suggestions for what testing to
+add.
 '''
 
         prompt += bundle
