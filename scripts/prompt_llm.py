@@ -131,19 +131,23 @@ if __name__ == "__main__":
         # that name in them.
         files += get_tests_with_names(get_commandline_pass_names(code))
 
-        print('🚀 Invoking bundler:')
+        print('🚀 Invoking bundler:', file=sys.stderr)
 
         # Bundle them up in an LLM-friendly manner.
         bundle = subprocess.check_output(bundler + files, encoding='utf-8')
 
-        print(f'🚀 Bundle size: {len(bundle)} bytes')
+        print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
 
-        prompt = '''
+        prompt = f'''
 You are an expert in compilers. Please look through the attached code and
 try to find a bug in it.
 
-The main source file I would like you to focus on is {main}. I will provide other
-files too, for context, and if you happen to find a bug there, please report it.
+The main source file I would like you to focus on is
+
+{main}
+
+I will provide other files too, for context, and if you happen to find a bug in
+them there, please report it.
 
 Report only one bug. Try to be sure that it is a bug, or at least that it is
 likely to be one.
@@ -154,9 +158,12 @@ but due to the complexity of the code, bugs probably exist. Look very carefully.
 If you do not find bugs but do find missing corner cases in the tests, that can
 be useful as well, and please mention them, with suggestions for what testing to
 add.
+
 '''
 
         prompt += bundle
+        print(prompt)
+        1/0
         do_prompt(prompt)
     else:
         print('invalid command')
