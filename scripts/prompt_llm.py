@@ -137,11 +137,32 @@ run wasm-opt -all on it:
 {result.stderr}
 ```
 
-Perhaps you can fix it up?
+Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
+your output.
 '''
 
-    # Try to run the command
+    assert pass_names, 'must be passes to run'
 
+    # Try to run the command on the passes we were given, looking for bugs.
+    for pass_name in pass_names:
+        result = run_wasm_opt(['-all', 't.wat', '--' + pass_name, '--fuzz-exec'])
+        if result.returncode:
+            # Success! An error means we found a bug; nothing more to prompt
+            return ''
+
+    # No bug found. Report the last output.
+    return f'''
+The testcase you provided does not seem to show a bug. Here is what I get when I
+run wasm-opt -all --fuzz-exec on the pass whose source code we are focused on:
+
+```
+{result.stdout}
+{result.stderr}
+```
+
+Is there no bug here? Or perhaps your testcase needs adjustment? If so, please
+attach the fixed testcase at the end of your output.
+'''
 
 # Given the code of a Binaryen pass, find the commandline flag(s) to use it.
 def get_commandline_pass_names(code):
