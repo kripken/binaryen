@@ -112,10 +112,6 @@ def get_tests_with_names(search_names):
 def run_wasm_opt(args):
     print(f'🚀 Running {' '.join(args)}', file=sys.stderr)
     return subprocess.run(wasm_opt + args,  capture_output=True, text=True)
-    print("Stdout:", result.stdout)
-    print("Stderr:", result.stderr)
-    print("Return code:", result.returncode)
-
 
 
 # Given an LLM response, process it: see if the finding is valid, and if not,
@@ -124,6 +120,8 @@ def run_wasm_opt(args):
 def process_testcase(response, pass_names):
     wat = extract_testcase(response)
     open('t.wat', 'w').write(wat)
+    print(f'🚀 Extracted testcase:', file=sys.stderr)
+    print(wat', file=sys.stderr)
 
     # See if it is even a valid wat file.
     result = run_wasm_opt(['-all', 't.wat'])
@@ -163,6 +161,16 @@ run wasm-opt -all --fuzz-exec on the pass whose source code we are focused on:
 Is there no bug here? Or perhaps your testcase needs adjustment? If so, please
 attach the fixed testcase at the end of your output.
 '''
+
+
+# Given a text response, find the last wat testcast in it, and return that. The
+# LLM is always told to put the testcase at the end, so any other wat fragments
+# earlier (in the explanation, say) can be ignored.
+def extract_testcase(response):
+    start = response.rfind('(module')
+    end = response.rfind(')')
+    return response[start:end + 1]
+
 
 # Given the code of a Binaryen pass, find the commandline flag(s) to use it.
 def get_commandline_pass_names(code):
