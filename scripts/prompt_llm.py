@@ -110,7 +110,7 @@ def get_tests_with_names(search_names):
 
 
 def run_wasm_opt(args):
-    print(f'🚀 Running {' '.join(args)}', file=sys.stderr)
+    print(f'🚀 Running wasm-opt {' '.join(args)}', file=sys.stderr)
     return subprocess.run(wasm_opt + args,  capture_output=True, text=True)
 
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
 
     # The commands we hope to find a bug using.
-    commands = '\n'.join(['wasm-opt -all --fuzz-exec ' + name for name in pass_names])
+    commands = '\n'.join(['wasm-opt -all --fuzz-exec --' + name for name in pass_names])
 
     prompt = f'''
 You are an expert in compilers. Please look through the attached code and
@@ -258,6 +258,9 @@ optimizations then it is a valid bug. Specifically, I will be running
 ```
 {commands}
 ```
+
+The testcase should not infinite loop, as then I cannot verify it shows a bug.
+(Ignore bugs related to preserving infinite loops.)
 
 The code follows:
 '''
