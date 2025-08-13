@@ -131,8 +131,9 @@ def process_testcase(response, pass_names):
 
 Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
 your output. Or, if you now realize that you have not found a bug, just write
-"{not_a_bug}". Or, if you believe your testcase is still valid despite what I
-have shown you, and it requires no more revisions, just write "{good_already}".
+"{not_a_bug} and a brief explanation why. Or, if you believe your testcase is
+still valid despite what I have shown you, and it requires no more revisions,
+just write "{good_already}" and a brief explanation.
 '''
 
     # See if it is even a valid wat file.
