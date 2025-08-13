@@ -131,9 +131,12 @@ def process_testcase(response, pass_names):
 
 Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
 your output. Or, if you now realize that you have not found a bug, just write
-"{not_a_bug} and a brief explanation why. Or, if you believe your testcase is
+"{not_a_bug}" and a brief explanation why. Or, if you believe your testcase is
 still valid despite what I have shown you, and it requires no more revisions,
-just write "{good_already}" and a brief explanation.
+just write "{good_already}" and a brief explanation. Do not do so unless you are
+absolutely certain, both that you have found a valid bug and testcase, and that
+I will be unable to reproduce it (because if I can reproduce it, I want to run
+it and verify, then show that result to you).
 '''
 
     # See if it is even a valid wat file.
@@ -293,7 +296,17 @@ Some important notes:
 * The Binaryen optimizer ignores differences between traps (as mentioned in
   effects.h). We consider all traps equal, so it is ok to reorder them, even if
   the logged message is different. For example, `[trap unreachable]` is the same
-  as `[trap i32.div_u by 0]`.
+  as `[trap i32.div_u by 0]`. The motivation for this definition of observable
+  behavior is that if a program traps then it is running into an error anyhow,
+  and we do not care as much about preserving the exact error; and, by doing so,
+  we allow a lot more optimization (it is often good for code size to move one
+  possible trap past another).
+* The only type of correctness bug I care about is one that
+  `wasm-opt --fuzz-exec` can detect, which means differences that the
+  optimizer here cares about. Other definitions of correctness, and of
+  observable behavior, are not interesting. The notes above should capture the
+  main differences between the more general sense of observable behavior, and
+  the specific one we use here.
 
 The code follows:
 '''
