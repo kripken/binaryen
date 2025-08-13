@@ -42,8 +42,8 @@ print('configuring...')
 key = os.getenv('GOOGLE_API_KEY')
 client = genai.Client(api_key=key)
 
-#model_name = 'gemini-2.5-flash'
-model_name = 'gemini-2.5-pro'
+model_name = 'gemini-2.5-flash'
+#model_name = 'gemini-2.5-pro'
 
 
 def start_chat():
@@ -112,6 +112,9 @@ def run_wasm_opt(args):
 
 # Marker the LLM emits when it gives up.
 not_a_bug = 'NOT A BUG'
+# Marker the LLM emits when it thinks it is right and we are wrong, and it has
+# no need to revise its testcase.
+good_already = 'GOOD ALREADY'
 
 
 # Given an LLM response, process it: see if the finding is valid, and if not,
@@ -128,7 +131,8 @@ def process_testcase(response, pass_names):
 
 Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
 your output. Or, if you now realize that you have not found a bug, just write
-"{not_a_bug}".
+"{not_a_bug}". Or, if you believe your testcase is still valid despite what I
+have shown you, and it requires no more revisions, just write "{good_already}".
 '''
 
     # See if it is even a valid wat file.
@@ -283,6 +287,13 @@ The testcase should not infinite loop, as then I cannot verify it shows a bug.
 Note that you cannot run wasm-opt on your side, but I will do so and inform you
 what I see, and we can continue from there.
 
+Some important notes:
+
+* The Binaryen optimizer ignores differences between traps (as mentioned in
+  effects.h). We consider all traps equal, so it is ok to reorder them, even if
+  the logged message is different. For example, `[trap unreachable]` is the same
+  as `[trap i32.div_u by 0]`.
+
 The code follows:
 '''
     # TODO: maybe look for missing test coverage too?
@@ -313,4 +324,6 @@ The code follows:
         response = continue_chat(chat, prompt)
         if not_a_bug in response:
             print(f'❌ LLM gave up.', file=sys.stderr)
+        if good_already in response:
+            print(f'❌ LLM is being stubborn.', file=sys.stderr)
 
