@@ -62,7 +62,7 @@ def continue_chat(chat, prompt, bundle=''):
     response = chat.send_message(prompt + '\n' + bundle)
     print('<<< RESPONSE BEGINS >>>')
     print(response.text)
-    print('<<< ENDS BEGINS >>>')
+    print('<<< RESPONSE ENDS >>>')
     print(f'🚀 Done ({len(response.text)} bytes output in {time.time() - start} seconds)',
           file=sys.stderr)
     return response.text
