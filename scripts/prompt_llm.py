@@ -119,21 +119,26 @@ def process_testcase(response, pass_names):
     print(f'🚀 Extracted testcase:', file=sys.stderr)
     print(wat, file=sys.stderr)
 
+    # All errors add the same suffix.
+    error_suffix = '''
+
+Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
+your output. Or, if you now realize that you have not found a bug, just write
+"NOT A BUG".
+'''
+
     # See if it is even a valid wat file.
     result = run_wasm_opt(['-all', 't.wat'])
     if result.returncode:
         return f'''
-The testcase you provided does not seem to be valid. Here is what I get when I
-run wasm-opt -all on it:
+The testcase you provided does not seem to be valid wat. Here is what I get when
+I load it using `wasm-opt -all`:
 
 ```
 {result.stdout}
 {result.stderr}
 ```
-
-Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
-your output.
-'''
+''' + error_suffix
 
     # See if it runs without hanging forever.
     try:
@@ -146,9 +151,8 @@ The testcase you provided hangs forever when I run it with
 wasm-opt -all --fuzz-exec-before
 ```
 
-Perhaps you can fix it to avoid that, while still showing the bug you found? If
-so, please attach the fixed testcase at the end of your output.
-'''
+Remember, I don't want testcases that infinite loop.
+''' + error_suffix
 
     # Try to run the command on the passes we were given, looking for bugs.
     assert pass_names, 'must be passes to run'
@@ -163,16 +167,14 @@ so, please attach the fixed testcase at the end of your output.
 The testcase you provided does not seem to show a bug. Here is what I get when I
 run `wasm-opt -all --print --{pass_names[-1]} --print --fuzz-exec`, which
 prints the module before and after the optimization, in addition to executing it
-before and after, so you can see exactly what happened:
+before and after, so you can see exactly what happens:
 
 ```
 {result.stdout}
 {result.stderr}
 ```
 
-Is there no bug here? Or perhaps your testcase needs adjustment? If so, please
-attach the fixed testcase at the end of your output.
-'''
+''' + error_suffix
 
 
 # Given a text response, find the last wat testcast in it, and return that. The
