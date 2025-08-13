@@ -110,8 +110,9 @@ def get_tests_with_names(search_names):
 
 
 def run_wasm_opt(args):
+# TODO timeout!
     print(f'🚀 Running wasm-opt {' '.join(args)}', file=sys.stderr)
-    return subprocess.run(wasm_opt + args,  capture_output=True, text=True)
+    return subprocess.run(wasm_opt + args,  capture_output=True, text=True, timeout=4)
 
 
 # Given an LLM response, process it: see if the finding is valid, and if not,
@@ -139,9 +140,23 @@ Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
 your output.
 '''
 
-    assert pass_names, 'must be passes to run'
+    # See if it runs without hanging forever.
+    try:
+        run_wasm_opt(['-all', 't.wat', '--fuzz-exec-before'])
+    except TimeoutExpired:
+        return f'''
+The testcase you provided hangs forever when I run it with
+
+```
+wasm-opt -all --fuzz-exec-before
+```
+
+Perhaps you can fix it to avoid that, while still showing the bug you found? If
+so, please attach the fixed testcase at the end of your output.
+'''
 
     # Try to run the command on the passes we were given, looking for bugs.
+    assert pass_names, 'must be passes to run'
     for pass_name in pass_names:
         result = run_wasm_opt(['-all', 't.wat', '--' + pass_name, '--print', '--fuzz-exec'])
         if result.returncode:
@@ -264,6 +279,11 @@ optimizations then it is a valid bug. Specifically, I will be running
 
 The testcase should not infinite loop, as then I cannot verify it shows a bug.
 (Ignore bugs related to preserving infinite loops.)
+
+When I receive your testcase, I will run wasm-opt on it to check if it is valid
+(it is a valid wat file, and it halts), and if it shows a bug when I run the
+pass on it. You cannot run wasm-opt yourself on your side, but I will respond
+with what I see when I do it, and you will be able to continue from there.
 
 The code follows:
 '''
