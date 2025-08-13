@@ -107,7 +107,7 @@ def get_tests_with_names(search_names):
 def run_wasm_opt(args):
 # TODO timeout!
     print(f'🚀 Running wasm-opt {' '.join(args)}', file=sys.stderr)
-    return subprocess.run(wasm_opt + args,  capture_output=True, text=True, timeout=4)
+    return subprocess.run(wasm_opt + args,  capture_output=True, text=True, timeout=3)
 
 
 # Marker the LLM emits when it gives up.
@@ -151,7 +151,7 @@ I load it using `wasm-opt -all`:
     # See if it runs without hanging forever.
     try:
         run_wasm_opt(['-all', 't.wat', '--fuzz-exec-before'])
-    except TimeoutExpired:
+    except subprocess.TimeoutExpired:
         return f'''
 The testcase you provided hangs forever when I run it with
 
