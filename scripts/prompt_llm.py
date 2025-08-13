@@ -54,7 +54,7 @@ def start_chat():
 def continue_chat(chat, prompt, bundle=''):
     print(f'🚀 Prompting:', file=sys.stderr)
     print(f'<<< PROMPT BEGINS ({len(prompt)} bytes)>>>')
-    print(prompt, file=sys.stderr)
+    print(prompt)
     print('<<< PROMPT ENDS >>>')
     if bundle:
         print(f'<<< Appended bundle of size {len(bundle)} >>>')
@@ -110,6 +110,10 @@ def run_wasm_opt(args):
     return subprocess.run(wasm_opt + args,  capture_output=True, text=True, timeout=4)
 
 
+# Marker the LLM emits when it gives up.
+not_a_bug = 'NOT A BUG'
+
+
 # Given an LLM response, process it: see if the finding is valid, and if not,
 # return a prompt that requests improvements. (If it is valid, return nothing.)
 # Receives the last response + the pass names we are looking for bugs in.
@@ -117,14 +121,14 @@ def process_testcase(response, pass_names):
     wat = extract_testcase(response)
     open('t.wat', 'w').write(wat)
     print(f'🚀 Extracted testcase:', file=sys.stderr)
-    print(wat, file=sys.stderr)
+    print(wat)
 
     # All errors add the same suffix.
-    error_suffix = '''
+    error_suffix = f'''
 
 Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
 your output. Or, if you now realize that you have not found a bug, just write
-"NOT A BUG".
+"{not_a_bug}".
 '''
 
     # See if it is even a valid wat file.
@@ -307,4 +311,6 @@ The code follows:
         # Keep hoping...
         print(f'❌ Not valid in iteration {i}', file=sys.stderr)
         response = continue_chat(chat, prompt)
+        if not_a_bug in response:
+            print(f'❌ LLM gave up.', file=sys.stderr)
 
