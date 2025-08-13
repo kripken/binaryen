@@ -322,8 +322,11 @@ The code follows:
         # Keep hoping...
         print(f'❌ Not valid in iteration {i}', file=sys.stderr)
         response = continue_chat(chat, prompt)
+
         if not_a_bug in response:
             print(f'❌ LLM gave up.', file=sys.stderr)
+            sys.exit(1)
         if good_already in response:
             print(f'❌ LLM is being stubborn.', file=sys.stderr)
+            sys.exit(1)
 
