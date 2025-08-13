@@ -46,28 +46,23 @@ model_name = 'gemini-2.5-flash'
 #model_name = 'gemini-2.5-pro'
 
 
-def do_prompt(prompt):
-    print(f'🚀 Prompting {len(prompt)} bytes...', file=sys.stderr)
-    start = time.time()
-    response = client.models.generate_content(model=model_name,
-                                              contents=prompt)
-    print(response.text)
-    print(f'🚀 Done ({len(response.text)} bytes output in {time.time() - start} seconds)',
-          file=sys.stderr)
-    return response.text
-
-
 def start_chat():
     print(f'🚀 Starting a new chat ({model_name})', file=sys.stderr)
     return client.chats.create(model=model_name)
 
 
-def continue_chat(chat, prompt, bundle):
-    print(f'🚀 Prompting {len(prompt)}+{len(bundle)} bytes in chat...', file=sys.stderr)
+def continue_chat(chat, prompt, bundle=''):
+    print(f'🚀 Prompting:', file=sys.stderr)
+    print(f'<<< PROMPT BEGINS ({len(prompt)} bytes)>>>')
     print(prompt, file=sys.stderr)
+    print('<<< PROMPT ENDS >>>')
+    if bundle:
+        print(f'<<< BUNDLE of size {len(bundle)}')
     start = time.time()
     response = chat.send_message(prompt + '\n' + bundle)
+    print('<<< RESPONSE BEGINS >>>')
     print(response.text)
+    print('<<< ENDS BEGINS >>>')
     print(f'🚀 Done ({len(response.text)} bytes output in {time.time() - start} seconds)',
           file=sys.stderr)
     return response.text
@@ -280,10 +275,8 @@ optimizations then it is a valid bug. Specifically, I will be running
 The testcase should not infinite loop, as then I cannot verify it shows a bug.
 (Ignore bugs related to preserving infinite loops.)
 
-When I receive your testcase, I will run wasm-opt on it to check if it is valid
-(it is a valid wat file, and it halts), and if it shows a bug when I run the
-pass on it. You cannot run wasm-opt yourself on your side, but I will respond
-with what I see when I do it, and you will be able to continue from there.
+Note that you cannot run wasm-opt on your side, but I will do so and inform you
+what I see, and we can continue from there.
 
 The code follows:
 '''
@@ -296,15 +289,21 @@ The code follows:
     # Check if the given testcase shows an actual bug, and if not, tell the
     # AI and see if it can fix things. Give it several chances to do so
     # before giving up.
-    for i in range(5):
+    i = 0
+    while True:
         # If the testcase is not valid, we get a prompt to issue.
-        response = process_testcase(response, pass_names)
-        if not response:
+        prompt = process_testcase(response, pass_names)
+        if not prompt:
             print(f'🚀 Success!', file=sys.stderr)
             sys.exit(0)
 
-        # Not so great, but keep hoping...
-        print(f'❌ Not valid in iteration {i}', file=sys.stderr)
+        # Failure.
+        i += 1
+        if i == 5:
+            print(f'❌ Giving up.', file=sys.stderr)
+            sys.exit(1)
 
-    print(f'❌ Giving up.', file=sys.stderr)
+        # Keep hoping...
+        print(f'❌ Not valid in iteration {i}', file=sys.stderr)
+        response = continue_chat(chat, prompt)
 
