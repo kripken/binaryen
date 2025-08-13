@@ -57,7 +57,7 @@ def continue_chat(chat, prompt, bundle=''):
     print(prompt, file=sys.stderr)
     print('<<< PROMPT ENDS >>>')
     if bundle:
-        print(f'<<< BUNDLE of size {len(bundle)}')
+        print(f'<<< Appended bundle of size {len(bundle)} >>>')
     start = time.time()
     response = chat.send_message(prompt + '\n' + bundle)
     print('<<< RESPONSE BEGINS >>>')
@@ -153,7 +153,7 @@ so, please attach the fixed testcase at the end of your output.
     # Try to run the command on the passes we were given, looking for bugs.
     assert pass_names, 'must be passes to run'
     for pass_name in pass_names:
-        result = run_wasm_opt(['-all', 't.wat', '--' + pass_name, '--print', '--fuzz-exec'])
+        result = run_wasm_opt(['-all', 't.wat', '--print', '--' + pass_name, '--print', '--fuzz-exec'])
         if result.returncode:
             # Success! An error means we found a bug; nothing more to prompt
             return ''
@@ -170,7 +170,6 @@ before and after, so you can see exactly what happened:
 {result.stderr}
 ```
 
-That prints out
 Is there no bug here? Or perhaps your testcase needs adjustment? If so, please
 attach the fixed testcase at the end of your output.
 '''

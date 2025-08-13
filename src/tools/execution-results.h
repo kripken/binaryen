@@ -365,6 +365,7 @@ struct ExecutionResults {
       std::cout << "[fuzz-exec] optimization passes changed results\n";
       exit(1);
     }
+    std::cout << "[fuzz-exec] no changes seen after passes\n";
   }
 
   bool areEqual(Literal a, Literal b) {
