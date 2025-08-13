@@ -42,8 +42,8 @@ print('configuring...')
 key = os.getenv('GOOGLE_API_KEY')
 client = genai.Client(api_key=key)
 
-model_name = 'gemini-2.5-flash'
-#model_name = 'gemini-2.5-pro'
+#model_name = 'gemini-2.5-flash'
+model_name = 'gemini-2.5-pro'
 
 
 def start_chat():
@@ -304,7 +304,7 @@ The code follows:
 
         # Failure.
         i += 1
-        if i == 5:
+        if i == 10:
             print(f'❌ Giving up.', file=sys.stderr)
             sys.exit(1)
 
