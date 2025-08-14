@@ -19,6 +19,7 @@ https://googleapis.github.io/python-genai/
 """
 
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -84,8 +85,8 @@ def get_core_files():
 # Given C++ code, find the headers mentioned there.
 def get_headers_used_by(code):
     includes = re.findall(r'^#include\s*"([^"]+)"', code, re.MULTILINE)
-    # Add 'src/' prefix
-    return [os.path.join('src', include) for include in includes]
+    # Add proper prefix to each.
+    return [list(pathlib.Path('.').rglob(include))[0] for include in includes]
 
 
 # Given a string, find all tests that contain it in their basename. This helps
@@ -263,12 +264,12 @@ try to find a bug in it, of one of these types:
 
 This code is from Binaryen, an optimizer for WebAssembly.
 
-The main source file I would like you to focus on is
+The main source file I would like you to focus on is the optimization pass
 
 {main}
 
-I will provide other files too, for context, and if you happen to find a bug in
-them there, please report it.
+I am providing other files too, for context: other source files that the pass
+uses, and the pass's test files.
 
 This code has been heavily tested and fuzzed, so trivial bugs are very unlikely,
 but due to the complexity of the code, bugs probably exist. Look very carefully.
