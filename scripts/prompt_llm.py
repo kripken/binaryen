@@ -308,6 +308,11 @@ Some important notes:
   observable behavior, are not interesting. The notes above should capture the
   main differences between the more general sense of observable behavior, and
   the specific one we use here.
+* Do not report missing optimizations as bugs. While in general we do want to
+  improve such things, the Binaryen optimizer thinks about optimizability as a
+  whole, and we intentionally do not optimize all cases in one pass if another
+  can handle them, or if another can simplify things for us. This helps reduce
+  overall complexity.
 
 The code follows:
 '''
