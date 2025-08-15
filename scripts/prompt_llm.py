@@ -183,8 +183,8 @@ Remember, I don't want testcases that infinite loop.
 
     if 'ignoring an unknown import' in (result.stdout + result.stderr):
         return f'''
-The testcase you provided appears to define an import that --fuzz-exec cannot
-run, which it will ignore and error on:
+The testcase you provided appears to define an import that `--fuzz-exec` cannot
+run, which it will ignore and error on. Here is the output from `--fuzz-exec`:
 
 ```
 {result.stdout}
