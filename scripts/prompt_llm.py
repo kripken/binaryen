@@ -18,6 +18,7 @@ Uses
 https://googleapis.github.io/python-genai/
 """
 
+import datetime
 import os
 import pathlib
 import re
@@ -60,7 +61,7 @@ def continue_chat(chat, prompt, bundle=''):
     if bundle:
         print(f'<<< Appended bundle of size {len(bundle)} >>>')
     start = time.time()
-    print(f'🚀 Waiting for response...\n', file=sys.stderr)
+    print(f'🚀 Waiting for response... (since {datetime.datetime.now()})\n', file=sys.stderr)
     response = chat.send_message(prompt + '\n' + bundle)
     print('<<< RESPONSE BEGINS >>>')
     print(response.text)
