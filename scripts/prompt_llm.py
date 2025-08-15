@@ -144,6 +144,14 @@ testcase is valid exactly as it is. Be careful when responding in this way,
 because you cannot run wasm-opt locally to verify your testcase (you do not have
 it installed), and therefore the only way to verify your testcase is to provide
 it so that I can run it for you, and report the results back.
+
+Reminders from earlier:
+
+* The Binaryen optimizer ignores differences between traps.
+* The Binaryen optimizer ignores metadata.
+* The only type of correctness bug I care about is one that
+  `wasm-opt --fuzz-exec` can detect.
+* Do not report missing optimization opportunities as bugs.
 '''
 
     # See if it is even a valid wat file.
