@@ -168,7 +168,7 @@ wasm-opt -all --fuzz-exec-before
 Remember, I don't want testcases that infinite loop.
 ''' + error_suffix
 
-    if 'ignoring an unknown import' in result:
+    if 'ignoring an unknown import' in (result.stdout + result.stderr):
         return f'''
 The testcase you provided appears to define an import that --fuzz-exec cannot
 run, which it will ignore and error on:
