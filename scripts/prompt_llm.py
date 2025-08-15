@@ -60,6 +60,7 @@ def continue_chat(chat, prompt, bundle=''):
     if bundle:
         print(f'<<< Appended bundle of size {len(bundle)} >>>')
     start = time.time()
+    print(f'🚀 Waiting for response...\n', file=sys.stderr)
     response = chat.send_message(prompt + '\n' + bundle)
     print('<<< RESPONSE BEGINS >>>')
     print(response.text)
@@ -130,7 +131,7 @@ def process_testcase(response, pass_names):
     # All errors add the same suffix.
     error_suffix = f'''
 
-Perhaps you can fix it up? If so, please attach the fixed testcase at the end of
+Can you fix your testcase? If so, please attach the fixed testcase at the end of
 your output. Or, if you now realize that you have not found a bug, just write
 "{not_a_bug}" and a brief explanation why. Or, if you believe your testcase is
 still valid despite what I have shown you, and it requires no more revisions,
@@ -155,7 +156,7 @@ I load it using `wasm-opt -all`:
 
     # See if it runs without hanging forever.
     try:
-        run_wasm_opt(['-all', 't.wat', '--fuzz-exec-before'])
+        result = run_wasm_opt(['-all', 't.wat', '--fuzz-exec-before'])
     except subprocess.TimeoutExpired:
         return f'''
 The testcase you provided hangs forever when I run it with
@@ -166,6 +167,20 @@ wasm-opt -all --fuzz-exec-before
 
 Remember, I don't want testcases that infinite loop.
 ''' + error_suffix
+
+    if 'ignoring an unknown import' in result:
+        return f'''
+The testcase you provided appears to define an import that --fuzz-exec cannot
+run:
+
+```
+{result.stdout}
+{result.stderr}
+```
+
+Remember, your testcase should not include custom imports.
+''' + error_suffix
+
 
     # Try to run the command on the passes we were given, looking for bugs.
     assert pass_names, 'must be passes to run'
@@ -302,6 +317,9 @@ Some important notes:
   and we do not care as much about preserving the exact error; and, by doing so,
   we allow a lot more optimization (it is often good for code size to move one
   possible trap past another).
+* The Binaryen optimizer ignores metadata when optimizing. For example, we will
+  merge code with different branch hint annotations. This is a tradeoff, of
+  course, but it is simple to do, and allows more optimization.
 * The only type of correctness bug I care about is one that
   `wasm-opt --fuzz-exec` can detect, which means differences that the
   optimizer here cares about. Other definitions of correctness, and of
@@ -313,6 +331,11 @@ Some important notes:
   whole, and we intentionally do not optimize all cases in one pass if another
   can handle them, or if another can simplify things for us. This helps reduce
   overall complexity.
+* In your testcases, do not add imports that `--fuzz-exec` cannot execute. That
+  mode only runs the wasm itself, that is, there is no JavaScript on the other
+  side that implements imports for it. It supports a small number of "known"
+  imports such as "fuzzing-support" "log" to log out values, but you cannot
+  assume it will implement anything custom that your testcase needs.
 
 The code follows:
 '''
