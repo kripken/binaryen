@@ -132,13 +132,18 @@ def process_testcase(response, pass_names):
     error_suffix = f'''
 
 Can you fix your testcase? If so, please attach the fixed testcase at the end of
-your output. Or, if you now realize that you have not found a bug, just write
-"{not_a_bug}" and a brief explanation why. Or, if you believe your testcase is
-still valid despite what I have shown you, and it requires no more revisions,
-just write "{good_already}" and a brief explanation. Do not do so unless you are
-absolutely certain, both that you have found a valid bug and testcase, and that
-I will be unable to reproduce it (because if I can reproduce it, I want to run
-it and verify, then show that result to you).
+your output.
+
+Or, if you now realize that you have not found a bug, just write "{not_a_bug}"
+and a brief explanation why.
+
+Or, if you believe your testcase is still valid despite what I have shown you,
+and it requires no more revisions, just write "{good_already}" and a brief
+explanation. Do not do so unless you are absolutely certain that your last
+testcase is valid exactly as it is. Be careful when responding in this way,
+because you cannot run wasm-opt locally to verify your testcase (you do not have
+it installed), and therefore the only way to verify your testcase is to provide
+it so that I can run it for you, and report the results back.
 '''
 
     # See if it is even a valid wat file.
