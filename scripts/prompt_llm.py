@@ -373,7 +373,7 @@ The code follows:
         # Failure.
         i += 1
         if i == 10:
-            print(f'❌ Giving up.', file=sys.stderr)
+            print(f'❌ Giving up after {i} iterations.', file=sys.stderr)
             sys.exit(1)
 
         # Keep hoping...
