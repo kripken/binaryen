@@ -522,6 +522,11 @@ private:
   Expression* makeMemoryCopy();
   Expression* makeMemoryFill();
 
+  Expression* makeContNew(Type type);
+  Expression* makeSuspend(Type type);
+  Expression* makeResume(Type type);
+  Expression* makeResumeThrow(Type type);
+
   // Getters for Types
   Type getSingleConcreteType();
   Type getReferenceType();

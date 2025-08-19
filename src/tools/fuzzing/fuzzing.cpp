@@ -5290,6 +5290,38 @@ Expression* TranslateToFuzzReader::makeMemoryFill() {
   return builder.makeMemoryFill(dest, value, size, wasm.memories[0]->name);
 }
 
+// TODO: call them
+
+Expression* TranslateToFuzzReader::makeContNew(Type type) {
+  auto funcType = type.getHeapType().getContinuation().type;
+  return builder.makeContNew(make(Type(funcType, getNullability())));
+}
+
+Expression* TranslateToFuzzReader::makeSuspend(Type type) {
+  // Find relevant tags.
+  std::vector<Name> tags;
+  for (auto& tag : wasm.tags) {
+    if (tag->getResults() == type) {
+      tags.push_back(tag->name);
+    }
+  }
+  if (tags.empty()) {
+    return makeTrivial(type);
+  }
+
+  std::vector<Expression*> operands;
+  for (auto t : type) {
+    operands.push_back(make(t));
+  }
+  return builder.makeSuspend(pick(tags), operands);
+}
+
+Expression* TranslateToFuzzReader::makeResume(Type type) {
+}
+
+Expression* TranslateToFuzzReader::makeResumeThrow(Type type) {
+}
+
 Type TranslateToFuzzReader::getSingleConcreteType() {
   if (wasm.features.hasReferenceTypes() && !interestingHeapTypes.empty() &&
       oneIn(3)) {
