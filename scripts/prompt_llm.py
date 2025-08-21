@@ -49,8 +49,8 @@ print('configuring...')
 key = os.getenv('GOOGLE_API_KEY')
 client = genai.Client(api_key=key)
 
-model_name = 'gemini-2.5-flash'
-#model_name = 'gemini-2.5-pro'
+#model_name = 'gemini-2.5-flash'
+model_name = 'gemini-2.5-pro'
 
 
 def start_chat():
@@ -559,6 +559,11 @@ Some important notes:
 
 The code follows:
 '''
+
+        # TODO:
+        #       * "Focus on line {random()}"
+        #       * Save last NOTABUGs
+        #       * "Look for a bug of type {crash|correctness|..}
 
         iterate(prompt, bundle, pass_flags)
     elif cmd == 'bespoke':
