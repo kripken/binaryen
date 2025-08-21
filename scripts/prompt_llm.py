@@ -99,6 +99,9 @@ def get_headers_used_by(code):
 # Given a string, find all tests that contain it in their basename. This helps
 # find all tests for a particular pass.
 def get_tests_with_names(search_names):
+    # Remove '--' prefixes
+    search_names = [name[2:] for name in search_names]
+
     files = []
     for dirpath, _, filenames in os.walk(test_dir):
         for filename in filenames:
@@ -212,7 +215,7 @@ Remember, your testcase should not include custom imports.
     # No bug found. Report the last output.
     return f'''
 The testcase you provided does not seem to show a bug. Here is what I get when I
-run `wasm-opt -all --print {' '.join(pass_flags([0])} --print --fuzz-exec`, which
+run `wasm-opt -all --print {' '.join(pass_flags[0])} --print --fuzz-exec`, which
 prints the module before and after the optimization, in addition to executing it
 before and after, so you can see exactly what happens:
 
@@ -306,6 +309,7 @@ def get_commandline_pass_flags(pass_names, tests):
                 base_flags.append(possible_flag)
                 break
 
+    print(pass_names, tests, base_flags)
     return [[pass_name] + base_flags for pass_name in pass_names]
 
 
