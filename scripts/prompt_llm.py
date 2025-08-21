@@ -9,6 +9,11 @@ For example:
 
 GOOGLE_API_KEY=... python prompt_llm.py bugfind src/passes/OptimizeInstructions.cpp
 
+Commands:
+  * bughunt
+  * testfuzz
+  * bespoke
+
 Setup: You may need
 
 $ pip install google-genai
@@ -396,6 +401,144 @@ The code follows:
 
         iterate(prompt, bundle, pass_names)
 
+    elif cmd == 'testfuzz':
+        code = open(main).read()
+
+        # Files to bundle. Start with a minimal set. The focus is on tests.
+        files = [
+            main,
+            # os.path.join(src_dir, 'wasm.h'),
+        ]
+
+        # Find the commandline name(s) of the pass, and find all test files with
+        # that name in them.
+        pass_names = get_commandline_pass_names(code)
+        files += get_tests_with_names(pass_names)
+
+        print('🚀 Invoking bundler:', file=sys.stderr)
+
+        # Bundle them up in an LLM-friendly manner.
+        bundle = subprocess.check_output(bundler + files, encoding='utf-8')
+
+        print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
+
+        # The commands we hope to find a bug using.
+        commands = '\n'.join(['wasm-opt -all --fuzz-exec --' + name for name in pass_names])
+
+        prompt = f'''
+You are an expert in compilers. Please look through the attached testcases and
+suggest a new test for the same passes. The new test should be interesting in
+some way, either handling a corner case the existing ones miss, or combining
+existing ones in hopes of finding something unexpected, etc.
+
+Specifically we want the new testcase to find a bug of one of these types:
+
+1. A crash or internal error in the optimizer.
+2. A correctness error, where the optimizer generates incorrect code.
+
+This is in Binaryen, an optimizer for WebAssembly.
+
+The main source file I would like you to focus on is the optimization pass
+
+{main}
+
+I am also providing test files. Let me quickly explain how a common test file
+works, for example:
+
+```
+;; RUN: wasm-opt %s --merge-locals -all -S -o - | filecheck %s
+
+(module
+  ;; CHECK:      (func $between-unreachable (type $0) (result i32)
+  ;; CHECK-NEXT:  (local $x i32)
+  ;; CHECK-NEXT:  (local $y i32)
+  ;; CHECK-NEXT:  (select
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:   (local.tee $x
+  ;; CHECK-NEXT:    (local.get $y)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $between-unreachable (result i32)
+    (local $x i32)
+    (local $y i32)
+    (select
+      (unreachable)
+      ;; The local copy here is in between unreachables. We should not error.
+      (local.tee $x
+        (local.get $y)
+      )
+      (unreachable)
+    )
+  )
+)
+```
+
+This test uses LLVM's filecheck utility. The testcase is a small wasm module
+with a single file. Based on the comment, the testcase is making sure that the
+`--merge-locals` pass is not erroring on a particular situation, specifically
+where the middle child of a `select` is in between unreachable expressions. The
+`CHECK-NEXT` output, right above, shows the expected output, which in this case
+is the same as the input, as we mainly check the optimizer does not error on an
+assertion.
+
+Given a testcase like that, one idea could be to modify a small part of it, like
+replacing one of the `unreachable` expressions with something else. Or, to
+reorder things, or add more code in the function, etc. There are many possible
+ways to alter a testcase. Please look over the existing testcases, and the
+source code of the pass, to find what seems like a promising alteration to test.
+
+Provide your full testcase at the end of your output. I will run that testcase
+through `wasm-opt` to see what happens when it runs the code I asked you to
+focus on. If it crashes, or if it behaves differently after optimizations then
+it is a valid bug. Specifically, I will be running
+
+```
+{commands}
+```
+
+Note that you cannot run wasm-opt on your side, but I will do so and inform you
+what I see, and we can continue from there.
+
+Some important notes:
+
+* The testcase should not infinite loop, as then I cannot verify it shows a bug.
+  (Ignore bugs related to preserving infinite loops.)
+* The Binaryen optimizer ignores differences between traps (as mentioned in
+  effects.h). We consider all traps equal, so it is ok to reorder them, even if
+  the logged message is different. For example, `[trap unreachable]` is the same
+  as `[trap i32.div_u by 0]`. The motivation for this definition of observable
+  behavior is that if a program traps then it is running into an error anyhow,
+  and we do not care as much about preserving the exact error; and, by doing so,
+  we allow a lot more optimization (it is often good for code size to move one
+  possible trap past another).
+* The Binaryen optimizer ignores metadata when optimizing. For example, we will
+  merge code with different branch hint annotations. This is a tradeoff, of
+  course, but it is simple to do, and allows more optimization.
+* The only type of correctness bug I care about is one that
+  `wasm-opt --fuzz-exec` can detect, which means differences that the
+  optimizer here cares about. Other definitions of correctness, and of
+  observable behavior, are not interesting. The notes above should capture the
+  main differences between the more general sense of observable behavior, and
+  the specific one we use here.
+* Do not report missing optimizations as bugs. While in general we do want to
+  improve such things, the Binaryen optimizer thinks about optimizability as a
+  whole, and we intentionally do not optimize all cases in one pass if another
+  can handle them, or if another can simplify things for us. This helps reduce
+  overall complexity.
+* In your testcases, do not add imports that `--fuzz-exec` cannot execute. That
+  mode only runs the wasm itself, that is, there is no JavaScript on the other
+  side that implements imports for it. It supports a small number of "known"
+  imports such as "fuzzing-support" "log" to log out values, but you cannot
+  assume it will implement anything custom that your testcase needs.
+* Be concise with explanations. The most important thing is the testcase that
+  you provide.
+
+The code follows:
+'''
+
+        iterate(prompt, bundle, pass_names)
     elif cmd == 'bespoke':
         # Just read the entire input file as the prompt.
         prompt = open(main).read()
