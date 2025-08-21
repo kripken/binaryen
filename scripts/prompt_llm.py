@@ -257,34 +257,35 @@ if __name__ == "__main__":
     cmd = sys.argv[1]
     main = sys.argv[2]
 
-    code = open(main).read()
+    if cmd == 'bughunt':
+        code = open(main).read()
 
-    # Files to bundle. Start with main.
-    files = [main]
+        # Files to bundle. Start with main.
+        files = [main]
 
-    # Next, add core files and headers used by main.
-    others = get_core_files()
-    for header in get_headers_used_by(code):
-        if header not in others:
-            others.append(header)
-    files += others
+        # Next, add core files and headers used by main.
+        others = get_core_files()
+        for header in get_headers_used_by(code):
+            if header not in others:
+                others.append(header)
+        files += others
 
-    # Find the commandline name(s) of the pass, and find all test files with
-    # that name in them.
-    pass_names = get_commandline_pass_names(code)
-    files += get_tests_with_names(pass_names)
+        # Find the commandline name(s) of the pass, and find all test files with
+        # that name in them.
+        pass_names = get_commandline_pass_names(code)
+        files += get_tests_with_names(pass_names)
 
-    print('🚀 Invoking bundler:', file=sys.stderr)
+        print('🚀 Invoking bundler:', file=sys.stderr)
 
-    # Bundle them up in an LLM-friendly manner.
-    bundle = subprocess.check_output(bundler + files, encoding='utf-8')
+        # Bundle them up in an LLM-friendly manner.
+        bundle = subprocess.check_output(bundler + files, encoding='utf-8')
 
-    print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
+        print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
 
-    # The commands we hope to find a bug using.
-    commands = '\n'.join(['wasm-opt -all --fuzz-exec --' + name for name in pass_names])
+        # The commands we hope to find a bug using.
+        commands = '\n'.join(['wasm-opt -all --fuzz-exec --' + name for name in pass_names])
 
-    prompt = f'''
+        prompt = f'''
 You are an expert in compilers. Please look through the attached code and
 try to find a bug in it, of one of these types:
 
@@ -353,37 +354,46 @@ Some important notes:
 
 The code follows:
 '''
-    # TODO: maybe look for missing test coverage too?
+        # TODO: maybe look for missing test coverage too?
 
-    # Start the conversation.
-    chat = start_chat()
-    response = continue_chat(chat, prompt, bundle)
+        # Start the conversation.
+        chat = start_chat()
+        response = continue_chat(chat, prompt, bundle)
 
-    # Check if the given testcase shows an actual bug, and if not, tell the
-    # AI and see if it can fix things. Give it several chances to do so
-    # before giving up.
-    i = 0
-    while True:
-        # If the testcase is not valid, we get a prompt to issue.
-        prompt = process_testcase(response, pass_names)
-        if not prompt:
-            print(f'🚀 Success!', file=sys.stderr)
-            sys.exit(0)
+        # Check if the given testcase shows an actual bug, and if not, tell the
+        # AI and see if it can fix things. Give it several chances to do so
+        # before giving up.
+        i = 0
+        while True:
+            # If the testcase is not valid, we get a prompt to issue.
+            prompt = process_testcase(response, pass_names)
+            if not prompt:
+                print(f'🚀 Success!', file=sys.stderr)
+                sys.exit(0)
 
-        # Failure.
-        i += 1
-        if i == 10:
-            print(f'❌ Giving up after {i} iterations.', file=sys.stderr)
-            sys.exit(1)
+            # Failure.
+            i += 1
+            if i == 10:
+                print(f'❌ Giving up after {i} iterations.', file=sys.stderr)
+                sys.exit(1)
 
-        # Keep hoping...
-        print(f'❌ Not valid in iteration {i}', file=sys.stderr)
+            # Keep hoping...
+            print(f'❌ Not valid in iteration {i}', file=sys.stderr)
+            response = continue_chat(chat, prompt)
+
+            if not_a_bug in response:
+                print(f'❌ LLM gave up.', file=sys.stderr)
+                sys.exit(1)
+            if good_already in response:
+                print(f'❌ LLM is being stubborn.', file=sys.stderr)
+                sys.exit(1)
+
+    elif cmd == 'bespoke':
+        # Just read the entire input file as the prompt.
+        prompt = open(main).read()
+        chat = start_chat()
         response = continue_chat(chat, prompt)
 
-        if not_a_bug in response:
-            print(f'❌ LLM gave up.', file=sys.stderr)
-            sys.exit(1)
-        if good_already in response:
-            print(f'❌ LLM is being stubborn.', file=sys.stderr)
-            sys.exit(1)
-
+    else:
+        print('BAD COMMAND', cmd)
+        sys.exit(1)
