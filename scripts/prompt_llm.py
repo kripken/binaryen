@@ -228,6 +228,42 @@ def extract_testcase(response):
     return response[start:end + 2]
 
 
+# Given a prompt, bundle, and pass names that we are focused on, converse with
+# the LLM and iterate
+def iterate(prompt, bundle, pass_names):
+    # Start the conversation.
+    chat = start_chat()
+    response = continue_chat(chat, prompt, bundle)
+
+    # Check if the given testcase shows an actual bug, and if not, tell the
+    # AI and see if it can fix things. Give it several chances to do so
+    # before giving up.
+    i = 0
+    while True:
+        # If the testcase is not valid, we get a prompt to issue.
+        prompt = process_testcase(response, pass_names)
+        if not prompt:
+            print(f'🚀 Success!', file=sys.stderr)
+            sys.exit(0)
+
+        # Failure.
+        i += 1
+        if i == 10:
+            print(f'❌ Giving up after {i} iterations.', file=sys.stderr)
+            sys.exit(1)
+
+        # Keep hoping...
+        print(f'❌ Not valid in iteration {i}', file=sys.stderr)
+        response = continue_chat(chat, prompt)
+
+        if not_a_bug in response:
+            print(f'❌ LLM gave up.', file=sys.stderr)
+            sys.exit(1)
+        if good_already in response:
+            print(f'❌ LLM is being stubborn.', file=sys.stderr)
+            sys.exit(1)
+
+
 # Given the code of a Binaryen pass, find the commandline flag(s) to use it.
 def get_commandline_pass_names(code):
     # The pass creates itself using something like
@@ -351,42 +387,14 @@ Some important notes:
   side that implements imports for it. It supports a small number of "known"
   imports such as "fuzzing-support" "log" to log out values, but you cannot
   assume it will implement anything custom that your testcase needs.
+* Be concise with explanations. The most important thing is the testcase that
+  you provide.
 
 The code follows:
 '''
         # TODO: maybe look for missing test coverage too?
 
-        # Start the conversation.
-        chat = start_chat()
-        response = continue_chat(chat, prompt, bundle)
-
-        # Check if the given testcase shows an actual bug, and if not, tell the
-        # AI and see if it can fix things. Give it several chances to do so
-        # before giving up.
-        i = 0
-        while True:
-            # If the testcase is not valid, we get a prompt to issue.
-            prompt = process_testcase(response, pass_names)
-            if not prompt:
-                print(f'🚀 Success!', file=sys.stderr)
-                sys.exit(0)
-
-            # Failure.
-            i += 1
-            if i == 10:
-                print(f'❌ Giving up after {i} iterations.', file=sys.stderr)
-                sys.exit(1)
-
-            # Keep hoping...
-            print(f'❌ Not valid in iteration {i}', file=sys.stderr)
-            response = continue_chat(chat, prompt)
-
-            if not_a_bug in response:
-                print(f'❌ LLM gave up.', file=sys.stderr)
-                sys.exit(1)
-            if good_already in response:
-                print(f'❌ LLM is being stubborn.', file=sys.stderr)
-                sys.exit(1)
+        iterate(prompt, bundle, pass_names)
 
     elif cmd == 'bespoke':
         # Just read the entire input file as the prompt.
