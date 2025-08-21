@@ -128,7 +128,7 @@ good_already = 'GOOD ALREADY'
 # Given an LLM response, process it: see if the finding is valid, and if not,
 # return a prompt that requests improvements. (If it is valid, return nothing.)
 # Receives the last response + the pass names we are looking for bugs in.
-def process_testcase(response, pass_names):
+def process_testcase(response, pass_flags):
     wat = extract_testcase(response)
     open('t.wat', 'w').write(wat)
     print(f'🚀 Extracted testcase:', file=sys.stderr)
@@ -202,9 +202,9 @@ Remember, your testcase should not include custom imports.
 
 
     # Try to run the command on the passes we were given, looking for bugs.
-    assert pass_names, 'must be passes to run'
-    for pass_name in pass_names:
-        result = run_wasm_opt(['-all', 't.wat', '--print', '--' + pass_name, '--print', '--fuzz-exec'])
+    assert gnames, 'must be passes to run'
+    for pass_name in pass_flags:
+        result = run_wasm_opt(['-all', 't.wat', '--print'] + pass_flags + ['--print', '--fuzz-exec'])
         if result.returncode:
             # Success! An error means we found a bug; nothing more to prompt
             return ''
@@ -212,7 +212,7 @@ Remember, your testcase should not include custom imports.
     # No bug found. Report the last output.
     return f'''
 The testcase you provided does not seem to show a bug. Here is what I get when I
-run `wasm-opt -all --print --{pass_names[-1]} --print --fuzz-exec`, which
+run `wasm-opt -all --print {' '.join(pass_flags([0])} --print --fuzz-exec`, which
 prints the module before and after the optimization, in addition to executing it
 before and after, so you can see exactly what happens:
 
@@ -235,7 +235,7 @@ def extract_testcase(response):
 
 # Given a prompt, bundle, and pass names that we are focused on, converse with
 # the LLM and iterate
-def iterate(prompt, bundle, pass_names):
+def iterate(prompt, bundle, pass_flags):
     # Start the conversation.
     chat = start_chat()
     response = continue_chat(chat, prompt, bundle)
@@ -246,7 +246,7 @@ def iterate(prompt, bundle, pass_names):
     i = 0
     while True:
         # If the testcase is not valid, we get a prompt to issue.
-        prompt = process_testcase(response, pass_names)
+        prompt = process_testcase(response, pass_flags)
         if not prompt:
             print(f'🚀 Success!', file=sys.stderr)
             sys.exit(0)
@@ -290,8 +290,23 @@ def get_commandline_pass_names(code):
     flags = []
     for flag, creator in pairs:
         if creator in creators:
-            flags.append(flag)
+            flags.append('--' + flag)
     return flags
+
+
+# Given commandline pass names and tests for those passes, see if the passes
+# require additional flags.
+def get_commandline_pass_flags(pass_names, tests):
+    base_flags = []
+    for possible_flag in [
+        '--closed-world',
+    ]:
+        for test in tests:
+            if possible_flag in open(test, 'r').read():
+                base_flags.append(possible_flag)
+                break
+
+    return [[pass_name] + base_flags for pass_name in pass_names]
 
 
 if __name__ == "__main__":
@@ -314,7 +329,9 @@ if __name__ == "__main__":
         # Find the commandline name(s) of the pass, and find all test files with
         # that name in them.
         pass_names = get_commandline_pass_names(code)
-        files += get_tests_with_names(pass_names)
+        tests = get_tests_with_names(pass_names)
+        files += tests
+        pass_flags = get_commandline_pass_flags(pass_names, tests)
 
         print('🚀 Invoking bundler:', file=sys.stderr)
 
@@ -324,7 +341,7 @@ if __name__ == "__main__":
         print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
 
         # The commands we hope to find a bug using.
-        commands = '\n'.join(['wasm-opt -all --fuzz-exec --' + name for name in pass_names])
+        commands = '\n'.join(['wasm-opt -all --fuzz-exec ' + ' '.join(pass_flags[0])])
 
         prompt = f'''
 You are an expert in compilers. Please look through the attached code and
@@ -399,7 +416,7 @@ The code follows:
 '''
         # TODO: maybe look for missing test coverage too?
 
-        iterate(prompt, bundle, pass_names)
+        iterate(prompt, bundle, pass_flags)
 
     elif cmd == 'testfuzz':
         code = open(main).read()
@@ -413,7 +430,9 @@ The code follows:
         # Find the commandline name(s) of the pass, and find all test files with
         # that name in them.
         pass_names = get_commandline_pass_names(code)
-        files += get_tests_with_names(pass_names)
+        tests = get_tests_with_names(pass_names)
+        files += tests
+        pass_flags = get_commandline_pass_flags(pass_names, tests)
 
         print('🚀 Invoking bundler:', file=sys.stderr)
 
@@ -423,7 +442,7 @@ The code follows:
         print(f'🚀 Bundle size: {len(bundle)} bytes', file=sys.stderr)
 
         # The commands we hope to find a bug using.
-        commands = '\n'.join(['wasm-opt -all --fuzz-exec --' + name for name in pass_names])
+        commands = '\n'.join(['wasm-opt -all --fuzz-exec ' + ' '.join(pass_flags[0])])
 
         prompt = f'''
 You are an expert in compilers. Please look through the attached testcases and
