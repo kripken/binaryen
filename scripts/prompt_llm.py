@@ -205,7 +205,7 @@ Remember, your testcase should not include custom imports.
 
 
     # Try to run the command on the passes we were given, looking for bugs.
-    assert gnames, 'must be passes to run'
+    assert pass_flags, 'must be passes to run'
     for pass_name in pass_flags:
         result = run_wasm_opt(['-all', 't.wat', '--print'] + pass_flags + ['--print', '--fuzz-exec'])
         if result.returncode:
@@ -309,7 +309,6 @@ def get_commandline_pass_flags(pass_names, tests):
                 base_flags.append(possible_flag)
                 break
 
-    print(pass_names, tests, base_flags)
     return [[pass_name] + base_flags for pass_name in pass_names]
 
 
@@ -561,7 +560,7 @@ Some important notes:
 The code follows:
 '''
 
-        iterate(prompt, bundle, pass_names)
+        iterate(prompt, bundle, pass_flags)
     elif cmd == 'bespoke':
         # Just read the entire input file as the prompt.
         prompt = open(main).read()
