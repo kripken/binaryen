@@ -206,8 +206,8 @@ Remember, your testcase should not include custom imports.
 
     # Try to run the command on the passes we were given, looking for bugs.
     assert pass_flags, 'must be passes to run'
-    for pass_name in pass_flags:
-        result = run_wasm_opt(['-all', 't.wat', '--print'] + pass_flags + ['--print', '--fuzz-exec'])
+    for pf in pass_flags:
+        result = run_wasm_opt(['-all', 't.wat', '--print'] + pf + ['--print', '--fuzz-exec'])
         if result.returncode:
             # Success! An error means we found a bug; nothing more to prompt
             return ''
