@@ -563,6 +563,7 @@ The code follows:
         # TODO:
         #       * "Focus on line {random()}"
         #       * Save last NOTABUGs, accumulate summarized failed attempts. or maybe just keep going in a chat? NOTABUG => "ok, try again from the start, no worries"
+        #         * Ask for one-linter NOTABUG: Reading/learning. Accumulate those learnings into the repo.
         #       * "Look for a bug of type {crash|correctness|..}
 
         iterate(prompt, bundle, pass_flags)
