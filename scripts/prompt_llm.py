@@ -32,12 +32,16 @@ import subprocess
 import sys
 import time
 
-script_dir = 'scripts'
+# use dirs from the current dir (just relatively), so we can use this on other
+# checkouts
 src_dir = 'src'
 bin_dir = 'bin'
 test_dir = 'test'
 
-bundler = ['python', os.path.join(script_dir, 'bundle_llm.py')]
+# use the bundler that is in the same dire as this one
+my_script_dir = pathlib.Path(__file__).parent.resolve()
+
+bundler = ['python', os.path.join(my_script_dir, 'bundle_llm.py')]
 wasm_opt = [os.path.join(bin_dir, 'wasm-opt')]
 
 print('importing...')
@@ -49,8 +53,8 @@ print('configuring...')
 key = os.getenv('GOOGLE_API_KEY')
 client = genai.Client(api_key=key)
 
-#model_name = 'gemini-2.5-flash'
-model_name = 'gemini-2.5-pro'
+model_name = 'gemini-2.5-flash'
+#model_name = 'gemini-2.5-pro'
 
 
 def start_chat():
@@ -402,6 +406,8 @@ Some important notes:
   observable behavior, are not interesting. The notes above should capture the
   main differences between the more general sense of observable behavior, and
   the specific one we use here.
+  * In particular, testcases must have an exported function, because all
+    `--fuzz-exec` does is execute the wasm, which means calling exports.
 * Do not report missing optimizations as bugs. While in general we do want to
   improve such things, the Binaryen optimizer thinks about optimizability as a
   whole, and we intentionally do not optimize all cases in one pass if another
