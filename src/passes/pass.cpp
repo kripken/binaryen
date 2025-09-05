@@ -573,6 +573,9 @@ void PassRegistry::registerPasses() {
   registerPass("type-finalizing",
                "mark all leaf types as final",
                createTypeFinalizingPass);
+  registerPass("type-generalizing",
+               "generalize (unrefine) types",
+               createTypeGeneralizingPass);
   registerPass("type-merging",
                "merge types to their supertypes where possible",
                createTypeMergingPass);
@@ -602,9 +605,6 @@ void PassRegistry::registerPasses() {
   registerTestPass("delete-branch-hints",
                    "delete branch hints using a list of instrumented IDs",
                    createDeleteBranchHintsPass);
-  registerTestPass("experimental-type-generalizing",
-                   "generalize types (not yet sound)",
-                   createTypeGeneralizingPass);
   registerTestPass("randomize-branch-hints",
                    "randomize branch hints (for fuzzing)",
                    createRandomizeBranchHintsPass);
