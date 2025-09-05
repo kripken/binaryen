@@ -405,30 +405,20 @@ template<typename T> void disallowDuplicates(const T& targets) {
 // example, if we do a local.get and return that value from a function, then
 // we have a link from the ExpressionLocation of that local.get to a
 // ResultLocation.
-template<typename T> struct Link {
-  T from;
-  T to;
+struct IndexLink {
+  Index from;
+  Index to;
 
-  bool operator==(const Link<T>& other) const {
+  bool operator==(const IndexLink& other) const {
     return from == other.from && to == other.to;
   }
 };
-
-using LocationLink = Link<Location>;
-using IndexLink = Link<LocationIndex>;
 
 } // anonymous namespace
 
 } // namespace wasm
 
 namespace std {
-
-template<> struct hash<wasm::LocationLink> {
-  size_t operator()(const wasm::LocationLink& loc) const {
-    return std::hash<std::pair<wasm::Location, wasm::Location>>{}(
-      {loc.from, loc.to});
-  }
-};
 
 template<> struct hash<wasm::IndexLink> {
   size_t operator()(const wasm::IndexLink& loc) const {

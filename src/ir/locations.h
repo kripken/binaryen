@@ -186,6 +186,16 @@ using Location = std::variant<ExpressionLocation,
                               TypeLocation,
                               ConeReadLocation>;
 
+// A link between two locations.
+struct LocationLink {
+  Location from;
+  Location to;
+
+  bool operator==(const LocationLink& other) const {
+    return from == other.from && to == other.to;
+  }
+};
+
 // Utility for printing a location with module info (like type names);
 using ModuleLocation = std::pair<Module*, Location>;
 
@@ -274,6 +284,13 @@ template<> struct hash<wasm::ConeReadLocation> {
   size_t operator()(const wasm::ConeReadLocation& loc) const {
     return std::hash<std::tuple<wasm::HeapType, wasm::Index, wasm::Index>>{}(
       {loc.type, loc.depth, loc.index});
+  }
+};
+
+template<> struct hash<wasm::LocationLink> {
+  size_t operator()(const wasm::LocationLink& loc) const {
+    return std::hash<std::pair<wasm::Location, wasm::Location>>{}(
+      {loc.from, loc.to});
   }
 };
 
