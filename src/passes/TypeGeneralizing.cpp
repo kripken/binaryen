@@ -30,6 +30,7 @@
 #include "ir/locations.h"
 #include "ir/lubs.h"
 #include "ir/subtype-exprs.h"
+#include "support/unique_deferring_queue.h"
 #include "pass.h"
 #include "wasm-traversal.h"
 #include "wasm.h"
@@ -124,17 +125,22 @@ struct TypeGeneralizing : public Pass {
     auto& globalInfo = analysis.map[nullptr];
     Collector(globalInfo).walkModuleCode(module);
 
+    // All our operations will be on the lattice of types, on the following data
+    // structure that maps locations to their data.
+    analysis::ValType lattice;
+    std::unordered_map<Location, Element> locationData;
+    
     // Merge the function information into a single large graph, deduplicating
-    // as we go
+    // as we go, and preparing the initial list of work (the roots).
     LocationLinkGraph links;
-    InsertOrderedMap<Location, Element> roots; // XXX insertordered?
+    UniqueDeferredQueue work;
 
     for (auto& [func, info] : analysis.map) {
       for (auto& link : info.links) {
         links.insert(link);
       }
       for (auto& [root, value] : info.roots) {
-        roots[root] = value;
+        lattice.meet(roots[root], value);
       }
     }
 
@@ -143,6 +149,14 @@ struct TypeGeneralizing : public Pass {
 
     // Prepare the full graph to flow on.
     links.fill(*module);
+
+    // Get the flow-efficient sorted graph.
+    auto sortedGraph = links.getSortedGraph();
+
+    // Flow while changes happen.
+    while (!work.empty()) {
+      
+    }
   }
 };
 

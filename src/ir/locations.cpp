@@ -94,6 +94,14 @@ void LocationLinkGraph::fill(Module& wasm) {
   // TODO: taglocation stuffs
 }
 
+CanonicalGraph LocationLinkGraph::getCanonicalGraph() {
+  CanonicalGraph ret;
+  for (auto& [from, to] : *this) {
+    ret[from].push_back(to);
+  }
+  return ret;
+}
+
 } // namespace wasm
 
 namespace std {

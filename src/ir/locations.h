@@ -310,6 +310,12 @@ struct LocationLinkGraph : public std::unordered_set<LocationLink> {
   // from there).
   // TODO: use this in GUFA?
   void fill(Module& wasm);
+
+  // This graph is a set { (from, to), .. }. For efficient traversal, we can
+  // provide the "sorted" form that maps a location to its targets, that is,
+  // { from: [to, ..], .. }, which is sorted by sources.
+  using SortedGraph = std::unordered_map<Location, SmallVector<Location, 2>>;
+  SortedGraph getSortedGraph();
 };
 
 } // namespace wasm
