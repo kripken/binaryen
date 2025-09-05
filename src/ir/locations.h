@@ -299,4 +299,18 @@ template<> struct hash<wasm::LocationLink> {
 
 } // namespace std
 
+namespace wasm {
+
+// A graph of links.
+struct LocationLinkGraph : public std::unordered_set<LocationLink> {
+  // Given a graph, fill it out. The input graph contains links of interest, and
+  // we fill out "boilerplate" links. For example, if the graph has an
+  // ExpressionLocation of a global.get, then we add a link from the
+  // corresponding GlobalLocation to that expression (since the expression reads
+  // from there).
+  void fill(Module& wasm);
+};
+
+} // namespace wasm
+
 #endif // wasm_ir_locations_h

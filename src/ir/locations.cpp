@@ -17,6 +17,32 @@
 #include "ir/locations.h"
 #include "wasm.h"
 
+namespace wasm {
+
+void LocationLinkGraph::fill(Module& wasm) {
+  // Find all locations, so we know what additional links to add.
+  std::unordered_set<Location> all;
+  for (auto& [from, to] : *this) {
+    all.insert(from);
+    all.insert(to);
+  }
+
+  // Find locations that we can add boilerplate links to, and do so.
+  for (auto& location : all) {
+    auto* loc = std::get_if<wasm::ExpressionLocation>(&location);
+    if (!loc) {
+      continue;
+    }
+    auto* curr = loc->expr;
+    if (auto* get = curr->dynCast<GlobalGet>()) {
+      // This reads from the corresponding global.
+      emplace(GlobalLocation{get->name}, *loc);
+    }
+  }
+}
+
+} // namespace wasm
+
 namespace std {
 
 // Debugging
@@ -59,3 +85,4 @@ std::ostream& operator<<(std::ostream& o, wasm::Location location) {
 }
 
 } // namespace std
+

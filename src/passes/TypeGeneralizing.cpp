@@ -53,7 +53,7 @@ struct CollectedFuncInfo {
   // later when we merge all function infos anyhow.
   //
   // Links are in the order of subtype-exprs calls, that is, {sub, super} pairs,
-  // where sub must be a subtype of super.
+  // where sub must be a subtype of super. XXX this may not be right with fill()
   std::vector<LocationLink> links;
 
   // 2. The second constraint we gather are absolute ones, "roots". E.g., ref.eq
@@ -63,29 +63,6 @@ struct CollectedFuncInfo {
   // above, we do not deduplicate here).
   std::vector<std::pair<Location, Element>> roots;
 };
-
-// Get the source location for an expression, that is, the location from where
-// its values arrive. For example, a global.get's source is the corresponding
-// GlobalLocation.
-// TODO: move to locations.h, if there are other users?
-#if 0
-Location getSourceLocation(Expression* curr) { // TODO; get func
-  if (auto* get = curr->dynCast<GlobalGet>()) {
-    return GlobalLocation{get->name};
-  } if (auto* get = curr->dynCast<LocalGet>()) {
-    return LocalLocation{get->index};
-  } if (auto* get = curr->dynCast<StructGet>()) {
-    return DataLocation{get->ref->type.getHeapType(), get->index};
-  } if (auto* get = curr->dynCast<ArrayGet>()) {
-    return DataLocation{get->ref->type.getHeapType(),
-                        DataLocation::ArrayIndex};
-  } if (auto* get = curr->dynCast<RefGetDesc>()) {
-    return DataLocation{get->ref->type.getHeapType(),
-                        DataLocation::DescriptorIndex};
-  }
-  Fatal() << "bad source " << *curr;
-}
-#endif
 
 Location getLocation(Expression* curr) {
   // TODO: tuples
@@ -148,7 +125,7 @@ struct TypeGeneralizing : public Pass {
 
     // Merge the function information into a single large graph, deduplicating
     // as we go
-    std::unordered_set<LocationLink> links;
+    LocationLinkGraph links;
     InsertOrderedMap<Location, Element> roots; // XXX insertordered?
 
     for (auto& [func, info] : analysis.map) {
@@ -162,6 +139,10 @@ struct TypeGeneralizing : public Pass {
 
     // We no longer need the function-level info.
     analysis.map.clear();
+
+    // Prepare the full graph to flow on.
+    links.fill(*module);
+
   }
 };
 
