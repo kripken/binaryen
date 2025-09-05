@@ -94,8 +94,8 @@ void LocationLinkGraph::fill(Module& wasm) {
   // TODO: taglocation stuffs
 }
 
-CanonicalGraph LocationLinkGraph::getCanonicalGraph() {
-  CanonicalGraph ret;
+SortedGraph LocationLinkGraph::getSortedGraph() {
+  SortedGraph ret;
   for (auto& [from, to] : *this) {
     ret[from].push_back(to);
   }

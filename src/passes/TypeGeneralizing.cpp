@@ -133,7 +133,7 @@ struct TypeGeneralizing : public Pass {
     // Merge the function information into a single large graph, deduplicating
     // as we go, and preparing the initial list of work (the roots).
     LocationLinkGraph links;
-    UniqueDeferredQueue work;
+    UniqueDeferredQueue<Element> work;
 
     for (auto& [func, info] : analysis.map) {
       for (auto& link : info.links) {
