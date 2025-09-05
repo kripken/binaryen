@@ -87,6 +87,11 @@ void LocationLinkGraph::fill(Module& wasm) {
                           DataLocation::DescriptorIndex};
     } */
   }
+
+  // TODO: collect calls for [Signature]Param/ResultLocation
+  //         - collect them, then see if their params are in our initial set etc
+  // TODO: struct operations for DataLoc, build ConeReadLocations
+  // TODO: taglocation stuffs
 }
 
 } // namespace wasm
