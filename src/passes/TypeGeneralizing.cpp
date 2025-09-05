@@ -72,7 +72,7 @@ Location getSourceLocation(Expression* curr) {
   if (auto* get = curr->dynCast<GlobalGet>()) {
     return GlobalLocation{get->name};
   } if (auto* get = curr->dynCast<LocalGet>()) {
-    return LocalLocation{get->name};
+    return LocalLocation{get->index};
   } if (auto* get = curr->dynCast<StructGet>()) {
     return DataLocation{get->ref->type.getHeapType(), get->index};
   } if (auto* get = curr->dynCast<ArrayGet>()) {
@@ -91,7 +91,7 @@ Location getLocation(Expression* curr) {
 }
 
 // Collect subtyping constraints for one CollectedFuncInfo.
-struct Collector : : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>>
+struct Collector : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>>
   CollectedFuncInfo& info;
 
   Collector(CollectedFuncInfo& info) : info(info) {}
