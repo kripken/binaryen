@@ -93,7 +93,7 @@ Location getLocation(Expression* curr) {
 }
 
 // Collect subtyping constraints for one CollectedFuncInfo.
-struct Collector : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>>
+struct Collector : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>> {
   CollectedFuncInfo& info;
 
   Collector(CollectedFuncInfo& info) : info(info) {}
@@ -101,11 +101,11 @@ struct Collector : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>>
   // Constraints on type themselves do not interest us.
   void noteSubtype(Type, Type) {}
   void noteSubtype(HeapType, HeapType) {}
-  void noteSubtype(Type, Expression) {}
+  void noteSubtype(Type, Expression*) {}
 
   // An absolute (root) constraint, e.g. from ref.eq.
   void noteSubtype(Expression* sub, Type super) {
-    info.roots.emplace_back({getLocation(super), type});
+    info.roots.emplace_back(getLocation(sub), super);
   }
   void noteNonFlowSubtype(Expression* sub, Type super) {
     noteSubtype(sub, super);
@@ -113,7 +113,7 @@ struct Collector : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>>
 
   // A relative (link) constraint, e.g. between a block and its last child.
   void noteSubtype(Expression* sub, Expression* super) {
-    info.roots.emplace_back({getLocation(sub), getLocation(super)});
+    info.links.emplace_back(getLocation(sub), getLocation(super));
   }
 
   // TODO

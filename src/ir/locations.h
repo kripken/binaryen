@@ -192,6 +192,8 @@ struct LocationLink {
   Location from;
   Location to;
 
+  LocationLink(Location from, Location to) : from(from), to(to) {}
+
   bool operator==(const LocationLink& other) const {
     return from == other.from && to == other.to;
   }
