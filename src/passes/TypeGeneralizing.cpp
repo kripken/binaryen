@@ -70,7 +70,8 @@ Location getLocation(Expression* curr) {
 }
 
 // Collect subtyping constraints for one CollectedFuncInfo.
-struct Collector : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>> {
+struct Collector
+  : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>> {
   CollectedFuncInfo& info;
 
   Collector(CollectedFuncInfo& info) : info(info) {}
@@ -142,7 +143,6 @@ struct TypeGeneralizing : public Pass {
 
     // Prepare the full graph to flow on.
     links.fill(*module);
-
   }
 };
 
