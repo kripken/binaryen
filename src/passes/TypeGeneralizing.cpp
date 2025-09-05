@@ -51,6 +51,9 @@ struct CollectedFuncInfo {
   //
   // Rarely are there duplicates in this list, so we leave deduplication for
   // later when we merge all function infos anyhow.
+  //
+  // Links are in the order of subtype-exprs calls, that is, {sub, super} pairs,
+  // where sub must be a subtype of super.
   std::vector<LocationLink> links;
 
   // 2. The second constraint we gather are absolute ones, "roots". E.g., ref.eq
@@ -82,28 +85,33 @@ Location getSourceLocation(Expression* curr) {
   Fatal() << "bad source " << *curr;
 }
 
+Location getLocation(Expression* curr) {
+  // TODO: tuples
+  return ExpressionLocation{curr, 0};
+}
+
 // Collect subtyping constraints for one CollectedFuncInfo.
-struct InfoCollector : public SubtypingDiscoverer<InfoCollector> {
+struct Collector : : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>>
   CollectedFuncInfo& info;
 
-  InfoCollector(CollectedFuncInfo& info) : info(info) {}
+  Collector(CollectedFuncInfo& info) : info(info) {}
 
   // Constraints on type themselves do not interest us.
   void noteSubtype(Type, Type) {}
   void noteSubtype(HeapType, HeapType) {}
   void noteSubtype(Type, Expression) {}
 
-  // An absolute (root) constraint.
+  // An absolute (root) constraint, e.g. from ref.eq.
   void noteSubtype(Expression* sub, Type super) {
-    info.roots.emplace_back({getSourceLocation(super), type});
+    info.roots.emplace_back({getLocation(super), type});
   }
   void noteNonFlowSubtype(Expression* sub, Type super) {
     noteSubtype(sub, super);
   }
 
-  // A relative (link) constraint.
+  // A relative (link) constraint, e.g. between a block and its last child.
   void noteSubtype(Expression* sub, Expression* super) {
-    info.roots.emplace_back({getLocation(super), getLocation(sub)});
+    info.roots.emplace_back({getLocation(sub), getLocation(super)});
   }
 
   // TODO
