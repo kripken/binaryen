@@ -61,6 +61,57 @@ struct CollectedFuncInfo {
   std::vector<std::pair<Location, Element>> roots;
 };
 
+// Get the source location for an expression, that is, the location from where
+// its values arrive. For example, a global.get's source is the corresponding
+// GlobalLocation.
+// TODO: move to locations.h, if there are other users?
+Location getSourceLocation(Expression* curr) {
+  if (auto* get = curr->dynCast<GlobalGet>()) {
+    return GlobalLocation{get->name};
+  } if (auto* get = curr->dynCast<LocalGet>()) {
+    return LocalLocation{get->name};
+  } if (auto* get = curr->dynCast<StructGet>()) {
+    return DataLocation{get->ref->type.getHeapType(), get->index};
+  } if (auto* get = curr->dynCast<ArrayGet>()) {
+    return DataLocation{get->ref->type.getHeapType(),
+                        DataLocation::ArrayIndex};
+  } if (auto* get = curr->dynCast<RefGetDesc>()) {
+    return DataLocation{get->ref->type.getHeapType(),
+                        DataLocation::DescriptorIndex};
+  }
+  Fatal() << "bad source " << *curr;
+}
+
+// Collect subtyping constraints for one CollectedFuncInfo.
+struct InfoCollector : public SubtypingDiscoverer<InfoCollector> {
+  CollectedFuncInfo& info;
+
+  InfoCollector(CollectedFuncInfo& info) : info(info) {}
+
+  // Constraints on type themselves do not interest us.
+  void noteSubtype(Type, Type) {}
+  void noteSubtype(HeapType, HeapType) {}
+  void noteSubtype(Type, Expression) {}
+
+  // An absolute (root) constraint.
+  void noteSubtype(Expression* sub, Type super) {
+    info.roots.emplace_back({getSourceLocation(super), type});
+  }
+  void noteNonFlowSubtype(Expression* sub, Type super) {
+    noteSubtype(sub, super);
+  }
+
+  // A relative (link) constraint.
+  void noteSubtype(Expression* sub, Expression* super) {
+    info.roots.emplace_back({getLocation(super), getLocation(sub)});
+  }
+
+  // TODO
+  void noteCast(HeapType, HeapType) {}
+  void noteCast(Expression*, Type) {}
+  void noteCast(Expression*, Expression*) {}
+};
+
 struct TypeGeneralizing : public Pass {
   // Only alters types.
   bool requiresNonNullableLocalFixups() override { return false; }
