@@ -32,7 +32,7 @@ void LocationLinkGraph::fill(Module& wasm) {
   // store that themselves (to save on size).
   using Exprs = std::unordered_set<Expression*>;
   ModuleUtils::ParallelFunctionAnalysis<Exprs> analysis(
-    *module, [&](Function* func, Exprs& exprs) {
+    wasm, [&](Function* func, Exprs& exprs) {
 
       if (func->imported()) {
         return;
@@ -51,7 +51,7 @@ void LocationLinkGraph::fill(Module& wasm) {
 
   // Build a mapping of expressions to their parent functions.
   std::unordered_map<Expression*, Function*> exprFuncs;
-  for (auto& [func, exprs]) {
+  for (auto& [func, exprs] : analysis.map) {
     for (auto* expr : exprs) {
       exprFuncs[expr] = func;
     }
@@ -72,10 +72,10 @@ void LocationLinkGraph::fill(Module& wasm) {
       emplace(location, GlobalLocation{set->name});
     if (auto* get = curr->dynCast<LocalGet>()) {
       // Reads from the corresponding local.
-      emplace(LocalLocation{exprFuncs[curr], get->name}, location);
+      emplace(LocalLocation{exprFuncs[curr], get->index}, location);
     } else if (auto* set = curr->dynCast<LocalGet>()) {
       // Write to the corresponding local.
-      emplace(location, LocalLocation{exprFuncs[curr], set->name});
+      emplace(location, LocalLocation{exprFuncs[curr], set->index});
     }
     /* TODO else if (auto* get = curr->dynCast<StructGet>()) {
       return DataLocation{get->ref->type.getHeapType(), get->index};
