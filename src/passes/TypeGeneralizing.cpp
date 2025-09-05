@@ -45,19 +45,20 @@ using Element = analysis::ValType::Element;
 // The data we gather from each function, as we process them in parallel. Later
 // this will be merged into a single big graph.
 struct CollectedFuncInfo {
-  // All the links we found in this function. Rarely are there duplicates
-  // in this list (say when writing to the same global location from another
-  // global location), and we do not try to deduplicate here, just store them in
-  // a plain array for now, which is faster (later, when we merge all the info
-  // from the functions, we need to deduplicate anyhow).
+  // We collect two types of information: 1. Relative constraints, where we find
+  // links between points in the graph, like a global.get that feeds into a
+  // local.set: the global must be refined enough to fit in the local.
+  //
+  // Rarely are there duplicates in this list, so we leave deduplication for
+  // later when we merge all function infos anyhow.
   std::vector<LocationLink> links;
 
-  // All the roots of the graph, that is, concrete constraints on typing (i.e.,
-  // absolute, as opposed to links that are relative between locations). For
-  // example, ref.eq imposes a root constraint of eqref on both children.
+  // 2. The second constraint we gather are absolute ones, "roots". E.g., ref.eq
+  // imposes a root constraint of eqref on both children.
   //
-  // The vector here is of the location of the root and its type.
-  std::vector<std::pair<Location, Type>> roots;
+  // The vector here is of the location of the root and the constraint there (as
+  // above, we do not deduplicate here).
+  std::vector<std::pair<Location, Element>> roots;
 };
 
 struct TypeGeneralizing : public Pass {
