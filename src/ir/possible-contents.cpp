@@ -3102,41 +3102,7 @@ void Flower::writeToData(Expression* ref, Expression* value, Index fieldIndex) {
 }
 
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
-void Flower::dump(Location location) {
-  if (auto* loc = std::get_if<ExpressionLocation>(&location)) {
-    std::cout << "  exprloc \n"
-              << *loc->expr << " : " << loc->tupleIndex << '\n';
-  } else if (auto* loc = std::get_if<DataLocation>(&location)) {
-    std::cout << "  dataloc ";
-    if (wasm.typeNames.count(loc->type)) {
-      std::cout << '$' << wasm.typeNames[loc->type].name;
-    } else {
-      std::cout << loc->type << '\n';
-    }
-    std::cout << " : " << loc->index << '\n';
-  } else if (auto* loc = std::get_if<TagLocation>(&location)) {
-    std::cout << "  tagloc " << loc->tag << " : " << loc->tupleIndex << '\n';
-  } else if (auto* loc = std::get_if<ParamLocation>(&location)) {
-    std::cout << "  paramloc " << loc->func->name << " : " << loc->index
-              << '\n';
-  } else if (auto* loc = std::get_if<LocalLocation>(&location)) {
-    std::cout << "  localloc " << loc->func->name << " : " << loc->index
-              << '\n';
-  } else if (auto* loc = std::get_if<ResultLocation>(&location)) {
-    std::cout << "  resultloc $" << loc->func->name << " : " << loc->index
-              << '\n';
-  } else if (auto* loc = std::get_if<GlobalLocation>(&location)) {
-    std::cout << "  globalloc " << loc->name << '\n';
-  } else if (std::get_if<SignatureParamLocation>(&location)) {
-    std::cout << "  sigparamloc " << '\n';
-  } else if (auto* loc = std::get_if<SignatureResultLocation>(&location)) {
-    std::cout << "  sigresultloc " << loc->type << " : " << loc->index << '\n';
-  } else if (auto* loc = std::get_if<RootLocation>(&location)) {
-    std::cout << "  rootloc " << loc->type << '\n';
-  } else {
-    std::cout << "  (other)\n";
-  }
-}
+void Flower::dump(Location location) { std::cout << location << '\n'; }
 #endif
 
 } // anonymous namespace

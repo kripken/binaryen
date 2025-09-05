@@ -7,6 +7,7 @@ set(ir_SOURCES
   eh-utils.cpp
   export-utils.cpp
   intrinsics.cpp
+  locations.cpp
   lubs.cpp
   memory-utils.cpp
   metadata.cpp
