@@ -140,7 +140,7 @@ struct TypeGeneralizing : public Pass {
         links.insert(link);
       }
       for (auto& [root, value] : info.roots) {
-        lattice.meet(roots[root], value);
+        lattice.meet(locationData[root], value);
       }
     }
 
@@ -155,7 +155,14 @@ struct TypeGeneralizing : public Pass {
 
     // Flow while changes happen.
     while (!work.empty()) {
-      
+      auto loc = work.pop();
+      auto data = locationData[loc];
+      for (auto target : sortedGraph[loc]) {
+        if (lattice.meet(locationData[target], data)) {
+          // Flow onward.
+          work.push(target);
+        }
+      }
     }
   }
 };
