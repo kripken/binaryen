@@ -70,7 +70,7 @@ void LocationLinkGraph::fill(Module& wasm) {
     } else if (auto* set = curr->dynCast<GlobalGet>()) {
       // Write to the corresponding global.
       emplace(location, GlobalLocation{set->name});
-    if (auto* get = curr->dynCast<LocalGet>()) {
+    } else if (auto* get = curr->dynCast<LocalGet>()) {
       // Reads from the corresponding local.
       emplace(LocalLocation{exprFuncs[curr], get->index}, location);
     } else if (auto* set = curr->dynCast<LocalGet>()) {
