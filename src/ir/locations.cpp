@@ -15,6 +15,7 @@
  */
 
 #include "ir/locations.h"
+#include "ir/module-utils.h"
 #include "wasm.h"
 
 namespace wasm {
@@ -28,7 +29,33 @@ void LocationLinkGraph::fill(Module& wasm) {
   }
 
   // Find the parent function of all expressions, as ExpressionLocations do not
-  // store that themselves (t
+  // store that themselves (to save on size).
+  using Exprs = std::unordered_set<Expression*>;
+  ModuleUtils::ParallelFunctionAnalysis<Exprs> analysis(
+    *module, [&](Function* func, Exprs& exprs) {
+
+      if (func->imported()) {
+        return;
+      }
+
+      struct Finder
+        : public PostWalker<Finder, UnifiedExpressionVisitor<Finder>> {
+        Exprs& exprs;
+        Finder(Exprs& exprs) : exprs(exprs) {}
+        void visitExpression(Expression* curr) {
+          exprs.insert(curr);
+        }
+      } finder(exprs);
+      finder.walk(func->body);
+    });
+
+  // Build a mapping of expressions to their parent functions.
+  std::unordered_map<Expression*, Function*> exprFuncs;
+  for (auto& [func, exprs]) {
+    for (auto* expr : exprs) {
+      exprFuncs[expr] = func;
+    }
+  }
 
   // Find locations that we can add boilerplate links to, and do so.
   for (auto& location : all) {
@@ -43,9 +70,14 @@ void LocationLinkGraph::fill(Module& wasm) {
     } else if (auto* set = curr->dynCast<GlobalGet>()) {
       // Write to the corresponding global.
       emplace(location, GlobalLocation{set->name});
-    } /*else if (auto* get = curr->dynCast<LocalGet>()) {
-      return LocalLocation{get->index};
-    } else if (auto* get = curr->dynCast<StructGet>()) {
+    if (auto* get = curr->dynCast<LocalGet>()) {
+      // Reads from the corresponding local.
+      emplace(LocalLocation{exprFuncs[curr], get->name}, location);
+    } else if (auto* set = curr->dynCast<LocalGet>()) {
+      // Write to the corresponding local.
+      emplace(location, LocalLocation{exprFuncs[curr], set->name});
+    }
+    /* TODO else if (auto* get = curr->dynCast<StructGet>()) {
       return DataLocation{get->ref->type.getHeapType(), get->index};
     } else if (auto* get = curr->dynCast<ArrayGet>()) {
       return DataLocation{get->ref->type.getHeapType(),

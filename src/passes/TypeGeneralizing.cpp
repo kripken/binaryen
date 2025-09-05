@@ -104,7 +104,6 @@ struct TypeGeneralizing : public Pass {
   bool requiresNonNullableLocalFixups() override { return false; }
 
   void run(Module* module) override {
-std::cout << "size " << sizeof(Location) << '\n';
     if (!module->features.hasGC()) {
       return;
     }
