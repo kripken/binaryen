@@ -68,7 +68,8 @@ struct CollectedFuncInfo {
 // its values arrive. For example, a global.get's source is the corresponding
 // GlobalLocation.
 // TODO: move to locations.h, if there are other users?
-Location getSourceLocation(Expression* curr) {
+#if 0
+Location getSourceLocation(Expression* curr) { // TODO; get func
   if (auto* get = curr->dynCast<GlobalGet>()) {
     return GlobalLocation{get->name};
   } if (auto* get = curr->dynCast<LocalGet>()) {
@@ -84,6 +85,7 @@ Location getSourceLocation(Expression* curr) {
   }
   Fatal() << "bad source " << *curr;
 }
+#endif
 
 Location getLocation(Expression* curr) {
   // TODO: tuples
