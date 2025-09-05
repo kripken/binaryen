@@ -27,17 +27,33 @@ void LocationLinkGraph::fill(Module& wasm) {
     all.insert(to);
   }
 
+  // Find the parent function of all expressions, as ExpressionLocations do not
+  // store that themselves (t
+
   // Find locations that we can add boilerplate links to, and do so.
   for (auto& location : all) {
-    auto* loc = std::get_if<wasm::ExpressionLocation>(&location);
-    if (!loc) {
+    auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&location);
+    if (!exprLoc) {
       continue;
     }
-    auto* curr = loc->expr;
+    auto* curr = exprLoc->expr;
     if (auto* get = curr->dynCast<GlobalGet>()) {
-      // This reads from the corresponding global.
-      emplace(GlobalLocation{get->name}, *loc);
-    }
+      // Reads from the corresponding global.
+      emplace(GlobalLocation{get->name}, location);
+    } else if (auto* set = curr->dynCast<GlobalGet>()) {
+      // Write to the corresponding global.
+      emplace(location, GlobalLocation{set->name});
+    } /*else if (auto* get = curr->dynCast<LocalGet>()) {
+      return LocalLocation{get->index};
+    } else if (auto* get = curr->dynCast<StructGet>()) {
+      return DataLocation{get->ref->type.getHeapType(), get->index};
+    } else if (auto* get = curr->dynCast<ArrayGet>()) {
+      return DataLocation{get->ref->type.getHeapType(),
+                          DataLocation::ArrayIndex};
+    } else if (auto* get = curr->dynCast<RefGetDesc>()) {
+      return DataLocation{get->ref->type.getHeapType(),
+                          DataLocation::DescriptorIndex};
+    } */
   }
 }
 
