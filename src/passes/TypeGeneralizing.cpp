@@ -132,6 +132,34 @@ struct TypeGeneralizing : public Pass {
     if (!getPassOptions().closedWorld) {
       Fatal() << "TypeRefining requires --closed-world";
     }
+
+    // Collect information from each function.
+    ModuleUtils::ParallelFunctionAnalysis<CollectedFuncInfo> analysis(
+      *module, [&](Function* func, CollectedFuncInfo& info) {
+        Collector(info).walkFunctionInModule(func, module);
+      });
+
+    // Also walk the global module code (for simplicity, also add it to the
+    // function map, using a "function" key of nullptr).
+    auto& globalInfo = analysis.map[nullptr];
+    Collector(globalInfo).walkModuleCode(module);
+
+    // Merge the function information into a single large graph, deduplicating
+    // as we go
+    std::unordered_set<LocationLink> links;
+    InsertOrderedMap<Location, Element> roots; // XXX insertordered?
+
+    for (auto& [func, info] : analysis.map) {
+      for (auto& link : info.links) {
+        links.insert(link);
+      }
+      for (auto& [root, value] : info.roots) {
+        roots[root] = value;
+      }
+    }
+
+    // We no longer need the function-level info.
+    analysis.map.clear();
   }
 };
 
