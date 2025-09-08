@@ -221,11 +221,14 @@ struct TypeGeneralizing : public Pass {
 
         // If there is no info at all, that means no constraints, and we can use
         // the top type.
+        auto old = type;
         auto iter = parent.locationValues.find(loc);
         type = iter == parent.locationValues.end()
                  ? Type(type.getHeapType().getTop(), Nullable)
                  : iter->second;
         std::cerr << "Updated " << loc << " to " << type << '\n';
+        // We should only ever generalize types, not refine them.
+        assert(Type::isSubType(old, type));
       };
 
       void visitGlobalGet(GlobalGet* curr) {

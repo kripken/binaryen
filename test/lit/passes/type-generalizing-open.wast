@@ -115,4 +115,3 @@
 
 ;; TODO: imports
 
-;; TODO: test we never refine here (all constraints are actually more refined than the initial value).
