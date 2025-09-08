@@ -95,8 +95,9 @@ void LocationLinkGraph::fill(Module& wasm) {
 }
 
 void LocationLinkGraph::reverse() {
-  for (auto& link : *this) {
-    std::swap(link.from, link.to);
+  auto original = std::move(*this);
+  for (auto& link : original) {
+    insert({link.to, link.from});
   }
 }
 

@@ -125,9 +125,9 @@ struct TypeGeneralizing : public Pass {
     Collector(globalInfo).walkModuleCode(module);
 
     // All our operations will be on the lattice of types, on the following data
-    // structure that maps locations to their data.
+    // structure that maps locations to their values.
     analysis::ValType lattice;
-    std::unordered_map<Location, Element> locationData;
+    std::unordered_map<Location, Element> locationValues;
     
     // Merge the function information into a single large graph, deduplicating
     // as we go, and preparing the initial list of work (the roots).
@@ -139,7 +139,7 @@ struct TypeGeneralizing : public Pass {
         links.insert(link);
       }
       for (auto& [root, value] : info.roots) {
-        lattice.meet(locationData[root], value);
+        lattice.meet(locationValues[root], value);
         work.push(root);
       }
     }
@@ -162,13 +162,19 @@ struct TypeGeneralizing : public Pass {
     // Flow while changes happen.
     while (!work.empty()) {
       auto loc = work.pop();
-      auto data = locationData[loc];
+      auto value = locationValues[loc];
       for (auto target : sortedGraph[loc]) {
-        if (lattice.meet(locationData[target], data)) {
+        if (lattice.meet(locationValues[target], value)) {
           // Flow onward.
           work.push(target);
         }
       }
+    }
+
+    // Apply |locationValues| to the module.
+    for (auto& [loc, value] : locationValues) {
+      std::cout << loc << " : ";
+      std::cout << value << '\n';
     }
   }
 };

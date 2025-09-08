@@ -297,6 +297,11 @@ template<> struct hash<wasm::LocationLink> {
   }
 };
 
+// Debugging.
+
+std::ostream& operator<<(std::ostream& o, wasm::ModuleLocation moduleLocation);
+std::ostream& operator<<(std::ostream& o, wasm::Location location);
+
 } // namespace std
 
 namespace wasm {

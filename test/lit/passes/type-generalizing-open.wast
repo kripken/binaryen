@@ -4,7 +4,9 @@
 
 ;; With no constraints on it, this global can be anyref.
 (module
+  ;; CHECK:      (type $A (struct))
   (type $A (struct))
 
+  ;; CHECK:      (global $g (mut (ref $A)) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 )
