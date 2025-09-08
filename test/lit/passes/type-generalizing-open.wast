@@ -16,9 +16,19 @@
   ;; CHECK:      (type $A (struct))
   (type $A (struct))
 
-  ;; CHECK:      (global $g (mut anyref) (struct.new_default $A))
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (global $g (mut eqref) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 
+  ;; CHECK:      (func $test (type $1)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.eq
+  ;; CHECK-NEXT:    (global.get $g)
+  ;; CHECK-NEXT:    (global.get $g)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
   (func $test
     (drop
       (ref.eq
