@@ -20,12 +20,16 @@
 
 namespace wasm {
 
-void LocationLinkGraph::fill(Module& wasm) {
+void LocationLinkGraph::fill(Module& wasm, const std::unordered_set<Location>& roots) {
   // Find all locations, so we know what additional links to add.
   std::unordered_set<Location> all;
   for (auto& [from, to] : *this) {
     all.insert(from);
     all.insert(to);
+  }
+
+  for (auto root : roots) {
+    all.insert(root);
   }
 
   // Find the parent function of all expressions, as ExpressionLocations do not
@@ -54,8 +58,10 @@ void LocationLinkGraph::fill(Module& wasm) {
     }
   }
 
+std::cout << "loop2\n";
   // Find locations that we can add boilerplate links to, and do so.
   for (auto& location : all) {
+std::cout << "loop3 " << location << '\n';
     auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&location);
     if (!exprLoc) {
       continue;
@@ -64,13 +70,13 @@ void LocationLinkGraph::fill(Module& wasm) {
     if (auto* get = curr->dynCast<GlobalGet>()) {
       // Reads from the corresponding global.
       emplace(GlobalLocation{get->name}, location);
-    } else if (auto* set = curr->dynCast<GlobalGet>()) {
+    } else if (auto* set = curr->dynCast<GlobalSet>()) {
       // Write to the corresponding global.
       emplace(location, GlobalLocation{set->name});
     } /* else if (auto* get = curr->dynCast<LocalGet>()) {
        // Reads from the corresponding local.
        emplace(LocalLocation{exprFuncs[curr], get->index}, location);
-     } else if (auto* set = curr->dynCast<LocalGet>()) {
+     } else if (auto* set = curr->dynCast<LocalSet>()) {
        // Write to the corresponding local.
        emplace(location, LocalLocation{exprFuncs[curr], set->index});
      }*/

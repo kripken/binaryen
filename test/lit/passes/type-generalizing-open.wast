@@ -10,3 +10,21 @@
   ;; CHECK:      (global $g (mut anyref) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 )
+
+;; A global.get constrains us as it feeds into a ref.eq, so we must be eq.
+(module
+  ;; CHECK:      (type $A (struct))
+  (type $A (struct))
+
+  ;; CHECK:      (global $g (mut anyref) (struct.new_default $A))
+  (global $g (mut (ref $A)) (struct.new $A))
+
+  (func $test
+    (drop
+      (ref.eq
+        (global.get $g)
+        (global.get $g)
+      )
+    )
+  )
+)

@@ -313,8 +313,11 @@ struct LocationLinkGraph : public std::unordered_set<LocationLink> {
   // ExpressionLocation of a global.get, then we add a link from the
   // corresponding GlobalLocation to that expression (since the expression reads
   // from there).
+  //
+  // Receives a set of roots that are additional locations to consider and link.
+  //
   // TODO: use this in GUFA?
-  void fill(Module& wasm);
+  void fill(Module& wasm, const std::unordered_set<Location>& roots);
 
   // Reverse the links.
   void reverse();

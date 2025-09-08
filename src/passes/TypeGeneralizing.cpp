@@ -108,6 +108,9 @@ struct TypeGeneralizing : public Pass {
   // Only alters types.
   bool requiresNonNullableLocalFixups() override { return false; }
 
+  // The computed element for each location.
+  std::unordered_map<Location, Element> locationValues;
+
   void run(Module* module) override {
     if (!module->features.hasGC()) {
       return;
@@ -124,14 +127,13 @@ struct TypeGeneralizing : public Pass {
     auto& globalInfo = analysis.map[nullptr];
     Collector(globalInfo).walkModuleCode(module);
 
-    // All our operations will be on the lattice of types, on the following data
-    // structure that maps locations to their values.
+    // All our operations will be on the lattice of types.
     analysis::ValType lattice;
-    std::unordered_map<Location, Element> locationValues;
 
     // Merge the function information into a single large graph, deduplicating
     // as we go, and preparing the initial list of work (the roots).
     LocationLinkGraph links;
+    std::unordered_set<Location> roots;
     UniqueDeferredQueue<Location> work;
 
     for (auto& [func, info] : analysis.map) {
@@ -140,6 +142,7 @@ struct TypeGeneralizing : public Pass {
       }
       for (auto& [root, value] : info.roots) {
         lattice.meet(locationValues[root], value);
+        roots.insert(root);
         work.push(root);
       }
     }
@@ -148,7 +151,7 @@ struct TypeGeneralizing : public Pass {
     analysis.map.clear();
 
     // Prepare the full graph to flow on.
-    links.fill(*module);
+    links.fill(*module, roots);
 
     // Our updates are in the reverse of the normal direction of the flow of
     // information. E.g. when we see (global.set $g (value)) we do not send the
@@ -157,11 +160,20 @@ struct TypeGeneralizing : public Pass {
     links.reverse();
 
     // Get the flow-efficient sorted graph.
+    std::cerr << "graph:\n";
     auto sortedGraph = links.getSortedGraph();
+    for (auto& [loc, targets] : sortedGraph) {
+      std::cerr << loc << " sends to targets: [\n";
+      for (auto t : targets) {
+        std::cerr << "  " << t << '\n';
+      }
+      std::cerr << "]\n";
+    }
 
     // Flow while changes happen.
     while (!work.empty()) {
       auto loc = work.pop();
+      std::cerr << "working on " << loc << '\n';
       auto value = locationValues[loc];
       for (auto target : sortedGraph[loc]) {
         if (lattice.meet(locationValues[target], value)) {
@@ -172,28 +184,55 @@ struct TypeGeneralizing : public Pass {
     }
 
     // Apply |locationValues| to the module.
-    std::cout << "map:\n";
+    std::cerr << "map:\n";
     for (auto& [loc, value] : locationValues) {
-      std::cout << loc << " : " << value << '\n';
+      std::cerr << loc << " => " << value << '\n';
     }
 
-    // Given a location and its type in the IR, update the type.
-    auto update = [&](Location loc, Type& type) {
-      if (!type.isRef()) {
-        return;
+    update(module);
+  }
+
+  // Apply |locationValues| to the IR.
+  void update(Module* module) {
+    struct Updater : public WalkerPass<PostWalker<Updater>> {
+      bool isFunctionParallel() override { return true; }
+
+      TypeGeneralizing& parent;
+
+      Updater(TypeGeneralizing& parent) : parent(parent) {}
+
+      std::unique_ptr<Pass> create() override {
+        return std::make_unique<Updater>(parent);
       }
 
-      // If there is no info at all, that means no constraints, and we can use
-      // the top type.
-      auto iter = locationValues.find(loc);
-      type = iter == locationValues.end()
-               ? Type(type.getHeapType().getTop(), Nullable)
-               : iter->second;
+      // Given a location and its type in the IR, update the type.
+      void updateType(Location loc, Type& type) {
+        if (!type.isRef()) {
+          return;
+        }
+
+        // If there is no info at all, that means no constraints, and we can use
+        // the top type.
+        auto iter = parent.locationValues.find(loc);
+        type = iter == parent.locationValues.end()
+                 ? Type(type.getHeapType().getTop(), Nullable)
+                 : iter->second;
+        std::cerr << "Updated " << loc << " to " << type << '\n';
+      };
+
+      void visitGlobalGet(GlobalGet* curr) {
+        updateType(GlobalLocation{curr->name}, curr->type);
+      }
+
+      void visitGlobal(Global* curr) {
+        updateType(GlobalLocation{curr->name}, curr->type);
+      }
     };
 
-    for (auto& global : module->globals) {
-      update(GlobalLocation{global->name}, global->type);
-    }
+    Updater updater(*this);
+    PassRunner runner(module);
+    updater.run(&runner, module);
+    updater.walkModuleCode(module);
   }
 };
 
