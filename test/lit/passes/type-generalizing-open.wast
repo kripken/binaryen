@@ -70,4 +70,49 @@
   )
 )
 
+;; One global influences another. Here $g has two constraints: the exported
+;; global $exp which requires non-null any, and the ref.eq which requires
+;; nullable eq. Together, we end up with non-null eq.
+(module
+  ;; CHECK:      (type $A (struct))
+  (type $A (struct))
+
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (global $exp (mut (ref any)) (struct.new_default $A))
+  (global $exp (mut (ref any)) (struct.new $A))
+
+  ;; CHECK:      (global $g (mut (ref eq)) (struct.new_default $A))
+  (global $g (mut (ref $A)) (struct.new $A))
+
+  ;; CHECK:      (export "exp" (global $exp))
+  (export "exp" (global $exp))
+
+  ;; CHECK:      (func $test (type $1)
+  ;; CHECK-NEXT:  (global.set $exp
+  ;; CHECK-NEXT:   (global.get $g)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.eq
+  ;; CHECK-NEXT:    (global.get $g)
+  ;; CHECK-NEXT:    (global.get $g)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    ;; Use $g in a set to the exported global, and in a ref.eq.
+    (global.set $exp
+      (global.get $g)
+    )
+    (drop
+      (ref.eq
+        (global.get $g)
+        (global.get $g)
+      )
+    )
+  )
+)
+
 ;; TODO: imports
+
+;; TODO: test we never refine here (all constraints are actually more refined than the initial value).
