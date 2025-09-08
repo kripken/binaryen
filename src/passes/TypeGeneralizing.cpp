@@ -150,6 +150,12 @@ struct TypeGeneralizing : public Pass {
     // Prepare the full graph to flow on.
     links.fill(*module);
 
+    // Our updates are in the reverse of the normal direction of the flow of
+    // information. E.g. when we see (global.set $g (value)) we do not send the
+    // value to the GlobalLocation, but rather look back and say that the
+    // value's sources must be refined enough to fit in the global's type.
+    links.reverse();
+
     // Get the flow-efficient sorted graph.
     auto sortedGraph = links.getSortedGraph();
 

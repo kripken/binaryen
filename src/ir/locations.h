@@ -311,6 +311,9 @@ struct LocationLinkGraph : public std::unordered_set<LocationLink> {
   // TODO: use this in GUFA?
   void fill(Module& wasm);
 
+  // Reverse the links.
+  void reverse();
+
   // This graph is a set { (from, to), .. }. For efficient traversal, we can
   // provide the "sorted" form that maps a location to its targets, that is,
   // { from: [to, ..], .. }, which is sorted by sources.

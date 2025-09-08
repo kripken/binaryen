@@ -70,13 +70,13 @@ void LocationLinkGraph::fill(Module& wasm) {
     } else if (auto* set = curr->dynCast<GlobalGet>()) {
       // Write to the corresponding global.
       emplace(location, GlobalLocation{set->name});
-    } else if (auto* get = curr->dynCast<LocalGet>()) {
+    }/* else if (auto* get = curr->dynCast<LocalGet>()) {
       // Reads from the corresponding local.
       emplace(LocalLocation{exprFuncs[curr], get->index}, location);
     } else if (auto* set = curr->dynCast<LocalGet>()) {
       // Write to the corresponding local.
       emplace(location, LocalLocation{exprFuncs[curr], set->index});
-    }
+    }*/
     /* TODO else if (auto* get = curr->dynCast<StructGet>()) {
       return DataLocation{get->ref->type.getHeapType(), get->index};
     } else if (auto* get = curr->dynCast<ArrayGet>()) {
@@ -92,6 +92,12 @@ void LocationLinkGraph::fill(Module& wasm) {
   //         - collect them, then see if their params are in our initial set etc
   // TODO: struct operations for DataLoc, build ConeReadLocations
   // TODO: taglocation stuffs
+}
+
+void LocationLinkGraph::reverse() {
+  for (auto& link : *this) {
+    std::swap(link.from, link.to);
+  }
 }
 
 LocationLinkGraph::SortedGraph LocationLinkGraph::getSortedGraph() {
