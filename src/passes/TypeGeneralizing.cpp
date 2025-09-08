@@ -33,8 +33,8 @@
 #include "ir/locations.h"
 #include "ir/lubs.h"
 #include "ir/subtype-exprs.h"
-#include "support/unique_deferring_queue.h"
 #include "pass.h"
+#include "support/unique_deferring_queue.h"
 #include "wasm-traversal.h"
 #include "wasm.h"
 
@@ -128,7 +128,7 @@ struct TypeGeneralizing : public Pass {
     // structure that maps locations to their values.
     analysis::ValType lattice;
     std::unordered_map<Location, Element> locationValues;
-    
+
     // Merge the function information into a single large graph, deduplicating
     // as we go, and preparing the initial list of work (the roots).
     LocationLinkGraph links;
@@ -186,7 +186,9 @@ struct TypeGeneralizing : public Pass {
       // If there is no info at all, that means no constraints, and we can use
       // the top type.
       auto iter = locationValues.find(loc);
-      type = iter == locationValues.end() ? Type(type.getHeapType().getTop(), Nullable) : iter->second;
+      type = iter == locationValues.end()
+               ? Type(type.getHeapType().getTop(), Nullable)
+               : iter->second;
     };
 
     for (auto& global : module->globals) {

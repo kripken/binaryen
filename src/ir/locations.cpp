@@ -33,7 +33,6 @@ void LocationLinkGraph::fill(Module& wasm) {
   using Exprs = std::unordered_set<Expression*>;
   ModuleUtils::ParallelFunctionAnalysis<Exprs> analysis(
     wasm, [&](Function* func, Exprs& exprs) {
-
       if (func->imported()) {
         return;
       }
@@ -42,9 +41,7 @@ void LocationLinkGraph::fill(Module& wasm) {
         : public PostWalker<Finder, UnifiedExpressionVisitor<Finder>> {
         Exprs& exprs;
         Finder(Exprs& exprs) : exprs(exprs) {}
-        void visitExpression(Expression* curr) {
-          exprs.insert(curr);
-        }
+        void visitExpression(Expression* curr) { exprs.insert(curr); }
       } finder(exprs);
       finder.walk(func->body);
     });
@@ -70,13 +67,13 @@ void LocationLinkGraph::fill(Module& wasm) {
     } else if (auto* set = curr->dynCast<GlobalGet>()) {
       // Write to the corresponding global.
       emplace(location, GlobalLocation{set->name});
-    }/* else if (auto* get = curr->dynCast<LocalGet>()) {
-      // Reads from the corresponding local.
-      emplace(LocalLocation{exprFuncs[curr], get->index}, location);
-    } else if (auto* set = curr->dynCast<LocalGet>()) {
-      // Write to the corresponding local.
-      emplace(location, LocalLocation{exprFuncs[curr], set->index});
-    }*/
+    } /* else if (auto* get = curr->dynCast<LocalGet>()) {
+       // Reads from the corresponding local.
+       emplace(LocalLocation{exprFuncs[curr], get->index}, location);
+     } else if (auto* set = curr->dynCast<LocalGet>()) {
+       // Write to the corresponding local.
+       emplace(location, LocalLocation{exprFuncs[curr], set->index});
+     }*/
     /* TODO else if (auto* get = curr->dynCast<StructGet>()) {
       return DataLocation{get->ref->type.getHeapType(), get->index};
     } else if (auto* get = curr->dynCast<ArrayGet>()) {
@@ -153,4 +150,3 @@ std::ostream& operator<<(std::ostream& o, wasm::Location location) {
 }
 
 } // namespace std
-
