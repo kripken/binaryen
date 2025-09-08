@@ -102,6 +102,14 @@ struct Collector
   void noteCast(HeapType, HeapType) {}
   void noteCast(Expression*, Type) {}
   void noteCast(Expression*, Expression*) {}
+
+  void visitGlobalSet(GlobalSet* curr) {
+    // Override the parent behavior of an absolute constraint of "value is a
+    // subtype of ${current type of global}" with a link to the global, i.e., a
+    // relative constraint.
+    info.links.emplace_back(getLocation(curr->value),
+                            GlobalLocation{curr->name});
+  }
 };
 
 struct TypeGeneralizing : public Pass {
@@ -150,6 +158,7 @@ struct TypeGeneralizing : public Pass {
       }
       for (auto& [root, value] : info.roots) {
         lattice.meet(locationValues[root], value);
+        std::cerr << "made root " << root << " to " << value << '\n';
         roots.insert(root);
         work.push(root);
       }
@@ -185,6 +194,7 @@ struct TypeGeneralizing : public Pass {
       auto value = locationValues[loc];
       for (auto target : sortedGraph[loc]) {
         if (lattice.meet(locationValues[target], value)) {
+          std::cerr << "  met target " << target << " to " << value << '\n';
           // Flow onward.
           work.push(target);
         }
