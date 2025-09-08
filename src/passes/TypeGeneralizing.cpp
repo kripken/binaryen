@@ -223,16 +223,16 @@ struct TypeGeneralizing : public Pass {
       void visitGlobalGet(GlobalGet* curr) {
         updateType(GlobalLocation{curr->name}, curr->type);
       }
-
-      void visitGlobal(Global* curr) {
-        updateType(GlobalLocation{curr->name}, curr->type);
-      }
     };
 
     Updater updater(*this);
     PassRunner runner(module);
     updater.run(&runner, module);
     updater.walkModuleCode(module);
+
+    for (auto& global : module->globals) {
+      updater.updateType(GlobalLocation{global->name}, global->type);
+    }
   }
 };
 
