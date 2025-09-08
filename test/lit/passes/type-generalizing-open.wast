@@ -38,3 +38,36 @@
     )
   )
 )
+
+;; Exported globals are roots: we do not change their types.
+(module
+  ;; CHECK:      (type $A (struct))
+  (type $A (struct))
+
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (global $g (mut (ref $A)) (struct.new_default $A))
+  (global $g (mut (ref $A)) (struct.new $A))
+
+  ;; CHECK:      (export "g" (global $g))
+  (export "g" (global $g))
+
+  ;; CHECK:      (func $test (type $1)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.eq
+  ;; CHECK-NEXT:    (global.get $g)
+  ;; CHECK-NEXT:    (global.get $g)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (drop
+      (ref.eq
+        (global.get $g)
+        (global.get $g)
+      )
+    )
+  )
+)
+
+;; TODO: imports

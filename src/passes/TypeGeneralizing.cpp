@@ -124,8 +124,16 @@ struct TypeGeneralizing : public Pass {
 
     // Also walk the global module code (for simplicity, also add it to the
     // function map, using a "function" key of nullptr).
-    auto& globalInfo = analysis.map[nullptr];
-    Collector(globalInfo).walkModuleCode(module);
+    auto& moduleInfo = analysis.map[nullptr];
+    Collector(moduleInfo).walkModuleCode(module);
+
+    // Add roots for exports. TODO: not in closed world?
+    for (auto& exp : module->exports) {
+      auto name = exp->getInternalName();
+      if (exp->kind == ExternalKind::Global) {
+        moduleInfo.roots.emplace_back(GlobalLocation{*name}, module->getGlobal(*name)->type);
+      }
+    }
 
     // All our operations will be on the lattice of types.
     analysis::ValType lattice;
