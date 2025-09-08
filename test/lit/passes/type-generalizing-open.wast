@@ -7,6 +7,6 @@
   ;; CHECK:      (type $A (struct))
   (type $A (struct))
 
-  ;; CHECK:      (global $g (mut (ref $A)) (struct.new_default $A))
+  ;; CHECK:      (global $g (mut anyref) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 )

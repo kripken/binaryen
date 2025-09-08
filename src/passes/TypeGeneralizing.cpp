@@ -176,6 +176,22 @@ struct TypeGeneralizing : public Pass {
     for (auto& [loc, value] : locationValues) {
       std::cout << loc << " : " << value << '\n';
     }
+
+    // Given a location and its type in the IR, update the type.
+    auto update = [&](Location loc, Type& type) {
+      if (!type.isRef()) {
+        return;
+      }
+
+      // If there is no info at all, that means no constraints, and we can use
+      // the top type.
+      auto iter = locationValues.find(loc);
+      type = iter == locationValues.end() ? Type(type.getHeapType().getTop(), Nullable) : iter->second;
+    };
+
+    for (auto& global : module->globals) {
+      update(GlobalLocation{global->name}, global->type);
+    }
   }
 };
 
