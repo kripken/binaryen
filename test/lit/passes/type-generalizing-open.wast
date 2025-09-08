@@ -174,6 +174,12 @@
   )
 )
 
+;; Imported globals are roots.
+(module
+  ;; CHECK:      (type $A (struct))
+  (type $A (struct))
 
-;; TODO: imports
+  ;; CHECK:      (import "a" "b" (global $g (mut (ref $A))))
+  (import "a" "b" (global $g (mut (ref $A))))
+)
 

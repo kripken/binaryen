@@ -143,6 +143,13 @@ struct TypeGeneralizing : public Pass {
       }
     }
 
+    // Add roots for imports. TODO: not in closed world?
+    for (auto& global : module->globals) {
+      if (global->imported()) {
+        moduleInfo.roots.emplace_back(GlobalLocation{global->name}, global->type);
+      }
+    }
+
     // All our operations will be on the lattice of types.
     analysis::ValType lattice;
 
