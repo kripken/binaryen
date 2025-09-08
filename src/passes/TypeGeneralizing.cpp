@@ -172,9 +172,9 @@ struct TypeGeneralizing : public Pass {
     }
 
     // Apply |locationValues| to the module.
+    std::cout << "map:\n";
     for (auto& [loc, value] : locationValues) {
-      std::cout << loc << " : ";
-      std::cout << value << '\n';
+      std::cout << loc << " : " << value << '\n';
     }
   }
 };
