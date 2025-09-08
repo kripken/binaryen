@@ -71,7 +71,7 @@
 )
 
 ;; One global influences another. Here $g has two constraints: the exported
-;; global $exp which requires non-null any, and the ref.eq which requires
+;; global $exp-nn which requires non-null any, and the ref.eq which requires
 ;; nullable eq. Together, we end up with non-null eq.
 (module
   ;; CHECK:      (type $A (struct))
@@ -79,17 +79,17 @@
 
   ;; CHECK:      (type $1 (func))
 
-  ;; CHECK:      (global $exp (mut (ref any)) (struct.new_default $A))
-  (global $exp (mut (ref any)) (struct.new $A))
+  ;; CHECK:      (global $exp-nn (mut (ref any)) (struct.new_default $A))
+  (global $exp-nn (mut (ref any)) (struct.new $A))
 
   ;; CHECK:      (global $g (mut (ref eq)) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 
-  ;; CHECK:      (export "exp" (global $exp))
-  (export "exp" (global $exp))
+  ;; CHECK:      (export "exp" (global $exp-nn))
+  (export "exp" (global $exp-nn))
 
   ;; CHECK:      (func $test (type $1)
-  ;; CHECK-NEXT:  (global.set $exp
+  ;; CHECK-NEXT:  (global.set $exp-nn
   ;; CHECK-NEXT:   (global.get $g)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
@@ -101,7 +101,7 @@
   ;; CHECK-NEXT: )
   (func $test
     ;; Use $g in a set to the exported global, and in a ref.eq.
-    (global.set $exp
+    (global.set $exp-nn
       (global.get $g)
     )
     (drop

@@ -70,9 +70,6 @@ std::cout << "loop3 " << location << '\n';
     if (auto* get = curr->dynCast<GlobalGet>()) {
       // Reads from the corresponding global.
       emplace(GlobalLocation{get->name}, location);
-    } else if (auto* set = curr->dynCast<GlobalSet>()) {
-      // Write to the corresponding global.
-      emplace(location, GlobalLocation{set->name});
     } /* else if (auto* get = curr->dynCast<LocalGet>()) {
        // Reads from the corresponding local.
        emplace(LocalLocation{exprFuncs[curr], get->index}, location);
