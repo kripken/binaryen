@@ -24,6 +24,9 @@
 // then flow the constraints to a fixed point to see what the minimal types are
 // that do not break validation or change program behavior.
 //
+// TODO: In closed world we could not treat externally-visible types as roots,
+//       e.g., we could generalize an exported (ref $foo) to an anyref.
+//
 
 #include "analysis/lattice.h"
 #include "analysis/lattices/valtype.h"
@@ -108,10 +111,6 @@ struct TypeGeneralizing : public Pass {
   void run(Module* module) override {
     if (!module->features.hasGC()) {
       return;
-    }
-
-    if (!getPassOptions().closedWorld) {
-      Fatal() << "TypeRefining requires --closed-world";
     }
 
     // Collect information from each function.
