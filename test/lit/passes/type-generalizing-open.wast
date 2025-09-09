@@ -564,3 +564,47 @@
   )
 )
 
+;; As above, with br_on_cast_desc_fail.
+(module
+  (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $A (descriptor $B (struct)))
+    (type $A (descriptor $B (struct)))
+    ;; CHECK:       (type $B (describes $A (struct)))
+    (type $B (describes $A (struct)))
+  )
+
+  ;; CHECK:      (type $2 (func (result (ref null $A))))
+
+  ;; CHECK:      (func $test (type $2) (result (ref null $A))
+  ;; CHECK-NEXT:  (block $block (result (ref null $A))
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (br_on_cast_desc_fail $block (ref null $A) (ref (exact $A))
+  ;; CHECK-NEXT:     (block (result (ref null $A))
+  ;; CHECK-NEXT:      (struct.new_default $A
+  ;; CHECK-NEXT:       (struct.new_default $B)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (struct.new_default $B)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (ref.null none)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test (result (ref null $A))
+    (block $block (result (ref null $A))
+      (drop
+        (br_on_cast_desc_fail $block (ref $A) (ref $A)
+          (block (result (ref $A)) ;; this can be nullable
+            (struct.new $A
+              (struct.new $B)
+            )
+          )
+          (struct.new $B)
+        )
+      )
+      (ref.null $A)
+    )
+  )
+)
+
