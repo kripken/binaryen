@@ -84,6 +84,12 @@ struct Collector
     info.links.emplace_back(sub, super);
   }
 
+  // SubtypingDiscoverer hooks. These implement all true subtyping constraints
+  // in the wasm, for example, that the value written to a global must be a
+  // subtype of the global. We override some of these below where we want to be
+  // more flexible, but SubtypingDiscoverer forms the sound foundation of
+  // enforcing all constraints.
+
   // Constraints on type themselves do not interest us.
   void noteSubtype(Type, Type) {}
   void noteSubtype(HeapType, HeapType) {}
@@ -138,7 +144,9 @@ struct TypeGeneralizing : public Pass {
     // Collect information from each function.
     ModuleUtils::ParallelFunctionAnalysis<CollectedFuncInfo> analysis(
       *module, [&](Function* func, CollectedFuncInfo& info) {
-        Collector(info).walkFunctionInModule(func, module);
+        if (!func->imported()) {
+          Collector(info).walkFunctionInModule(func, module);
+        }
       });
 
     // Also walk the global module code (for simplicity, also add it to the

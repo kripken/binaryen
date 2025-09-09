@@ -249,3 +249,11 @@
   (import "a" "b" (global $g (mut (ref $A))))
 )
 
+;; Imported globals can be ignored and we should not error.
+(module
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (import "a" "b" (func $f (type $0)))
+  (import "a" "b" (func $f))
+)
+
