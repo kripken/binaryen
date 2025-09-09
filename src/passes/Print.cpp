@@ -2274,19 +2274,6 @@ struct PrintExpressionContents
         o << ' ';
         printType(curr->castType);
         return;
-        printMedium(o,
-                    curr->op == BrOnCastFail ? "br_on_cast_fail "
-                                             : "br_on_cast_desc_fail ");
-        curr->name.print(o);
-        o << ' ';
-        if (curr->ref->type == Type::unreachable) {
-          printType(curr->castType);
-        } else {
-          printType(curr->ref->type);
-        }
-        o << ' ';
-        printType(curr->castType);
-        return;
     }
     WASM_UNREACHABLE("Unexpected br_on* op");
   }

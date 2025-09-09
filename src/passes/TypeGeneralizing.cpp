@@ -126,6 +126,8 @@ struct Collector
   void visitGlobalGet(GlobalGet* curr) {
     // Reads from the corresponding global, and must match the global's type
     // exactly, so loop them.
+    // TODO: should all loops be in a general "add equality connections"
+    //       helper, which adds on top of the subtype-exprs stuff?
     loop(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
   }
 
@@ -134,6 +136,30 @@ struct Collector
     // subtype of ${current type of global}" with a link to the global, i.e., a
     // relative constraint.
     link(getLocation(curr->value), GlobalLocation{curr->name});
+  }
+
+  void visitBrOn(BrOn* curr) {
+    // Note the cast, as per the parent behavior.
+    if (curr->op == BrOnCast || curr->op == BrOnCastFail) {
+      self()->noteCast(curr->ref, curr->castType);
+    }
+    // The parent then notes that the sent type is a subtype of the break
+    // target. That is not enough for us, as we need to apply that constraint
+    // onto the *source* of the sent type. Whenever the reference is sent, we
+    // must note the constraint on it
+    switch (curr->op) {
+      // BrOnNonNull sends the non-nullable type on the branch.
+      // TODO: Do not require non-nullability here.
+      case BrOnNonNull:
+      // Failing casts send the reference as is.
+      case BrOnCastFail:
+      case BrOnCastDescFail:
+        self()->noteSubtype(curr->ref,
+                            self()->findBreakTarget(curr->name));
+        break;
+      default:
+        {}
+    }
   }
 };
 
@@ -293,6 +319,7 @@ struct TypeGeneralizing : public Pass {
           // Other
           case Expression::GlobalGetId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
+            //curr->finalize();
             break;
           default:
             break;

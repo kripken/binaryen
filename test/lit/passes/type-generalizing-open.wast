@@ -492,3 +492,42 @@
   )
 )
 
+;; br_on_cast_fail: here we can relax the nullability of the input type, but
+;; not go to anyref (as then we'd be sending anyref to the block, which
+;; requires more).
+(module
+  ;; CHECK:      (type $array (array i16))
+  (type $array (array i16))
+
+  ;; CHECK:      (type $1 (func (result (ref null $array))))
+
+  ;; CHECK:      (func $test (type $1) (result (ref null $array))
+  ;; CHECK-NEXT:  (block $block (result (ref null $array))
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (br_on_cast_fail $block (ref null $array) (ref $array)
+  ;; CHECK-NEXT:     (block (result (ref null $array))
+  ;; CHECK-NEXT:      (array.new_default $array
+  ;; CHECK-NEXT:       (i32.const 0)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (ref.null none)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test (result (ref null $array))
+    (block $block (result (ref null $array))
+      (drop
+        (br_on_cast_fail $block (ref $array) (ref $array)
+          (block (result (ref $array))
+            (array.new_default $array
+              (i32.const 0)
+            )
+          )
+        )
+      )
+      (ref.null $array)
+    )
+  )
+)
+
