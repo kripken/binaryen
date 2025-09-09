@@ -84,6 +84,11 @@ struct Collector
     info.links.emplace_back(sub, super);
   }
 
+  void loop(Location sub, Location super) {
+    link(sub, super);
+    link(super, sub);
+  }
+
   // SubtypingDiscoverer hooks. These implement all true subtyping constraints
   // in the wasm, for example, that the value written to a global must be a
   // subtype of the global. We override some of these below where we want to be
@@ -117,9 +122,9 @@ struct Collector
   // flow of constraints.
 
   void visitGlobalGet(GlobalGet* curr) {
-    // Reads from the corresponding global.
-    link(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
-    link(ExpressionLocation{curr, 0}, GlobalLocation{curr->name});
+    // Reads from the corresponding global, and must match the global's type
+    // exactly, so loop them.
+    loop(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
   }
 
   void visitGlobalSet(GlobalSet* curr) {
