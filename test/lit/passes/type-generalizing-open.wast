@@ -174,6 +174,65 @@
   )
 )
 
+;; As above, but add a loop between globals.
+(module
+  ;; CHECK:      (type $A (sub (struct)))
+  (type $A (sub (struct)))
+
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (global $exp-nn (mut (ref any)) (struct.new_default $A))
+  (global $exp-nn (mut (ref any)) (struct.new $A))
+
+  ;; CHECK:      (global $exp-A (mut (ref null $A)) (struct.new_default $A))
+  (global $exp-A (mut (ref null $A)) (struct.new $A))
+
+  ;; CHECK:      (global $g (mut (ref any)) (struct.new_default $A))
+  (global $g (mut (ref $A)) (struct.new $A))
+
+  ;; CHECK:      (global $h (mut (ref null $A)) (struct.new_default $A))
+  (global $h (mut (ref $A)) (struct.new $A))
+
+  ;; CHECK:      (global $i (mut (ref $A)) (struct.new_default $A))
+  (global $i (mut (ref $A)) (struct.new $A))
+
+  ;; CHECK:      (export "exp-nn" (global $exp-nn))
+  (export "exp-nn" (global $exp-nn))
+
+  ;; CHECK:      (export "exp-A" (global $exp-A))
+  (export "exp-A" (global $exp-A))
+
+  ;; CHECK:      (func $test (type $1)
+  ;; CHECK-NEXT:  (global.set $exp-nn
+  ;; CHECK-NEXT:   (global.get $g)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (global.set $exp-A
+  ;; CHECK-NEXT:   (global.get $h)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (global.set $g
+  ;; CHECK-NEXT:   (global.get $i)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (global.set $h
+  ;; CHECK-NEXT:   (global.get $i)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (global.set $exp-nn
+      (global.get $g)
+    )
+    (global.set $exp-A
+      (global.get $h)
+    )
+    (global.set $g
+      (global.get $i)
+    )
+    (global.set $h
+      (global.get $i)
+    )
+    ;; Add an edge between $h and $i the other way
+  )
+)
+
 ;; Imported globals are roots.
 (module
   ;; CHECK:      (type $A (struct))
