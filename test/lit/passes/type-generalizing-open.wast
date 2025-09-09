@@ -257,3 +257,19 @@
   (import "a" "b" (func $f))
 )
 
+;; The block's type constrains the global: we can only make it nullable, not
+;; funcref.
+(module
+ (type $func (func))
+
+ (global $global (ref $func) (ref.func $func))
+
+ (func $func (type $func)
+  (drop
+   (block (result (ref null $func))
+    (global.get $global)
+   )
+  )
+ )
+)
+
