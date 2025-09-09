@@ -80,6 +80,10 @@ struct Collector
 
   Collector(CollectedFuncInfo& info) : info(info) {}
 
+  void link(Location sub, Location super) {
+    info.links.emplace_back(sub, super);
+  }
+
   // Constraints on type themselves do not interest us.
   void noteSubtype(Type, Type) {}
   void noteSubtype(HeapType, HeapType) {}
@@ -95,7 +99,7 @@ struct Collector
 
   // A relative (link) constraint, e.g. between a block and its last child.
   void noteSubtype(Expression* sub, Expression* super) {
-    info.links.emplace_back(getLocation(sub), getLocation(super));
+    link(getLocation(sub), getLocation(super));
   }
 
   // TODO
@@ -103,12 +107,16 @@ struct Collector
   void noteCast(Expression*, Type) {}
   void noteCast(Expression*, Expression*) {}
 
+  void visitGlobalGet(GlobalGet* curr) {
+    // Reads from the corresponding global.
+    link(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
+  }
+
   void visitGlobalSet(GlobalSet* curr) {
     // Override the parent behavior of an absolute constraint of "value is a
     // subtype of ${current type of global}" with a link to the global, i.e., a
     // relative constraint.
-    info.links.emplace_back(getLocation(curr->value),
-                            GlobalLocation{curr->name});
+    link(getLocation(curr->value), GlobalLocation{curr->name});
   }
 };
 
