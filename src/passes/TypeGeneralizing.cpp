@@ -240,7 +240,10 @@ struct TypeGeneralizing : public Pass {
     std::unordered_set<Expression*> isTarget;
     auto noteExprTarget = [&](const Location& loc) {
       if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) { // TODO not just exprloc?
-        isTarget.insert(exprLoc->expr);
+        if (DEBUG) std::cerr << "made untargeted root " << loc << '\n';
+        if (exprLoc->expr->type.isRef()) {
+          isTarget.insert(exprLoc->expr);
+        }
       }
     };
     for (auto& root : roots) {
@@ -254,7 +257,7 @@ struct TypeGeneralizing : public Pass {
     // are definitely targets.
     for (auto& link : links) {
       if (auto* exprLoc = std::get_if<ExpressionLocation>(&link.from)) {
-        if (!isTarget.count(exprLoc->expr)) {
+        if (exprLoc->expr->type.isRef() && !isTarget.count(exprLoc->expr)) {
           // Force its type to its original one.
           locationValues[*exprLoc] = exprLoc->expr->type;
         }
@@ -340,7 +343,6 @@ struct TypeGeneralizing : public Pass {
           case Expression::SelectId:
           case Expression::TryId:
           case Expression::TryTableId:
-
           // Things we optimize, and need updating.
           case Expression::GlobalGetId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
