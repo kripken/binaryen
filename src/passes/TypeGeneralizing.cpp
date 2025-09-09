@@ -107,6 +107,9 @@ struct Collector
   void noteCast(Expression*, Type) {}
   void noteCast(Expression*, Expression*) {}
 
+  // Override subtype-exprs where we want more precise representation of the
+  // flow of constraints.
+
   void visitGlobalGet(GlobalGet* curr) {
     // Reads from the corresponding global.
     link(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
