@@ -259,35 +259,42 @@
 
 ;; The function result constrains the global. We can only make it nullable.
 (module
+ ;; CHECK:      (type $func (func))
  (type $func (func))
 
+ ;; CHECK:      (type $1 (func (result (ref null $func))))
+
+ ;; CHECK:      (global $global (ref null $func) (ref.func $func))
  (global $global (ref $func) (ref.func $func))
 
+ ;; CHECK:      (func $func (type $func)
+ ;; CHECK-NEXT: )
  (func $func (type $func)
  )
 
+ ;; CHECK:      (func $test (type $1) (result (ref null $func))
+ ;; CHECK-NEXT:  (global.get $global)
+ ;; CHECK-NEXT: )
  (func $test (result (ref null $func))
-  (global.get $global)
- )
-)
-
-;; A drop does not constrain the global.
-(module
- (type $func (func))
-
- (global $global (ref $func) (ref.func $func))
-
- (func $func (type $func)
   (global.get $global)
  )
 )
 
 ;; The block's type does not constrain the global, since it is dropped.
 (module
+ ;; CHECK:      (type $func (func))
  (type $func (func))
 
+ ;; CHECK:      (global $global funcref (ref.func $func))
  (global $global (ref $func) (ref.func $func))
 
+ ;; CHECK:      (func $func (type $func)
+ ;; CHECK-NEXT:  (drop
+ ;; CHECK-NEXT:   (block (result funcref)
+ ;; CHECK-NEXT:    (global.get $global)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $func (type $func)
   (drop
    (block (result (ref null $func))
@@ -296,4 +303,15 @@
   )
  )
 )
+
+;; A drop does not constrain the global.
+(;;module
+ (type $func (func))
+
+ (global $global (ref $func) (ref.func $func))
+
+ (func $func (type $func)
+  (global.get $global)
+ )
+;;)
 

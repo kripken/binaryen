@@ -119,6 +119,7 @@ struct Collector
   void visitGlobalGet(GlobalGet* curr) {
     // Reads from the corresponding global.
     link(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
+    link(ExpressionLocation{curr, 0}, GlobalLocation{curr->name});
   }
 
   void visitGlobalSet(GlobalSet* curr) {
@@ -237,7 +238,7 @@ struct TypeGeneralizing : public Pass {
 
   // Apply |locationValues| to the IR.
   void update(Module* module) {
-    struct Updater : public WalkerPass<PostWalker<Updater>> {
+    struct Updater : public WalkerPass<PostWalker<Updater, UnifiedExpressionVisitor<Updater>>> {
       bool isFunctionParallel() override { return true; }
 
       TypeGeneralizing& parent;
@@ -266,8 +267,17 @@ struct TypeGeneralizing : public Pass {
         assert(Type::isSubType(old, type));
       };
 
-      void visitGlobalGet(GlobalGet* curr) {
-        updateType(GlobalLocation{curr->name}, curr->type);
+      void visitExpression(Expression* curr) {
+        // Apply generalized types to all things we can.
+        // TODO: tuples
+        switch (curr->_id) {
+          case Expression::BlockId:
+          case Expression::GlobalGetId:
+            updateType(ExpressionLocation{curr, 0}, curr->type);
+            break;
+          default:
+            break;
+        }
       }
     };
 
