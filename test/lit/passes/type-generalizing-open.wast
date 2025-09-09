@@ -440,3 +440,29 @@
   )
 )
 
+;; Generalize a try's type.
+(module
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (elem declare func $test)
+
+  ;; CHECK:      (func $test (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (try (result funcref)
+  ;; CHECK-NEXT:    (do
+  ;; CHECK-NEXT:     (ref.func $test)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (drop
+      (try (result (ref func))
+        (do
+          (ref.func $test)
+        )
+      )
+    )
+  )
+)
+
