@@ -259,41 +259,41 @@
 
 ;; The function result constrains the global. We can only make it nullable.
 (module
- ;; CHECK:      (type $func (func))
- (type $func (func))
+  ;; CHECK:      (type $F (func))
+  (type $F (func))
 
- ;; CHECK:      (type $1 (func (result (ref null $func))))
+  ;; CHECK:      (type $1 (func (result (ref null $F))))
 
- ;; CHECK:      (global $global (ref null $func) (ref.func $func))
- (global $global (ref $func) (ref.func $func))
+  ;; CHECK:      (global $global (ref null $F) (ref.func $F))
+  (global $global (ref $F) (ref.func $F))
 
- ;; CHECK:      (func $func (type $func)
- ;; CHECK-NEXT: )
-  (func $func (type $func)
+  ;; CHECK:      (func $F (type $F)
+  ;; CHECK-NEXT: )
+  (func $F (type $F)
   )
 
- ;; CHECK:      (func $test (type $1) (result (ref null $func))
- ;; CHECK-NEXT:  (global.get $global)
- ;; CHECK-NEXT: )
-  (func $test (result (ref null $func))
+  ;; CHECK:      (func $test (type $1) (result (ref null $F))
+  ;; CHECK-NEXT:  (global.get $global)
+  ;; CHECK-NEXT: )
+  (func $test (result (ref null $F))
     (global.get $global)
   )
 )
 
 ;; A drop does not constrain the global.
 (module
-  ;; CHECK:      (type $func (func))
-  (type $func (func))
+  ;; CHECK:      (type $F (func))
+  (type $F (func))
 
-  ;; CHECK:      (global $global funcref (ref.func $func))
-  (global $global (ref $func) (ref.func $func))
+  ;; CHECK:      (global $global funcref (ref.func $F))
+  (global $global (ref $F) (ref.func $F))
 
-  ;; CHECK:      (func $func (type $func)
+  ;; CHECK:      (func $F (type $F)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (global.get $global)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  (func $func (type $func)
+  (func $F (type $F)
     (drop
       (global.get $global)
     )
@@ -302,26 +302,53 @@
 
 ;; The block's type does not constrain the global, since it is dropped.
 (module
-  ;; CHECK:      (type $func (func))
-  (type $func (func))
+  ;; CHECK:      (type $F (func))
+  (type $F (func))
 
-  ;; CHECK:      (global $global funcref (ref.func $func))
-  (global $global (ref $func) (ref.func $func))
+  ;; CHECK:      (global $global funcref (ref.func $F))
+  (global $global (ref $F) (ref.func $F))
 
-  ;; CHECK:      (func $func (type $func)
+  ;; CHECK:      (func $F (type $F)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (block (result funcref)
-  ;; CHECK-NEXT:    (nop)
   ;; CHECK-NEXT:    (global.get $global)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  (func $func (type $func)
+  (func $F (type $F)
    (drop
-      (block (result (ref null $func))
-       (nop)
-       (global.get $global)
+      (block (result (ref null $F))
+        (global.get $global)
       )
+    )
+  )
+)
+
+;; The function result constrains the block and the global.
+(module
+  ;; CHECK:      (type $F (func))
+  (type $F (func))
+
+  ;; CHECK:      (type $1 (func (result (ref func))))
+
+  ;; CHECK:      (global $global (ref func) (ref.func $F))
+  (global $global (ref $F) (ref.func $F))
+
+  ;; CHECK:      (func $F (type $F)
+  ;; CHECK-NEXT: )
+  (func $F (type $F)
+  )
+
+  ;; CHECK:      (func $test (type $1) (result (ref func))
+  ;; CHECK-NEXT:  (nop)
+  ;; CHECK-NEXT:  (block (result (ref func))
+  ;; CHECK-NEXT:   (global.get $global)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test (result (ref func))
+    (nop) ;; avoid a trivial block
+    (block (result (ref $F))
+      (global.get $global)
     )
   )
 )
