@@ -519,10 +519,43 @@
     (block $block (result (ref null $array))
       (drop
         (br_on_cast_fail $block (ref $array) (ref $array)
-          (block (result (ref $array))
+          (block (result (ref $array)) ;; this can be nullable
             (array.new_default $array
               (i32.const 0)
             )
+          )
+        )
+      )
+      (ref.null $array)
+    )
+  )
+)
+
+;; As above, with br_on_non_null.
+(module
+  ;; CHECK:      (type $array (array i16))
+  (type $array (array i16))
+
+  ;; CHECK:      (type $1 (func (result (ref null $array))))
+
+  ;; CHECK:      (func $test (type $1) (result (ref null $array))
+  ;; CHECK-NEXT:  (block $block (result (ref null $array))
+  ;; CHECK-NEXT:   (br_on_non_null $block
+  ;; CHECK-NEXT:    (block (result (ref null $array))
+  ;; CHECK-NEXT:     (array.new_default $array
+  ;; CHECK-NEXT:      (i32.const 0)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (ref.null none)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test (result (ref null $array))
+    (block $block (result (ref null $array))
+      (br_on_non_null $block
+        (block (result (ref $array)) ;; this can be nullable
+          (array.new_default $array
+            (i32.const 0)
           )
         )
       )
