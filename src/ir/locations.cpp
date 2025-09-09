@@ -21,6 +21,8 @@
 namespace wasm {
 
 void LocationLinkGraph::fill(Module& wasm, const std::unordered_set<Location>& roots) {
+  // XXX unneeded?
+
   // Find all locations, so we know what additional links to add.
   std::unordered_set<Location> all;
   for (auto& [from, to] : *this) {

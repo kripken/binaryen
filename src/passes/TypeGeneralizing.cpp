@@ -185,8 +185,7 @@ struct TypeGeneralizing : public Pass {
     // We no longer need the function-level info.
     analysis.map.clear();
 
-    // Prepare the full graph to flow on.
-    links.fill(*module, roots);
+    // Fill?
 
     // Our updates are in the reverse of the normal direction of the flow of
     // information. E.g. when we see (global.set $g (value)) we do not send the
