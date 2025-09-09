@@ -257,8 +257,32 @@
   (import "a" "b" (func $f))
 )
 
-;; The block's type constrains the global: we can only make it nullable, not
-;; funcref.
+;; The function result constrains the global. We can only make it nullable.
+(module
+ (type $func (func))
+
+ (global $global (ref $func) (ref.func $func))
+
+ (func $func (type $func)
+ )
+
+ (func $test (result (ref null $func))
+  (global.get $global)
+ )
+)
+
+;; A drop does not constrain the global.
+(module
+ (type $func (func))
+
+ (global $global (ref $func) (ref.func $func))
+
+ (func $func (type $func)
+  (global.get $global)
+ )
+)
+
+;; The block's type does not constrain the global, since it is dropped.
 (module
  (type $func (func))
 
