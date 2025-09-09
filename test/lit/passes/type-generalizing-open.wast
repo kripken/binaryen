@@ -414,3 +414,29 @@
   )
 )
 
+;; Generalize a select's type.
+(module
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (elem declare func $test)
+
+  ;; CHECK:      (func $test (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (select (result funcref)
+  ;; CHECK-NEXT:    (ref.func $test)
+  ;; CHECK-NEXT:    (ref.func $test)
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (drop
+      (select (result (ref func))
+        (ref.func $test)
+        (ref.func $test)
+        (i32.const 1)
+      )
+    )
+  )
+)
+

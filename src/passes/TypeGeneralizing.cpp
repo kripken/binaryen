@@ -285,7 +285,7 @@ struct TypeGeneralizing : public Pass {
           case Expression::BlockId:
           case Expression::IfId:
           case Expression::LoopId:
-          //case Expression::SelectId:
+          case Expression::SelectId:
           //case Expression::TryId:
           //case Expression::TryTableId:
           case Expression::GlobalGetId:
