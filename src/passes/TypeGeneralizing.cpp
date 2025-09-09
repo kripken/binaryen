@@ -83,6 +83,7 @@ struct Collector
   Collector(CollectedFuncInfo& info) : info(info) {}
 
   void link(Location sub, Location super) {
+    // TODO: don't bother linking non-ref-typed things. At least exprs are easy
     info.links.emplace_back(sub, super);
   }
 
@@ -203,15 +204,19 @@ struct TypeGeneralizing : public Pass {
     std::unordered_set<Location> roots;
     UniqueDeferredQueue<Location> work;
 
+    auto addRoot = [&](Location root, Element value) {
+      if (DEBUG) std::cerr << "made root " << root << " to " << value << '\n';
+      lattice.meet(locationValues[root], value);
+      roots.insert(root);
+      work.push(root);
+    };
+
     for (auto& [func, info] : analysis.map) {
       for (auto& link : info.links) {
         links.insert(link);
       }
       for (auto& [root, value] : info.roots) {
-        lattice.meet(locationValues[root], value);
-        if (DEBUG) std::cerr << "made root " << root << " to " << value << '\n';
-        roots.insert(root);
-        work.push(root);
+        addRoot(root, value);
       }
     }
 
@@ -240,7 +245,6 @@ struct TypeGeneralizing : public Pass {
     std::unordered_set<Expression*> isTarget;
     auto noteExprTarget = [&](const Location& loc) {
       if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) { // TODO not just exprloc?
-        if (DEBUG) std::cerr << "made untargeted root " << loc << '\n';
         if (exprLoc->expr->type.isRef()) {
           isTarget.insert(exprLoc->expr);
         }
@@ -257,9 +261,10 @@ struct TypeGeneralizing : public Pass {
     // are definitely targets.
     for (auto& link : links) {
       if (auto* exprLoc = std::get_if<ExpressionLocation>(&link.from)) {
-        if (exprLoc->expr->type.isRef() && !isTarget.count(exprLoc->expr)) {
+        if (exprLoc->expr->type.isRef() && !isTarget.count(exprLoc->expr) &&
+            !locationValues.count(*exprLoc)) {
           // Force its type to its original one.
-          locationValues[*exprLoc] = exprLoc->expr->type;
+          addRoot(*exprLoc, exprLoc->expr->type);
         }
       }
     }
@@ -290,7 +295,7 @@ struct TypeGeneralizing : public Pass {
     }
 
     // Apply |locationValues| to the module.
-    if (DEBUG) std::cerr << "map:\n";
+    if (DEBUG) std::cerr << "computed locationValues:\n";
     for (auto& [loc, value] : locationValues) {
       if (DEBUG) std::cerr << loc << " => " << value << '\n';
     }
