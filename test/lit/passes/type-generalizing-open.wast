@@ -466,3 +466,29 @@
   )
 )
 
+;; Generalize a try_table's type.
+(module
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (elem declare func $test)
+
+  ;; CHECK:      (func $test (type $0)
+  ;; CHECK-NEXT:  (block $block
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (try_table (result funcref) (catch_all $block)
+  ;; CHECK-NEXT:     (ref.func $test)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (block $block
+      (drop
+        (try_table (result (ref func)) (catch_all $block)
+          (ref.func $test)
+        )
+      )
+    )
+  )
+)
+

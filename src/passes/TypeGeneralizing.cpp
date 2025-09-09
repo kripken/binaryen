@@ -282,12 +282,15 @@ struct TypeGeneralizing : public Pass {
         // do not yet optimize.
         // TODO: tuples
         switch (curr->_id) {
+          // Control flow
           case Expression::BlockId:
           case Expression::IfId:
           case Expression::LoopId:
           case Expression::SelectId:
           case Expression::TryId:
-          //case Expression::TryTableId:
+          case Expression::TryTableId:
+
+          // Other
           case Expression::GlobalGetId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
             break;
