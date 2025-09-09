@@ -353,3 +353,42 @@
   )
 )
 
+;; The drop does not constrain the if, so we can generalize it to anyref.
+(module
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (func $0 (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (if (result anyref)
+  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK-NEXT:    (then
+  ;; CHECK-NEXT:     (ref.i31
+  ;; CHECK-NEXT:      (i32.const 0)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (else
+  ;; CHECK-NEXT:     (nop)
+  ;; CHECK-NEXT:     (ref.null none)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $0
+    (drop
+      (if (result i31ref)
+        (i32.const 0)
+        (then
+          (ref.i31
+            (i32.const 0)
+          )
+        )
+        (else
+          (nop) ;; Avoid a trivial block here, so we test the typing of this
+                ;; block as well.
+          (ref.null none)
+        )
+      )
+    )
+  )
+)
+

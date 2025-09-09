@@ -149,6 +149,8 @@ struct TypeGeneralizing : public Pass {
       return;
     }
 
+    if (getenv("DEBUG")) DEBUG = 1;
+
     // Collect information from each function.
     ModuleUtils::ParallelFunctionAnalysis<CollectedFuncInfo> analysis(
       *module, [&](Function* func, CollectedFuncInfo& info) {
@@ -281,6 +283,7 @@ struct TypeGeneralizing : public Pass {
         // TODO: tuples
         switch (curr->_id) {
           case Expression::BlockId:
+          case Expression::IfId:
           case Expression::GlobalGetId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
             break;
