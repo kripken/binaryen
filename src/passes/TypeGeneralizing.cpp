@@ -138,7 +138,7 @@ struct Collector
     link(getLocation(curr->value), GlobalLocation{curr->name});
   }
 
-  void visitBrOn(BrOn* curr) {
+  void visitBrOn(BrOn* curr) { // TODO: needed?
     // Note the cast, as per the parent behavior.
     if (curr->op == BrOnCast || curr->op == BrOnCastFail) {
       self()->noteCast(curr->ref, curr->castType);
@@ -159,6 +159,19 @@ struct Collector
         break;
       default:
         {}
+    }
+  }
+
+  void visitDrop(Drop* curr) {
+    // Drop imposes no constraints on the input. It is the only expression
+    // that truly does so, and therefore requires special treatment, as below,
+    // we look for expressions that have no constraints and fix their types (see
+    // below for why). We do not want drop to do this, so we make it impose the
+    // "empty" constraint of the top type for the child.
+    auto* value = curr->value;
+    if (value->type.isRef()) {
+      noteSubtype(value,
+                  Type(value->type.getHeapType().getTop(), Nullable));
     }
   }
 };
@@ -229,13 +242,43 @@ struct TypeGeneralizing : public Pass {
     // We no longer need the function-level info.
     analysis.map.clear();
 
-    // Fill?
-
     // Our updates are in the reverse of the normal direction of the flow of
     // information. E.g. when we see (global.set $g (value)) we do not send the
     // value to the GlobalLocation, but rather look back and say that the
     // value's sources must be refined enough to fit in the global's type.
     links.reverse();
+
+    // Finalize the graph. If an expression has no constraints on it whatsoever,
+    // then we force its type to remain fixed by making it a root. Normally
+    // every expression has some constraint, derived by the parent of the
+    // expression, like the parent ref.eq of a child forces it to be of type eq.
+    // When subtyping-exprs has no constraint at all, that means it is unaware
+    // of subtyping requirements, but there are other ones, such as a
+    // struct.get's reference child. TODO copy explanation for that from
+    // subtype-exprs
+    std::unordered_set<Expression*> isTarget;
+    auto noteExprTarget = [&](const Location& loc) {
+      if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) { // TODO not just exprloc?
+        isTarget.insert(exprLoc->expr);
+      }
+    };
+    for (auto& root : roots) {
+      noteExprTarget(root);
+    }
+    for (auto& link : links) {
+      noteExprTarget(link.to);
+    }
+    // After finding all the expressions that are targets, mark the others as
+    // roots. We only need to consider the |from| of links, as all other things
+    // are definitely targets.
+    for (auto& link : links) {
+      if (auto* exprLoc = std::get_if<ExpressionLocation>(&link.from)) {
+        if (!isTarget.count(exprLoc->expr)) {
+          // Force its type to its original one.
+          locationValues[*exprLoc] = exprLoc->expr->type;
+        }
+      }
+    }
 
     // Get the flow-efficient sorted graph.
     if (DEBUG) std::cerr << "graph:\n";
@@ -308,7 +351,8 @@ struct TypeGeneralizing : public Pass {
         // do not yet optimize.
         // TODO: tuples
         switch (curr->_id) {
-          // Control flow
+          // Control flow. Values fall through them, and we can just update
+          // their new types.
           case Expression::BlockId:
           case Expression::IfId:
           case Expression::LoopId:
@@ -316,10 +360,10 @@ struct TypeGeneralizing : public Pass {
           case Expression::TryId:
           case Expression::TryTableId:
 
-          // Other
+          // Things we optimize, and need updating.
           case Expression::GlobalGetId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
-            //curr->finalize();
+            //curr->finalize();?
             break;
           default:
             break;

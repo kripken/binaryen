@@ -316,7 +316,7 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $F (type $F)
-   (drop
+    (drop
       (block (result (ref null $F))
         (global.get $global)
       )
