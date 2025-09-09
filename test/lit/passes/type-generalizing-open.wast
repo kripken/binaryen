@@ -608,3 +608,30 @@
   )
 )
 
+;; Struct operations, like struct.set, require that their reference input be a
+;; struct type. We avoid generalizing them and leave them as is, forcing the
+;; block here to remain unchanged.
+(module
+  ;; CHECK:      (type $A (struct (field (mut i32))))
+  (type $A (struct (field (mut i32))))
+
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (func $test (type $1)
+  ;; CHECK-NEXT:  (struct.set $A 0
+  ;; CHECK-NEXT:   (block (result (ref $A))
+  ;; CHECK-NEXT:    (struct.new_default $A)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (i32.const 42)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (struct.set $A 0
+      (block (result (ref $A))
+        (struct.new_default $A)
+      )
+      (i32.const 42)
+    )
+  )
+)
+
