@@ -273,7 +273,9 @@ struct TypeGeneralizing : public Pass {
       };
 
       void visitExpression(Expression* curr) {
-        // Apply generalized types to all things we can.
+        // Apply generalized types to all things we can. We must avoid updating
+        // things with fixed types like constants (e.g. ref.func), and things we
+        // do not yet optimize.
         // TODO: tuples
         switch (curr->_id) {
           case Expression::BlockId:
