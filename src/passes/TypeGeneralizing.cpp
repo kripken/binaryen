@@ -42,6 +42,8 @@ namespace wasm {
 
 namespace {
 
+int DEBUG = 0;
+
 // We will perform our computation over the ValType lattice, that is, over
 // types, using the element from there.
 using Element = analysis::ValType::Element;
@@ -190,7 +192,7 @@ struct TypeGeneralizing : public Pass {
       }
       for (auto& [root, value] : info.roots) {
         lattice.meet(locationValues[root], value);
-        std::cerr << "made root " << root << " to " << value << '\n';
+        if (DEBUG) std::cerr << "made root " << root << " to " << value << '\n';
         roots.insert(root);
         work.push(root);
       }
@@ -208,24 +210,24 @@ struct TypeGeneralizing : public Pass {
     links.reverse();
 
     // Get the flow-efficient sorted graph.
-    std::cerr << "graph:\n";
+    if (DEBUG) std::cerr << "graph:\n";
     auto sortedGraph = links.getSortedGraph();
     for (auto& [loc, targets] : sortedGraph) {
-      std::cerr << loc << " sends to targets: [\n";
+      if (DEBUG) std::cerr << loc << " sends to targets: [\n";
       for (auto t : targets) {
-        std::cerr << "  " << t << '\n';
+        if (DEBUG) std::cerr << "  " << t << '\n';
       }
-      std::cerr << "]\n";
+      if (DEBUG) std::cerr << "]\n";
     }
 
     // Flow while changes happen.
     while (!work.empty()) {
       auto loc = work.pop();
-      std::cerr << "working on " << loc << '\n';
+      if (DEBUG) std::cerr << "working on " << loc << '\n';
       auto value = locationValues[loc];
       for (auto target : sortedGraph[loc]) {
         if (lattice.meet(locationValues[target], value)) {
-          std::cerr << "  met target " << target << " to " << value << '\n';
+          if (DEBUG) std::cerr << "  met target " << target << " to " << value << '\n';
           // Flow onward.
           work.push(target);
         }
@@ -233,9 +235,9 @@ struct TypeGeneralizing : public Pass {
     }
 
     // Apply |locationValues| to the module.
-    std::cerr << "map:\n";
+    if (DEBUG) std::cerr << "map:\n";
     for (auto& [loc, value] : locationValues) {
-      std::cerr << loc << " => " << value << '\n';
+      if (DEBUG) std::cerr << loc << " => " << value << '\n';
     }
 
     update(module);
@@ -267,7 +269,7 @@ struct TypeGeneralizing : public Pass {
         type = iter == parent.locationValues.end()
                  ? Type(type.getHeapType().getTop(), Nullable)
                  : iter->second;
-        std::cerr << "Updated " << loc << " to " << type << '\n';
+        if (DEBUG) std::cerr << "Updated " << loc << " to " << type << '\n';
         // We should only ever generalize types, not refine them.
         assert(Type::isSubType(old, type));
       };
