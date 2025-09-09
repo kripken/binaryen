@@ -138,30 +138,6 @@ struct Collector
     link(getLocation(curr->value), GlobalLocation{curr->name});
   }
 
-  void visitBrOn(BrOn* curr) { // TODO: needed?
-    // Note the cast, as per the parent behavior.
-    if (curr->op == BrOnCast || curr->op == BrOnCastFail) {
-      self()->noteCast(curr->ref, curr->castType);
-    }
-    // The parent then notes that the sent type is a subtype of the break
-    // target. That is not enough for us, as we need to apply that constraint
-    // onto the *source* of the sent type. Whenever the reference is sent, we
-    // must note the constraint on it
-    switch (curr->op) {
-      // BrOnNonNull sends the non-nullable type on the branch.
-      // TODO: Do not require non-nullability here.
-      case BrOnNonNull:
-      // Failing casts send the reference as is.
-      case BrOnCastFail:
-      case BrOnCastDescFail:
-        self()->noteSubtype(curr->ref,
-                            self()->findBreakTarget(curr->name));
-        break;
-      default:
-        {}
-    }
-  }
-
   void visitDrop(Drop* curr) {
     // Drop imposes no constraints on the input. It is the only expression
     // that truly does so, and therefore requires special treatment, as below,
@@ -255,7 +231,12 @@ struct TypeGeneralizing : public Pass {
     // When subtyping-exprs has no constraint at all, that means it is unaware
     // of subtyping requirements, but there are other ones, such as a
     // struct.get's reference child. TODO copy explanation for that from
-    // subtype-exprs
+    // subtype-exprs, or give a better example.
+    //
+    // Each time we do this, we are missing a potential optimization opportunity
+    // that could be added. This starts us out in a safe and valid place. For
+    // example, we could optimize BrOn by adding a visitor above and precisely
+    // stating what requirements are placed on the input reference.
     std::unordered_set<Expression*> isTarget;
     auto noteExprTarget = [&](const Location& loc) {
       if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) { // TODO not just exprloc?

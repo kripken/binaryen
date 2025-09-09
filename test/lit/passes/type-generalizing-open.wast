@@ -504,8 +504,8 @@
   ;; CHECK:      (func $test (type $1) (result (ref null $array))
   ;; CHECK-NEXT:  (block $block (result (ref null $array))
   ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (br_on_cast_fail $block (ref null $array) (ref $array)
-  ;; CHECK-NEXT:     (block (result (ref null $array))
+  ;; CHECK-NEXT:    (br_on_cast_fail $block (ref $array) (ref $array)
+  ;; CHECK-NEXT:     (block (result (ref $array))
   ;; CHECK-NEXT:      (array.new_default $array
   ;; CHECK-NEXT:       (i32.const 0)
   ;; CHECK-NEXT:      )
@@ -541,7 +541,7 @@
   ;; CHECK:      (func $test (type $1) (result (ref null $array))
   ;; CHECK-NEXT:  (block $block (result (ref null $array))
   ;; CHECK-NEXT:   (br_on_non_null $block
-  ;; CHECK-NEXT:    (block (result (ref null $array))
+  ;; CHECK-NEXT:    (block (result (ref $array))
   ;; CHECK-NEXT:     (array.new_default $array
   ;; CHECK-NEXT:      (i32.const 0)
   ;; CHECK-NEXT:     )
@@ -579,8 +579,8 @@
   ;; CHECK:      (func $test (type $2) (result (ref null $A))
   ;; CHECK-NEXT:  (block $block (result (ref null $A))
   ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (br_on_cast_desc_fail $block (ref null $A) (ref (exact $A))
-  ;; CHECK-NEXT:     (block (result (ref null $A))
+  ;; CHECK-NEXT:    (br_on_cast_desc_fail $block (ref $A) (ref (exact $A))
+  ;; CHECK-NEXT:     (block (result (ref $A))
   ;; CHECK-NEXT:      (struct.new_default $A
   ;; CHECK-NEXT:       (struct.new_default $B)
   ;; CHECK-NEXT:      )
