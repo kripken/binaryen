@@ -190,7 +190,7 @@
   ;; CHECK:      (global $g (mut (ref any)) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 
-  ;; CHECK:      (global $h (mut (ref null $A)) (struct.new_default $A))
+  ;; CHECK:      (global $h (mut (ref $A)) (struct.new_default $A))
   (global $h (mut (ref $A)) (struct.new $A))
 
   ;; CHECK:      (global $i (mut (ref $A)) (struct.new_default $A))
@@ -215,6 +215,9 @@
   ;; CHECK-NEXT:  (global.set $h
   ;; CHECK-NEXT:   (global.get $i)
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (global.set $i
+  ;; CHECK-NEXT:   (global.get $h)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
     (global.set $exp-nn
@@ -229,7 +232,11 @@
     (global.set $h
       (global.get $i)
     )
-    ;; Add an edge between $h and $i the other way
+    ;; Add an edge between $h and $i the other way. Now $h must be refined
+    ;; enough to write to $i, making $h (ref $A) like $i.
+    (global.set $i
+      (global.get $h)
+    )
   )
 )
 
