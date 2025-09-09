@@ -327,27 +327,11 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
       self()->noteSubtype(curr->operands[i], fields[i].type);
     }
   }
-
-  // Require than an expression not change type.
-  void requireFixed(Expression* curr) {
-    self()->noteSubtype(curr, curr->type);
-  }
-
-  void visitStructGet(StructGet* curr) {
-    // Here and in the operations below we disallow the reference from
-    // changing type. This is simple and safe, while doing better would be
-    // tricky: Consider that in struct.set we have two requirements, for the
-    // reference and for the value, and the subtyping of the value depends on
-    // the ref. That is, in theory the reference could be less refined, making
-    // the field less refined, and hence the field requires less of the value.
-    // TODO Consider handling multiple requirements like that.
-    requireFixed(curr->ref);
-  }
+  void visitStructGet(StructGet* curr) {}
   void visitStructSet(StructSet* curr) {
     if (!curr->ref->type.isStruct()) {
       return;
     }
-    requireFixed(curr->ref);
     const auto& fields = curr->ref->type.getHeapType().getStruct().fields;
     self()->noteSubtype(curr->value, fields[curr->index].type);
   }
@@ -355,7 +339,6 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     if (!curr->ref->type.isStruct()) {
       return;
     }
-    requireFixed(curr->ref);
     const auto& fields = curr->ref->type.getHeapType().getStruct().fields;
     self()->noteSubtype(curr->value, fields[curr->index].type);
   }
@@ -363,7 +346,6 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     if (!curr->ref->type.isStruct()) {
       return;
     }
-    requireFixed(curr->ref);
     const auto& fields = curr->ref->type.getHeapType().getStruct().fields;
     auto type = fields[curr->index].type;
     self()->noteSubtype(curr->expected,
@@ -396,27 +378,19 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     }
   }
 
-  void visitArrayGet(ArrayGet* curr) {
-    requireFixed(curr->ref);
-  }
+  void visitArrayGet(ArrayGet* curr) {}
   void visitArraySet(ArraySet* curr) {
     if (!curr->ref->type.isArray()) {
       return;
     }
-    requireFixed(curr->ref);
     auto array = curr->ref->type.getHeapType().getArray();
     self()->noteSubtype(curr->value, array.element.type);
   }
-  void visitArrayLen(ArrayLen* curr) {
-    // TODO: This (and below) could be any strict subtype of array.
-    requireFixed(curr->ref);
-  }
+  void visitArrayLen(ArrayLen* curr) {}
   void visitArrayCopy(ArrayCopy* curr) {
     if (!curr->srcRef->type.isArray() || !curr->destRef->type.isArray()) {
       return;
     }
-    requireFixed(curr->srcRef);
-    requireFixed(curr->destRef);
     auto src = curr->srcRef->type.getHeapType().getArray();
     auto dest = curr->destRef->type.getHeapType().getArray();
     self()->noteSubtype(src.element.type, dest.element.type);
@@ -425,18 +399,14 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     if (!curr->ref->type.isArray()) {
       return;
     }
-    requireFixed(curr->ref);
     auto array = curr->ref->type.getHeapType().getArray();
     self()->noteSubtype(curr->value, array.element.type);
   }
-  void visitArrayInitData(ArrayInitData* curr) {
-    requireFixed(curr->ref);
-  }
+  void visitArrayInitData(ArrayInitData* curr) {}
   void visitArrayInitElem(ArrayInitElem* curr) {
     if (!curr->ref->type.isArray()) {
       return;
     }
-    requireFixed(curr->ref);
     auto array = curr->ref->type.getHeapType().getArray();
     auto* seg = self()->getModule()->getElementSegment(curr->segment);
     self()->noteSubtype(seg->type, array.element.type);
@@ -445,7 +415,6 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     if (!curr->ref->type.isArray()) {
       return;
     }
-    requireFixed(curr->ref);
     auto array = curr->ref->type.getHeapType().getArray();
     self()->noteSubtype(curr->value, array.element.type);
   }
@@ -453,7 +422,6 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     if (!curr->ref->type.isArray()) {
       return;
     }
-    requireFixed(curr->ref);
     auto type = curr->ref->type.getHeapType().getArray().element.type;
     self()->noteSubtype(curr->expected,
                         type.isRef() ? Type(HeapType::eq, Nullable) : type);
