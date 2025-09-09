@@ -357,7 +357,7 @@
 (module
   ;; CHECK:      (type $0 (func))
 
-  ;; CHECK:      (func $0 (type $0)
+  ;; CHECK:      (func $test (type $0)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (if (result anyref)
   ;; CHECK-NEXT:    (i32.const 0)
@@ -373,7 +373,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  (func $0
+  (func $test
     (drop
       (if (result i31ref)
         (i32.const 0)
@@ -387,6 +387,28 @@
                 ;; block as well.
           (ref.null none)
         )
+      )
+    )
+  )
+)
+
+;; Generalize a loop's type.
+(module
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (elem declare func $test)
+
+  ;; CHECK:      (func $test (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (loop (result funcref)
+  ;; CHECK-NEXT:    (ref.func $test)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (drop
+      (loop (result (ref func))
+        (ref.func $test)
       )
     )
   )

@@ -284,6 +284,10 @@ struct TypeGeneralizing : public Pass {
         switch (curr->_id) {
           case Expression::BlockId:
           case Expression::IfId:
+          case Expression::LoopId:
+          //case Expression::SelectId:
+          //case Expression::TryId:
+          //case Expression::TryTableId:
           case Expression::GlobalGetId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
             break;
