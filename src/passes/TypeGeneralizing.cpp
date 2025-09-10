@@ -131,6 +131,7 @@ struct Collector
     // TODO: should all loops be in a general "add equality connections"
     //       helper, which adds on top of the subtype-exprs stuff?
     loop(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
+std::cout << "gg\n";
   }
 
   void visitGlobalSet(GlobalSet* curr) {
@@ -138,6 +139,15 @@ struct Collector
     // subtype of ${current type of global}" with a link to the global, i.e., a
     // relative constraint.
     link(getLocation(curr->value), GlobalLocation{curr->name});
+  }
+
+  void visitGlobal(Global* global) {
+std::cout << "justG1\n";
+    // Override the parent to specify GlobalLocation (and not just a type).
+    if (global->init) {
+std::cout << "justG2\n";
+      link(getLocation(global->init), GlobalLocation{global->name});
+    }
   }
 
   void visitDrop(Drop* curr) {
@@ -179,7 +189,7 @@ struct TypeGeneralizing : public Pass {
     // Also walk the global module code (for simplicity, also add it to the
     // function map, using a "function" key of nullptr).
     auto& moduleInfo = analysis.map[nullptr];
-    Collector(moduleInfo).walkModuleCode(module);
+    Collector(moduleInfo).walkModuleLevel(module);
 
     // Add roots for exports. TODO: not in closed world?
     for (auto& exp : module->exports) {

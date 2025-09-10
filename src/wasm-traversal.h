@@ -269,6 +269,39 @@ struct Walker : public VisitorType {
     setModule(nullptr);
   }
 
+  // Walks module-level things. This is the same as walkModuleCode, but does
+  // not only walk code: it also visits Globals, etc.
+  void walkModuleLevel(Module* module) {
+    walkModuleCode(module);
+    setModule(module);
+    SubType* self = static_cast<SubType*>(this);
+    for (auto& curr : module->exports) {
+      self->visitExport(curr.get());
+    }
+    for (auto& curr : module->globals) {
+      self->visitGlobal(curr.get());
+    }
+    for (auto& curr : module->functions) {
+      self->visitFunction(curr.get());
+    }
+    for (auto& curr : module->tags) {
+      self->visitTag(curr.get());
+    }
+    for (auto& curr : module->elementSegments) {
+      self->visitElementSegment(curr.get());
+    }
+    for (auto& curr : module->tables) {
+      self->visitTable(curr.get());
+    }
+    for (auto& curr : module->dataSegments) {
+      self->visitDataSegment(curr.get());
+    }
+    for (auto& curr : module->memories) {
+      self->visitMemory(curr.get());
+    }
+    setModule(nullptr);
+  }
+
   // Walk implementation. We don't use recursion as ASTs may be highly
   // nested.
 

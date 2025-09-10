@@ -681,3 +681,16 @@
   )
 )
 
+;; A chain of globals that read each other in the global scope.
+(module
+  (type $struct (struct))
+
+  (global $g (ref $struct) (struct.new_default $struct))
+
+  (global $h (ref $struct) (global.get $g))
+
+  (func $test (result (ref $struct))
+    (global.get $h)
+  )
+)
+
