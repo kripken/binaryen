@@ -643,7 +643,7 @@
   ;; CHECK-NEXT: )
   (func $test
     (struct.set $A 0
-      (block (result (ref $A))
+      (block (result (ref (exact $A)))
         (struct.new_default $A)
       )
       (i32.const 42)
