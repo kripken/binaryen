@@ -651,3 +651,33 @@
   )
 )
 
+;; We must refinalize after generalizing here, to not break validation: the
+;; select must be (ref nofunc), even though the outer constraint only requires
+;; funcref.
+(module
+  ;; CHECK:      (type $0 (func (result funcref)))
+
+  ;; CHECK:      (func $0 (type $0) (result funcref)
+  ;; CHECK-NEXT:  (select (result (ref nofunc))
+  ;; CHECK-NEXT:   (ref.as_non_null
+  ;; CHECK-NEXT:    (ref.null nofunc)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (ref.as_non_null
+  ;; CHECK-NEXT:    (ref.null nofunc)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $0 (result funcref)
+    (select (result (ref nofunc))
+      (ref.as_non_null
+        (ref.null nofunc)
+      )
+      (ref.as_non_null
+        (ref.null nofunc)
+      )
+      (i32.const 0)
+    )
+  )
+)
+
