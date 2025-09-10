@@ -33,6 +33,7 @@
 #include "ir/locations.h"
 #include "ir/lubs.h"
 #include "ir/subtype-exprs.h"
+#include "ir/utils.h"
 #include "pass.h"
 #include "support/unique_deferring_queue.h"
 #include "wasm-traversal.h"
@@ -351,7 +352,6 @@ struct TypeGeneralizing : public Pass {
           // Things we optimize, and need updating.
           case Expression::GlobalGetId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
-            //curr->finalize();?
             break;
           default:
             break;
@@ -367,6 +367,11 @@ struct TypeGeneralizing : public Pass {
     for (auto& global : module->globals) {
       updater.updateType(GlobalLocation{global->name}, global->type);
     }
+
+    // ReFinalize to propagate changes and make things consistent. This can end
+    // up refining types, but is necessary for correctness in general (and it
+    // only works locally, at least, preserving global generalizations).
+    ReFinalize().run(getPassRunner(), module); // utils.h
   }
 };
 
