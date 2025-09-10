@@ -731,3 +731,27 @@
   )
 )
 
+
+;; TODO
+(module
+ (type $array (array i8))
+
+ (global $g (ref $array) (array.new_fixed $array 0))
+
+ (func $test
+  (drop
+   (ref.eq
+    (global.get $g)
+    (global.get $g)
+   )
+  )
+  (block $block
+   (drop
+    (br_on_null $block
+     (global.get $g)
+    )
+   )
+  )
+ )
+)
+
