@@ -2,16 +2,19 @@
 
 ;; RUN: foreach %s %t wasm-opt --type-generalizing -all -S -o - | filecheck %s
 
-;; With no constraints on it, this global can be anyref.
+;; With no constraints on it, this global can be anyref. However, we do not
+;; generalize types of things with no constraints on them, as they must either
+;; be dead code (as here) or things we do not model yet (which would be unsafe
+;; to modify).
 (module
   ;; CHECK:      (type $A (struct))
   (type $A (struct))
 
-  ;; CHECK:      (global $g (mut anyref) (struct.new_default $A))
+  ;; CHECK:      (global $g (mut (ref $A)) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 )
 
-;; A global.get constrains us as it feeds into a ref.eq, so we must be eq.
+;; A global.get constrains us as it feeds into a ref.eq, so $g must be eq.
 (module
   ;; CHECK:      (type $A (struct))
   (type $A (struct))
@@ -647,6 +650,31 @@
         (struct.new_default $A)
       )
       (i32.const 42)
+    )
+  )
+)
+
+;; Array operations require array inputs. As with structs, we avoid generalizing
+;; them. TODO: We could generalize to arrayref
+(module
+  ;; CHECK:      (type $array (array i16))
+  (type $array (array i16))
+
+  ;; CHECK:      (type $1 (func (result i32)))
+
+  ;; CHECK:      (global $g (ref $array) (array.new_default $array
+  ;; CHECK-NEXT:  (i32.const 0)
+  ;; CHECK-NEXT: ))
+  (global $g (ref $array) (array.new_default $array (i32.const 0)))
+
+  ;; CHECK:      (func $test (type $1) (result i32)
+  ;; CHECK-NEXT:  (array.len
+  ;; CHECK-NEXT:   (global.get $g)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test (result i32)
+    (array.len
+      (global.get $g)
     )
   )
 )

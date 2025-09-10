@@ -60,7 +60,7 @@ struct CollectedFuncInfo {
   // later when we merge all function infos anyhow.
   //
   // Links are in the order of subtype-exprs calls, that is, {sub, super} pairs,
-  // where sub must be a subtype of super. XXX this may not be right with fill()
+  // where sub must be a subtype of super.
   std::vector<LocationLink> links;
 
   // 2. The second constraint we gather are absolute ones, "roots". E.g., ref.eq
@@ -86,11 +86,6 @@ struct Collector
   void link(Location sub, Location super) {
     // TODO: don't bother linking non-ref-typed things. At least exprs are easy
     info.links.emplace_back(sub, super);
-  }
-
-  void loop(Location sub, Location super) {
-    link(sub, super);
-    link(super, sub);
   }
 
   // SubtypingDiscoverer hooks. These implement all true subtyping constraints
@@ -124,14 +119,6 @@ struct Collector
 
   // Override subtype-exprs where we want more precise representation of the
   // flow of constraints.
-
-  void visitGlobalGet(GlobalGet* curr) {
-    // Reads from the corresponding global, and must match the global's type
-    // exactly, so loop them.
-    // TODO: should all loops be in a general "add equality connections"
-    //       helper, which adds on top of the subtype-exprs stuff?
-    loop(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
-  }
 
   void visitGlobalSet(GlobalSet* curr) {
     // Override the parent behavior of an absolute constraint of "value is a
@@ -214,6 +201,7 @@ struct TypeGeneralizing : public Pass {
 
     auto addRoot = [&](Location root, Element value) {
       if (DEBUG) std::cerr << "made root " << root << " to " << value << '\n';
+      // TODO: can avoid non-ref roots?
       lattice.meet(locationValues[root], value);
       roots.insert(root);
       work.push(root);
@@ -250,6 +238,8 @@ struct TypeGeneralizing : public Pass {
     // that could be added. This starts us out in a safe and valid place. For
     // example, we could optimize BrOn by adding a visitor above and precisely
     // stating what requirements are placed on the input reference.
+    //
+    // XXX clarify that an EXPRloc needs an EXPRloc input.
     std::unordered_set<Expression*> isTarget;
     auto noteExprTarget = [&](const Location& loc) {
       if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) { // TODO not just exprloc?
@@ -262,18 +252,51 @@ struct TypeGeneralizing : public Pass {
       noteExprTarget(root);
     }
     for (auto& link : links) {
-      noteExprTarget(link.to);
+      if (std::get_if<ExpressionLocation>(&link.to)) { // holds_alternative?
+        noteExprTarget(link.to);
+      }
     }
     // After finding all the expressions that are targets, mark the others as
-    // roots. We only need to consider the |from| of links, as all other things
-    // are definitely targets.
-    for (auto& link : links) {
-      if (auto* exprLoc = std::get_if<ExpressionLocation>(&link.from)) {
-        if (exprLoc->expr->type.isRef() && !isTarget.count(exprLoc->expr) &&
-            !locationValues.count(*exprLoc)) {
+    // roots.
+    auto maybeAddRoot = [&](const Location& loc) {
+      if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
+        if (exprLoc->expr->type.isRef() && !isTarget.count(exprLoc->expr)) {
           // Force its type to its original one.
+          if (DEBUG) std::cerr << "adding untargeted root\n";
           addRoot(*exprLoc, exprLoc->expr->type);
         }
+      }
+    };
+    for (auto& link : links) {
+      maybeAddRoot(link.from);
+      maybeAddRoot(link.to);
+    }
+
+    // The graph is now complete for subtyping. Add the necessary equality
+    // constraints on top. (We do this after fixing up all the subtyping rules,
+    // so that the equality constraints do not confuse the above logic.)
+    // TODO split into utility?
+    std::unordered_set<Expression*> allExprs;
+    auto noteExpr = [&](const Location& loc) {
+      if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
+std::cout << "note expr " << loc << '\n';
+        allExprs.insert(exprLoc->expr);
+      }
+    };
+    for (auto& root : roots) {
+      noteExpr(root);
+    }
+    for (auto& link : links) {
+      noteExpr(link.from);
+      noteExpr(link.to);
+    }
+    for (auto* expr : allExprs) {
+      // global.get must have the same type as the global it reads from.
+      if (auto* get = expr->dynCast<GlobalGet>()) {
+        if (DEBUG) std::cerr << "linking global.get " << get->name << '\n';
+        auto link = LocationLink{GlobalLocation{get->name}, ExpressionLocation{expr, 0}};
+        links.emplace(link);
+        links.emplace(link.reverse());
       }
     }
 
@@ -330,13 +353,14 @@ struct TypeGeneralizing : public Pass {
           return;
         }
 
-        // If there is no info at all, that means no constraints, and we can use
+        // If there is no info at all, that means XXX no constraints, and we can use
         // the top type.
-        auto old = type;
         auto iter = parent.locationValues.find(loc);
-        type = iter == parent.locationValues.end()
-                 ? Type(type.getHeapType().getTop(), Nullable)
-                 : iter->second;
+        if (iter == parent.locationValues.end()) {
+          return;
+        }
+        auto old = type;
+        type = iter->second;
         if (DEBUG) std::cerr << "Updated " << loc << " to " << type << '\n';
         // We should only ever generalize types, not refine them.
         assert(Type::isSubType(old, type));
