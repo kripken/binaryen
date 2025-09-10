@@ -681,14 +681,23 @@
   )
 )
 
-;; A chain of globals that read each other in the global scope.
+;; A chain of globals that read each other in the global scope. We must keep
+;; the global $g refined so that $h is refined enough for the function's result.
 (module
+  ;; CHECK:      (type $struct (struct))
   (type $struct (struct))
 
+  ;; CHECK:      (type $1 (func (result (ref $struct))))
+
+  ;; CHECK:      (global $g (ref $struct) (struct.new_default $struct))
   (global $g (ref $struct) (struct.new_default $struct))
 
+  ;; CHECK:      (global $h (ref $struct) (global.get $g))
   (global $h (ref $struct) (global.get $g))
 
+  ;; CHECK:      (func $test (type $1) (result (ref $struct))
+  ;; CHECK-NEXT:  (global.get $h)
+  ;; CHECK-NEXT: )
   (func $test (result (ref $struct))
     (global.get $h)
   )

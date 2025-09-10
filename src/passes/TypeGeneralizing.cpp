@@ -131,7 +131,6 @@ struct Collector
     // TODO: should all loops be in a general "add equality connections"
     //       helper, which adds on top of the subtype-exprs stuff?
     loop(GlobalLocation{curr->name}, ExpressionLocation{curr, 0});
-std::cout << "gg\n";
   }
 
   void visitGlobalSet(GlobalSet* curr) {
@@ -142,10 +141,8 @@ std::cout << "gg\n";
   }
 
   void visitGlobal(Global* global) {
-std::cout << "justG1\n";
     // Override the parent to specify GlobalLocation (and not just a type).
     if (global->init) {
-std::cout << "justG2\n";
       link(getLocation(global->init), GlobalLocation{global->name});
     }
   }
