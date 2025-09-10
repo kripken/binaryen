@@ -353,19 +353,23 @@
   )
 )
 
-;; The drop does not constrain the if, so we can generalize it to anyref.
-;; Refinalizing undoes this, but we should not error.
+;; The drop does not constrain the if, so we can generalize it to anyref (and
+;; the global as well).
 (module
+
   ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (global $g anyref (ref.i31
+  ;; CHECK-NEXT:  (i32.const 42)
+  ;; CHECK-NEXT: ))
+  (global $g (ref i31) (ref.i31 (i32.const 42)))
 
   ;; CHECK:      (func $test (type $0)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (if (result i31ref)
+  ;; CHECK-NEXT:   (if (result anyref)
   ;; CHECK-NEXT:    (i32.const 0)
   ;; CHECK-NEXT:    (then
-  ;; CHECK-NEXT:     (ref.i31
-  ;; CHECK-NEXT:      (i32.const 0)
-  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (global.get $g)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:    (else
   ;; CHECK-NEXT:     (nop)
@@ -379,13 +383,11 @@
       (if (result i31ref)
         (i32.const 0)
         (then
-          (ref.i31
-            (i32.const 0)
-          )
+          (global.get $g)
         )
         (else
           (nop) ;; Avoid a trivial block here, so we test the typing of this
-                ;; block as well.
+                ;; block does not cause errors.
           (ref.null none)
         )
       )
@@ -395,21 +397,23 @@
 
 ;; Generalize a loop's type.
 (module
+
   ;; CHECK:      (type $0 (func))
 
-  ;; CHECK:      (elem declare func $test)
+  ;; CHECK:      (global $g funcref (ref.func $test))
+  (global $g (ref func) (ref.func $test))
 
   ;; CHECK:      (func $test (type $0)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (loop (result (ref (exact $0)))
-  ;; CHECK-NEXT:    (ref.func $test)
+  ;; CHECK-NEXT:   (loop (result funcref)
+  ;; CHECK-NEXT:    (global.get $g)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $test
     (drop
       (loop (result (ref func))
-        (ref.func $test)
+        (global.get $g)
       )
     )
   )
@@ -417,15 +421,17 @@
 
 ;; Generalize a select's type.
 (module
+
   ;; CHECK:      (type $0 (func))
 
-  ;; CHECK:      (elem declare func $test)
+  ;; CHECK:      (global $g funcref (ref.func $test))
+  (global $g (ref func) (ref.func $test))
 
   ;; CHECK:      (func $test (type $0)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (select (result (ref (exact $0)))
-  ;; CHECK-NEXT:    (ref.func $test)
-  ;; CHECK-NEXT:    (ref.func $test)
+  ;; CHECK-NEXT:   (select (result funcref)
+  ;; CHECK-NEXT:    (global.get $g)
+  ;; CHECK-NEXT:    (global.get $g)
   ;; CHECK-NEXT:    (i32.const 1)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
@@ -433,8 +439,8 @@
   (func $test
     (drop
       (select (result (ref func))
-        (ref.func $test)
-        (ref.func $test)
+        (global.get $g)
+        (global.get $g)
         (i32.const 1)
       )
     )
@@ -443,15 +449,17 @@
 
 ;; Generalize a try's type.
 (module
+
   ;; CHECK:      (type $0 (func))
 
-  ;; CHECK:      (elem declare func $test)
+  ;; CHECK:      (global $g funcref (ref.func $test))
+  (global $g (ref func) (ref.func $test))
 
   ;; CHECK:      (func $test (type $0)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (try (result (ref (exact $0)))
+  ;; CHECK-NEXT:   (try (result funcref)
   ;; CHECK-NEXT:    (do
-  ;; CHECK-NEXT:     (ref.func $test)
+  ;; CHECK-NEXT:     (global.get $g)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
@@ -460,7 +468,7 @@
     (drop
       (try (result (ref func))
         (do
-          (ref.func $test)
+          (global.get $g)
         )
       )
     )
@@ -469,15 +477,17 @@
 
 ;; Generalize a try_table's type.
 (module
+
   ;; CHECK:      (type $0 (func))
 
-  ;; CHECK:      (elem declare func $test)
+  ;; CHECK:      (global $g funcref (ref.func $test))
+  (global $g (ref func) (ref.func $test))
 
   ;; CHECK:      (func $test (type $0)
   ;; CHECK-NEXT:  (block $block
   ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (try_table (result (ref (exact $0))) (catch_all $block)
-  ;; CHECK-NEXT:     (ref.func $test)
+  ;; CHECK-NEXT:    (try_table (result funcref) (catch_all $block)
+  ;; CHECK-NEXT:     (global.get $g)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
@@ -486,7 +496,7 @@
     (block $block
       (drop
         (try_table (result (ref func)) (catch_all $block)
-          (ref.func $test)
+          (global.get $g)
         )
       )
     )
@@ -502,14 +512,17 @@
 
   ;; CHECK:      (type $1 (func (result (ref null $array))))
 
+  ;; CHECK:      (global $g (ref $array) (array.new_default $array
+  ;; CHECK-NEXT:  (i32.const 0)
+  ;; CHECK-NEXT: ))
+  (global $g (ref $array) (array.new_default $array (i32.const 0)))
+
   ;; CHECK:      (func $test (type $1) (result (ref null $array))
-  ;; CHECK-NEXT:  (block $block (result (ref null (exact $array)))
+  ;; CHECK-NEXT:  (block $block (result (ref null $array))
   ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (br_on_cast_fail $block (ref (exact $array)) (ref (exact $array))
-  ;; CHECK-NEXT:     (block (result (ref (exact $array)))
-  ;; CHECK-NEXT:      (array.new_default $array
-  ;; CHECK-NEXT:       (i32.const 0)
-  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:    (br_on_cast_fail $block (ref $array) (ref $array)
+  ;; CHECK-NEXT:     (block (result (ref $array))
+  ;; CHECK-NEXT:      (global.get $g)
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
@@ -521,9 +534,7 @@
       (drop
         (br_on_cast_fail $block (ref $array) (ref $array)
           (block (result (ref $array)) ;; this can be nullable
-            (array.new_default $array
-              (i32.const 0)
-            )
+            (global.get $g)
           )
         )
       )
@@ -539,13 +550,16 @@
 
   ;; CHECK:      (type $1 (func (result (ref null $array))))
 
+  ;; CHECK:      (global $g (ref $array) (array.new_default $array
+  ;; CHECK-NEXT:  (i32.const 0)
+  ;; CHECK-NEXT: ))
+  (global $g (ref $array) (array.new_default $array (i32.const 0)))
+
   ;; CHECK:      (func $test (type $1) (result (ref null $array))
-  ;; CHECK-NEXT:  (block $block (result (ref null (exact $array)))
+  ;; CHECK-NEXT:  (block $block (result (ref null $array))
   ;; CHECK-NEXT:   (br_on_non_null $block
-  ;; CHECK-NEXT:    (block (result (ref (exact $array)))
-  ;; CHECK-NEXT:     (array.new_default $array
-  ;; CHECK-NEXT:      (i32.const 0)
-  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    (block (result (ref $array))
+  ;; CHECK-NEXT:     (global.get $g)
   ;; CHECK-NEXT:    )
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (ref.null none)
@@ -555,9 +569,7 @@
     (block $block (result (ref null $array))
       (br_on_non_null $block
         (block (result (ref $array)) ;; this can be nullable
-          (array.new_default $array
-            (i32.const 0)
-          )
+          (global.get $g)
         )
       )
       (ref.null $array)
@@ -577,14 +589,19 @@
 
   ;; CHECK:      (type $2 (func (result (ref null $A))))
 
+  ;; CHECK:      (global $g (ref $A) (struct.new_default $A
+  ;; CHECK-NEXT:  (struct.new_default $B)
+  ;; CHECK-NEXT: ))
+  (global $g (ref $A) (struct.new $A
+    (struct.new $B)
+  ))
+
   ;; CHECK:      (func $test (type $2) (result (ref null $A))
-  ;; CHECK-NEXT:  (block $block (result (ref null (exact $A)))
+  ;; CHECK-NEXT:  (block $block (result (ref null $A))
   ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (br_on_cast_desc_fail $block (ref (exact $A)) (ref (exact $A))
-  ;; CHECK-NEXT:     (block (result (ref (exact $A)))
-  ;; CHECK-NEXT:      (struct.new_default $A
-  ;; CHECK-NEXT:       (struct.new_default $B)
-  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:    (br_on_cast_desc_fail $block (ref $A) (ref (exact $A))
+  ;; CHECK-NEXT:     (block (result (ref $A))
+  ;; CHECK-NEXT:      (global.get $g)
   ;; CHECK-NEXT:     )
   ;; CHECK-NEXT:     (struct.new_default $B)
   ;; CHECK-NEXT:    )
@@ -597,9 +614,7 @@
       (drop
         (br_on_cast_desc_fail $block (ref $A) (ref $A)
           (block (result (ref $A)) ;; this can be nullable
-            (struct.new $A
-              (struct.new $B)
-            )
+            (global.get $g)
           )
           (struct.new $B)
         )
