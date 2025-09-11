@@ -282,6 +282,13 @@ struct Collector
         // local.tee's type must match the value.
         enforceEquality(ExpressionLocation{tee, 0},
                         ExpressionLocation{tee->value, 0});
+      } else if (auto* br = expr->dynCast<Break>()) {
+        // br_if's type must match the value. (This must be a br_if with a
+        // value because it has a concrete type, or else it would not be a
+        // tracked location at all.)
+        assert(br->value);
+        enforceEquality(ExpressionLocation{br, 0},
+                        ExpressionLocation{br->value, 0});
       }
     }
   }
@@ -464,9 +471,10 @@ struct TypeGeneralizing : public Pass {
           case Expression::SelectId:
           case Expression::TryId:
           case Expression::TryTableId:
+          case Expression::LocalSetId:
+          case Expression::BreakId:
           // Things we optimize.
           case Expression::LocalGetId:
-          case Expression::LocalSetId:
           case Expression::GlobalGetId:
           case Expression::RefCastId:
             updateType(ExpressionLocation{curr, 0}, curr->type);

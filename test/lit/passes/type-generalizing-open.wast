@@ -939,3 +939,43 @@
   )
 )
 
+;; br_if type updating. Here the global $g can be made nullable, like the
+;; local, but no further. When the global is generalized, so is the br_if as it
+;; flows the global's value through it.
+(module
+  ;; CHECK:      (type $A (sub (struct)))
+  (type $A (sub (struct)))
+
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (global $g (ref null $A) (struct.new_default $A))
+  (global $g (ref $A) (struct.new $A))
+
+  ;; CHECK:      (func $test (type $1)
+  ;; CHECK-NEXT:  (local $temp (ref null $A))
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block $block (result (ref null $A))
+  ;; CHECK-NEXT:    (local.tee $temp
+  ;; CHECK-NEXT:     (br_if $block
+  ;; CHECK-NEXT:      (global.get $g)
+  ;; CHECK-NEXT:      (i32.const 0)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (local $temp (ref null $A))
+    (drop
+      (block $block (result (ref null $A))
+        (local.tee $temp
+          (br_if $block
+            (global.get $g)
+            (i32.const 0)
+          )
+        )
+      )
+    )
+  )
+)
+
