@@ -2,15 +2,12 @@
 
 ;; RUN: foreach %s %t wasm-opt --type-generalizing -all -S -o - | filecheck %s
 
-;; With no constraints on it, this global can be anyref. However, we do not
-;; generalize types of things with no constraints on them, as they must either
-;; be dead code (as here) or things we do not model yet (which would be unsafe
-;; to modify).
+;; With no constraints on it, this global can be anyref.
 (module
   ;; CHECK:      (type $A (struct))
   (type $A (struct))
 
-  ;; CHECK:      (global $g (mut (ref $A)) (struct.new_default $A))
+  ;; CHECK:      (global $g (mut anyref) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 )
 
@@ -800,5 +797,33 @@
    )
   )
  )
+)
+
+;; $g can be generalized to eqref. The global $h must be generalized at the
+;; same time, to not break validation, and it can be anyref.
+(module
+  ;; CHECK:      (type $array (array i8))
+  (type $array (array i8))
+
+  ;; CHECK:      (type $1 (func (result i32)))
+
+  ;; CHECK:      (global $g eqref (array.new_fixed $array 0))
+  (global $g arrayref (array.new_fixed $array 0))
+
+  ;; CHECK:      (global $h (mut anyref) (global.get $g))
+  (global $h (mut arrayref) (global.get $g))
+
+  ;; CHECK:      (func $0 (type $1) (result i32)
+  ;; CHECK-NEXT:  (ref.eq
+  ;; CHECK-NEXT:   (global.get $g)
+  ;; CHECK-NEXT:   (global.get $g)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $0 (result i32)
+    (ref.eq
+      (global.get $g)
+      (global.get $g)
+    )
+  )
 )
 

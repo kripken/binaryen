@@ -181,7 +181,7 @@ struct Collector
     auto* value = curr->value;
     if (value->type.isRef()) {
       noteSubtype(value,
-                  Type(value->type.getHeapType().getTop(), Nullable));
+                  Type(value->type.getHeapType().getTop(), Nullable)); // TODO: with(, as below
     }
   }
 
@@ -389,12 +389,13 @@ struct TypeGeneralizing : public Pass {
 
         // If there is no info at all, that means XXX no constraints, and we can use
         // the top type.
+        auto old = type;
         auto iter = parent.locationValues.find(loc);
         if (iter == parent.locationValues.end()) {
-          return;
+          type = type.with(type.getHeapType().getTop()).with(Nullable);
+        } else {
+          type = iter->second;
         }
-        auto old = type;
-        type = iter->second;
         if (DEBUG) std::cerr << "Updated " << loc << " to " << type << '\n';
         // We should only ever generalize types, not refine them.
         assert(Type::isSubType(old, type));
