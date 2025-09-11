@@ -326,7 +326,7 @@
   )
 )
 
-;; A ref.cast does not constrain the global.
+;; A ref.cast does not constrain the global, and can even be generalized itself.
 (module
   ;; CHECK:      (type $A (struct))
   (type $A (struct))
@@ -338,7 +338,7 @@
 
   ;; CHECK:      (func $test (type $1)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.cast (ref $A)
+  ;; CHECK-NEXT:   (ref.cast anyref
   ;; CHECK-NEXT:    (global.get $g)
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )

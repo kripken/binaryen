@@ -447,6 +447,8 @@ struct TypeGeneralizing : public Pass {
           case Expression::SelectId:
           case Expression::TryId:
           case Expression::TryTableId:
+          // Casts
+          case Expression::RefCastId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
             break;
 
