@@ -47,7 +47,7 @@
   (func $set (export "set") (param $any anyref)
     ;; Cast to $A & stash that in the global, but then only use it below to
     ;; check for nullability. The global does't need to be anything more than
-    ;; anyref and we don't need the cast.
+    ;; anyref and we don't need the cast (in TYGEN).
     (global.set $g
       (ref.cast (ref null $A)
         (local.get $any)
