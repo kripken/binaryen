@@ -24,6 +24,31 @@
 // then flow the constraints to a fixed point to see what the minimal types are
 // that do not break validation or change program behavior.
 //
+// In more detail:
+//
+//  * We build the basic graph using SubtypingDiscoverer which finds proper
+//    subtyping constraints, like the value of a local.set being a subtype of
+//    the local's type.
+//  * We then add equality constraints, things that must be identical in the IR,
+//    like a global.get being the exact type of the global.
+//  * We do not define all such equality constraints. We *must* provide relevant
+//    equality constraints for things we intend to optimize (to optimize
+//    globals safely, we must ensure equality of global.gets to the global's
+//    type, as mentioned before), but rather than depend on having all possible
+//    equality constraints present, we use the following simple rule: When a
+//    thing is unconstrained, we keep its type fixed. That is, if nothing tells
+//    us that a particular location in the module must be a subtype of
+//    something else, then we we do not know enough to safely optimize it, and
+//    we (safely) leave its type unmodified.
+//    TODO Each time we do so, we are leaving a possible optimization
+//         opportunity on the table, so this can be incrementally improved. For
+//         the work required to optimize a new type of thing, see the logic
+//         below for Globals:
+//         * Visit them in Collector.
+//         * Handle imported and exported versions of them.
+//         * Add equality constraints.
+//         * Update them in update().
+//
 // TODO: In closed world we could not treat externally-visible types as roots,
 //       e.g., we could generalize an exported (ref $foo) to an anyref.
 //
@@ -70,7 +95,8 @@ struct CollectedFuncInfo {
   // above, we do not deduplicate here).
   std::vector<std::pair<Location, Element>> roots;
 
-  // TODO comment up here from drop
+  // All the unconstrained expressions, which as mentioned in the top comment,
+  // we must note so that we can avoid changing their type later.
   std::vector<Expression*> unconstrained;
 };
 
@@ -95,8 +121,7 @@ struct Collector
   }
 
   // Maintain maps of all expressions and of all constrained ones. This allows
-  // us to find the *un*constrained ones later, which is important. TODO move
-  // comments from drop etc. to here
+  // us to find the *un*constrained ones later, as explained earlier.
   std::unordered_set<Expression*> allExprs, constrainedExprs;
 
   // Note an expression to a given set, if it has a relevant type.
@@ -260,7 +285,6 @@ struct TypeGeneralizing : public Pass {
 
     auto addRoot = [&](Location root, Element value) {
       if (DEBUG) std::cerr << "made root " << root << " to " << value << '\n';
-      // TODO: can avoid non-ref roots?
       lattice.meet(locationValues[root], value);
       roots.insert(root);
       work.push(root);
@@ -275,22 +299,8 @@ struct TypeGeneralizing : public Pass {
       }
     }
 
-    // Finalize the graph. If an expression has no constraints on it whatsoever,
-    // then we force its type to remain fixed by making it a root. Normally
-    // every expression has some constraint, derived by the parent of the
-    // expression, like the parent ref.eq of a child forces it to be of type eq.
-    // When subtyping-exprs has no constraint at all, that means it is unaware
-    // of subtyping requirements, but there are other ones, such as a
-    // struct.get's reference child. TODO copy explanation for that from
-    // subtype-exprs, or give a better example.
-    //
-    // Each time we do this, we are missing a potential optimization opportunity
-    // that could be added. This starts us out in a safe and valid place. For
-    // example, we could optimize BrOn by adding a visitor above and precisely
-    // stating what requirements are placed on the input reference.
-    //
-    // XXX clarify that an EXPRloc needs an EXPRloc input.
-    // TODO: move this upp
+    // Apply the rule mentioned in the top comment: When a thing is
+    // unconstrained, we keep its type fixed.
     for (auto& [func, info] : analysis.map) {
       for (auto* expr : info.unconstrained) {
         if (DEBUG) std::cerr << "adding unconstrained root\n";
