@@ -20,6 +20,13 @@
 // weaken casts that cast to unnecessarily refined types. If the casts are
 // weakened enough, they will be able to be removed by OptimizeInstructions.
 //
+// While this pass has the benefits mentioned above, unrefining types can still
+// be harmful, e.g. if the VM might have benefited from more precise types after
+// it does runtime inlining. For that reason it may be useful to run this pass
+// near the end of the optimization pipeline, and optimize after it: doing so
+// may allow removal of some unnecessary casts, and the follow optimizations
+// will restore some amount of refinement (without adding casts back).
+//
 // To do this, we generate a global graph of all type constraints in the module,
 // then flow the constraints to a fixed point to see what the minimal types are
 // that do not break validation or change program behavior.
@@ -197,17 +204,27 @@ struct Collector
     }
   }
 
+  void noteEmptyConstraint(Expression* value) {
+    // Apply a constraint of the top type, which is no constraint in effect.
+   noteSubtype(value,
+               Type(value->type.getHeapType().getTop(), Nullable)); // TODO: with(, as below
+  }
+
   void visitDrop(Drop* curr) {
     // Drop imposes no constraints on the input. It is the only expression
-    // that truly does so, and therefore requires special treatment, as below,
-    // we look for expressions that have no constraints and fix their types (see
-    // below for why). We do not want drop to do this, so we make it impose the
-    // "empty" constraint of the top type for the child.
-    auto* value = curr->value;
-    if (value->type.isRef()) {
-      noteSubtype(value,
-                  Type(value->type.getHeapType().getTop(), Nullable)); // TODO: with(, as below
+    // that truly does so, and therefore requires special treatment: Since we
+    // consider things that have no constraints as unchangeable (see above), we
+    // must make a note to allow optimization here, by applying an empty
+    // constraint.
+    if (curr->value->type.isRef()) {
+      noteEmptyConstraint(curr->value);
     }
+  }
+
+  void visitRefIsNull(RefIsNull* curr) {
+    // The input must be a reference, but nothing more, so SubtypingDiscoverer
+    // does nothing for it. We treat it as a drop.
+    noteEmptyConstraint(curr->value);
   }
 
   static void scan(Collector* self, Expression** currp) {
