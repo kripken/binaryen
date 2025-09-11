@@ -197,10 +197,6 @@ struct LocationLink {
   bool operator==(const LocationLink& other) const {
     return from == other.from && to == other.to;
   }
-
-  LocationLink reverse() {
-    return {to, from};
-  }
 };
 
 // Utility for printing a location with module info (like type names);

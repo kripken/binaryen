@@ -190,10 +190,15 @@ struct Collector
   // Override subtype-exprs where we want more precise representation of the
   // flow of constraints.
 
-  void visitGlobalSet(GlobalSet* curr) {
+  void visitLocalSet(LocalSet* curr) {
     // Override the parent behavior of an absolute constraint of "value is a
-    // subtype of ${current type of global}" with a link to the global, i.e., a
+    // subtype of ${current type of local}" with a link to the local, i.e., a
     // relative constraint.
+    link(getLocation(curr->value), LocalLocation{getFunction(), curr->index});
+  }
+
+  void visitGlobalSet(GlobalSet* curr) {
+    // Similar to LocalSet.
     link(getLocation(curr->value), GlobalLocation{curr->name});
   }
 
@@ -242,6 +247,13 @@ struct Collector
     }
   }
 
+  // Forces two locations to be equal in value, like a local.get and the type
+  // of the local.
+  void enforceEquality(Location a, Location b) {
+    info.links.emplace_back(a, b);
+    info.links.emplace_back(b, a);
+  }
+
   void visitFunction(Function* func) {
     Super::visitFunction(func);
 
@@ -249,6 +261,20 @@ struct Collector
     for (auto* expr : allExprs) {
       if (!constrainedExprs.count(expr)) {
         info.unconstrained.push_back(expr);
+      }
+    }
+
+    // After finding the unconstrained expressions, we can apply equality
+    // constraints. TODO merge loops
+    for (auto* expr : allExprs) {
+      // local.get must have the same type as the local it reads from, and ditto
+      // for globals.
+      if (auto* get = expr->dynCast<LocalGet>()) {
+        enforceEquality(LocalLocation{func, get->index},
+                        ExpressionLocation{expr, 0});
+      } else if (auto* get = expr->dynCast<GlobalGet>()) {
+        enforceEquality(GlobalLocation{get->name},
+                        ExpressionLocation{expr, 0});
       }
     }
   }
@@ -339,33 +365,6 @@ struct TypeGeneralizing : public Pass {
     // value's sources must be refined enough to fit in the global's type.
     links.reverse();
 
-    // The graph is now complete for subtyping. Add the necessary equality
-    // constraints on top. (We do this after fixing up all the subtyping rules,
-    // so that the equality constraints do not confuse the above logic.)
-    // TODO split into utility?
-    std::unordered_set<Expression*> allExprs;
-    auto noteExpr = [&](const Location& loc) {
-      if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
-        allExprs.insert(exprLoc->expr);
-      }
-    };
-    for (auto& root : roots) {
-      noteExpr(root);
-    }
-    for (auto& link : links) {
-      noteExpr(link.from);
-      noteExpr(link.to);
-    }
-    for (auto* expr : allExprs) {
-      // global.get must have the same type as the global it reads from.
-      if (auto* get = expr->dynCast<GlobalGet>()) {
-        if (DEBUG) std::cerr << "linking global.get " << get->name << '\n';
-        auto link = LocationLink{GlobalLocation{get->name}, ExpressionLocation{expr, 0}};
-        links.emplace(link);
-        links.emplace(link.reverse());
-      }
-    }
-
     // Get the flow-efficient sorted graph.
     auto sortedGraph = links.getSortedGraph();
     if (DEBUG) std::cerr << "\nGRAPH:\n";
@@ -447,21 +446,22 @@ struct TypeGeneralizing : public Pass {
           case Expression::SelectId:
           case Expression::TryId:
           case Expression::TryTableId:
-          // Casts
+          // Things we optimize.
+          case Expression::LocalGetId:
+          case Expression::GlobalGetId:
           case Expression::RefCastId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
             break;
-
-          // Things we optimize, and need updating. Note that some of these may
-          // not be in the graph (e.g. a global.get that has no parent that
-          // constrains it), but we must still update them all properly (so we
-          // use GlobalLocation here and not ExpressionLocation, as the latter
-          // would not be updated if not in the graph).
-          case Expression::GlobalGetId:
-            updateType(GlobalLocation{curr->cast<GlobalGet>()->name}, curr->type);
-            break;
           default:
             break;
+        }
+      }
+
+      void visitFunction(Function* func) {
+        // Apply types to the vars (but not params).
+        auto base = func->getVarIndexBase();
+        for (Index i = 0; i < func->getNumVars(); ++i) {
+          updateType(LocalLocation{func, base + i}, func->vars[i]);
         }
       }
     };
