@@ -255,8 +255,7 @@ struct Collector
     // TODO: do we need to find unconstrained non-function-scoped things? As we
     //       do not optimize them, perhaps not
     for (auto& loc : all) {
-      if ((std::get_if<ExpressionLocation>(&loc) ||
-           std::get_if<LocalLocation>(&loc)) && !constrained.count(loc)) {
+      if ((std::get_if<ExpressionLocation>(&loc)) && !constrained.count(loc)) {
         info.unconstrained.push_back(loc);
       }
     }
