@@ -102,9 +102,9 @@ struct CollectedFuncInfo {
   // above, we do not deduplicate here).
   std::vector<std::pair<Location, Element>> roots;
 
-  // All the unconstrained expressions, which as mentioned in the top comment,
+  // All the unconstrained locations, which as mentioned in the top comment,
   // we must note so that we can avoid changing their type later.
-  std::vector<Expression*> unconstrained;
+  std::vector<Location> unconstrained;
 };
 
 Location getLocation(Expression* curr) {
@@ -129,15 +129,16 @@ struct Collector
 
   // Maintain maps of all expressions and of all constrained ones. This allows
   // us to find the *un*constrained ones later, as explained earlier.
-  std::unordered_set<Expression*> allExprs, constrainedExprs;
+  std::unordered_set<Location> all, constrained;
 
   // Note an expression to a given set, if it has a relevant type.
   void noteConstrainedExpr(Location loc) {
     if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
-      if (isRelevant(exprLoc->expr->type)) {
-        constrainedExprs.insert(exprLoc->expr);
+      if (!isRelevant(exprLoc->expr->type)) {
+        return;
       }
     }
+    constrained.insert(loc);
   }
 
   void root(Location loc, Type value) {
@@ -243,32 +244,29 @@ struct Collector
     // Also note all expressions, so we can find unconstrained ones (see drop).
     auto* curr = *currp;
     if (self->isRelevant(curr->type)) {
-      self->allExprs.insert(curr);
+      self->all.insert(ExpressionLocation{curr, 0});
     }
   }
 
-  // Forces two locations to be equal in value, like a local.get and the type
-  // of the local.
-  void enforceEquality(Location a, Location b) {
-    info.links.emplace_back(a, b);
-    info.links.emplace_back(b, a);
-  }
-
-  void visitFunction(Function* func) {
-    Super::visitFunction(func);
-
+  void finish(Function* func=nullptr) {
     // We can now note all the unconstrained expressions.
-    for (auto* expr : allExprs) {
-      if (!constrainedExprs.count(expr)) {
-        info.unconstrained.push_back(expr);
+    for (auto& loc : all) {
+      if (!constrained.count(loc)) {
+        info.unconstrained.push_back(loc);
       }
     }
 
     // After finding the unconstrained expressions, we can apply equality
     // constraints. TODO merge loops
-    for (auto* expr : allExprs) {
+    for (auto& loc : all) {
+      auto* exprLoc = std::get_if<ExpressionLocation>(&loc);
+      if (!exprLoc) {
+        continue;
+      }
+
       // local.get must have the same type as the local it reads from, and ditto
       // for globals.
+      auto* expr = exprLoc->expr;
       if (auto* get = expr->dynCast<LocalGet>()) {
         enforceEquality(LocalLocation{func, get->index},
                         ExpressionLocation{expr, 0});
@@ -277,6 +275,13 @@ struct Collector
                         ExpressionLocation{expr, 0});
       }
     }
+  }
+
+  // Forces two locations to be equal in value, like a local.get and the type
+  // of the local.
+  void enforceEquality(Location a, Location b) {
+    info.links.emplace_back(a, b);
+    info.links.emplace_back(b, a);
   }
 };
 
@@ -298,14 +303,18 @@ struct TypeGeneralizing : public Pass {
     ModuleUtils::ParallelFunctionAnalysis<CollectedFuncInfo> analysis(
       *module, [&](Function* func, CollectedFuncInfo& info) {
         if (!func->imported()) {
-          Collector(info).walkFunctionInModule(func, module);
+          Collector collector(info);
+          collector.walkFunctionInModule(func, module);
+          collector.finish(func);
         }
       });
 
     // Also walk the global module code (for simplicity, also add it to the
     // function map, using a "function" key of nullptr).
     auto& moduleInfo = analysis.map[nullptr];
-    Collector(moduleInfo).walkModuleLevel(module);
+    Collector moduleCollector(moduleInfo);
+    moduleCollector.walkModuleLevel(module);
+    moduleCollector.finish();
 
     // Add roots for exports. TODO: not in closed world?
     for (auto& exp : module->exports) {
@@ -350,9 +359,9 @@ struct TypeGeneralizing : public Pass {
     // Apply the rule mentioned in the top comment: When a thing is
     // unconstrained, we keep its type fixed.
     for (auto& [func, info] : analysis.map) {
-      for (auto* expr : info.unconstrained) {
+      for (auto& loc : info.unconstrained) {
         if (DEBUG) std::cerr << "adding unconstrained root\n";
-        addRoot(ExpressionLocation{expr, 0}, expr->type);
+        addRoot(loc, getLocationType(loc, *module));
       }
     };
 
@@ -448,6 +457,7 @@ struct TypeGeneralizing : public Pass {
           case Expression::TryTableId:
           // Things we optimize.
           case Expression::LocalGetId:
+          case Expression::LocalSetId:
           case Expression::GlobalGetId:
           case Expression::RefCastId:
             updateType(ExpressionLocation{curr, 0}, curr->type);

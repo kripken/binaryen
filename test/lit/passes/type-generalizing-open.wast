@@ -871,10 +871,44 @@
   ;; CHECK-NEXT:   (global.get $g)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  (func $0 (result i32)
+  (func $test (result i32)
     (ref.eq
       (global.get $g)
       (global.get $g)
+    )
+  )
+)
+
+;; Generalization of a local type.
+(module
+  (type $A (struct))
+
+  (func $test (param $p (ref null $A))
+    ;; The parameter cannot be changed, but the last two locals can.
+    (local $l-reads (ref null $A))
+    (local $l-tee (ref null $A))
+    (local $l-unused (ref null $A))
+
+    ;; Prevent the first local from being generalized.
+    (local.set $p
+      (local.get $l-reads)
+    )
+
+    (drop
+      (local.get $p)
+    )
+    (drop
+      (local.get $l-reads)
+    )
+    (drop
+      (local.get $l-tee)
+    )
+
+    ;; Verify we update tees (or the IR would not validate).
+    (drop
+      (local.tee $l-tee
+        (local.get $l-tee)
+      )
     )
   )
 )

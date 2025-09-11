@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "ir/gc-type-utils.h"
 #include "ir/locations.h"
 #include "ir/module-utils.h"
 #include "wasm.h"
@@ -109,6 +110,31 @@ LocationLinkGraph::SortedGraph LocationLinkGraph::getSortedGraph() {
     ret[from].push_back(to);
   }
   return ret;
+}
+
+Type getLocationType(const Location& location, Module& wasm) {
+  if (auto* loc = std::get_if<wasm::ExpressionLocation>(&location)) {
+    return loc->expr->type;
+  } else if (auto* loc = std::get_if<wasm::DataLocation>(&location)) {
+    return GCTypeUtils::getField(loc->type, loc->index)->type;
+  } else if (auto* loc = std::get_if<wasm::TagLocation>(&location)) {
+    return wasm.getTag(loc->tag)->params()[loc->tupleIndex];
+  } else if (auto* loc = std::get_if<wasm::ParamLocation>(&location)) {
+    return wasm.getFunction(loc->func->name)->getLocalType(loc->index);
+  } else if (auto* loc = std::get_if<wasm::LocalLocation>(&location)) {
+    return wasm.getFunction(loc->func->name)->getLocalType(loc->index);
+  } else if (auto* loc = std::get_if<wasm::ResultLocation>(&location)) {
+    return wasm.getFunction(loc->func->name)->getResults()[loc->index];
+  } else if (auto* loc = std::get_if<wasm::GlobalLocation>(&location)) {
+    return wasm.getGlobal(loc->name)->type;
+  } else if (auto* loc = std::get_if<wasm::SignatureParamLocation>(&location)) {
+    return loc->type.getSignature().params[loc->index];
+  } else if (auto* loc =
+               std::get_if<wasm::SignatureResultLocation>(&location)) {
+    return loc->type.getSignature().results[loc->index];
+  } else {
+    WASM_UNREACHABLE("TODO: all locations");
+  }
 }
 
 } // namespace wasm

@@ -187,6 +187,9 @@ using Location = std::variant<ExpressionLocation,
                               TypeLocation,
                               ConeReadLocation>;
 
+// Finds the type of this location in the given module.
+Type getLocationType(const Location& location, Module& wasm);
+
 // A link between two locations.
 struct LocationLink {
   Location from;
