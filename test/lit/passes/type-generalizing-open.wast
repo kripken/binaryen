@@ -326,6 +326,32 @@
   )
 )
 
+;; A ref.cast does not constrain the global.
+(module
+  ;; CHECK:      (type $A (struct))
+  (type $A (struct))
+
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (global $g (mut anyref) (struct.new_default $A))
+  (global $g (mut (ref $A)) (struct.new $A))
+
+  ;; CHECK:      (func $test (type $1)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.cast (ref $A)
+  ;; CHECK-NEXT:    (global.get $g)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (drop
+      (ref.cast (ref $A)
+        (global.get $g)
+      )
+    )
+  )
+)
+
 ;; The block's type does not constrain the global, since it is dropped.
 (module
   ;; CHECK:      (type $F (func))

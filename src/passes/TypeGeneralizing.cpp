@@ -182,7 +182,7 @@ struct Collector
     }
   }
 
-  // TODO
+  // Casts impose no requirements on us.
   void noteCast(HeapType, HeapType) {}
   void noteCast(Expression*, Type) {}
   void noteCast(Expression*, Expression*) {}
@@ -225,6 +225,11 @@ struct Collector
     // The input must be a reference, but nothing more, so SubtypingDiscoverer
     // does nothing for it. We treat it as a drop.
     noteEmptyConstraint(curr->value);
+  }
+
+  void visitRefCast(RefCast* curr) {
+    // The type we cast to is not a constraint.
+    noteEmptyConstraint(curr->ref);
   }
 
   static void scan(Collector* self, Expression** currp) {
