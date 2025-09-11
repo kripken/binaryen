@@ -69,6 +69,9 @@ struct CollectedFuncInfo {
   // The vector here is of the location of the root and the constraint there (as
   // above, we do not deduplicate here).
   std::vector<std::pair<Location, Element>> roots;
+
+  // TODO comment up here from drop
+  std::vector<Expression*> unconstrained;
 };
 
 Location getLocation(Expression* curr) {
@@ -79,6 +82,9 @@ Location getLocation(Expression* curr) {
 // Collect subtyping constraints for one CollectedFuncInfo.
 struct Collector
   : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>> {
+
+  using Super = ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>>;
+
   CollectedFuncInfo& info;
 
   Collector(CollectedFuncInfo& info) : info(info) {}
@@ -88,8 +94,32 @@ struct Collector
     return type.isRef();
   }
 
+  // Maintain maps of all expressions and of all constrained ones. This allows
+  // us to find the *un*constrained ones later, which is important. TODO move
+  // comments from drop etc. to here
+  std::unordered_set<Expression*> allExprs, constrainedExprs;
+
+  // Note an expression to a given set, if it has a relevant type.
+  void noteConstrainedExpr(Location loc) {
+    if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
+      if (isRelevant(exprLoc->expr->type)) {
+        constrainedExprs.insert(exprLoc->expr);
+      }
+    }
+  }
+
+  void root(Location loc, Type value) {
+    info.roots.emplace_back(loc, value);
+
+    // Roots are constrained by their types.
+    noteConstrainedExpr(loc);
+  }
+
   void link(Location sub, Location super) {
     info.links.emplace_back(sub, super);
+
+    // |sub| is constrained to be a subtype of the super.
+    noteConstrainedExpr(sub);
   }
 
   // SubtypingDiscoverer hooks. These implement all true subtyping constraints
@@ -106,7 +136,7 @@ struct Collector
   // An absolute (root) constraint, e.g. from ref.eq.
   void noteSubtype(Expression* sub, Type super) {
     if (isRelevant(super)) {
-      info.roots.emplace_back(getLocation(sub), super);
+      root(getLocation(sub), super);
     }
   }
   void noteNonFlowSubtype(Expression* sub, Type super) {
@@ -152,6 +182,27 @@ struct Collector
     if (value->type.isRef()) {
       noteSubtype(value,
                   Type(value->type.getHeapType().getTop(), Nullable));
+    }
+  }
+
+  static void scan(Collector* self, Expression** currp) {
+    Super::scan(self, currp);
+
+    // Also note all expressions, so we can find unconstrained ones (see drop).
+    auto* curr = *currp;
+    if (self->isRelevant(curr->type)) {
+      self->allExprs.insert(curr);
+    }
+  }
+
+  void visitFunction(Function* func) {
+    Super::visitFunction(func);
+
+    // We can now note all the unconstrained expressions.
+    for (auto* expr : allExprs) {
+      if (!constrainedExprs.count(expr)) {
+        info.unconstrained.push_back(expr);
+      }
     }
   }
 };
@@ -224,15 +275,6 @@ struct TypeGeneralizing : public Pass {
       }
     }
 
-    // We no longer need the function-level info.
-    analysis.map.clear();
-
-    // Our updates are in the reverse of the normal direction of the flow of
-    // information. E.g. when we see (global.set $g (value)) we do not send the
-    // value to the GlobalLocation, but rather look back and say that the
-    // value's sources must be refined enough to fit in the global's type.
-    links.reverse();
-
     // Finalize the graph. If an expression has no constraints on it whatsoever,
     // then we force its type to remain fixed by making it a root. Normally
     // every expression has some constraint, derived by the parent of the
@@ -248,37 +290,22 @@ struct TypeGeneralizing : public Pass {
     // stating what requirements are placed on the input reference.
     //
     // XXX clarify that an EXPRloc needs an EXPRloc input.
-    std::unordered_set<Expression*> isTarget;
-    auto noteExprTarget = [&](const Location& loc) {
-      if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) { // TODO not just exprloc?
-        if (exprLoc->expr->type.isRef()) {
-          isTarget.insert(exprLoc->expr);
-        }
+    // TODO: move this upp
+    for (auto& [func, info] : analysis.map) {
+      for (auto* expr : info.unconstrained) {
+        if (DEBUG) std::cerr << "adding unconstrained root\n";
+        addRoot(ExpressionLocation{expr, 0}, expr->type);
       }
     };
-    for (auto& root : roots) {
-      noteExprTarget(root);
-    }
-    for (auto& link : links) {
-      if (std::get_if<ExpressionLocation>(&link.to)) { // holds_alternative?
-        noteExprTarget(link.to);
-      }
-    }
-    // After finding all the expressions that are targets, mark the others as
-    // roots.
-    auto maybeAddRoot = [&](const Location& loc) {
-      if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
-        if (exprLoc->expr->type.isRef() && !isTarget.count(exprLoc->expr)) {
-          // Force its type to its original one.
-          if (DEBUG) std::cerr << "adding untargeted root\n";
-          addRoot(*exprLoc, exprLoc->expr->type);
-        }
-      }
-    };
-    for (auto& link : links) {
-      maybeAddRoot(link.from);
-      maybeAddRoot(link.to);
-    }
+
+    // We no longer need the function-level info.
+    analysis.map.clear();
+
+    // Our updates are in the reverse of the normal direction of the flow of
+    // information. E.g. when we see (global.set $g (value)) we do not send the
+    // value to the GlobalLocation, but rather look back and say that the
+    // value's sources must be refined enough to fit in the global's type.
+    links.reverse();
 
     // The graph is now complete for subtyping. Add the necessary equality
     // constraints on top. (We do this after fixing up all the subtyping rules,

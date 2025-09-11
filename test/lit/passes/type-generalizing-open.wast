@@ -654,6 +654,33 @@
   )
 )
 
+;; The function result forces the global to be (ref eq). We also have a use of
+;; $g in a struct.set, which forces it to be a proper struct type.
+(module
+  ;; CHECK:      (type $A (struct (field (mut i32))))
+  (type $A (struct (field (mut i32))))
+
+  ;; CHECK:      (type $1 (func (result (ref eq))))
+
+  ;; CHECK:      (global $g (ref $A) (struct.new_default $A))
+  (global $g (ref $A) (struct.new_default $A))
+
+  ;; CHECK:      (func $test (type $1) (result (ref eq))
+  ;; CHECK-NEXT:  (struct.set $A 0
+  ;; CHECK-NEXT:   (global.get $g)
+  ;; CHECK-NEXT:   (i32.const 42)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (global.get $g)
+  ;; CHECK-NEXT: )
+  (func $test (result (ref eq))
+    (struct.set $A 0
+      (global.get $g)
+      (i32.const 42)
+    )
+    (global.get $g)
+  )
+)
+
 ;; Array operations require array inputs. As with structs, we avoid generalizing
 ;; them. TODO: We could generalize to arrayref
 (module
@@ -733,15 +760,14 @@
 
 
 ;; $g is constrained by a ref.eq and also has another use in br_on_null which we
-;; do not optimize atm. The latter is not part of the graph, but we must still
-;; update its type to match the global, which becomes eqref.
+;; do not optimize atm, which forces the global to not be generalized.
 (module
  ;; CHECK:      (type $array (array i8))
  (type $array (array i8))
 
  ;; CHECK:      (type $1 (func))
 
- ;; CHECK:      (global $g eqref (array.new_fixed $array 0))
+ ;; CHECK:      (global $g (ref $array) (array.new_fixed $array 0))
  (global $g (ref $array) (array.new_fixed $array 0))
 
  ;; CHECK:      (func $test (type $1)
