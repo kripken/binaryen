@@ -250,14 +250,16 @@ struct Collector
   }
 
   void finish(Function* func=nullptr) {
-    // We can now note all the unconstrained expressions.
+    // We can now note all the unconstrained expressions and locals, as nothing
+    // can refer to them from outside this function context.
     for (auto& loc : all) {
-      if (!constrained.count(loc)) {
+      if ((std::get_if<ExpressionLocation>(&loc) ||
+           std::get_if<LocalLocation>(&loc)) && !constrained.count(loc)) {
         info.unconstrained.push_back(loc);
       }
     }
 
-    // After finding the unconstrained expressions, we can apply equality
+    // After XXX finding the unconstrained expressions, we can apply equality
     // constraints. TODO merge loops
     for (auto& loc : all) {
       auto* exprLoc = std::get_if<ExpressionLocation>(&loc);

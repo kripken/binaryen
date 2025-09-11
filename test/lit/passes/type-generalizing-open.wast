@@ -2,7 +2,8 @@
 
 ;; RUN: foreach %s %t wasm-opt --type-generalizing -all -S -o - | filecheck %s
 
-;; With no constraints on it, this global can be anyref.
+;; With no constraints on it, this global can be anyref, but it is unused, so
+;; we ignore it. (Having no constraints on it, we don't bother doing anything.)
 (module
   ;; CHECK:      (type $A (struct))
   (type $A (struct))
@@ -865,7 +866,7 @@
   ;; CHECK:      (global $h (mut anyref) (global.get $g))
   (global $h (mut arrayref) (global.get $g))
 
-  ;; CHECK:      (func $0 (type $1) (result i32)
+  ;; CHECK:      (func $test (type $1) (result i32)
   ;; CHECK-NEXT:  (ref.eq
   ;; CHECK-NEXT:   (global.get $g)
   ;; CHECK-NEXT:   (global.get $g)
@@ -881,8 +882,33 @@
 
 ;; Generalization of a local type.
 (module
+  ;; CHECK:      (type $A (struct))
   (type $A (struct))
 
+  ;; CHECK:      (type $1 (func (param (ref null $A))))
+
+  ;; CHECK:      (func $test (type $1) (param $p (ref null $A))
+  ;; CHECK-NEXT:  (local $l-reads (ref null $A))
+  ;; CHECK-NEXT:  (local $l-tee (ref null $A))
+  ;; CHECK-NEXT:  (local $l-unused anyref)
+  ;; CHECK-NEXT:  (local.set $p
+  ;; CHECK-NEXT:   (local.get $l-reads)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (local.get $p)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (local.get $l-reads)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (local.get $l-tee)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (local.tee $l-tee
+  ;; CHECK-NEXT:    (local.get $l-tee)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
   (func $test (param $p (ref null $A))
     ;; The parameter cannot be changed, but the last two locals can.
     (local $l-reads (ref null $A))
