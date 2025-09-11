@@ -252,6 +252,8 @@ struct Collector
   void finish(Function* func=nullptr) {
     // We can now note all the unconstrained expressions and locals, as nothing
     // can refer to them from outside this function context.
+    // TODO: do we need to find unconstrained non-function-scoped things? As we
+    //       do not optimize them, perhaps not
     for (auto& loc : all) {
       if ((std::get_if<ExpressionLocation>(&loc) ||
            std::get_if<LocalLocation>(&loc)) && !constrained.count(loc)) {
