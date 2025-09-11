@@ -265,15 +265,19 @@ struct Collector
         continue;
       }
 
-      // local.get must have the same type as the local it reads from, and ditto
-      // for globals.
       auto* expr = exprLoc->expr;
       if (auto* get = expr->dynCast<LocalGet>()) {
+        // local.get must have the same type as the local it reads from.
         enforceEquality(LocalLocation{func, get->index},
                         ExpressionLocation{expr, 0});
       } else if (auto* get = expr->dynCast<GlobalGet>()) {
+        // Ditto for globals.
         enforceEquality(GlobalLocation{get->name},
                         ExpressionLocation{expr, 0});
+      } else if (auto* tee = expr->dynCast<LocalSet>()) {
+        // local.tee's type must match the value.
+        enforceEquality(ExpressionLocation{tee, 0},
+                        ExpressionLocation{tee->value, 0});
       }
     }
   }
