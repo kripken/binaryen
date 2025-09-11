@@ -83,8 +83,12 @@ struct Collector
 
   Collector(CollectedFuncInfo& info) : info(info) {}
 
+  bool isRelevant(Type type) {
+    // Only reference types can be generalized.
+    return type.isRef();
+  }
+
   void link(Location sub, Location super) {
-    // TODO: don't bother linking non-ref-typed things. At least exprs are easy
     info.links.emplace_back(sub, super);
   }
 
@@ -101,8 +105,9 @@ struct Collector
 
   // An absolute (root) constraint, e.g. from ref.eq.
   void noteSubtype(Expression* sub, Type super) {
-    // TODO: here and in links, ignore none. also unreachable?
-    info.roots.emplace_back(getLocation(sub), super);
+    if (isRelevant(super)) {
+      info.roots.emplace_back(getLocation(sub), super);
+    }
   }
   void noteNonFlowSubtype(Expression* sub, Type super) {
     noteSubtype(sub, super);
@@ -110,7 +115,9 @@ struct Collector
 
   // A relative (link) constraint, e.g. between a block and its last child.
   void noteSubtype(Expression* sub, Expression* super) {
-    link(getLocation(sub), getLocation(super));
+    if (isRelevant(sub->type) && isRelevant(super->type)) {
+      link(getLocation(sub), getLocation(super));
+    }
   }
 
   // TODO
