@@ -153,6 +153,7 @@ struct Collector
 
     // |sub| is constrained to be a subtype of the super.
     noteConstrainedExpr(sub);
+    all.insert(super); // XXX
   }
 
   // SubtypingDiscoverer hooks. These implement all true subtyping constraints
