@@ -732,12 +732,33 @@
 )
 
 
-;; TODO
+;; $g is constrained by a ref.eq and also has another use in br_on_null which we
+;; do not optimize atm. The latter is not part of the graph, but we must still
+;; update its type to match the global, which becomes eqref.
 (module
+ ;; CHECK:      (type $array (array i8))
  (type $array (array i8))
 
+ ;; CHECK:      (type $1 (func))
+
+ ;; CHECK:      (global $g eqref (array.new_fixed $array 0))
  (global $g (ref $array) (array.new_fixed $array 0))
 
+ ;; CHECK:      (func $test (type $1)
+ ;; CHECK-NEXT:  (drop
+ ;; CHECK-NEXT:   (ref.eq
+ ;; CHECK-NEXT:    (global.get $g)
+ ;; CHECK-NEXT:    (global.get $g)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (block $block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (br_on_null $block
+ ;; CHECK-NEXT:     (global.get $g)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $test
   (drop
    (ref.eq

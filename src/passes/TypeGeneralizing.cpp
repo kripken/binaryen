@@ -101,6 +101,7 @@ struct Collector
 
   // An absolute (root) constraint, e.g. from ref.eq.
   void noteSubtype(Expression* sub, Type super) {
+    // TODO: here and in links, ignore none. also unreachable?
     info.roots.emplace_back(getLocation(sub), super);
   }
   void noteNonFlowSubtype(Expression* sub, Type super) {
@@ -279,7 +280,6 @@ struct TypeGeneralizing : public Pass {
     std::unordered_set<Expression*> allExprs;
     auto noteExpr = [&](const Location& loc) {
       if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
-std::cout << "note expr " << loc << '\n';
         allExprs.insert(exprLoc->expr);
       }
     };
@@ -301,8 +301,8 @@ std::cout << "note expr " << loc << '\n';
     }
 
     // Get the flow-efficient sorted graph.
-    if (DEBUG) std::cerr << "graph:\n";
     auto sortedGraph = links.getSortedGraph();
+    if (DEBUG) std::cerr << "\nGRAPH:\n";
     for (auto& [loc, targets] : sortedGraph) {
       if (DEBUG) std::cerr << loc << " sends to targets: [\n";
       for (auto t : targets) {
@@ -326,7 +326,7 @@ std::cout << "note expr " << loc << '\n';
     }
 
     // Apply |locationValues| to the module.
-    if (DEBUG) std::cerr << "computed locationValues:\n";
+    if (DEBUG) std::cerr << "\nCOMPUTED locationValues:\n";
     for (auto& [loc, value] : locationValues) {
       if (DEBUG) std::cerr << loc << " => " << value << '\n';
     }
@@ -380,9 +380,16 @@ std::cout << "note expr " << loc << '\n';
           case Expression::SelectId:
           case Expression::TryId:
           case Expression::TryTableId:
-          // Things we optimize, and need updating.
-          case Expression::GlobalGetId:
             updateType(ExpressionLocation{curr, 0}, curr->type);
+            break;
+
+          // Things we optimize, and need updating. Note that some of these may
+          // not be in the graph (e.g. a global.get that has no parent that
+          // constrains it), but we must still update them all properly (so we
+          // use GlobalLocation here and not ExpressionLocation, as the latter
+          // would not be updated if not in the graph).
+          case Expression::GlobalGetId:
+            updateType(GlobalLocation{curr->cast<GlobalGet>()->name}, curr->type);
             break;
           default:
             break;
