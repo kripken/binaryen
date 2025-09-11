@@ -387,9 +387,9 @@ struct TypeGeneralizing : public Pass {
           return;
         }
 
-        // If there is no info at all, that means XXX no constraints, and we can use
+        // If there is no info at all, that means no constraints, and we can use
         // the top type.
-        auto old = type;
+        [[maybe_unused]] auto old = type;
         auto iter = parent.locationValues.find(loc);
         if (iter == parent.locationValues.end()) {
           type = type.with(type.getHeapType().getTop()).with(Nullable);
