@@ -62,11 +62,13 @@
 
 #include "analysis/lattice.h"
 #include "analysis/lattices/valtype.h"
+#include "ir/iteration.h"
 #include "ir/locations.h"
 #include "ir/lubs.h"
 #include "ir/subtype-exprs.h"
 #include "ir/utils.h"
 #include "pass.h"
+#include "support/small_set.h"
 #include "support/unique_deferring_queue.h"
 #include "wasm-traversal.h"
 #include "wasm.h"
@@ -129,16 +131,15 @@ struct Collector
 
   // Maintain maps of all expressions and of all constrained ones. This allows
   // us to find the *un*constrained ones later, as explained earlier.
-  std::unordered_set<Location> all, constrained;
+  std::unordered_set<Location> all, constrained; // XXX unneeded
 
   // Note an expression to a given set, if it has a relevant type.
   void noteConstrainedExpr(Location loc) {
     if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
-      if (!isRelevant(exprLoc->expr->type)) {
-        return;
+      if (isRelevant(exprLoc->expr->type)) {
+        justConstrained.insert(exprLoc->expr);
       }
     }
-    constrained.insert(loc);
   }
 
   void root(Location loc, Type value) {
@@ -154,6 +155,16 @@ struct Collector
     // |sub| is constrained to be a subtype of the super.
     noteConstrainedExpr(sub);
     all.insert(super); // XXX
+  }
+
+  // Forces two locations to be equal in value, like a local.get and the type
+  // of the local. These are not subtyping constraints but requirements of the
+  // IR, and they are therefore not noted as constraints: a local.get may be
+  // forced to be equal to the local's type, but if its parent does not
+  // constrain it, it is unconstrained.
+  void enforceEquality(Location a, Location b) {
+    info.links.emplace_back(a, b);
+    info.links.emplace_back(b, a);
   }
 
   // SubtypingDiscoverer hooks. These implement all true subtyping constraints
@@ -192,11 +203,41 @@ struct Collector
   // Override subtype-exprs where we want more precise representation of the
   // flow of constraints.
 
+  void visitLocalGet(LocalGet* curr) {
+    // local.get's type must match the local type.
+    if (isRelevant(curr->type)) {
+      enforceEquality(LocalLocation{getFunction(), curr->index},
+                      getLocation(curr));
+    }
+  }
+
   void visitLocalSet(LocalSet* curr) {
     // Override the parent behavior of an absolute constraint of "value is a
     // subtype of ${current type of local}" with a link to the local, i.e., a
     // relative constraint.
     link(getLocation(curr->value), LocalLocation{getFunction(), curr->index});
+
+    // local.tee's type must match the value.
+    if (isRelevant(curr->type)) {
+      enforceEquality(getLocation(curr),
+                      getLocation(curr->value));
+    }
+  }
+
+  void visitGlobalGet(GlobalGet* curr) {
+    // global.get's type must match the global type.
+    if (isRelevant(curr->type)) {
+      enforceEquality(GlobalLocation{curr->name},
+                      getLocation(curr));
+    }
+  }
+
+  void visitBreak(Break* curr) {
+    // br_if's type must match the value.
+    if (isRelevant(curr->type)) {
+      enforceEquality(getLocation(curr),
+                      getLocation(curr->value));
+    }
   }
 
   void visitGlobalSet(GlobalSet* curr) {
@@ -213,7 +254,8 @@ struct Collector
 
   void noteEmptyConstraint(Expression* value) {
     // Apply a constraint of the top type, which is no constraint in effect.
-   noteSubtype(value,
+    // TODO: we can just add to justConstrained I thinkd
+    noteSubtype(value,
                Type(value->type.getHeapType().getTop(), Nullable)); // TODO: with(, as below
   }
 
@@ -239,65 +281,24 @@ struct Collector
     noteEmptyConstraint(curr->ref);
   }
 
+  // Override the normal scanning to add a hook right after visiting. This will
+  // allow us to see which children are constrainted during the visit, and hence which remain unconstrainted.
   static void scan(Collector* self, Expression** currp) {
+    self->pushTask(Collector::doPostVisit, currp);                                 \
+
     Super::scan(self, currp);
-
-    // Also note all expressions, so we can find unconstrained ones (see drop).
-    auto* curr = *currp;
-    if (self->isRelevant(curr->type)) {
-      self->all.insert(ExpressionLocation{curr, 0});
-    }
   }
 
-  void finish(Function* func=nullptr) {
-    // We can now note all the unconstrained expressions and locals, as nothing
-    // can refer to them from outside this function context.
-    // TODO: do we need to find unconstrained non-function-scoped things? As we
-    //       do not optimize them, perhaps not
-    for (auto& loc : all) {
-      if ((std::get_if<ExpressionLocation>(&loc) ||
-           std::get_if<LocalLocation>(&loc)) && !constrained.count(loc)) {
-        info.unconstrained.push_back(loc);
+  SmallSet<Expression*, 3> justConstrained;
+
+  static void doPostVisit(Collector* self, Expression** currp) {
+    for (auto* child : ChildIterator(*currp)) {
+      if (self->isRelevant(child->type) && !self->justConstrained.count(child)) {
+        if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
+        self->root(getLocation(child), child->type);
       }
     }
-
-    // After XXX finding the unconstrained expressions, we can apply equality
-    // constraints. TODO merge loops
-    for (auto& loc : all) {
-      auto* exprLoc = std::get_if<ExpressionLocation>(&loc);
-      if (!exprLoc) {
-        continue;
-      }
-
-      auto* expr = exprLoc->expr;
-      if (auto* get = expr->dynCast<LocalGet>()) {
-        // local.get must have the same type as the local it reads from.
-        enforceEquality(LocalLocation{func, get->index},
-                        ExpressionLocation{expr, 0});
-      } else if (auto* get = expr->dynCast<GlobalGet>()) {
-        // Ditto for globals.
-        enforceEquality(GlobalLocation{get->name},
-                        ExpressionLocation{expr, 0});
-      } else if (auto* tee = expr->dynCast<LocalSet>()) {
-        // local.tee's type must match the value.
-        enforceEquality(ExpressionLocation{tee, 0},
-                        ExpressionLocation{tee->value, 0});
-      } else if (auto* br = expr->dynCast<Break>()) {
-        // br_if's type must match the value. (This must be a br_if with a
-        // value because it has a concrete type, or else it would not be a
-        // tracked location at all.)
-        assert(br->value);
-        enforceEquality(ExpressionLocation{br, 0},
-                        ExpressionLocation{br->value, 0});
-      }
-    }
-  }
-
-  // Forces two locations to be equal in value, like a local.get and the type
-  // of the local.
-  void enforceEquality(Location a, Location b) {
-    info.links.emplace_back(a, b);
-    info.links.emplace_back(b, a);
+    self->justConstrained.clear();
   }
 };
 
@@ -321,7 +322,6 @@ struct TypeGeneralizing : public Pass {
         if (!func->imported()) {
           Collector collector(info);
           collector.walkFunctionInModule(func, module);
-          collector.finish(func);
         }
       });
 
@@ -330,7 +330,6 @@ struct TypeGeneralizing : public Pass {
     auto& moduleInfo = analysis.map[nullptr];
     Collector moduleCollector(moduleInfo);
     moduleCollector.walkModuleLevel(module);
-    moduleCollector.finish();
 
     // Add roots for exports. TODO: not in closed world?
     for (auto& exp : module->exports) {
@@ -374,12 +373,14 @@ struct TypeGeneralizing : public Pass {
 
     // Apply the rule mentioned in the top comment: When a thing is
     // unconstrained, we keep its type fixed.
+/*
     for (auto& [func, info] : analysis.map) {
       for (auto& loc : info.unconstrained) {
         if (DEBUG) std::cerr << "adding unconstrained root\n";
         addRoot(loc, getLocationType(loc, *module));
       }
-    };
+    } // TODO remove other .unconstrainted stuff too
+*/
 
     // We no longer need the function-level info.
     analysis.map.clear();
