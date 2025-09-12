@@ -142,6 +142,10 @@ struct Collector
   }
 
   void root(Location loc, Type value) {
+    if (!isRelevant(getLocationType(loc, *getModule()))) {
+      return;
+    }
+
     info.roots.emplace_back(loc, value);
 
     // Roots are constrained by their types.
@@ -149,6 +153,10 @@ struct Collector
   }
 
   void link(Location sub, Location super) {
+    if (!isRelevant(getLocationType(sub, *getModule())) || !isRelevant(getLocationType(super, *getModule()))) {
+      return;
+    }
+
     info.links.emplace_back(sub, super);
 
     // |sub| is constrained to be a subtype of the super.
@@ -166,7 +174,7 @@ struct Collector
   static void doPostVisit(Collector* self, Expression** currp) {
     auto* curr = *currp;
     for (auto* child : ChildIterator(curr)) {
-      if (isRelevant(child->type) && !self->justConstrained.count(child)) {
+      if (!self->justConstrained.count(child)) {
         if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
         self->root(getLocation(child), child->type);
       }
@@ -174,17 +182,15 @@ struct Collector
 
     // Add fallthrough constraints. SubtypingDiscoverer handles subtyping, not
     // equalities like these, so we must add them.
-    if (isRelevant(curr->type)) {
-      if (auto* fallthrough =
-            Properties::getImmediateFallthrough(curr,
-                                                self->passOptions,
-                                                *self->getModule())) {
-        // If the type differs then this is something like ref.as_non_null: not
-        // a pure fallthrough but one that changes the type as it flows through.
-        // We leave such things for specific handling below.
-        if (fallthrough->type == curr->type) {
-          self->link(getLocation(fallthrough), getLocation(curr));
-        }
+    if (auto* fallthrough =
+          Properties::getImmediateFallthrough(curr,
+                                              self->passOptions,
+                                              *self->getModule())) {
+      // If the type differs then this is something like ref.as_non_null: not
+      // a pure fallthrough but one that changes the type as it flows through.
+      // We leave such things for specific handling below.
+      if (fallthrough->type == curr->type) {
+        self->link(getLocation(fallthrough), getLocation(curr));
       }
     }
 
@@ -224,9 +230,7 @@ struct Collector
 
   // A relative (link) constraint, e.g. between a block and its last child.
   void noteSubtype(Expression* sub, Expression* super) {
-    if (isRelevant(sub->type) && isRelevant(super->type)) {
-      link(getLocation(sub), getLocation(super));
-    }
+    link(getLocation(sub), getLocation(super));
   }
 
   // Casts impose no requirements on us.
