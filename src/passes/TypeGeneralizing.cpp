@@ -289,7 +289,7 @@ struct Collector
     Super::scan(self, currp);
   }
 
-  SmallSet<Expression*, 3> justConstrained;
+  SmallSet<Expression*, 3> justConstrained; // TODO move all this up to top
 
   static void doPostVisit(Collector* self, Expression** currp) {
     for (auto* child : ChildIterator(*currp)) {
@@ -299,6 +299,13 @@ struct Collector
       }
     }
     self->justConstrained.clear();
+  }
+
+  void visitFunction(Function* func) {
+    // Root the parameters. TODO optimize them
+    for (Index i = 0; i < func->getNumParams(); ++i) {
+      root(LocalLocation{func, i}, func->getLocalType(i));
+    }
   }
 };
 
