@@ -1057,3 +1057,23 @@
   )
 )
 
+;; ref.as_non_null has a different type going out than going it: it has a
+;; fallthrough, but it changes the type. We should not enforce the same type on
+;; both sides, and keep the local as eqref.
+(module
+  ;; CHECK:      (type $0 (func (result (ref eq))))
+
+  ;; CHECK:      (func $test (type $0) (result (ref eq))
+  ;; CHECK-NEXT:  (local $temp eqref)
+  ;; CHECK-NEXT:  (ref.as_non_null
+  ;; CHECK-NEXT:   (local.get $temp)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test (result (ref eq))
+    (local $temp eqref)
+    (ref.as_non_null
+      (local.get $temp)
+    )
+  )
+)
+

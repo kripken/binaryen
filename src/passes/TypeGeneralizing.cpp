@@ -153,7 +153,9 @@ struct Collector
             Properties::getImmediateFallthrough(curr,
                                                 self->passOptions,
                                                 *self->getModule())) {
-        self->link(getLocation(fallthrough), getLocation(curr));
+        if (fallthrough->type == curr->type) {
+          self->link(getLocation(fallthrough), getLocation(curr));
+        }
       }
     }
 
