@@ -302,6 +302,8 @@ struct Collector
   }
 
   void visitFunction(Function* func) {
+    Super::visitFunction(func);
+
     // Root the parameters. TODO optimize them
     for (Index i = 0; i < func->getNumParams(); ++i) {
       root(LocalLocation{func, i}, func->getLocalType(i));
