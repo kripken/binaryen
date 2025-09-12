@@ -939,16 +939,15 @@
   )
 )
 
-;; br_if type updating. Here the global $g can be made nullable, like the
-;; local, but no further. When the global is generalized, so is the br_if as it
-;; flows the global's value through it.
+;; br_if type updating. Here the global $g can be made anyref, as can the
+;; local. The br_if then sends along that generalized type.
 (module
   ;; CHECK:      (type $A (sub (struct)))
   (type $A (sub (struct)))
 
   ;; CHECK:      (type $1 (func))
 
-  ;; CHECK:      (global $g (ref $A) (struct.new_default $A))
+  ;; CHECK:      (global $g anyref (struct.new_default $A))
   (global $g (ref $A) (struct.new $A))
 
   ;; CHECK:      (func $test (type $1)

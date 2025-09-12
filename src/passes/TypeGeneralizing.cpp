@@ -226,14 +226,6 @@ struct Collector
     }
   }
 
-  void visitBreak(Break* curr) {
-    // br_if's type must match the value.
-    if (isRelevant(curr->type)) {
-      enforceEquality(getLocation(curr),
-                      getLocation(curr->value));
-    }
-  }
-
   void visitGlobalSet(GlobalSet* curr) {
     // Similar to LocalSet.
     link(getLocation(curr->value), GlobalLocation{curr->name});
