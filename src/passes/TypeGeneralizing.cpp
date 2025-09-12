@@ -65,6 +65,7 @@
 #include "ir/iteration.h"
 #include "ir/locations.h"
 #include "ir/lubs.h"
+#include "ir/properties.h"
 #include "ir/subtype-exprs.h"
 #include "ir/utils.h"
 #include "pass.h"
@@ -117,8 +118,9 @@ struct Collector
   using Super = ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>>;
 
   CollectedFuncInfo& info;
+  PassOptions& passOptions;
 
-  Collector(CollectedFuncInfo& info) : info(info) {}
+  Collector(CollectedFuncInfo& info, PassOptions& passOptions) : info(info), passOptions(passOptions) {}
 
   bool isRelevant(Type type) {
     // Only reference types can be generalized.
@@ -136,12 +138,25 @@ struct Collector
   SmallSet<Expression*, 3> justConstrained; // TODO move all this up to top
 
   static void doPostVisit(Collector* self, Expression** currp) {
-    for (auto* child : ChildIterator(*currp)) {
+    auto* curr = *currp;
+    for (auto* child : ChildIterator(curr)) {
       if (self->isRelevant(child->type) && !self->justConstrained.count(child)) {
         if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
         self->root(getLocation(child), child->type);
       }
     }
+
+    // Add fallthrough constraints. SubtypingDiscoverer handles subtyping, not
+    // equalities like these, so we must add them.
+    if (self->isRelevant(curr->type)) {
+      if (auto* fallthrough =
+            Properties::getImmediateFallthrough(curr,
+                                                self->passOptions,
+                                                *self->getModule())) {
+        self->link(getLocation(fallthrough), getLocation(curr));
+      }
+    }
+
     self->justConstrained.clear();
   }
 
@@ -287,18 +302,6 @@ struct Collector
     noteEmptyConstraint(curr->ref);
   }
 
-  void visitBreak(Break* curr) {
-    // The super handles the value.
-    Super::visitBreak(curr);
-
-    // We ourselves must flow out that value. TODO can we use getflalthrough for all these getfallthrough?
-    // We need that as SubtypingDiscoverer handles subtyping, now equality
-    // flowing out.
-    if (isRelevant(curr->type)) {
-      link(getLocation(curr->value), getLocation(curr));
-    }
-  }
-
   void visitFunction(Function* func) {
     Super::visitFunction(func);
 
@@ -323,11 +326,13 @@ struct TypeGeneralizing : public Pass {
 
     if (getenv("DEBUG")) DEBUG = 1;
 
+    auto* runner = getPassRunner();
+
     // Collect information from each function.
     ModuleUtils::ParallelFunctionAnalysis<CollectedFuncInfo> analysis(
       *module, [&](Function* func, CollectedFuncInfo& info) {
         if (!func->imported()) {
-          Collector collector(info);
+          Collector collector(info, runner->options);
           collector.walkFunctionInModule(func, module);
         }
       });
@@ -335,7 +340,7 @@ struct TypeGeneralizing : public Pass {
     // Also walk the global module code (for simplicity, also add it to the
     // function map, using a "function" key of nullptr).
     auto& moduleInfo = analysis.map[nullptr];
-    Collector moduleCollector(moduleInfo);
+    Collector moduleCollector(moduleInfo, runner->options);
     moduleCollector.walkModuleLevel(module);
 
     // Add roots for exports. TODO: not in closed world?
