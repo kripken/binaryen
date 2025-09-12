@@ -281,8 +281,10 @@ struct Collector
   void noteEmptyConstraint(Expression* value) {
     // Apply a constraint of the top type, which is no constraint in effect.
     // TODO: we can just add to justConstrained I thinkd
-    noteSubtype(value,
-               Type(value->type.getHeapType().getTop(), Nullable)); // TODO: with(, as below
+    if (isRelevant(value->type)) {
+      noteSubtype(value,
+                 Type(value->type.getHeapType().getTop(), Nullable)); // TODO: with(, as below
+    }
   }
 
   void visitDrop(Drop* curr) {

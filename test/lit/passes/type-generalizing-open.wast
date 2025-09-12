@@ -1051,3 +1051,19 @@
   )
 )
 
+;; Do not error on unreachable code.
+(module
+  ;; CHECK:      (type $0 (func (result structref)))
+
+  ;; CHECK:      (func $test (type $0) (result structref)
+  ;; CHECK-NEXT:  (ref.is_null
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test (result structref)
+    (ref.is_null
+      (unreachable)
+    )
+  )
+)
+
