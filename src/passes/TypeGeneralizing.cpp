@@ -216,7 +216,7 @@ struct Collector
 
   void visitLocalGet(LocalGet* curr) {
     // local.get's type must match the local type.
-    if (isRelevant(curr->type)) {
+    if (isRelevant(curr->type)) { // XXX remove all these and do getLocationType in root() link()
       enforceEquality(LocalLocation{getFunction(), curr->index},
                       getLocation(curr));
     }
@@ -232,9 +232,9 @@ struct Collector
     // refined than the local type, but this is necessary to ensure that we pick
     // up constraints from the parent (e.g. if the parent is a ref.eq, that
     // means the local must be ref.eq).
-    if (isRelevant(curr->type)) {
+    if (isRelevant(curr->type)) { // Can be isTee() after move isRelevants up
       enforceEquality(LocalLocation{getFunction(), curr->index},
-                      getLocation(curr));
+                      getLocation(curr)); // XXX can this be one-sided?
     }
   }
 
@@ -285,6 +285,18 @@ struct Collector
   void visitRefCast(RefCast* curr) {
     // The type we cast to is not a constraint.
     noteEmptyConstraint(curr->ref);
+  }
+
+  void visitBreak(Break* curr) {
+    // The super handles the value.
+    Super::visitBreak(curr);
+
+    // We ourselves must flow out that value. TODO can we use getflalthrough for all these getfallthrough?
+    // We need that as SubtypingDiscoverer handles subtyping, now equality
+    // flowing out.
+    if (isRelevant(curr->type)) {
+      link(getLocation(curr->value), getLocation(curr));
+    }
   }
 
   void visitFunction(Function* func) {
@@ -377,13 +389,21 @@ struct TypeGeneralizing : public Pass {
 
     // Get the flow-efficient sorted graph.
     auto sortedGraph = links.getSortedGraph();
-    if (DEBUG) std::cerr << "\nGRAPH:\n";
-    for (auto& [loc, targets] : sortedGraph) {
-      if (DEBUG) std::cerr << loc << " sends to targets: [\n";
-      for (auto t : targets) {
-        if (DEBUG) std::cerr << "  " << t << '\n';
+    if (DEBUG) {
+      std::cerr << "\nGRAPH:\n";
+      for (auto& [loc, targets] : sortedGraph) {
+        std::cerr << loc << " sends to targets: [";
+        bool first = true;
+        for (auto t : targets) {
+          if (first) {
+            first = false;
+          } else {
+            std::cerr << ',';
+          }
+          std::cerr << "\n  " << t;
+        }
+        std::cerr << "]\n\n";
       }
-      if (DEBUG) std::cerr << "]\n";
     }
 
     // Flow while changes happen.

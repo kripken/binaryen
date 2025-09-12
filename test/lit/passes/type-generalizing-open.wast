@@ -1009,3 +1009,51 @@
   )
 )
 
+;; The br_on_non_null is not yet optimized, so its child tee is rooted and
+;; ungeneralized. We cannot generalize either local.
+(module
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (type $A (struct))
+  (type $A (struct))
+
+  ;; CHECK:      (func $test (type $0)
+  ;; CHECK-NEXT:  (local $0 (ref struct))
+  ;; CHECK-NEXT:  (local $1 (ref struct))
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block $block (result (ref struct))
+  ;; CHECK-NEXT:    (br_on_non_null $block
+  ;; CHECK-NEXT:     (local.tee $1
+  ;; CHECK-NEXT:      (br_if $block
+  ;; CHECK-NEXT:       (local.tee $0
+  ;; CHECK-NEXT:        (struct.new_default $A)
+  ;; CHECK-NEXT:       )
+  ;; CHECK-NEXT:       (i32.const 0)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (return)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (local $0 (ref struct))
+    (local $1 (ref struct))
+    (drop
+      (block $block (result (ref struct))
+        (br_on_non_null $block
+          (local.tee $1
+            (br_if $block
+              (local.tee $0
+                (struct.new_default $A)
+              )
+              (i32.const 0)
+            )
+          )
+        )
+        (return)
+      )
+    )
+  )
+)
+
