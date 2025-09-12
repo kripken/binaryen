@@ -237,7 +237,7 @@ struct Collector
     link(getLocation(sub), getLocation(super));
   }
 
-  // Casts impose no requirements on us.
+  // See below for how we optimize ref.cast specifically. TODO other casts too.
   void noteCast(HeapType, HeapType) {}
   void noteCast(Expression*, Type) {}
   void noteCast(Expression*, Expression*) {}
@@ -457,7 +457,8 @@ struct TypeGeneralizing : public Pass {
 
     // TODO: A "cast" variant of this pass, where after finding the maximal
     //       generalizations, we find places where the generalization helps
-    //       remove a cast, and then undo all the ones that don't.
+    //       remove a cast, and then find all the places that help achieve it,
+    //       and apply only them.
 
     // Apply |locationValues| to the module.
     update(module);
@@ -502,7 +503,7 @@ struct TypeGeneralizing : public Pass {
         // do not yet optimize.
         // TODO: tuples
         switch (curr->_id) {
-          // Control flow. Values fall through them, and we can just update
+          // Things that flow/fall through values, which we can just update to
           // their new types.
           case Expression::BlockId:
           case Expression::IfId:
@@ -543,7 +544,7 @@ struct TypeGeneralizing : public Pass {
 
     // ReFinalize to propagate changes and make things consistent. This can end
     // up refining types, but is necessary for correctness in general (and it
-    // only works locally, at least, preserving global generalizations).
+    // only works locally, at least, which preserves global generalizations).
     ReFinalize().run(getPassRunner(), module); // utils.h
   }
 };
