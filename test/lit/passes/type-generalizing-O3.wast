@@ -4,8 +4,8 @@
 ;; pipeline cannot. We optimize the module with -O3 in both cases, but once with
 ;; generalization before.
 
-;; RUN: foreach %s %t wasm-opt                     -O3 -all -S -o - | filecheck %s
-;; RUN: foreach %s %t wasm-opt --type-generalizing -O3 -all -S -o - | filecheck %s --check-prefix=TYGEN
+;; RUN: foreach %s %t wasm-opt                     -O3 -all -tnh -S -o - | filecheck %s
+;; RUN: foreach %s %t wasm-opt --type-generalizing -O3 -all -tnh -S -o - | filecheck %s --check-prefix=TYGEN
 
 (module
   ;; CHECK:      (type $A (struct))

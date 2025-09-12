@@ -303,8 +303,13 @@ struct Collector
   }
 
   void visitRefCast(RefCast* curr) {
-    // The type we cast to is not a constraint.
-    noteEmptyConstraint(curr->ref);
+    if (passOptions.trapsNeverHappen) {
+      // The type we cast to is not a constraint, when traps cannot happen.
+      noteEmptyConstraint(curr->ref);
+    } else {
+      // Otherwise, we cannot generalize a cast as it might no longer fail.
+      root(getLocation(curr), curr->type);
+    }
   }
 
   void visitFunction(Function* func) {
