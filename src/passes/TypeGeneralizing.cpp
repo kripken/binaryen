@@ -153,6 +153,9 @@ struct Collector
             Properties::getImmediateFallthrough(curr,
                                                 self->passOptions,
                                                 *self->getModule())) {
+        // If the type differs then this is something like ref.as_non_null: not
+        // a pure fallthrough but one that changes the type as it flows through.
+        // We leave such things for specific handling below.
         if (fallthrough->type == curr->type) {
           self->link(getLocation(fallthrough), getLocation(curr));
         }
