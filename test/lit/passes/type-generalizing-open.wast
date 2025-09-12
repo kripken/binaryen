@@ -978,3 +978,34 @@
   )
 )
 
+;; The local can be eqref, but not anyref, because the tee must be eqref.
+(module
+  ;; CHECK:      (type $A (struct))
+  (type $A (struct))
+
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (func $test (type $1)
+  ;; CHECK-NEXT:  (local $temp eqref)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (ref.eq
+  ;; CHECK-NEXT:    (local.tee $temp
+  ;; CHECK-NEXT:     (struct.new_default $A)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (struct.new_default $A)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (local $temp (ref $A))
+    (drop
+      (ref.eq
+        (local.tee $temp
+          (struct.new $A)
+        )
+        (struct.new $A)
+      )
+    )
+  )
+)
+

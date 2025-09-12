@@ -227,6 +227,15 @@ struct Collector
     // subtype of ${current type of local}" with a link to the local, i.e., a
     // relative constraint.
     link(getLocation(curr->value), LocalLocation{getFunction(), curr->index});
+
+    // As with local.get, link us to the local. Note that a tee can be more
+    // refined than the local type, but this is necessary to ensure that we pick
+    // up constraints from the parent (e.g. if the parent is a ref.eq, that
+    // means the local must be ref.eq).
+    if (isRelevant(curr->type)) {
+      enforceEquality(LocalLocation{getFunction(), curr->index},
+                      getLocation(curr));
+    }
   }
 
   void visitGlobalGet(GlobalGet* curr) {
@@ -391,12 +400,16 @@ struct TypeGeneralizing : public Pass {
       }
     }
 
-    // Apply |locationValues| to the module.
     if (DEBUG) std::cerr << "\nCOMPUTED locationValues:\n";
     for (auto& [loc, value] : locationValues) {
       if (DEBUG) std::cerr << loc << " => " << value << '\n';
     }
 
+    // TODO: A "cast" variant of this pass, where after finding the maximal
+    //       generalizations, we find places where the generalization helps
+    //       remove a cast, and then undo all the ones that don't.
+
+    // Apply |locationValues| to the module.
     update(module);
   }
 
