@@ -103,10 +103,6 @@ struct CollectedFuncInfo {
   // The vector here is of the location of the root and the constraint there (as
   // above, we do not deduplicate here).
   std::vector<std::pair<Location, Element>> roots;
-
-  // All the unconstrained locations, which as mentioned in the top comment,
-  // we must note so that we can avoid changing their type later.
-  std::vector<Location> unconstrained;
 };
 
 Location getLocation(Expression* curr) {
@@ -365,17 +361,6 @@ struct TypeGeneralizing : public Pass {
         addRoot(root, value);
       }
     }
-
-    // Apply the rule mentioned in the top comment: When a thing is
-    // unconstrained, we keep its type fixed.
-/*
-    for (auto& [func, info] : analysis.map) {
-      for (auto& loc : info.unconstrained) {
-        if (DEBUG) std::cerr << "adding unconstrained root\n";
-        addRoot(loc, getLocationType(loc, *module));
-      }
-    } // TODO remove other .unconstrainted stuff too
-*/
 
     // We no longer need the function-level info.
     analysis.map.clear();
