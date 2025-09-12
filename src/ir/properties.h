@@ -266,15 +266,22 @@ inline Index getZeroExtBits(Expression* curr) {
 // which some cases care about; the same for a br_if, whose type is related to
 // the branch target).
 //
+// Behavior wrt effects is also customizable: By default we consider effects
+// that would prevent the fallthrough child from actually being the value that
+// falls through. In particular, a br_if's value is before the condition, so if
+// the condition has a side effect, it might not be equal.
+//
 // TODO: Receive a Module instead of FeatureSet, to pass to EffectAnalyzer?
 
 enum class FallthroughBehavior { AllowTeeBrIf, NoTeeBrIf };
+enum class FallthroughEffectBehavior { Consider, Ignore };
 
 inline Expression** getImmediateFallthroughPtr(
   Expression** currp,
   const PassOptions& passOptions,
   Module& module,
-  FallthroughBehavior behavior = FallthroughBehavior::AllowTeeBrIf) {
+  FallthroughBehavior behavior = FallthroughBehavior::AllowTeeBrIf,
+  FallthroughEffectBehavior effectBehavior = FallthroughEffectBehavior::Consider) {
   auto* curr = *currp;
   // If the current node is unreachable, there is no value
   // falling through.
@@ -316,8 +323,9 @@ inline Expression** getImmediateFallthroughPtr(
     // know the fallthrough in that case.
     if (br->condition && br->value &&
         behavior == FallthroughBehavior::AllowTeeBrIf &&
-        EffectAnalyzer::canReorder(
-          passOptions, module, br->condition, br->value)) {
+        (effectBehavior == FallthroughEffectBehavior::Ignore ||
+         EffectAnalyzer::canReorder(
+           passOptions, module, br->condition, br->value))) {
       return &br->value;
     }
   } else if (auto* tryy = curr->dynCast<Try>()) {
@@ -343,8 +351,9 @@ inline Expression* getImmediateFallthrough(
   Expression* curr,
   const PassOptions& passOptions,
   Module& module,
-  FallthroughBehavior behavior = FallthroughBehavior::AllowTeeBrIf) {
-  return *getImmediateFallthroughPtr(&curr, passOptions, module, behavior);
+  FallthroughBehavior behavior = FallthroughBehavior::AllowTeeBrIf,
+  FallthroughEffectBehavior effectBehavior = FallthroughEffectBehavior::Consider) {
+  return *getImmediateFallthroughPtr(&curr, passOptions, module, behavior, effectBehavior);
 }
 
 // Similar to getImmediateFallthrough, but looks through multiple children to
@@ -353,9 +362,10 @@ inline Expression* getFallthrough(
   Expression* curr,
   const PassOptions& passOptions,
   Module& module,
-  FallthroughBehavior behavior = FallthroughBehavior::AllowTeeBrIf) {
+  FallthroughBehavior behavior = FallthroughBehavior::AllowTeeBrIf,
+  FallthroughEffectBehavior effectBehavior = FallthroughEffectBehavior::Consider) {
   while (1) {
-    auto* next = getImmediateFallthrough(curr, passOptions, module, behavior);
+    auto* next = getImmediateFallthrough(curr, passOptions, module, behavior, effectBehavior);
     if (next == curr) {
       return curr;
     }

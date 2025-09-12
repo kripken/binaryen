@@ -1067,3 +1067,95 @@
   )
 )
 
+;; TODO: cleanup. this is for Fallthrougheffectbehavior::ignore
+(module
+ ;; CHECK:      (type $1 (struct))
+ (type $1 (struct))
+ ;; CHECK:      (type $3 (array (mut i16)))
+ (type $3 (array (mut i16)))
+ ;; CHECK:      (type $0 (func))
+ (type $0 (func))
+ ;; CHECK:      (func $109 (type $0)
+ ;; CHECK-NEXT:  (local $1 (ref (exact $1)))
+ ;; CHECK-NEXT:  (local $0 (ref string))
+ ;; CHECK-NEXT:  (local $3 (ref $3))
+ ;; CHECK-NEXT:  (drop
+ ;; CHECK-NEXT:   (block $block (result (ref (exact $1)))
+ ;; CHECK-NEXT:    (ref.cast (ref (exact $1))
+ ;; CHECK-NEXT:     (br_if $block
+ ;; CHECK-NEXT:      (block (result (ref (exact $1)))
+ ;; CHECK-NEXT:       (local.set $1
+ ;; CHECK-NEXT:        (struct.new_default $1)
+ ;; CHECK-NEXT:       )
+ ;; CHECK-NEXT:       (local.set $0
+ ;; CHECK-NEXT:        (string.const "\f0\90\8d\88953\c2\a3")
+ ;; CHECK-NEXT:       )
+ ;; CHECK-NEXT:       (local.get $1)
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:      (if (result i32)
+ ;; CHECK-NEXT:       (array.len
+ ;; CHECK-NEXT:        (local.tee $3
+ ;; CHECK-NEXT:         (array.new_default $3
+ ;; CHECK-NEXT:          (i32.const 0)
+ ;; CHECK-NEXT:         )
+ ;; CHECK-NEXT:        )
+ ;; CHECK-NEXT:       )
+ ;; CHECK-NEXT:       (then
+ ;; CHECK-NEXT:        (string.encode_wtf16_array
+ ;; CHECK-NEXT:         (local.get $0)
+ ;; CHECK-NEXT:         (local.get $3)
+ ;; CHECK-NEXT:         (i32.const 0)
+ ;; CHECK-NEXT:        )
+ ;; CHECK-NEXT:       )
+ ;; CHECK-NEXT:       (else
+ ;; CHECK-NEXT:        (i32.const 0)
+ ;; CHECK-NEXT:       )
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $109 (type $0)
+  (local $1 (ref (exact $1)))
+  (local $0 (ref string))
+  (local $3 (ref $3))
+  (drop
+   (block $block (result (ref (exact $1)))
+    (ref.cast (ref (exact $1))
+     (br_if $block
+      (block (result (ref (exact $1)))
+       (local.set $1
+        (struct.new_default $1)
+       )
+       (local.set $0
+        (string.const "\f0\90\8d\88953\c2\a3")
+       )
+       (local.get $1)
+      )
+      (if (result i32)
+       (array.len
+        (local.tee $3
+         (array.new_default $3
+          (i32.const 0)
+         )
+        )
+       )
+       (then
+        (string.encode_wtf16_array
+         (local.get $0)
+         (local.get $3)
+         (i32.const 0)
+        )
+       )
+       (else
+        (i32.const 0)
+       )
+      )
+     )
+    )
+   )
+  )
+ )
+)
+

@@ -180,14 +180,20 @@ struct Collector
 
     // Add fallthrough constraints. SubtypingDiscoverer handles subtyping, not
     // equalities like these, so we must add them.
+    //
+    // When computing the fallthrough we allow tees and br_ifs - everything is
+    // relevant - and we can ignore effects, as we just care about the flow of
+    // types, not values.
     if (auto* fallthrough =
           Properties::getImmediateFallthrough(curr,
                                               self->passOptions,
-                                              *self->getModule())) {
+                                              *self->getModule(),
+                                              Properties::FallthroughBehavior::AllowTeeBrIf,
+                                              Properties::FallthroughEffectBehavior::Ignore)) {
       // If the type differs then this is something like ref.as_non_null: not
       // a pure fallthrough but one that changes the type as it flows through.
       // We leave such things for specific handling below.
-      if (fallthrough->type == curr->type) {
+      if (fallthrough != curr && fallthrough->type == curr->type) {
         self->link(getLocation(fallthrough), getLocation(curr));
       }
     }
@@ -314,6 +320,10 @@ struct Collector
     } else {
       // Otherwise, we cannot generalize a cast as it might no longer fail.
       root(getLocation(curr), curr->type);
+      // If this is an exact cast, we must keep it "trivial" if custom
+      // descriptors are not enabled (see visitRefCast/Test in wasm-validator).
+      // For now, just force the input to remain as before. TODO
+      root(getLocation(curr->ref), curr->ref->type);
     }
   }
 
