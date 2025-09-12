@@ -111,6 +111,12 @@ Location getLocation(Expression* curr) {
   return ExpressionLocation{curr, 0};
 }
 
+// Only reference types can be generalized; nothing else is relevant for this
+// pass.
+bool isRelevant(Type type) {
+  return type.isRef();
+}
+
 // Collect subtyping constraints for one CollectedFuncInfo.
 struct Collector
   : ControlFlowWalker<Collector, SubtypingDiscoverer<Collector>> {
@@ -122,48 +128,9 @@ struct Collector
 
   Collector(CollectedFuncInfo& info, PassOptions& passOptions) : info(info), passOptions(passOptions) {}
 
-  bool isRelevant(Type type) {
-    // Only reference types can be generalized.
-    return type.isRef();
-  }
-
-  // Override the normal scanning to add a hook right after visiting. This will
-  // allow us to see which children are constrainted during the visit, and hence which remain unconstrainted.
-  static void scan(Collector* self, Expression** currp) {
-    self->pushTask(Collector::doPostVisit, currp);                                 \
-
-    Super::scan(self, currp);
-  }
-
-  SmallSet<Expression*, 3> justConstrained; // TODO move all this up to top
-
-  static void doPostVisit(Collector* self, Expression** currp) {
-    auto* curr = *currp;
-    for (auto* child : ChildIterator(curr)) {
-      if (self->isRelevant(child->type) && !self->justConstrained.count(child)) {
-        if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
-        self->root(getLocation(child), child->type);
-      }
-    }
-
-    // Add fallthrough constraints. SubtypingDiscoverer handles subtyping, not
-    // equalities like these, so we must add them.
-    if (self->isRelevant(curr->type)) {
-      if (auto* fallthrough =
-            Properties::getImmediateFallthrough(curr,
-                                                self->passOptions,
-                                                *self->getModule())) {
-        // If the type differs then this is something like ref.as_non_null: not
-        // a pure fallthrough but one that changes the type as it flows through.
-        // We leave such things for specific handling below.
-        if (fallthrough->type == curr->type) {
-          self->link(getLocation(fallthrough), getLocation(curr));
-        }
-      }
-    }
-
-    self->justConstrained.clear();
-  }
+  // The set of expressions we added a constraint to in the last visit(). We
+  // will use this to find expressions that are unconstrained. TODO text?
+  SmallSet<Expression*, 3> justConstrained;
 
   // Note an expression to a given set, if it has a relevant type.
   void noteConstrainedExpr(Location loc) {
@@ -186,6 +153,42 @@ struct Collector
 
     // |sub| is constrained to be a subtype of the super.
     noteConstrainedExpr(sub);
+  }
+
+  // Override the normal scanning to add a hook right after visiting. This will
+  // allow us to see which children are constrainted during the visit, and hence which remain unconstrainted.
+  static void scan(Collector* self, Expression** currp) {
+    self->pushTask(Collector::doPostVisit, currp);                                 \
+
+    Super::scan(self, currp);
+  }
+
+  static void doPostVisit(Collector* self, Expression** currp) {
+    auto* curr = *currp;
+    for (auto* child : ChildIterator(curr)) {
+      if (isRelevant(child->type) && !self->justConstrained.count(child)) {
+        if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
+        self->root(getLocation(child), child->type);
+      }
+    }
+
+    // Add fallthrough constraints. SubtypingDiscoverer handles subtyping, not
+    // equalities like these, so we must add them.
+    if (isRelevant(curr->type)) {
+      if (auto* fallthrough =
+            Properties::getImmediateFallthrough(curr,
+                                                self->passOptions,
+                                                *self->getModule())) {
+        // If the type differs then this is something like ref.as_non_null: not
+        // a pure fallthrough but one that changes the type as it flows through.
+        // We leave such things for specific handling below.
+        if (fallthrough->type == curr->type) {
+          self->link(getLocation(fallthrough), getLocation(curr));
+        }
+      }
+    }
+
+    self->justConstrained.clear();
   }
 
   // Forces two locations to be equal in value, like a local.get and the type
