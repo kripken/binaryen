@@ -125,9 +125,25 @@ struct Collector
     return type.isRef();
   }
 
-  // Maintain maps of all expressions and of all constrained ones. This allows
-  // us to find the *un*constrained ones later, as explained earlier.
-  std::unordered_set<Location> all, constrained; // XXX unneeded
+  // Override the normal scanning to add a hook right after visiting. This will
+  // allow us to see which children are constrainted during the visit, and hence which remain unconstrainted.
+  static void scan(Collector* self, Expression** currp) {
+    self->pushTask(Collector::doPostVisit, currp);                                 \
+
+    Super::scan(self, currp);
+  }
+
+  SmallSet<Expression*, 3> justConstrained; // TODO move all this up to top
+
+  static void doPostVisit(Collector* self, Expression** currp) {
+    for (auto* child : ChildIterator(*currp)) {
+      if (self->isRelevant(child->type) && !self->justConstrained.count(child)) {
+        if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
+        self->root(getLocation(child), child->type);
+      }
+    }
+    self->justConstrained.clear();
+  }
 
   // Note an expression to a given set, if it has a relevant type.
   void noteConstrainedExpr(Location loc) {
@@ -150,7 +166,6 @@ struct Collector
 
     // |sub| is constrained to be a subtype of the super.
     noteConstrainedExpr(sub);
-    all.insert(super); // XXX
   }
 
   // Forces two locations to be equal in value, like a local.get and the type
@@ -261,26 +276,6 @@ struct Collector
   void visitRefCast(RefCast* curr) {
     // The type we cast to is not a constraint.
     noteEmptyConstraint(curr->ref);
-  }
-
-  // Override the normal scanning to add a hook right after visiting. This will
-  // allow us to see which children are constrainted during the visit, and hence which remain unconstrainted.
-  static void scan(Collector* self, Expression** currp) {
-    self->pushTask(Collector::doPostVisit, currp);                                 \
-
-    Super::scan(self, currp);
-  }
-
-  SmallSet<Expression*, 3> justConstrained; // TODO move all this up to top
-
-  static void doPostVisit(Collector* self, Expression** currp) {
-    for (auto* child : ChildIterator(*currp)) {
-      if (self->isRelevant(child->type) && !self->justConstrained.count(child)) {
-        if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
-        self->root(getLocation(child), child->type);
-      }
-    }
-    self->justConstrained.clear();
   }
 
   void visitFunction(Function* func) {
