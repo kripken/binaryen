@@ -135,9 +135,7 @@ struct Collector
   // Note an expression to a given set, if it has a relevant type.
   void noteConstrainedExpr(Location loc) {
     if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
-      if (isRelevant(exprLoc->expr->type)) {
-        justConstrained.insert(exprLoc->expr);
-      }
+      justConstrained.insert(exprLoc->expr);
     }
   }
 
