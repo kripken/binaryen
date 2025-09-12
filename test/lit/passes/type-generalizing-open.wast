@@ -889,7 +889,7 @@
 
   ;; CHECK:      (func $test (type $1) (param $p (ref null $A))
   ;; CHECK-NEXT:  (local $l-reads (ref null $A))
-  ;; CHECK-NEXT:  (local $l-tee (ref null $A))
+  ;; CHECK-NEXT:  (local $l-tee anyref)
   ;; CHECK-NEXT:  (local $l-unused anyref)
   ;; CHECK-NEXT:  (local.set $p
   ;; CHECK-NEXT:   (local.get $l-reads)
@@ -948,13 +948,13 @@
 
   ;; CHECK:      (type $1 (func))
 
-  ;; CHECK:      (global $g (ref null $A) (struct.new_default $A))
+  ;; CHECK:      (global $g (ref $A) (struct.new_default $A))
   (global $g (ref $A) (struct.new $A))
 
   ;; CHECK:      (func $test (type $1)
-  ;; CHECK-NEXT:  (local $temp (ref null $A))
+  ;; CHECK-NEXT:  (local $temp anyref)
   ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (block $block (result (ref null $A))
+  ;; CHECK-NEXT:   (block $block (result anyref)
   ;; CHECK-NEXT:    (local.tee $temp
   ;; CHECK-NEXT:     (br_if $block
   ;; CHECK-NEXT:      (global.get $g)

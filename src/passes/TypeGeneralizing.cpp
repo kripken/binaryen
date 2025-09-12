@@ -216,12 +216,6 @@ struct Collector
     // subtype of ${current type of local}" with a link to the local, i.e., a
     // relative constraint.
     link(getLocation(curr->value), LocalLocation{getFunction(), curr->index});
-
-    // local.tee's type must match the value.
-    if (isRelevant(curr->type)) {
-      enforceEquality(getLocation(curr),
-                      getLocation(curr->value));
-    }
   }
 
   void visitGlobalGet(GlobalGet* curr) {
@@ -462,7 +456,7 @@ struct TypeGeneralizing : public Pass {
         } else {
           type = iter->second;
         }
-        if (DEBUG) std::cerr << "Updated " << loc << " to " << type << '\n';
+        if (DEBUG) std::cerr << "Updated " << loc << " from " << old << " to " << type << '\n';
         // We should only ever generalize types, not refine them.
         assert(Type::isSubType(old, type));
       };
