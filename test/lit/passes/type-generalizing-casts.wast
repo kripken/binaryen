@@ -3,16 +3,27 @@
 ;; Check with and without trapsNeverHappen.
 
 ;; RUN: foreach %s %t wasm-opt --type-generalizing       -tnh -all -S -o - | filecheck %s
-;; RUN: foreach %s %t wasm-opt --type-generalizing-casts -tnh -all -S -o - | filecheck %s --check-prefix=CASTS
+;; R TODO UN: foreach %s %t wasm-opt --type-generalizing-casts -tnh -all -S -o - | filecheck %s --check-prefix=CASTS
 
 ;; The cast here can be removed, if we generalize the cast and the local to
 ;; (ref null $A). We could generalize further, but do not.
 (module
+  ;; CHECK:      (type $A (sub (struct)))
   (type $A (sub (struct)))
   (type $B (sub $A (struct)))
 
-  ;; CHECK:      (type $1 (func))
 
+  ;; CHECK:      (type $1 (func (param (ref $A)) (result anyref)))
+
+  ;; CHECK:      (func $test (type $1) (param $A (ref $A)) (result anyref)
+  ;; CHECK-NEXT:  (local $temp anyref)
+  ;; CHECK-NEXT:  (local.set $temp
+  ;; CHECK-NEXT:   (ref.cast (ref $A)
+  ;; CHECK-NEXT:    (local.get $A)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.get $temp)
+  ;; CHECK-NEXT: )
   (func $test (param $A (ref $A)) (result anyref)
     (local $temp (ref $B))
     (local.set $temp

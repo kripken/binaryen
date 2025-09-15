@@ -179,7 +179,7 @@ struct Collector
   static void doPostVisit(Collector* self, Expression** currp) {
     auto* curr = *currp;
     for (auto* child : ChildIterator(curr)) {
-      if (!self->justConstrained.count(child)) {
+      if (isRelevant(child->type) && !self->justConstrained.count(child)) {
         if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
         self->root(getLocation(child), child->type);
       }
@@ -436,38 +436,40 @@ struct TypeGeneralizing : public Pass {
     // information about the links for a location.
     struct LocationLinks {
       // To avoid ambiguity in notation, we will talk about links going in the
-      // "up" and "down" directions, which follow the shape of wat:
+      // "forward" and "back" directions, which follow the flow of values:
+      // values flow forward from children to parents.
       //
-      //   (call                 up
-      //     (ref.cast            ^
-      //       (local.get $y)     |
-      //     )                    v
-      //   )                    down
-      //
-      // "Down" links follow the flow of data: the local.get flows down into the
-      // ref.cast, which flows into the call. "Up" links go in reverse.
-      //
-      // Most optimizations flow in the "down" direction, which is how values
-      // flow, and that is what SubtypingDiscoverer built up for us. However,
-      // our main work here is in the opposite direction: in the example above,
-      // the call may impose a constraint on the ref.cast (the constraint that
-      // it be refined enough to fit in the call parameter), and so forth.
-      SmallVector<Location, 2> down, up;
+      // Most optimizations flow in the "forward" direction (following value
+      // flow), and that is what SubtypingDiscoverer built up for us. However,
+      // our main work here is in the opposite direction: a parent imposes a
+      // constraint on the child that will send it a value, forcing the child to
+      // be refined enough to fit.
+      SmallVector<Location, 2> forward, back;
     };
     std::unordered_map<Location, LocationLinks> graph;
     for (auto& [from, to] : links) {
       // Convert the [from, to] in the sense of SubtypingDiscoverer - which go
-      // in the "down" direction - to our graph.
-      graph[from].down.push_back(to);
-      graph[to].up.push_back(from);
+      // in the "forward" direction - to our graph.
+      graph[from].forward.push_back(to);
+      graph[to].back.push_back(from);
     }
 
     if (DEBUG) {
       std::cerr << "\nGRAPH:\n";
       for (auto& [loc, links] : graph) {
-        std::cerr << loc << " sends to up: [";
+        std::cerr << loc << " sends to back: [";
         bool first = true;
-        for (auto t : links.up) {
+        for (auto t : links.back) {
+          if (first) {
+            first = false;
+          } else {
+            std::cerr << ',';
+          }
+          std::cerr << "\n  " << t;
+        }
+        std::cerr << "] and sends to forward: [";
+        first = true;
+        for (auto t : links.forward) {
           if (first) {
             first = false;
           } else {
@@ -487,7 +489,7 @@ struct TypeGeneralizing : public Pass {
       if (!isRelevant(value)) {
         continue;
       }
-      for (auto target : graph[loc].up) {
+      for (auto target : graph[loc].back) {
         if (lattice.meet(locationValues[target], value)) {
           if (isRelevant(locationValues[target])) {
             if (DEBUG) std::cerr << "  met target " << target << " to " << value << '\n';
@@ -532,7 +534,7 @@ struct TypeGeneralizing : public Pass {
               // We only need to generalize as much as the cast's value (the
               // actual maximal generalization may be larger).
               casts.emplace_back(loc, cast->ref->type);
-std::cout << "gen cast t' " << cast->ref->type << '\n';
+std::cout << "gen cast t' " << ModuleType(*module, cast->ref->type) << '\n';
             }
           }
         }
@@ -544,17 +546,8 @@ std::cout << "gen cast t' " << cast->ref->type << '\n';
 
       // Starting from the casts we found, generalize all the other things we
       // need, so that they are valid after generalization. This is a flow in
-      // the opposite direction of before:
-      //
-      //   (call                 up XXX this graph is wrong. $y is highest, most up.
-      //     (ref.cast            ^
-      //       (local.get $y)     |
-      //     )                    v
-      //   )                    down
-      //
-      // If we generalize that cast to a less-refined type, we must look up at
-      // the call, and make sure to generalize the call's parameter so that the
-      // unrefined cast's output fits in it.
+      // the opposite direction of before, where children force parents to be
+      // less refined than before.
       UniqueDeferredQueue<Location> work;
       for (auto& [loc, value] : casts) {
         work.push(loc);
@@ -568,14 +561,14 @@ std::cout << "gen cast t' " << cast->ref->type << '\n';
         if (!isRelevant(value)) {
           continue;
         }
-        for (auto target : graph[loc].down) {
+        for (auto target : graph[loc].forward) {
           if (Type::isSubType(getLocationType(target, *module), value)) {
             // The target is already refined enough.
             continue;
           }
-          if (lattice.meet(locationValues[target], value)) {
+          if (lattice.join(locationValues[target], value)) {
             if (isRelevant(locationValues[target])) {
-              if (DEBUG) std::cerr << "  met target " << target << " to " << value << '\n';
+              if (DEBUG) std::cerr << "  joined target " << target << " to " << value << '\n';
               // Flow onward.
               work.push(target);
             }
