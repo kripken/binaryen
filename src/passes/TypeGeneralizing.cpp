@@ -394,7 +394,7 @@ struct TypeGeneralizing : public Pass {
 
     // Merge the function information into a single large graph, deduplicating
     // as we go, and preparing the initial list of work (the roots).
-    LocationLinkGraph links;
+    std::unordered_set<LocationLink> links;
     UniqueDeferredQueue<Location> work;
 
     auto addRoot = [&](Location root, Element value) { // TODO inline
@@ -420,20 +420,42 @@ struct TypeGeneralizing : public Pass {
     // We no longer need the function-level info.
     analysis.map.clear();
 
-    // Our updates are in the reverse of the normal direction of the flow of
-    // information. E.g. when we see (global.set $g (value)) we do not send the
-    // value to the GlobalLocation, but rather look back and say that the
-    // value's sources must be refined enough to fit in the global's type.
-    links.reverse();
+    // Build the data structures for flowing of information, a graph of
+    // information about the links for a location.
+    struct LocationLinks {
+      // To avoid ambiguity in notation, we will talk about links going in the
+      // "up" and "down" directions, which follow the shape of wat:
+      //
+      //   (call                 up
+      //     (ref.cast            ^
+      //       (local.get $y)     |
+      //     )                    v
+      //   )                    down
+      //
+      // "Down" links follow the flow of data: the local.get flows down into the
+      // ref.cast, which flows into the call. "Up" links go in reverse.
+      //
+      // Most optimizations flow in the "down" direction, which is how values
+      // flow, and that is what SubtypingDiscoverer built up for us. However,
+      // our main work here is in the opposite direction: in the example above,
+      // the call may impose a constraint on the ref.cast (the constraint that
+      // it be refined enough to fit in the call parameter), and so forth.
+      SmallVector<Location, 2> down, up;
+    };
+    std::unordered_map<Location, LocationLinks> graph;
+    for (auto& [from, to] : links) {
+      // Convert the [from, to] in the sense of SubtypingDiscoverer - which go
+      // in the "down" direction - to our graph.
+      graph[from].down.push_back(to);
+      graph[to].up.push_back(from);
+    }
 
-    // Get the flow-efficient sorted graph.
-    auto sortedGraph = links.getSortedGraph();
     if (DEBUG) {
       std::cerr << "\nGRAPH:\n";
-      for (auto& [loc, targets] : sortedGraph) {
-        std::cerr << loc << " sends to targets: [";
+      for (auto& [loc, links] : graph) {
+        std::cerr << loc << " sends to up: [";
         bool first = true;
-        for (auto t : targets) {
+        for (auto t : links.up) {
           if (first) {
             first = false;
           } else {
@@ -453,7 +475,7 @@ struct TypeGeneralizing : public Pass {
       if (!isRelevant(value)) {
         continue;
       }
-      for (auto target : sortedGraph[loc]) {
+      for (auto target : graph[loc].up) {
         if (lattice.meet(locationValues[target], value)) {
           if (isRelevant(locationValues[target])) {
             if (DEBUG) std::cerr << "  met target " << target << " to " << value << '\n';

@@ -104,7 +104,7 @@ void LocationLinkGraph::reverse() {
   }
 }
 
-LocationLinkGraph::SortedGraph LocationLinkGraph::getSortedGraph() {
+LocationLinkGraph::SortedGraph LocationLinkGraph::getSortedGraph() { // XXX unneeded
   SortedGraph ret;
   for (auto& [from, to] : *this) {
     ret[from].push_back(to);

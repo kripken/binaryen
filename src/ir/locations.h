@@ -309,7 +309,7 @@ std::ostream& operator<<(std::ostream& o, wasm::Location location);
 
 namespace wasm {
 
-// A graph of links.
+// A graph of links. XXX unneeded
 struct LocationLinkGraph : public std::unordered_set<LocationLink> {
   // Given a graph, fill it out. The input graph contains links of interest, and
   // we fill out "boilerplate" links. For example, if the graph has an
@@ -322,7 +322,7 @@ struct LocationLinkGraph : public std::unordered_set<LocationLink> {
   // TODO: use this in GUFA?
   void fill(Module& wasm, const std::unordered_set<Location>& roots);
 
-  // Reverse the links.
+  // Reverse the links. // XXX needed?
   void reverse();
 
   // This graph is a set { (from, to), .. }. For efficient traversal, we can
