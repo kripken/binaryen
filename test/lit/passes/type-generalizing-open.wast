@@ -1159,3 +1159,18 @@
  )
 )
 
+;; Element segments constrain their inputs. We cannot generalize $g here.
+(module
+  ;; CHECK:      (type $f (func))
+  (type $f (func))
+
+  ;; CHECK:      (global $g (ref null $f) (ref.null nofunc))
+  (global $g (ref null $f) (ref.null $f))
+
+  ;; CHECK:      (table $t 22 funcref)
+  (table $t 22 funcref)
+
+  ;; CHECK:      (elem $e (ref null $f) (item (global.get $g)))
+  (elem $e (ref null $f) (item (global.get $g)))
+)
+

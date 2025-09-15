@@ -366,6 +366,7 @@ struct TypeGeneralizing : public Pass {
     // function map, using a "function" key of nullptr).
     auto& moduleInfo = analysis.map[nullptr];
     Collector moduleCollector(moduleInfo, runner->options);
+    moduleCollector.walkModuleCode(module);
     moduleCollector.walkModuleLevel(module);
 
     // Add roots for exports. TODO: not in closed world?
