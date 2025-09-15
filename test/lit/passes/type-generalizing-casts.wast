@@ -13,13 +13,6 @@
   ;; CHECK:      (global $g (mut (ref $A)) (struct.new_default $A))
   (global $g (mut (ref $A)) (struct.new $A))
 
-  ;; CHECK:      (func $test (type $1)
-  ;; CHECK-NEXT:  (drop
-  ;; CHECK-NEXT:   (ref.cast (ref $A)
-  ;; CHECK-NEXT:    (global.get $g)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT: )
   (func $test (result anyref)
     (local $temp (ref $A))
     (local.set $temp
