@@ -567,6 +567,10 @@ struct TypeGeneralizing : public Pass {
           continue;
         }
         for (auto target : graph[loc].down) {
+          if (Type::isSubType(getLocationType(target, *module), value)) {
+            // The target is already refined enough.
+            continue;
+          }
           if (lattice.meet(locationValues[target], value)) {
             if (isRelevant(locationValues[target])) {
               if (DEBUG) std::cerr << "  met target " << target << " to " << value << '\n';
