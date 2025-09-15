@@ -532,6 +532,7 @@ struct TypeGeneralizing : public Pass {
               // We only need to generalize as much as the cast's value (the
               // actual maximal generalization may be larger).
               casts.emplace_back(loc, cast->ref->type);
+std::cout << "gen cast t' " << cast->ref->type << '\n';
             }
           }
         }
@@ -558,6 +559,7 @@ struct TypeGeneralizing : public Pass {
       for (auto& [loc, value] : casts) {
         work.push(loc);
         locationValues[loc] = value;
+        if (DEBUG) std::cerr << "cast " << loc << " set to " << value << '\n';
       }
       while (!work.empty()) {
         auto loc = work.pop();
@@ -579,6 +581,11 @@ struct TypeGeneralizing : public Pass {
             }
           }
         }
+      }
+
+      if (DEBUG) std::cerr << "\nCOMPUTED CAST locationValues:\n";
+      for (auto& [loc, value] : locationValues) {
+        if (DEBUG) std::cerr << loc << " => " << value << '\n';
       }
     }
 

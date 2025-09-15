@@ -5,19 +5,19 @@
 ;; RUN: foreach %s %t wasm-opt --type-generalizing       -tnh -all -S -o - | filecheck %s
 ;; RUN: foreach %s %t wasm-opt --type-generalizing-casts -tnh -all -S -o - | filecheck %s --check-prefix=CASTS
 
+;; The cast here can be removed, if we generalize the cast and the local to
+;; (ref null $A). We could generalize further, but do not.
 (module
-  (type $A (struct))
+  (type $A (sub (struct)))
+  (type $B (sub $A (struct)))
 
   ;; CHECK:      (type $1 (func))
 
-  ;; CHECK:      (global $g (mut (ref $A)) (struct.new_default $A))
-  (global $g (mut (ref $A)) (struct.new $A))
-
-  (func $test (result anyref)
-    (local $temp (ref $A))
+  (func $test (param $A (ref $A)) (result anyref)
+    (local $temp (ref $B))
     (local.set $temp
-      (ref.cast (ref $A)
-        (global.get $g)
+      (ref.cast (ref $B)
+        (local.get $A)
       )
     )
     (local.get $temp)
