@@ -9,7 +9,7 @@
 
   ;; CHECK:      (type $0 (func (param structref) (result anyref)))
 
-  ;; CHECK:      (func $test (type $0) (param $ref structref) (result anyref)
+  ;; CHECK:      (func $local (type $0) (param $ref structref) (result anyref)
   ;; CHECK-NEXT:  (local $temp anyref)
   ;; CHECK-NEXT:  (local.set $temp
   ;; CHECK-NEXT:   (ref.cast structref
@@ -20,7 +20,7 @@
   ;; CHECK-NEXT: )
   ;; CASTS:      (type $0 (func (param structref) (result anyref)))
 
-  ;; CASTS:      (func $test (type $0) (param $ref structref) (result anyref)
+  ;; CASTS:      (func $local (type $0) (param $ref structref) (result anyref)
   ;; CASTS-NEXT:  (local $temp structref)
   ;; CASTS-NEXT:  (local.set $temp
   ;; CASTS-NEXT:   (ref.cast structref
@@ -41,13 +41,25 @@
     (local.get $temp)
   )
 
-  (func $local (param $ref structref) (result anyref)
-    ;; As above, but without a cast. We do not refine at all in casts mode.
-    (local $temp (ref $A))
+  ;; CHECK:      (func $no-cast (type $0) (param $ref structref) (result anyref)
+  ;; CHECK-NEXT:  (local $temp anyref)
+  ;; CHECK-NEXT:  (local.set $temp
+  ;; CHECK-NEXT:   (local.get $ref)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.get $temp)
+  ;; CHECK-NEXT: )
+  ;; CASTS:      (func $no-cast (type $0) (param $ref structref) (result anyref)
+  ;; CASTS-NEXT:  (local $temp structref)
+  ;; CASTS-NEXT:  (local.set $temp
+  ;; CASTS-NEXT:   (local.get $ref)
+  ;; CASTS-NEXT:  )
+  ;; CASTS-NEXT:  (local.get $temp)
+  ;; CASTS-NEXT: )
+  (func $no-cast (param $ref structref) (result anyref)
+    ;; No cast. We do not refine at all in casts mode.
+    (local $temp structref)
     (local.set $temp
-      (ref.cast (ref $A)
-        (local.get $ref)
-      )
+      (local.get $ref)
     )
     (local.get $temp)
   )
