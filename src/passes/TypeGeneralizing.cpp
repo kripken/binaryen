@@ -534,7 +534,6 @@ struct TypeGeneralizing : public Pass {
               // We only need to generalize as much as the cast's value (the
               // actual maximal generalization may be larger).
               casts.emplace_back(loc, cast->ref->type);
-std::cout << "gen cast t' " << ModuleType(*module, cast->ref->type) << '\n';
             }
           }
         }
@@ -556,18 +555,19 @@ std::cout << "gen cast t' " << ModuleType(*module, cast->ref->type) << '\n';
       }
       while (!work.empty()) {
         auto loc = work.pop();
-        if (DEBUG) std::cerr << "casts working on " << loc << '\n';
         auto value = locationValues[loc];
+        if (DEBUG) std::cerr << "casts working on " << loc << " with " << value << '\n';
         if (!isRelevant(value)) {
           continue;
         }
         for (auto target : graph[loc].forward) {
-          if (Type::isSubType(getLocationType(target, *module), value)) {
-            // The target is already refined enough.
-            continue;
+          auto& targetValue = locationValues[target];
+          if (targetValue == Type::none) {
+            // This is the first time we flow to here, get the initial value.
+            targetValue = getLocationType(target, *module);
           }
-          if (lattice.join(locationValues[target], value)) {
-            if (isRelevant(locationValues[target])) {
+          if (lattice.join(targetValue, value)) {
+            if (isRelevant(targetValue)) {
               if (DEBUG) std::cerr << "  joined target " << target << " to " << value << '\n';
               // Flow onward.
               work.push(target);
@@ -610,6 +610,11 @@ std::cout << "gen cast t' " << ModuleType(*module, cast->ref->type) << '\n';
         [[maybe_unused]] auto old = type;
         auto iter = parent.locationValues.find(loc);
         if (iter == parent.locationValues.end()) {
+          if (parent.casts) {
+            // In the casts mode we do not do unnecessary generalizations: only
+            // the things we found to help with casts, are applied.
+            return;
+          }
           type = type.with(type.getHeapType().getTop()).with(Nullable);
         } else {
           // Do not apply irrelevant types like unreachable.
