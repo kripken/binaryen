@@ -140,7 +140,7 @@ struct Collector
   }
 
   void root(Location loc, Type value) {
-    if (!isRelevant(getLocationType(loc, *getModule()))) {
+    if (!isRelevant(value)) {
       return;
     }
 
@@ -245,6 +245,11 @@ struct Collector
   // Override subtype-exprs where we want more precise representation of the
   // flow of constraints.
 
+  // TODO: maybe make struct-utils use Locations, and add a helper on top that
+  //       un-locates to the old API for people that want simplicity? or use
+  //       locations in current users? Or, use locations there, but also add the
+  //       high level hooks to translate to non-location stuff, so it gets
+  //       immediately folded away in struct-utils.
   void visitLocalGet(LocalGet* curr) {
     // local.get's type must match the local type.
     if (isRelevant(curr->type)) { // XXX remove all these and do getLocationType in root() link()
@@ -390,14 +395,15 @@ struct TypeGeneralizing : public Pass {
     // Merge the function information into a single large graph, deduplicating
     // as we go, and preparing the initial list of work (the roots).
     LocationLinkGraph links;
-    std::unordered_set<Location> roots;
     UniqueDeferredQueue<Location> work;
 
-    auto addRoot = [&](Location root, Element value) {
+    auto addRoot = [&](Location root, Element value) { // TODO inline
       if (DEBUG) std::cerr << "made root " << root << " to " << value << '\n';
+      assert(isRelevant(value));
       lattice.meet(locationValues[root], value);
-      roots.insert(root);
-      work.push(root);
+      if (isRelevant(locationValues[root])) {
+        work.push(root);
+      }
     };
 
     for (auto& [func, info] : analysis.map) {
@@ -442,11 +448,16 @@ struct TypeGeneralizing : public Pass {
       auto loc = work.pop();
       if (DEBUG) std::cerr << "working on " << loc << '\n';
       auto value = locationValues[loc];
+      if (!isRelevant(value)) {
+        continue;
+      }
       for (auto target : sortedGraph[loc]) {
         if (lattice.meet(locationValues[target], value)) {
-          if (DEBUG) std::cerr << "  met target " << target << " to " << value << '\n';
-          // Flow onward.
-          work.push(target);
+          if (isRelevant(locationValues[target])) {
+            if (DEBUG) std::cerr << "  met target " << target << " to " << value << '\n';
+            // Flow onward.
+            work.push(target);
+          }
         }
       }
     }
@@ -491,7 +502,12 @@ struct TypeGeneralizing : public Pass {
         if (iter == parent.locationValues.end()) {
           type = type.with(type.getHeapType().getTop()).with(Nullable);
         } else {
-          type = iter->second;
+          // Do not apply irrelevant types like unreachable.
+          auto newType = iter->second;
+          if (!isRelevant(newType)) {
+            return;
+          }
+          type = newType;
         }
         if (DEBUG) std::cerr << "Updated " << loc << " from " << old << " to " << type << '\n';
         // We should only ever generalize types, not refine them.

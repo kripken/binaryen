@@ -1174,3 +1174,25 @@
   (elem $e (ref null $f) (item (global.get $g)))
 )
 
+;; Check we do not error on unreachability and uninhabitable types.
+(module
+  ;; CHECK:      (type $0 (func (result i32)))
+
+  ;; CHECK:      (func $test (type $0) (result i32)
+  ;; CHECK-NEXT:  (ref.eq
+  ;; CHECK-NEXT:   (ref.cast (ref (shared none))
+  ;; CHECK-NEXT:    (ref.null (shared none))
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test (result i32)
+    (ref.eq
+      (ref.cast (ref (shared none))
+        (ref.null (shared none))
+      )
+      (unreachable)
+    )
+  )
+)
+
