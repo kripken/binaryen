@@ -515,7 +515,7 @@ struct TypeGeneralizing : public Pass {
 
       // Find casts that we might remove, and the types we want to generalize
       // them to.
-      std::vector<std::pair<RefCast*, Element>> casts;
+      std::vector<std::pair<Location, Element>> casts;
 
       for (auto& [loc, value] : maximalLocationValues) {
         if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
@@ -531,7 +531,7 @@ struct TypeGeneralizing : public Pass {
             if (Type::isSubType(cast->ref->type, value)) {
               // We only need to generalize as much as the cast's value (the
               // actual maximal generalization may be larger).
-              casts.emplace_back({loc, cast->ref->type});
+              casts.emplace_back(loc, cast->ref->type);
             }
           }
         }
@@ -555,8 +555,7 @@ struct TypeGeneralizing : public Pass {
       // the call, and make sure to generalize the call's parameter so that the
       // unrefined cast's output fits in it.
       UniqueDeferredQueue<Location> work;
-      for (auto [cast, value] : casts) {
-        auto loc = getLocation(cast);
+      for (auto& [loc, value] : casts) {
         work.push(loc);
         locationValues[loc] = value;
       }
