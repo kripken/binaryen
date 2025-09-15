@@ -576,6 +576,9 @@ void PassRegistry::registerPasses() {
   registerPass("type-generalizing",
                "generalize (unrefine) types",
                createTypeGeneralizingPass);
+  registerPass("type-generalizing-casts",
+               "generalize (unrefine) types, but only to remove casts",
+               createTypeGeneralizingCastsPass);
   registerPass("type-merging",
                "merge types to their supertypes where possible",
                createTypeMergingPass);

@@ -56,6 +56,13 @@
 //         * Add equality constraints.
 //         * Update them in update().
 //
+// The "casts" variant of this pass only generalizes up to the point that
+// actually allows removal of a cast. This attempts a better tradeoff, where we
+// only generalize when we accomplish something we know is useful for runtime
+// (removing a cast), and hope that by doing so we do not add even more
+// downsides (which are possible, in theory, with VM inlining that could have
+// benefited from more refined types to remove casts then).
+//
 // TODO: In closed world we could not treat externally-visible types as roots,
 //       e.g., we could generalize an exported (ref $foo) to an anyref.
 //
@@ -346,6 +353,11 @@ struct TypeGeneralizing : public Pass {
   // Only alters types.
   bool requiresNonNullableLocalFixups() override { return false; }
 
+  // Whether we are the variant of the pass that focuses on removing casts.
+  bool casts;
+
+  TypeGeneralizing(bool casts) : casts(casts) {}
+
   // The computed element for each location.
   std::unordered_map<Location, Element> locationValues;
 
@@ -491,10 +503,81 @@ struct TypeGeneralizing : public Pass {
       if (DEBUG) std::cerr << loc << " => " << value << '\n';
     }
 
-    // TODO: A "cast" variant of this pass, where after finding the maximal
-    //       generalizations, we find places where the generalization helps
-    //       remove a cast, and then find all the places that help achieve it,
-    //       and apply only them.
+    if (casts) {
+      // Thus far we have found the *maximal* generalization we can accomplish,
+      // that is, how far we can go with generalizing when we try as hard as
+      // possible. In the "casts" variant, we now find places where
+      // generalization can help remove a cast, and then we only generalize just
+      // enough for that.
+
+      // Stash the maximally general findings before we compute the new ones.
+      auto maximalLocationValues = std::move(locationValues);
+
+      // Find casts that we might remove, and the types we want to generalize
+      // them to.
+      std::vector<std::pair<RefCast*, Element>> casts;
+
+      for (auto& [loc, value] : maximalLocationValues) {
+        if (auto* exprLoc = std::get_if<ExpressionLocation>(&loc)) {
+          if (auto* cast = exprLoc->expr->dynCast<RefCast>()) {
+            // A cast becomes removable (in trapsNeverHappen, at least) when it
+            // can be generalized to something that makes its input always
+            // succeed:
+            //
+            //   (ref.cast (ref $bar) (call $get_foo))
+            //
+            // If the call returns (ref null $foo), and we can generalize this
+            // cast to (ref null $foo), then it is unneeded.
+            if (Type::isSubType(cast->ref->type, value)) {
+              // We only need to generalize as much as the cast's value (the
+              // actual maximal generalization may be larger).
+              casts.emplace_back({loc, cast->ref->type});
+            }
+          }
+        }
+      }
+
+      if (casts.empty()) {
+        return;
+      }
+
+      // Starting from the casts we found, generalize all the other things we
+      // need, so that they are valid after generalization. This is a flow in
+      // the opposite direction of before:
+      //
+      //   (call                 up XXX this graph is wrong. $y is highest, most up.
+      //     (ref.cast            ^
+      //       (local.get $y)     |
+      //     )                    v
+      //   )                    down
+      //
+      // If we generalize that cast to a less-refined type, we must look up at
+      // the call, and make sure to generalize the call's parameter so that the
+      // unrefined cast's output fits in it.
+      UniqueDeferredQueue<Location> work;
+      for (auto [cast, value] : casts) {
+        auto loc = getLocation(cast);
+        work.push(loc);
+        locationValues[loc] = value;
+      }
+      while (!work.empty()) {
+        auto loc = work.pop();
+        if (DEBUG) std::cerr << "casts working on " << loc << '\n';
+        auto value = locationValues[loc];
+        if (!isRelevant(value)) {
+          continue;
+        }
+        for (auto target : graph[loc].down) {
+          if (lattice.meet(locationValues[target], value)) {
+            if (isRelevant(locationValues[target])) {
+              if (DEBUG) std::cerr << "  met target " << target << " to " << value << '\n';
+              // Flow onward.
+              work.push(target);
+            }
+          }
+        }
+      }
+    }
 
     // Apply |locationValues| to the module.
     update(module);
@@ -592,6 +675,8 @@ struct TypeGeneralizing : public Pass {
 
 } // anonymous namespace
 
-Pass* createTypeGeneralizingPass() { return new TypeGeneralizing; }
+Pass* createTypeGeneralizingPass() { return new TypeGeneralizing(false); }
+
+Pass* createTypeGeneralizingCastsPass() { return new TypeGeneralizing(true); }
 
 } // namespace wasm
