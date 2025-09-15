@@ -1196,3 +1196,11 @@
   )
 )
 
+;; Check we do not error on an exported global with no other uses.
+(module
+  ;; CHECK:      (global $g i32 (i32.const 0))
+  (global $g i32 (i32.const 0))
+  ;; CHECK:      (export "__data_end" (global $g))
+  (export "__data_end" (global $g))
+)
+

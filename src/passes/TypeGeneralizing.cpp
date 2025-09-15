@@ -399,7 +399,9 @@ struct TypeGeneralizing : public Pass {
 
     auto addRoot = [&](Location root, Element value) { // TODO inline
       if (DEBUG) std::cerr << "made root " << root << " to " << value << '\n';
-      assert(isRelevant(value));
+      if (!isRelevant(value)) {
+        return;
+      }
       lattice.meet(locationValues[root], value);
       if (isRelevant(locationValues[root])) {
         work.push(root);
