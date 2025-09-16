@@ -187,8 +187,21 @@ using Location = std::variant<ExpressionLocation,
                               TypeLocation,
                               ConeReadLocation>;
 
-// Finds the type of this location in the given module.
-Type getLocationType(const Location& location, Module& wasm);
+// Common helpers. These would be static methods on Location, but that is a
+// std::variant and subclassing it complicates things.
+
+namespace Locations {
+
+// Finds the type of this location in the given module. TODO inline?
+Type getType(const Location& location, Module& wasm);
+
+// Gets the location of an expression.
+inline Location get(Expression* curr) {
+  // TODO: tuples
+  return ExpressionLocation{curr, 0};
+}
+
+} // namespace Locations
 
 // A link between two locations.
 struct LocationLink {

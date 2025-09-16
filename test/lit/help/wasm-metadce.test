@@ -554,6 +554,11 @@
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --type-finalizing                             mark all leaf types as final
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --type-generalizing                           generalize (unrefine) types
+;; CHECK-NEXT:
+;; CHECK-NEXT:   --type-generalizing-casts                     generalize (unrefine) types, but
+;; CHECK-NEXT:                                                 only to remove casts
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --type-merging                                merge types to their supertypes
 ;; CHECK-NEXT:                                                 where possible
 ;; CHECK-NEXT:

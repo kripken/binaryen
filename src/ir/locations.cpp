@@ -19,9 +19,9 @@
 #include "ir/module-utils.h"
 #include "wasm.h"
 
-namespace wasm {
+namespace wasm::Locations {
 
-Type getLocationType(const Location& location, Module& wasm) {
+Type getType(const Location& location, Module& wasm) {
   if (auto* loc = std::get_if<wasm::ExpressionLocation>(&location)) {
     return loc->expr->type;
   } else if (auto* loc = std::get_if<wasm::DataLocation>(&location)) {
@@ -46,7 +46,7 @@ Type getLocationType(const Location& location, Module& wasm) {
   }
 }
 
-} // namespace wasm
+} // namespace wasm::Locations
 
 namespace std {
 

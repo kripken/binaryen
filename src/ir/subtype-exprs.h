@@ -18,45 +18,45 @@
 #define wasm_ir_subtype_exprs_h
 
 #include "ir/branch-utils.h"
+#include "ir/locations.h"
 #include "wasm-traversal.h"
 #include "wasm.h"
 
 namespace wasm {
 
 //
-// Analyze subtyping relationships between expressions. This must CRTP with a
-// class that implements:
+// Analyze subtyping relationships. This must CRTP with a class that implements:
 //
 //  * noteSubtype(A, B) indicating A must be a subtype of B
 //  * noteCast(A, B) indicating A is cast to B
 //
 // There must be multiple versions of each of those, supporting A and B being
-// either a Type, which indicates a fixed type requirement, or an Expression*,
+// either a Type, which indicates a fixed type requirement, or a Location,
 // indicating a flexible requirement that depends on the type of that
-// expression. Specifically:
+// location. Specifically:
 //
-//  * noteSubtype(Type, Type) - A constraint not involving expressions at all,
+//  * noteSubtype(Type, Type) - A constraint not involving locations at all,
 //                              for example, an element segment's type must be
 //                              a subtype of the corresponding table's.
 //  * noteSubtype(HeapType, HeapType) - Ditto, with heap types, for example in a
 //                                      CallIndirect.
-//  * noteSubtype(Type, Expression) - A fixed type must be a subtype of an
-//                                    expression's type, for example, in BrOn
+//  * noteSubtype(Type, Location) - A fixed type must be a subtype of an
+//                                    location's type, for example, in BrOn
 //                                    (the declared sent type must be a subtype
 //                                    of the block we branch to).
-//  * noteSubtype(Expression, Type) - An expression's type must be a subtype of
+//  * noteSubtype(Location, Type) - An location's type must be a subtype of
 //                                    a fixed type, for example, a Call operand
 //                                    must be a subtype of the signature's
 //                                    param.
-//  * noteSubtype(Expression, Expression) - An expression's type must be a
+//  * noteSubtype(Location, Location) - An location's type must be a
 //                                          subtype of anothers, for example,
 //                                          a block and its last child.
 //
 //  * noteCast(HeapType, HeapType) - A fixed type is cast to another, for
 //                                   example, in a CallIndirect.
-//  * noteCast(Expression, Type) - An expression's type is cast to a fixed type,
+//  * noteCast(Location, Type) - An location's type is cast to a fixed type,
 //                                 for example, in RefTest.
-//  * noteCast(Expression, Expression) - An expression's type is cast to
+//  * noteCast(Location, Location) - An location's type is cast to
 //                                       another, for example, in RefCast.
 //
 // In addition, we need to differentiate two situations that cause subtyping:
@@ -69,32 +69,107 @@ namespace wasm {
 // the above functions all handle flow-based subtyping, while there is also the
 // following:
 //
-//  * noteNonFlowSubtype(Expression, Type)
+//  * noteNonFlowSubtype(Location, Type)
 //
 // This is the only signature we need for the non-flowing case since it always
-// stems from an expression that is compared against a type.
+// stems from an location that is compared against a type.
 //
 // The concrete signatures are:
 //
 //      void noteSubtype(Type, Type);
 //      void noteSubtype(HeapType, HeapType);
-//      void noteSubtype(Type, Expression*);
-//      void noteSubtype(Expression*, Type);
-//      void noteSubtype(Expression*, Expression*);
-//      void noteNonFlowSubtype(Expression*, Type);
+//      void noteLocSubtype(Type, Location);
+//      void noteLocSubtype(Location, Type);
+//      void noteLocSubtype(Location, Location);
+//      void noteLocNonFlowSubtype(Location, Type);
 //      void noteCast(HeapType, HeapType);
-//      void noteCast(Expression*, Type);
-//      void noteCast(Expression*, Expression*);
+//      void noteLocCast(Location, Type);
+//      void noteLocCast(Location, Location);
 //
-// Note that noteCast(Type, Type) and noteCast(Type, Expression) never occur and
+// Where Location is always const Location&. Note that the ones with Location
+// have "Loc" in the name, to avoid ambiguity issues with CRTP (necessary given
+// the automatic conversion from Location to Expression* that is mentioned
+// below).
+//
+// Note that noteCast(Type, Type) and noteCast(Type, Location) never occur and
 // do not need to be implemented.
 //
+// If a user of this class is uninterested in the generality of Locations over
+// Expressions, then it can implement the above signatures with Expression*
+// instead of each Location, and this class will automatically convert:
+// Locations refering to Expressions will be converted to them, and Locations
+// refering to anything else will use the type.
+
 // The class must also inherit from ControlFlowWalker (for findBreakTarget).
 //
 
 template<typename SubType>
 struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   SubType* self() { return static_cast<SubType*>(this); }
+
+  Type getLocationType(const Location& loc) {
+    return Locations::getType(loc, *self()->getModule());
+  }
+
+  // Conversions from Locations to Expressions.
+  void noteLocSubtype(const Location& sub, const Location& super) {
+    if (auto* subExprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
+      if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
+        self()->noteSubtype(subExprLoc->expr, superExprLoc->expr);
+      } else {
+        self()->noteSubtype(subExprLoc->expr, getLocationType(super));
+      }
+    } else {
+      if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
+        self()->noteSubtype(getLocationType(sub), superExprLoc->expr);
+      } else {
+        self()->noteSubtype(getLocationType(sub), getLocationType(super));
+      }
+    }
+  }
+  void noteLocSubtype(Type sub, const Location& super) {
+    if (auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
+      self()->noteSubtype(sub, exprLoc->expr);
+    } else {
+      self()->noteSubtype(sub, getLocationType(super));
+    }
+  }
+  void noteLocSubtype(const Location& sub, Type super) {
+    if (auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
+      self()->noteSubtype(exprLoc->expr, super);
+    } else {
+      self()->noteSubtype(getLocationType(sub), super);
+    }
+  }
+  void noteNonFlowLocSubtype(const Location& sub, Type super) {
+    if (auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
+      self()->noteNonFlowSubtype(exprLoc->expr, super);
+    } else {
+      self()->noteNonFlowSubtype(getLocationType(sub), super);
+    }
+  }
+  void noteLocCast(const Location& sub, Type super) {
+    if (auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
+      self()->noteCast(exprLoc->expr, super);
+    } else {
+      self()->noteCast(getLocationType(sub), super);
+    }
+  }
+  void noteLocCast(const Location& sub, const Location& super) {
+    if (auto* subExprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
+      if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
+        self()->noteCast(subExprLoc->expr, superExprLoc->expr);
+      } else {
+        self()->noteCast(subExprLoc->expr, getLocationType(super));
+      }
+    } else {
+      if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
+        self()->noteCast(getLocationType(sub), superExprLoc->expr);
+      } else {
+        self()->noteCast(getLocationType(sub), getLocationType(super));
+      }
+    }
+  }
 
   void visitFunction(Function* func) {
     if (func->body) {
@@ -103,7 +178,7 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   }
   void visitGlobal(Global* global) {
     if (global->init) {
-      self()->noteSubtype(global->init, global->type);
+      self()->noteLocSubtype(Locations::get(global->init), GlobalLocation{global->name});
     }
   }
   void visitElementSegment(ElementSegment* seg) {
@@ -173,13 +248,13 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   }
   void visitLocalGet(LocalGet* curr) {}
   void visitLocalSet(LocalSet* curr) {
-    self()->noteSubtype(curr->value,
-                        self()->getFunction()->getLocalType(curr->index));
+    self()->noteLocSubtype(Locations::get(curr->value),
+                        LocalLocation{self()->getFunction(), curr->index});
   }
   void visitGlobalGet(GlobalGet* curr) {}
   void visitGlobalSet(GlobalSet* curr) {
-    self()->noteSubtype(curr->value,
-                        self()->getModule()->getGlobal(curr->name)->type);
+    self()->noteLocSubtype(Locations::get(curr->value),
+                        GlobalLocation{curr->name});
   }
   void visitLoad(Load* curr) {}
   void visitStore(Store* curr) {}

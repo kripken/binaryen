@@ -113,11 +113,6 @@ struct CollectedFuncInfo {
   std::vector<std::pair<Location, Element>> roots;
 };
 
-Location getLocation(Expression* curr) {
-  // TODO: tuples
-  return ExpressionLocation{curr, 0};
-}
-
 // Only reference types can be generalized; nothing else is relevant for this
 // pass.
 bool isRelevant(Type type) {
@@ -150,7 +145,7 @@ struct Collector
     // We can ignore irrelevant types, either in the type we are told to apply,
     // or the current type (if the current type is unreachable, this is dead
     // code).
-    if (!isRelevant(value) || !isRelevant(getLocationType(loc, *getModule()))) {
+    if (!isRelevant(value) || !isRelevant(Locations::getType(loc, *getModule()))) {
       return;
     }
 
@@ -161,7 +156,7 @@ struct Collector
   }
 
   void link(Location sub, Location super) {
-    if (!isRelevant(getLocationType(sub, *getModule())) || !isRelevant(getLocationType(super, *getModule()))) {
+    if (!isRelevant(Locations::getType(sub, *getModule())) || !isRelevant(Locations::getType(super, *getModule()))) {
       return;
     }
 
@@ -184,7 +179,7 @@ struct Collector
     for (auto* child : ChildIterator(curr)) {
       if (isRelevant(child->type) && !self->justConstrained.count(child)) {
         if (DEBUG) std::cerr << "Unconstrained child " << *child << "\n";
-        self->root(getLocation(child), child->type);
+        self->root(Locations::get(child), child->type);
       }
     }
 
@@ -204,7 +199,7 @@ struct Collector
       // a pure fallthrough but one that changes the type as it flows through.
       // We leave such things for specific handling below.
       if (fallthrough != curr && fallthrough->type == curr->type) {
-        self->link(getLocation(fallthrough), getLocation(curr));
+        self->link(Locations::get(fallthrough), Locations::get(curr));
       }
     }
 
@@ -231,11 +226,12 @@ struct Collector
   void noteSubtype(Type, Type) {}
   void noteSubtype(HeapType, HeapType) {}
   void noteSubtype(Type, Expression*) {}
+  void noteLocSubtype(Type, const Location&) {}
 
   // An absolute (root) constraint, e.g. from ref.eq.
-  void noteSubtype(Expression* sub, Type super) {
+  void noteSubtype(Expression* sub, Type super) { // XXX can we remove all Expr* ones?
     if (isRelevant(super)) {
-      root(getLocation(sub), super);
+      root(Locations::get(sub), super);
     }
   }
   void noteNonFlowSubtype(Expression* sub, Type super) {
@@ -244,13 +240,25 @@ struct Collector
 
   // A relative (link) constraint, e.g. between a block and its last child.
   void noteSubtype(Expression* sub, Expression* super) {
-    link(getLocation(sub), getLocation(super));
+    link(Locations::get(sub), Locations::get(super));
+  }
+
+  void noteLocSubtype(const Location& sub, Type super) {
+    root(sub, super);
+  }
+  void noteLocSubtype(const Location& sub, const Location& super) {
+    link(sub, super);
+  }
+  void noteLocNonFlowSubtype(const Location& sub, Type super) {
+    root(sub, super);
   }
 
   // See below for how we optimize ref.cast specifically. TODO other casts too.
   void noteCast(HeapType, HeapType) {}
   void noteCast(Expression*, Type) {}
   void noteCast(Expression*, Expression*) {}
+  void noteLocCast(const Location&, Type) {}
+  void noteLocCast(const Location&, const Location&) {}
 
   // Override subtype-exprs where we want more precise representation of the
   // flow of constraints.
@@ -262,9 +270,9 @@ struct Collector
   //       immediately folded away in struct-utils.
   void visitLocalGet(LocalGet* curr) {
     // local.get's type must match the local type.
-    if (isRelevant(curr->type)) { // XXX remove all these and do getLocationType in root() link()
+    if (isRelevant(curr->type)) { // XXX remove all these and do Locations::getType in root() link()
       enforceEquality(LocalLocation{getFunction(), curr->index},
-                      getLocation(curr));
+                      Locations::get(curr));
     }
   }
 
@@ -272,15 +280,15 @@ struct Collector
     // Override the parent behavior of an absolute constraint of "value is a
     // subtype of ${current type of local}" with a link to the local, i.e., a
     // relative constraint.
-    link(getLocation(curr->value), LocalLocation{getFunction(), curr->index});
+    link(Locations::get(curr->value), LocalLocation{getFunction(), curr->index});
 
     // As with local.get, link us to the local. Note that a tee can be more
     // refined than the local type, but this is necessary to ensure that we pick
     // up constraints from the parent (e.g. if the parent is a ref.eq, that
-    // means the local must be ref.eq).
+    // means the local must be ref.eq). XXX do we need this? can it be in the parent SubtypingDiscoverer?
     if (isRelevant(curr->type)) { // Can be isTee() after move isRelevants up
       enforceEquality(LocalLocation{getFunction(), curr->index},
-                      getLocation(curr)); // XXX can this be one-sided?
+                      Locations::get(curr)); // XXX can this be one-sided?
     }
   }
 
@@ -288,19 +296,7 @@ struct Collector
     // global.get's type must match the global type.
     if (isRelevant(curr->type)) {
       enforceEquality(GlobalLocation{curr->name},
-                      getLocation(curr));
-    }
-  }
-
-  void visitGlobalSet(GlobalSet* curr) {
-    // Similar to LocalSet.
-    link(getLocation(curr->value), GlobalLocation{curr->name});
-  }
-
-  void visitGlobal(Global* global) {
-    // Override the parent to specify GlobalLocation (and not just a type).
-    if (global->init) {
-      link(getLocation(global->init), GlobalLocation{global->name});
+                      Locations::get(curr));
     }
   }
 
@@ -334,11 +330,11 @@ struct Collector
       noteEmptyConstraint(curr->ref);
     } else {
       // Otherwise, we cannot generalize a cast as it might no longer fail.
-      root(getLocation(curr), curr->type);
+      root(Locations::get(curr), curr->type);
       // If this is an exact cast, we must keep it "trivial" if custom
       // descriptors are not enabled (see visitRefCast/Test in wasm-validator).
       // For now, just force the input to remain as before. TODO
-      root(getLocation(curr->ref), curr->ref->type);
+      root(Locations::get(curr->ref), curr->ref->type);
     }
   }
 
@@ -566,7 +562,7 @@ struct TypeGeneralizing : public Pass {
           auto& targetValue = locationValues[target];
           if (targetValue == Type::none) {
             // This is the first time we flow to here, get the initial value.
-            targetValue = getLocationType(target, *module);
+            targetValue = Locations::getType(target, *module);
           }
           if (lattice.join(targetValue, value)) {
             if (isRelevant(targetValue)) {
