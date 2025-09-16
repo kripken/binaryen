@@ -1204,3 +1204,27 @@
   (export "__data_end" (global $g))
 )
 
+;; Mix shared and unshared in unreachable code.
+(module
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (func $test (type $0)
+  ;; CHECK-NEXT:  (ref.eq
+  ;; CHECK-NEXT:   (block (result (ref null (shared none)))
+  ;; CHECK-NEXT:    (unreachable)
+  ;; CHECK-NEXT:    (ref.null (shared none))
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $test
+    (ref.eq
+      (block (result (ref null (shared none)))
+        (unreachable)
+        (ref.null (shared none))
+      )
+      (unreachable)
+    )
+  )
+)
+

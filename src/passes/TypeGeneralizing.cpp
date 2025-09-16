@@ -147,7 +147,10 @@ struct Collector
   }
 
   void root(Location loc, Type value) {
-    if (!isRelevant(value)) {
+    // We can ignore irrelevant types, either in the type we are told to apply,
+    // or the current type (if the current type is unreachable, this is dead
+    // code).
+    if (!isRelevant(value) || !isRelevant(getLocationType(loc, *getModule()))) {
       return;
     }
 
@@ -387,17 +390,18 @@ struct TypeGeneralizing : public Pass {
     moduleCollector.walkModuleLevel(module);
 
     // Add roots for exports. TODO: not in closed world?
+    moduleCollector.setModule(module);
     for (auto& exp : module->exports) {
       auto name = exp->getInternalName();
       if (exp->kind == ExternalKind::Global) {
-        moduleInfo.roots.emplace_back(GlobalLocation{*name}, module->getGlobal(*name)->type);
+        moduleCollector.root(GlobalLocation{*name}, module->getGlobal(*name)->type);
       }
     }
 
     // Add roots for imports. TODO: not in closed world?
     for (auto& global : module->globals) {
       if (global->imported()) {
-        moduleInfo.roots.emplace_back(GlobalLocation{global->name}, global->type);
+        moduleCollector.root(GlobalLocation{global->name}, global->type);
       }
     }
 
@@ -411,9 +415,7 @@ struct TypeGeneralizing : public Pass {
 
     auto addRoot = [&](Location root, Element value) { // TODO inline
       if (DEBUG) std::cerr << "made root " << root << " to " << value << '\n';
-      if (!isRelevant(value)) {
-        return;
-      }
+      assert(isRelevant(value));
       lattice.meet(locationValues[root], value);
       if (isRelevant(locationValues[root])) {
         work.push(root);
@@ -622,11 +624,14 @@ struct TypeGeneralizing : public Pass {
           if (!isRelevant(newType)) {
             return;
           }
+          // We should only ever generalize types, not refine them. Unreachable
+          // code can make us try to alter a type wrongly.
+          if (!Type::isSubType(old, newType)) {
+            return;
+          }
           type = newType;
         }
         if (DEBUG) std::cerr << "Updated " << loc << " from " << old << " to " << type << '\n';
-        // We should only ever generalize types, not refine them.
-        assert(Type::isSubType(old, type));
       };
 
       void visitExpression(Expression* curr) {
