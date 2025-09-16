@@ -202,7 +202,7 @@ struct LocationLink {
   }
 };
 
-// Utility for printing a location with module info (like type names);
+// Utility for printing a location with module info (like type names).
 using ModuleLocation = std::pair<Module*, Location>;
 
 } // namespace wasm
@@ -306,32 +306,5 @@ std::ostream& operator<<(std::ostream& o, wasm::ModuleLocation moduleLocation);
 std::ostream& operator<<(std::ostream& o, wasm::Location location);
 
 } // namespace std
-
-namespace wasm {
-
-// A graph of links. XXX unneeded
-struct LocationLinkGraph : public std::unordered_set<LocationLink> {
-  // Given a graph, fill it out. The input graph contains links of interest, and
-  // we fill out "boilerplate" links. For example, if the graph has an
-  // ExpressionLocation of a global.get, then we add a link from the
-  // corresponding GlobalLocation to that expression (since the expression reads
-  // from there).
-  //
-  // Receives a set of roots that are additional locations to consider and link.
-  //
-  // TODO: use this in GUFA?
-  void fill(Module& wasm, const std::unordered_set<Location>& roots);
-
-  // Reverse the links. // XXX needed?
-  void reverse();
-
-  // This graph is a set { (from, to), .. }. For efficient traversal, we can
-  // provide the "sorted" form that maps a location to its targets, that is,
-  // { from: [to, ..], .. }, which is sorted by sources.
-  using SortedGraph = std::unordered_map<Location, SmallVector<Location, 2>>;
-  SortedGraph getSortedGraph();
-};
-
-} // namespace wasm
 
 #endif // wasm_ir_locations_h
