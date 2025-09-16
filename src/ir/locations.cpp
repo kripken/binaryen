@@ -71,10 +71,7 @@ std::ostream& operator<<(std::ostream& o, wasm::ModuleLocation moduleLocation) {
   } else if (auto* loc = std::get_if<wasm::LocalLocation>(&location)) {
     o << "  localloc " << loc->func->name << " : " << loc->index << '\n';
   } else if (auto* loc = std::get_if<wasm::ResultLocation>(&location)) {
-std::cout << "RESULTLOCATION1\n";
-std::cout << "RESULTLOCATION2 " << loc->func << "\n";
     o << "  resultloc $" << loc->func->name << " : " << loc->index << '\n';
-std::cout << "RESULTLOCATION3\n";
   } else if (auto* loc = std::get_if<wasm::GlobalLocation>(&location)) {
     o << "  globalloc " << loc->name << '\n';
   } else if (std::get_if<wasm::SignatureParamLocation>(&location)) {
