@@ -42,7 +42,7 @@ struct ExpressionLocation {
   ExpressionLocation(Expression* expr, Index tupleIndex=0) : expr(expr), tupleIndex(tupleIndex) {
     // The tuple index is 0 for non-tuples, and must be small enough in an
     // actual tuple.
-    assert(tupleIndex == 0 || tupleIndex < !expr->type.size());
+    assert(tupleIndex == 0 || tupleIndex < expr->type.size());
   }
 
   bool operator==(const ExpressionLocation& other) const {
