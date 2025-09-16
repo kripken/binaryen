@@ -226,7 +226,7 @@ struct Collector
   void noteSubtype(Type, Type) {}
   void noteSubtype(HeapType, HeapType) {}
   void noteSubtype(Type, Expression*) {}
-  void noteLocSubtype(Type, const Location&) {}
+  void noteSubtype(Type, const Location&) {}
 
   // An absolute (root) constraint, e.g. from ref.eq.
   void noteSubtype(Expression* sub, Type super) { // XXX can we remove all Expr* ones?
@@ -243,13 +243,13 @@ struct Collector
     link(Locations::get(sub), Locations::get(super));
   }
 
-  void noteLocSubtype(const Location& sub, Type super) {
+  void noteSubtype(const Location& sub, Type super) {
     root(sub, super);
   }
-  void noteLocSubtype(const Location& sub, const Location& super) {
+  void noteSubtype(const Location& sub, const Location& super) {
     link(sub, super);
   }
-  void noteLocNonFlowSubtype(const Location& sub, Type super) {
+  void noteNonFlowSubtype(const Location& sub, Type super) {
     root(sub, super);
   }
 
@@ -257,8 +257,8 @@ struct Collector
   void noteCast(HeapType, HeapType) {}
   void noteCast(Expression*, Type) {}
   void noteCast(Expression*, Expression*) {}
-  void noteLocCast(const Location&, Type) {}
-  void noteLocCast(const Location&, const Location&) {}
+  void noteCast(const Location&, Type) {}
+  void noteCast(const Location&, const Location&) {}
 
   // Override subtype-exprs where we want more precise representation of the
   // flow of constraints.

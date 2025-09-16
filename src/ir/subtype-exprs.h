@@ -78,18 +78,15 @@ namespace wasm {
 //
 //      void noteSubtype(Type, Type);
 //      void noteSubtype(HeapType, HeapType);
-//      void noteLocSubtype(Type, Location);
-//      void noteLocSubtype(Location, Type);
-//      void noteLocSubtype(Location, Location);
-//      void noteLocNonFlowSubtype(Location, Type);
+//      void noteSubtype(Type, Location);
+//      void noteSubtype(Location, Type);
+//      void noteSubtype(Location, Location);
+//      void noteNonFlowSubtype(Location, Type);
 //      void noteCast(HeapType, HeapType);
-//      void noteLocCast(Location, Type);
-//      void noteLocCast(Location, Location);
+//      void noteCast(Location, Type);
+//      void noteCast(Location, Location);
 //
-// Where Location is always const Location&. Note that the ones with Location
-// have "Loc" in the name, to avoid ambiguity issues with CRTP (necessary given
-// the automatic conversion from Location to Expression* that is mentioned
-// below).
+// Where Location is always const Location&.
 //
 // Note that noteCast(Type, Type) and noteCast(Type, Location) never occur and
 // do not need to be implemented.
@@ -108,76 +105,15 @@ template<typename SubType>
 struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   SubType* self() { return static_cast<SubType*>(this); }
 
-  Type getLocationType(const Location& loc) {
+  // Convenience for converting location methods to types.
+  Type getType(const Location& loc) {
     return Locations::getType(loc, *self()->getModule());
-  }
-
-  // Conversions from Locations to Expressions, for users that don't care about
-  // the generality of Locations.
-  // Seems we need a different API... for tuples. to handle individual partses vs not... or maybe just make all users use Locations?
-  void noteLocSubtype(const Location& sub, const Location& super) {
-    if (auto* subExprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
-      if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
-        self()->noteSubtype(subExprLoc->expr, superExprLoc->expr);
-      } else {
-        self()->noteSubtype(subExprLoc->expr, getLocationType(super));
-      }
-    } else {
-      if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
-        self()->noteSubtype(getLocationType(sub), superExprLoc->expr);
-      } else {
-        self()->noteSubtype(getLocationType(sub), getLocationType(super));
-      }
-    }
-  }
-  void noteLocSubtype(Type sub, const Location& super) {
-    if (auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
-      self()->noteSubtype(sub, exprLoc->expr);
-    } else {
-      self()->noteSubtype(sub, getLocationType(super));
-    }
-  }
-  void noteLocSubtype(const Location& sub, Type super) {
-    if (auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
-      self()->noteSubtype(exprLoc->expr, super);
-    } else {
-      self()->noteSubtype(getLocationType(sub), super);
-    }
-  }
-  void noteNonFlowLocSubtype(const Location& sub, Type super) {
-    if (auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
-      self()->noteNonFlowSubtype(exprLoc->expr, super);
-    } else {
-      self()->noteNonFlowSubtype(getLocationType(sub), super);
-    }
-  }
-  void noteLocCast(const Location& sub, Type super) {
-    if (auto* exprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
-      self()->noteCast(exprLoc->expr, super);
-    } else {
-      self()->noteCast(getLocationType(sub), super);
-    }
-  }
-  void noteLocCast(const Location& sub, const Location& super) {
-    if (auto* subExprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
-      if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
-        self()->noteCast(subExprLoc->expr, superExprLoc->expr);
-      } else {
-        self()->noteCast(subExprLoc->expr, getLocationType(super));
-      }
-    } else {
-      if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
-        self()->noteCast(getLocationType(sub), superExprLoc->expr);
-      } else {
-        self()->noteCast(getLocationType(sub), getLocationType(super));
-      }
-    }
   }
 
   void noteResult(Expression* value, Function* func) {
     if (value && value->type != Type::unreachable) {
       for (Index i = 0; i < value->type.size(); i++) {
-        self()->noteLocSubtype(ExpressionLocation{value, i},
+        self()->noteSubtype(ExpressionLocation{value, i},
                                ResultLocation{func, i});
       }
     }
@@ -187,8 +123,8 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     noteResult(func->body, func);
   }
   void visitGlobal(Global* global) {
-    if (global->init) {
-      self()->noteLocSubtype(Locations::get(global->init), GlobalLocation{global->name});
+    if (global->init) { // TODO: these Locations::get are hopefully not needed any more!
+      self()->noteSubtype(Locations::get(global->init), GlobalLocation{global->name});
     }
   }
   void visitElementSegment(ElementSegment* seg) {
@@ -201,34 +137,48 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     }
   }
   void visitNop(Nop* curr) {}
+
+  // Notes subtyping between two expressions, which may have tuple types. If so,
+  // we note subtyping between each of their elements.
+  void noteExpressionSubtyping(Expression* sub, Expression* super) {
+    if (sub->type == Type::unreachable || super->type == Type::unreachable) {
+      return;
+    }
+    assert(sub->type.size() == super->type.size());
+    for (Index i = 0; i < sub->type.size(); ++i) {
+      self()->noteSubtype(ExpressionLocation{sub, i},
+                          ExpressionLocation{super, i});
+    }
+  }
+
   void visitBlock(Block* curr) {
     if (!curr->list.empty()) {
-      self()->noteSubtype(curr->list.back(), curr);
+      noteExpressionSubtyping(curr->list.back(), curr);
     }
   }
   void visitIf(If* curr) {
     if (curr->ifFalse && curr->type != Type::unreachable) {
-      self()->noteSubtype(curr->ifTrue, curr);
-      self()->noteSubtype(curr->ifFalse, curr);
+      noteExpressionSubtyping(curr->ifTrue, curr);
+      noteExpressionSubtyping(curr->ifFalse, curr);
     }
   }
-  void visitLoop(Loop* curr) { self()->noteSubtype(curr->body, curr); }
+  void visitLoop(Loop* curr) { noteExpressionSubtyping(curr->body, curr); }
   void visitBreak(Break* curr) {
     if (curr->value) {
-      self()->noteSubtype(curr->value, self()->findBreakTarget(curr->name));
+      noteExpressionSubtyping(curr->value, self()->findBreakTarget(curr->name));
     }
   }
   void visitSwitch(Switch* curr) {
     if (curr->value) {
       for (auto name : BranchUtils::getUniqueTargets(curr)) {
-        self()->noteSubtype(curr->value, self()->findBreakTarget(name));
+        noteExpressionSubtyping(curr->value, self()->findBreakTarget(name));
       }
     }
   }
   template<typename T> void handleCall(T* curr, Signature sig) {
     assert(curr->operands.size() == sig.params.size());
     for (size_t i = 0, size = sig.params.size(); i < size; ++i) {
-      self()->noteSubtype(curr->operands[i], sig.params[i]);
+      self()->noteSubtype(Locations::get(curr->operands[i]), sig.params[i]);
     }
     if (curr->isReturn) {
       self()->noteSubtype(sig.results, self()->getFunction()->getResults());
@@ -258,12 +208,12 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   }
   void visitLocalGet(LocalGet* curr) {}
   void visitLocalSet(LocalSet* curr) {
-    self()->noteLocSubtype(Locations::get(curr->value),
+    self()->noteSubtype(Locations::get(curr->value),
                         LocalLocation{self()->getFunction(), curr->index});
   }
   void visitGlobalGet(GlobalGet* curr) {}
   void visitGlobalSet(GlobalSet* curr) {
-    self()->noteLocSubtype(Locations::get(curr->value),
+    self()->noteSubtype(Locations::get(curr->value),
                         GlobalLocation{curr->name});
   }
   void visitLoad(Load* curr) {}
@@ -289,8 +239,8 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   void visitUnary(Unary* curr) {}
   void visitBinary(Binary* curr) {}
   void visitSelect(Select* curr) {
-    self()->noteSubtype(curr->ifTrue, curr);
-    self()->noteSubtype(curr->ifFalse, curr);
+    noteExpressionSubtyping(curr->ifTrue, curr);
+    noteExpressionSubtyping(curr->ifFalse, curr);
   }
   void visitDrop(Drop* curr) {}
   void visitReturn(Return* curr) {
@@ -329,13 +279,13 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   }
   void visitElemDrop(ElemDrop* curr) {}
   void visitTry(Try* curr) {
-    self()->noteSubtype(curr->body, curr);
+    noteExpressionSubtyping(curr->body, curr);
     for (auto* body : curr->catchBodies) {
-      self()->noteSubtype(body, curr);
+      noteExpressionSubtyping(body, curr);
     }
   }
   void visitTryTable(TryTable* curr) {
-    self()->noteSubtype(curr->body, curr);
+    noteExpressionSubtyping(curr->body, curr);
     for (Index i = 0; i < curr->catchTags.size(); i++) {
       self()->noteSubtype(curr->sentTypes[i],
                           self()->findBreakTarget(curr->catchDests[i]));

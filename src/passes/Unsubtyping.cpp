@@ -383,16 +383,16 @@ struct Unsubtyping : Pass {
         }
         info.subtypings.insert({sub, super});
       }
-      void noteSubtype(Type sub, Expression* super) {
-        noteSubtype(sub, super->type);
+      void noteSubtype(Type sub, const Location& super) {
+        noteSubtype(sub, getType(super));
       }
-      void noteSubtype(Expression* sub, Type super) {
-        noteSubtype(sub->type, super);
+      void noteSubtype(const Location& sub, Type super) {
+        noteSubtype(getType(sub), super);
       }
-      void noteSubtype(Expression* sub, Expression* super) {
-        noteSubtype(sub->type, super->type);
+      void noteSubtype(const Location& sub, const Location& super) {
+        noteSubtype(getType(sub), getType(super));
       }
-      void noteNonFlowSubtype(Expression* sub, Type super) {
+      void noteNonFlowSubtype(const Location& sub, Type super) {
         // This expression's type must be a subtype of |super|, but the value
         // does not flow anywhere - this is a static constraint. As the value
         // does not flow, it cannot reach anywhere else, which means we need
@@ -434,14 +434,17 @@ struct Unsubtyping : Pass {
           info.subtypings.insert({src, dst});
         }
       }
-      void noteCast(Expression* src, Type dst) {
-        if (src->type.isRef() && dst.isRef()) {
-          noteCast(src->type.getHeapType(), dst.getHeapType());
+      void noteCast(const Location& src, Type dst) {
+        auto srcType = getType(src);
+        if (srcType.isRef() && dst.isRef()) {
+          noteCast(srcType.getHeapType(), dst.getHeapType());
         }
       }
-      void noteCast(Expression* src, Expression* dst) {
-        if (src->type.isRef() && dst->type.isRef()) {
-          noteCast(src->type.getHeapType(), dst->type.getHeapType());
+      void noteCast(const Location& src, const Location& dst) {
+        auto srcType = getType(src);
+        auto dstType = getType(dst);
+        if (srcType.isRef() && dstType.isRef()) {
+          noteCast(srcType.getHeapType(), dstType.getHeapType());
         }
       }
     };
