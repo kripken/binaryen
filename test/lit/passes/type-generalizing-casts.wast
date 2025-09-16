@@ -6,8 +6,9 @@
 (module
   (type $A (sub (struct)))
 
-
   ;; CHECK:      (type $0 (func (param structref) (result anyref)))
+
+  ;; CHECK:      (type $1 (func (param structref) (result i32)))
 
   ;; CHECK:      (func $local (type $0) (param $ref structref) (result anyref)
   ;; CHECK-NEXT:  (local $temp anyref)
@@ -19,6 +20,8 @@
   ;; CHECK-NEXT:  (local.get $temp)
   ;; CHECK-NEXT: )
   ;; CASTS:      (type $0 (func (param structref) (result anyref)))
+
+  ;; CASTS:      (type $1 (func (param structref) (result i32)))
 
   ;; CASTS:      (func $local (type $0) (param $ref structref) (result anyref)
   ;; CASTS-NEXT:  (local $temp structref)
@@ -62,6 +65,58 @@
       (local.get $ref)
     )
     (local.get $temp)
+  )
+
+  ;; CHECK:      (func $local-chain (type $1) (param $ref structref) (result i32)
+  ;; CHECK-NEXT:  (local $a eqref)
+  ;; CHECK-NEXT:  (local $b eqref)
+  ;; CHECK-NEXT:  (local.set $a
+  ;; CHECK-NEXT:   (ref.cast structref
+  ;; CHECK-NEXT:    (local.get $ref)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $b
+  ;; CHECK-NEXT:   (local.get $a)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (ref.eq
+  ;; CHECK-NEXT:   (local.get $a)
+  ;; CHECK-NEXT:   (local.get $b)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; CASTS:      (func $local-chain (type $1) (param $ref structref) (result i32)
+  ;; CASTS-NEXT:  (local $a structref)
+  ;; CASTS-NEXT:  (local $b structref)
+  ;; CASTS-NEXT:  (local.set $a
+  ;; CASTS-NEXT:   (ref.cast structref
+  ;; CASTS-NEXT:    (local.get $ref)
+  ;; CASTS-NEXT:   )
+  ;; CASTS-NEXT:  )
+  ;; CASTS-NEXT:  (local.set $b
+  ;; CASTS-NEXT:   (local.get $a)
+  ;; CASTS-NEXT:  )
+  ;; CASTS-NEXT:  (ref.eq
+  ;; CASTS-NEXT:   (local.get $a)
+  ;; CASTS-NEXT:   (local.get $b)
+  ;; CASTS-NEXT:  )
+  ;; CASTS-NEXT: )
+  (func $local-chain (param $ref structref) (result i32)
+    ;; In casts mode we want to generalize the cast's output to structref, as
+    ;; above. The copy between the locals force the other local to generalize as
+    ;; well (but just to structref, not all the way to eqref like normal mode).
+    (local $a (ref $A))
+    (local $b (ref $A))
+    (local.set $a
+      (ref.cast (ref $A)
+        (local.get $ref)
+      )
+    )
+    (local.set $b
+      (local.get $a)
+    )
+    (ref.eq
+      (local.get $a)
+      (local.get $b)
+    )
   )
 )
 
