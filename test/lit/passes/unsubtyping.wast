@@ -1892,3 +1892,10 @@
   )
  )
 )
+
+;; Do not error on an unreachable function result.
+(module
+ (func $test
+  (unreachable)
+ )
+)

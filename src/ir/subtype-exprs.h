@@ -114,6 +114,7 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
 
   // Conversions from Locations to Expressions, for users that don't care about
   // the generality of Locations.
+  // Seems we need a different API... for tuples. to handle individual partses vs not... or maybe just make all users use Locations?
   void noteLocSubtype(const Location& sub, const Location& super) {
     if (auto* subExprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
       if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
@@ -174,7 +175,7 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   }
 
   void noteResult(Expression* value, Function* func) {
-    if (value) {
+    if (value && value->type != Type::unreachable) {
       for (Index i = 0; i < value->type.size(); i++) {
         self()->noteLocSubtype(ExpressionLocation{value, i},
                                ResultLocation{func, i});
