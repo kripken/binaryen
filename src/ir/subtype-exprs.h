@@ -99,7 +99,8 @@ namespace wasm {
 // instead of each Location, and this class will automatically convert:
 // Locations refering to Expressions will be converted to them, and Locations
 // refering to anything else will use the type.
-
+// Example - GlobalLocation rather than the fixed type of the global etc.
+//
 // The class must also inherit from ControlFlowWalker (for findBreakTarget).
 //
 
@@ -172,10 +173,17 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     }
   }
 
-  void visitFunction(Function* func) {
-    if (func->body) {
-      self()->noteSubtype(func->body, func->getResults());
+  void noteResult(Expression* value, Function* func) {
+    if (value) {
+      for (Index i = 0; i < value->type.size(); i++) {
+        self()->noteLocSubtype(ExpressionLocation{value, i},
+                               ResultLocation{func, i});
+      }
     }
+  }
+
+  void visitFunction(Function* func) {
+    noteResult(func->body, func);
   }
   void visitGlobal(Global* global) {
     if (global->init) {
@@ -285,9 +293,7 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   }
   void visitDrop(Drop* curr) {}
   void visitReturn(Return* curr) {
-    if (curr->value) {
-      self()->noteSubtype(curr->value, self()->getFunction()->getResults());
-    }
+    noteResult(curr->value, self()->getFunction());
   }
   void visitMemorySize(MemorySize* curr) {}
   void visitMemoryGrow(MemoryGrow* curr) {}
