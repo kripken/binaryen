@@ -23,7 +23,7 @@ namespace wasm::Locations {
 
 Type getType(const Location& location, Module& wasm) {
   if (auto* loc = std::get_if<wasm::ExpressionLocation>(&location)) {
-    return loc->expr->type;
+    return loc->expr->type[loc->tupleIndex];
   } else if (auto* loc = std::get_if<wasm::DataLocation>(&location)) {
     return GCTypeUtils::getField(loc->type, loc->index)->type;
   } else if (auto* loc = std::get_if<wasm::TagLocation>(&location)) {

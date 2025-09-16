@@ -1895,6 +1895,11 @@
 
 ;; Do not error on an unreachable function result.
 (module
+ ;; CHECK:      (type $0 (func))
+
+ ;; CHECK:      (func $test (type $0)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
  (func $test
   (unreachable)
  )
