@@ -111,7 +111,8 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
     return Locations::getType(loc, *self()->getModule());
   }
 
-  // Conversions from Locations to Expressions.
+  // Conversions from Locations to Expressions, for users that don't care about
+  // the generality of Locations.
   void noteLocSubtype(const Location& sub, const Location& super) {
     if (auto* subExprLoc = std::get_if<wasm::ExpressionLocation>(&sub)) {
       if (auto* superExprLoc = std::get_if<wasm::ExpressionLocation>(&super)) {
