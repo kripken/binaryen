@@ -615,37 +615,53 @@ struct TypeGeneralizing : public Pass {
         return std::make_unique<Updater>(parent);
       }
 
-      // Given a location and its type in the IR, update the type.
-      void updateType(Location loc, Type& type) {
-        if (!type.isRef()) {
+      // Given a location and its type in the IR, update the type. We receive a
+      // vector of locations to handle tuple types.
+      void updateType(const std::vector<Location>& locs, Type& type) {
+        if (type == Type::none || type == Type::unreachable || locs.empty()) {
           return;
         }
 
-        // If there is no info at all, that means no constraints, and we can use
-        // the top type.
-        [[maybe_unused]] auto old = type;
-        auto iter = parent.locationValues.find(loc);
-        if (iter == parent.locationValues.end()) {
-          if (parent.casts) {
-            // In the casts mode we do not do unnecessary generalizations: only
-            // the things we found to help with casts, are applied.
-            return;
+        std::vector<Type> newTypes(type.size());
+        bool hasUpdate = false;
+        for (Index i = 0; i < type.size(); ++i) {
+          auto t = type[i];
+          newTypes[i] = t;
+          if (!t.isRef()) {
+            continue;
           }
-          type = type.with(type.getHeapType().getTop()).with(Nullable);
-        } else {
-          // Do not apply irrelevant types like unreachable.
-          auto newType = iter->second;
-          if (!isRelevant(newType)) {
-            return;
+
+          // If there is no info at all, that means no constraints, and we can use
+          // the top type.
+          auto iter = parent.locationValues.find(locs[i]);
+          if (iter == parent.locationValues.end()) {
+            if (parent.casts) {
+              // In the casts mode we do not do unnecessary generalizations: only
+              // the things we found to help with casts, are applied.
+              continue;
+            }
+            t = t.with(t.getHeapType().getTop()).with(Nullable);
+          } else {
+            // Do not apply irrelevant types like unreachable.
+            auto newT = iter->second;
+            if (!isRelevant(newT)) {
+              continue;
+            }
+            // We should only ever generalize types, not refine them. Unreachable
+            // code can make us try to alter a type wrongly.
+            if (!Type::isSubType(old, newT)) {
+              continue;
+            }
+            newTypes[i] = newT;
           }
-          // We should only ever generalize types, not refine them. Unreachable
-          // code can make us try to alter a type wrongly.
-          if (!Type::isSubType(old, newType)) {
-            return;
-          }
-          type = newType;
         }
-        if (DEBUG) std::cerr << "Updated " << loc << " from " << old << " to " << type << '\n';
+
+        auto newType = Type(newTypes);
+        if (!isRelevant(newType)) {
+          return;
+        }
+        if (DEBUG) std::cerr << "Updated " << loc << " from " << type << " to " << newType << '\n';
+        type = newType;
       };
 
       void visitExpression(Expression* curr) {
@@ -668,7 +684,11 @@ struct TypeGeneralizing : public Pass {
           case Expression::LocalGetId:
           case Expression::GlobalGetId:
           case Expression::RefCastId:
-            updateType(ExpressionLocation{curr, 0}, curr->type);
+            std::vector<Location> locs(curr->type.size());
+            for (Index i = 0; i < curr->type.size(); ++i) {
+              locs[i] = ExpressionLocation{curr, i};
+            }
+            updateType(locs, curr->type);
             break;
           default:
             break;
@@ -690,9 +710,11 @@ struct TypeGeneralizing : public Pass {
     updater.walkModuleCode(module);
 
     for (auto& global : module->globals) {
+      std::vector<Location> locs(curr->type.size());
       for (Index i = 0; i < global->type.size(); ++i) {
-        updater.updateType(GlobalLocation{global->name, i}, global->type[i]); // update tupe?
+        locs[i] = GlobalLocation{global->name, i};
       }
+      updateType(locs, global->type);
     }
 
     // ReFinalize to propagate changes and make things consistent. This can end
