@@ -11,6 +11,9 @@
   ;; NOP-NEXT:  (type $0 (func (param (ref $A)) (result i32)))
 
   ;; NOP:       (type $A (sub (struct (field i32))))
+  ;; YES:     
+  ;; YES-NEXT: (type $struct.0 (sub (struct)))
+
   ;; YES:      (type $0 (func (result i32)))
 
   ;; YES:      (rec
