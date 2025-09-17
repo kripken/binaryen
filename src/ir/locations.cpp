@@ -38,7 +38,7 @@ Type getType(const Location& location, Module& wasm) {
   } else if (auto* loc = std::get_if<wasm::ResultLocation>(&location)) {
     return wasm.getFunction(loc->func->name)->getResults()[loc->index];
   } else if (auto* loc = std::get_if<wasm::GlobalLocation>(&location)) {
-    return wasm.getGlobal(loc->name)->type;
+    return wasm.getGlobal(loc->name)->type[loc->tupleIndex];
   } else if (auto* loc = std::get_if<wasm::SignatureParamLocation>(&location)) {
     return loc->type.getSignature().params[loc->index];
   } else if (auto* loc =

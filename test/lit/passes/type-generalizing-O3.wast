@@ -21,7 +21,7 @@
 
   ;; TYGEN:      (type $2 (func (result i32)))
 
-  ;; TYGEN:      (global $g (mut anyref) (struct.new_default $A))
+  ;; TYGEN:      (global $g (mut (ref null $A)) (struct.new_default $A))
   (global $g (mut (ref null $A)) (struct.new $A))
 
   ;; CHECK:      (export "set" (func $set))
@@ -41,7 +41,9 @@
 
   ;; TYGEN:      (func $set (type $1) (param $0 anyref)
   ;; TYGEN-NEXT:  (global.set $g
-  ;; TYGEN-NEXT:   (local.get $0)
+  ;; TYGEN-NEXT:   (ref.cast (ref null $A)
+  ;; TYGEN-NEXT:    (local.get $0)
+  ;; TYGEN-NEXT:   )
   ;; TYGEN-NEXT:  )
   ;; TYGEN-NEXT: )
   (func $set (export "set") (param $any anyref)
