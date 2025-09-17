@@ -622,6 +622,9 @@ struct TypeGeneralizing : public Pass {
           return;
         }
 
+        // We should receive one location for each part of the type.
+        assert(locs.size() == type.size());
+
         std::vector<Type> newTypes(type.size());
         for (Index i = 0; i < type.size(); ++i) {
           auto t = type[i];
