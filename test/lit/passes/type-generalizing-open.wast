@@ -1228,3 +1228,14 @@
   )
 )
 
+;; TODOtuple update in global
+(;;
+(module
+ (type $t (sub (struct)))
+ (type $t_1 (sub $t (struct)))
+ (global $g (tuple i32 (ref null $t)) (tuple.make 2
+  (i32.const 0)
+  (struct.new_default $t_1)
+ ))
+)
+;;)

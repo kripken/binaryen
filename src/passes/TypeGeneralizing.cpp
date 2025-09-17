@@ -639,7 +639,7 @@ struct TypeGeneralizing : public Pass {
               // the things we found to help with casts, are applied.
               continue;
             }
-            t = t.with(t.getHeapType().getTop()).with(Nullable);
+            newTypes[i] = t.with(t.getHeapType().getTop()).with(Nullable);
           } else {
             // Do not apply irrelevant types like unreachable.
             auto newT = iter->second;
