@@ -364,6 +364,7 @@ struct Unsubtyping : Pass {
       Info& info;
       Collector(Info& info) : info(info) {}
       void noteSubtype(Type sub, Type super) {
+std::cout << "noteTTTsub " << sub << " : " << super << '\n'; // This prints proof of what is wrong!!1
         if (sub.isTuple()) {
           assert(super.isTuple() && sub.size() == super.size());
           for (size_t i = 0, size = sub.size(); i < size; ++i) {
@@ -377,10 +378,12 @@ struct Unsubtyping : Pass {
         noteSubtype(sub.getHeapType(), super.getHeapType());
       }
       void noteSubtype(HeapType sub, HeapType super) {
+std::cout << "noteHTsub " << sub << " : " << super << '\n';
         assert(HeapType::isSubType(sub, super));
         if (sub == super || sub.isBottom()) {
           return;
         }
+std::cout << "  insert " << sub << " : " << super << '\n';
         info.subtypings.insert({sub, super});
       }
       void noteSubtype(Type sub, const Location& super) {

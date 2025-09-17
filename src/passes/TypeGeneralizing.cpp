@@ -116,6 +116,14 @@ struct CollectedFuncInfo {
 // Only reference types can be generalized; nothing else is relevant for this
 // pass.
 bool isRelevant(Type type) {
+  if (type.isTuple()) {
+    for (auto t : type) {
+      if (isRelevant(t)) {
+        return true;
+      }
+    }
+    return false;
+  }
   return type.isRef();
 }
 
@@ -295,8 +303,10 @@ struct Collector
   void visitGlobalGet(GlobalGet* curr) {
     // global.get's type must match the global type.
     if (isRelevant(curr->type)) {
-      enforceEquality(GlobalLocation{curr->name},
-                      Locations::get(curr));
+      for (Index i = 0; i < curr->type.size(); ++i) {
+        enforceEquality(GlobalLocation{curr->name, i},
+                        ExpressionLocation{curr, i});
+      }
     }
   }
 
@@ -393,14 +403,19 @@ struct TypeGeneralizing : public Pass {
     for (auto& exp : module->exports) {
       auto name = exp->getInternalName();
       if (exp->kind == ExternalKind::Global) {
-        moduleCollector.root(GlobalLocation{*name}, module->getGlobal(*name)->type);
+        auto type = module->getGlobal(*name)->type;
+        for (Index i = 0; i < type.size(); ++i) {
+          moduleCollector.root(GlobalLocation{*name, i}, type[i]);
+        }
       }
     }
 
     // Add roots for imports. TODO: not in closed world?
     for (auto& global : module->globals) {
       if (global->imported()) {
-        moduleCollector.root(GlobalLocation{global->name}, global->type);
+        for (Index i = 0; i < global->type.size(); ++i) {
+          moduleCollector.root(GlobalLocation{global->name, i}, global->type[i]);
+        }
       }
     }
 
@@ -675,7 +690,9 @@ struct TypeGeneralizing : public Pass {
     updater.walkModuleCode(module);
 
     for (auto& global : module->globals) {
-      updater.updateType(GlobalLocation{global->name}, global->type);
+      for (Index i = 0; i < global->type.size(); ++i) {
+        updater.updateType(GlobalLocation{global->name, i}, global->type[i]); // update tupe?
+      }
     }
 
     // ReFinalize to propagate changes and make things consistent. This can end

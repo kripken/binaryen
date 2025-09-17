@@ -78,10 +78,11 @@ struct ResultLocation {
 };
 
 // The location of a global in the module.
-struct GlobalLocation {
+struct GlobalLocation { // Need tuple global...
   Name name;
+  Index tupleIndex;
   bool operator==(const GlobalLocation& other) const {
-    return name == other.name;
+    return name == other.name && tupleIndex == other.tupleIndex;
   }
 };
 
@@ -265,7 +266,8 @@ template<> struct hash<wasm::ResultLocation> {
 
 template<> struct hash<wasm::GlobalLocation> {
   size_t operator()(const wasm::GlobalLocation& loc) const {
-    return std::hash<wasm::Name>{}(loc.name);
+    return std::hash<std::pair<wasm::Name, wasm::Index>>{}(
+      {loc.name, loc.tupleIndex});
   }
 };
 

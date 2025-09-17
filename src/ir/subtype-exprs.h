@@ -124,7 +124,10 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   }
   void visitGlobal(Global* global) {
     if (global->init) { // TODO: these Locations::get are hopefully not needed any more!
-      self()->noteSubtype(Locations::get(global->init), GlobalLocation{global->name});
+      for (Index i = 0; i < global->init->type.size(); ++i) {
+        self()->noteSubtype(ExpressionLocation{global->init, i},
+                            GlobalLocation{global->name, i});
+      }
     }
   }
   void visitElementSegment(ElementSegment* seg) {
@@ -213,8 +216,10 @@ struct SubtypingDiscoverer : public OverriddenVisitor<SubType> {
   }
   void visitGlobalGet(GlobalGet* curr) {}
   void visitGlobalSet(GlobalSet* curr) {
-    self()->noteSubtype(Locations::get(curr->value),
-                        GlobalLocation{curr->name});
+    for (Index i = 0; i < curr->value->type.size(); ++i) {
+      self()->noteSubtype(ExpressionLocation{curr->value, i},
+                          GlobalLocation{curr->name, i});
+    }
   }
   void visitLoad(Load* curr) {}
   void visitStore(Store* curr) {}
