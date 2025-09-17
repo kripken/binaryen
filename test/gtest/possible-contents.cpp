@@ -274,10 +274,10 @@ TEST_F(PossibleContentsTest, TestOracleMinimal) {
   ContentOracle oracle(*wasm, options);
 
   // This will be a null constant.
-  EXPECT_TRUE(oracle.getContents(GlobalLocation{"null"}).isNull());
+  EXPECT_TRUE(oracle.getContents(GlobalLocation{"null", 0}).isNull());
 
   // This will be 42.
-  EXPECT_EQ(oracle.getContents(GlobalLocation{"something"}).getLiteral(),
+  EXPECT_EQ(oracle.getContents(GlobalLocation{"something", 0}).getLiteral(),
             Literal(int32_t(42)));
 }
 

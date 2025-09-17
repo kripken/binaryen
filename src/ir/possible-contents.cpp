@@ -742,13 +742,14 @@ struct InfoCollector
       //        and we should loop here.
       assert(!curr->type.isTuple());
       info.links.push_back(
-        {GlobalLocation{curr->name}, ExpressionLocation{curr, 0}});
+        {GlobalLocation{curr->name, 0}, ExpressionLocation{curr, 0}});
     }
   }
   void visitGlobalSet(GlobalSet* curr) {
     if (isRelevant(curr->value->type)) {
+      assert(!curr->value->type.isTuple());
       info.links.push_back(
-        {ExpressionLocation{curr->value, 0}, GlobalLocation{curr->name}});
+        {ExpressionLocation{curr->value, 0}, GlobalLocation{curr->name, 0}});
     }
   }
 
@@ -2278,14 +2279,16 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   for (auto& global : wasm.globals) {
     if (global->imported()) {
       // Imports are unknown values.
-      finder.addRoot(GlobalLocation{global->name},
+      assert(!global->type.isTuple());
+      finder.addRoot(GlobalLocation{global->name, 0},
                      PossibleContents::fromType(global->type));
       continue;
     }
     auto* init = global->init;
     if (finder.isRelevant(init->type)) {
+      assert(!global->type.isTuple());
       globalInfo.links.push_back(
-        {ExpressionLocation{init, 0}, GlobalLocation{global->name}});
+        {ExpressionLocation{init, 0}, GlobalLocation{global->name, 0}});
     }
   }
 
@@ -2376,7 +2379,8 @@ Flower::Flower(Module& wasm, const PassOptions& options)
       auto name = *ex->getInternalName();
       auto* global = wasm.getGlobal(name);
       if (global->mutable_) {
-        roots[GlobalLocation{name}] = PossibleContents::fromType(global->type);
+        assert(!global->type.isTuple());
+        roots[GlobalLocation{name, 0}] = PossibleContents::fromType(global->type);
       }
     }
   }

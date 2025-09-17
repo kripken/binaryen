@@ -623,7 +623,6 @@ struct TypeGeneralizing : public Pass {
         }
 
         std::vector<Type> newTypes(type.size());
-        bool hasUpdate = false;
         for (Index i = 0; i < type.size(); ++i) {
           auto t = type[i];
           newTypes[i] = t;
@@ -649,7 +648,7 @@ struct TypeGeneralizing : public Pass {
             }
             // We should only ever generalize types, not refine them. Unreachable
             // code can make us try to alter a type wrongly.
-            if (!Type::isSubType(old, newT)) {
+            if (!Type::isSubType(t, newT)) {
               continue;
             }
             newTypes[i] = newT;
@@ -660,7 +659,7 @@ struct TypeGeneralizing : public Pass {
         if (!isRelevant(newType)) {
           return;
         }
-        if (DEBUG) std::cerr << "Updated " << loc << " from " << type << " to " << newType << '\n';
+        if (DEBUG) std::cerr << "Updated " << locs[0] << " from " << type << " to " << newType << '\n';
         type = newType;
       };
 
@@ -683,13 +682,14 @@ struct TypeGeneralizing : public Pass {
           // Things we optimize.
           case Expression::LocalGetId:
           case Expression::GlobalGetId:
-          case Expression::RefCastId:
+          case Expression::RefCastId: {
             std::vector<Location> locs(curr->type.size());
             for (Index i = 0; i < curr->type.size(); ++i) {
               locs[i] = ExpressionLocation{curr, i};
             }
             updateType(locs, curr->type);
             break;
+          }
           default:
             break;
         }
@@ -699,7 +699,7 @@ struct TypeGeneralizing : public Pass {
         // Apply types to the vars (but not params).
         auto base = func->getVarIndexBase();
         for (Index i = 0; i < func->getNumVars(); ++i) {
-          updateType(LocalLocation{func, base + i}, func->vars[i]);
+          updateType({LocalLocation{func, base + i}}, func->vars[i]);
         }
       }
     };
@@ -710,11 +710,11 @@ struct TypeGeneralizing : public Pass {
     updater.walkModuleCode(module);
 
     for (auto& global : module->globals) {
-      std::vector<Location> locs(curr->type.size());
+      std::vector<Location> locs(global->type.size());
       for (Index i = 0; i < global->type.size(); ++i) {
         locs[i] = GlobalLocation{global->name, i};
       }
-      updateType(locs, global->type);
+      updater.updateType(locs, global->type);
     }
 
     // ReFinalize to propagate changes and make things consistent. This can end
