@@ -63,6 +63,7 @@ struct ParamLocation {
 struct LocalLocation {
   Function* func;
   Index index;
+  // need tupleIndex...
   bool operator==(const LocalLocation& other) const {
     return func == other.func && index == other.index;
   }
