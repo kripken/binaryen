@@ -394,6 +394,36 @@ struct AbstractTypeRefining : public Pass {
         }
       }
 
+      // If we optimize away a descriptor type, then we must fix up any
+      // ref.get_desc of it, as ReFinalize would fix us up to return it.
+      void visitRefGetDesc(RefGetDesc* curr) {
+        auto optimized = getOptimized(curr->type);
+        if (!optimized) {
+          return;
+        }
+
+        // We are optimizing the descriptor to a subtype.
+        auto subDescriptor = *optimized;
+
+        Builder builder(*getModule());
+        if (curr->type.isExact() ||
+            subDescriptor.isMaybeShared(HeapType::none)) {
+          // This is exact, so we can ignore subtypes, or there is no subtype to
+          // optimize to. In this case it must trap.
+          replaceCurrent(builder.makeSequence(builder.makeDrop(curr->ref),
+                                              builder.makeUnreachable()));
+        } else {
+          // The descriptor is abstract, but it has a subtype that is not
+          // (which we want to optimize to). We know this will only succeed if
+          // we receive the subtype of the described type, so that that
+          // descriptor is fetched. Add a cast so that we validate.
+          auto subDescribed = subDescriptor.getDescribedType();
+          assert(subDescribed);
+          curr->ref =
+            builder.makeRefCast(curr->ref, curr->ref->type.with(*subDescribed));
+        }
+      }
+
       void visitBrOn(BrOn* curr) {
         if (curr->op == BrOnNull || curr->op == BrOnNonNull) {
           return;

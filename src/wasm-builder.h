@@ -44,7 +44,7 @@ public:
   // make* functions create an expression instance.
 
   static std::unique_ptr<Function> makeFunction(Name name,
-                                                HeapType type,
+                                                Type type,
                                                 std::vector<Type>&& vars,
                                                 Expression* body = nullptr) {
     assert(type.isSignature());
@@ -57,8 +57,16 @@ public:
   }
 
   static std::unique_ptr<Function> makeFunction(Name name,
-                                                std::vector<NameType>&& params,
                                                 HeapType type,
+                                                std::vector<Type>&& vars,
+                                                Expression* body = nullptr) {
+    return makeFunction(
+      name, Type(type, NonNullable, Exact), std::move(vars), body);
+  }
+
+  static std::unique_ptr<Function> makeFunction(Name name,
+                                                std::vector<NameType>&& params,
+                                                Type type,
                                                 std::vector<NameType>&& vars,
                                                 Expression* body = nullptr) {
     assert(type.isSignature());
@@ -80,6 +88,18 @@ public:
       func->localNames[index] = var.name;
     }
     return func;
+  }
+
+  static std::unique_ptr<Function> makeFunction(Name name,
+                                                std::vector<NameType>&& params,
+                                                HeapType type,
+                                                std::vector<NameType>&& vars,
+                                                Expression* body = nullptr) {
+    return makeFunction(name,
+                        std::move(params),
+                        Type(type, NonNullable, Exact),
+                        std::move(vars),
+                        body);
   }
 
   static std::unique_ptr<Table> makeTable(Name name,
@@ -680,10 +700,19 @@ public:
     ret->finalize();
     return ret;
   }
+  RefFunc* makeRefFunc(Name func, Type type) {
+    auto* ret = wasm.allocator.alloc<RefFunc>();
+    ret->func = func;
+    // Just apply the type, trusting it completely. This is safe to do even in
+    // the middle of an operation (where the Module is in the process of being
+    // altered, and should not be read from, which finalize normally does).
+    ret->type = type;
+    return ret;
+  }
   RefFunc* makeRefFunc(Name func, HeapType heapType) {
     auto* ret = wasm.allocator.alloc<RefFunc>();
     ret->func = func;
-    ret->finalize(heapType);
+    ret->finalize(heapType, wasm);
     return ret;
   }
   RefEq* makeRefEq(Expression* left, Expression* right) {
@@ -1389,7 +1418,7 @@ public:
     Signature sig = func->getSig();
     std::vector<Type> params(sig.params.begin(), sig.params.end());
     params.push_back(type);
-    func->type = Signature(Type(params), sig.results);
+    func->type = func->type.with(Signature(Type(params), sig.results));
     Index index = func->localNames.size();
     func->localIndices[name] = index;
     func->localNames[index] = name;

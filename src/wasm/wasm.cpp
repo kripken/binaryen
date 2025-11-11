@@ -827,8 +827,10 @@ void RefFunc::finalize() {
   assert(type.isSignature());
 }
 
-void RefFunc::finalize(HeapType heapType) {
-  type = Type(heapType, NonNullable, Exact);
+void RefFunc::finalize(HeapType heapType, Module& wasm) {
+  type = Type(heapType,
+              NonNullable,
+              wasm.getFunction(func)->imported() ? Inexact : Exact);
 }
 
 void RefEq::finalize() {
@@ -1075,7 +1077,7 @@ void RefCast::finalize() {
       return;
     }
     // The cast heap type and exactness is determined by the descriptor's type.
-    // Its nullability can be improved if the input valus is non-nullable.
+    // Its nullability can be improved if the input value is non-nullable.
     auto heapType = desc->type.getHeapType().getDescribedType();
     assert(heapType);
     auto exactness = desc->type.getExactness();

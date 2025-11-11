@@ -965,7 +965,7 @@ void FunctionValidator::visitCall(Call* curr) {
   if (!shouldBeTrue(!!target, curr, "call target must exist")) {
     return;
   }
-  validateCallParamsAndResult(curr, target->type);
+  validateCallParamsAndResult(curr, target->type.getHeapType());
 
   if (Intrinsics(*getModule()).isCallWithoutEffects(curr)) {
     // call.without.effects has the specific form of the last argument being a
@@ -2385,11 +2385,10 @@ void FunctionValidator::visitRefFunc(RefFunc* curr) {
   if (!shouldBeTrue(!!func, curr, "function argument of ref.func must exist")) {
     return;
   }
-  shouldBeTrue(func->type == curr->type.getHeapType(),
-               curr,
-               "function reference type must match referenced function type");
-  shouldBeTrue(
-    curr->type.isExact(), curr, "function reference should be exact");
+  shouldBeEqual(curr->type,
+                func->type,
+                curr,
+                "function reference type must match referenced function type");
 }
 
 void FunctionValidator::visitRefEq(RefEq* curr) {
@@ -2910,6 +2909,10 @@ void FunctionValidator::visitI31Get(I31Get* curr) {
 void FunctionValidator::visitRefTest(RefTest* curr) {
   shouldBeTrue(
     getModule()->features.hasGC(), curr, "ref.test requires gc [--enable-gc]");
+
+  shouldBeTrue(
+    curr->castType.isCastable(), curr, "ref.test cannot cast to invalid type");
+
   if (curr->ref->type == Type::unreachable) {
     return;
   }
@@ -2939,11 +2942,26 @@ void FunctionValidator::visitRefTest(RefTest* curr) {
                  "ref.test of exact type requires custom descriptors "
                  "[--enable-custom-descriptors]");
   }
+
+  shouldBeTrue(
+    curr->ref->type.isCastable(), curr, "ref.test cannot cast invalid type");
 }
 
 void FunctionValidator::visitRefCast(RefCast* curr) {
   shouldBeTrue(
     getModule()->features.hasGC(), curr, "ref.cast requires gc [--enable-gc]");
+
+  // Require descriptors to be valid even if the ref is unreachable.
+  if (curr->desc && curr->desc->type != Type::unreachable) {
+    auto descType = curr->desc->type;
+    bool isNull = descType.isNull();
+    bool isDescriptor =
+      descType.isRef() && descType.getHeapType().getDescribedType();
+    shouldBeTrue(isNull || isDescriptor,
+                 curr,
+                 "ref.cast_desc descriptor must be a descriptor reference");
+  }
+
   if (curr->type == Type::unreachable) {
     return;
   }
@@ -2987,6 +3005,11 @@ void FunctionValidator::visitRefCast(RefCast* curr) {
                  "[--enable-custom-descriptors]");
   }
 
+  shouldBeTrue(
+    curr->ref->type.isCastable(), curr, "ref.cast cannot cast invalid type");
+  shouldBeTrue(
+    curr->type.isCastable(), curr, "ref.cast cannot cast to invalid type");
+
   if (!curr->desc) {
     return;
   }
@@ -3006,11 +3029,7 @@ void FunctionValidator::visitRefCast(RefCast* curr) {
   }
 
   auto described = descriptor.getDescribedType();
-  if (!shouldBeTrue(bool(described),
-                    curr,
-                    "ref.cast_desc descriptor should have a described type")) {
-    return;
-  }
+  assert(described && "already checked descriptor");
   shouldBeEqual(*described,
                 curr->type.getHeapType(),
                 curr,
@@ -3114,6 +3133,10 @@ void FunctionValidator::visitBrOn(BrOn* curr) {
                      "br_on_cast* to exact type requires custom descriptors "
                      "[--enable-custom-descriptors]");
       }
+      shouldBeTrue(
+        curr->ref->type.isCastable(), curr, "br_on cannot cast invalid type");
+      shouldBeTrue(
+        curr->castType.isCastable(), curr, "br_on cannot cast to invalid type");
       break;
     }
   }
@@ -4135,6 +4158,14 @@ void FunctionValidator::visitFunction(Function* curr) {
   shouldBeTrue(features <= getModule()->features,
                curr->name,
                "all used types should be allowed");
+
+  if (curr->imported()) {
+    shouldBeTrue(
+      !curr->type.isExact(), curr->name, "imported function should be inexact");
+  } else {
+    shouldBeTrue(
+      curr->type.isExact(), curr->name, "defined function should be exact");
+  }
 
   // validate optional local names
   std::unordered_set<Name> seen;

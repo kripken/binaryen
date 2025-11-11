@@ -27,6 +27,7 @@
 #include "ir/module-utils.h"
 #include "ir/possible-contents.h"
 #include "support/insert_ordered.h"
+#include "wasm-type.h"
 #include "wasm.h"
 
 namespace std {
@@ -208,9 +209,9 @@ void PossibleContents::intersect(const PossibleContents& other) {
   // Note the global's information, if we started as a global. In that case, the
   // code below will refine our type but we can remain a global, which we will
   // accomplish by restoring our global status at the end.
-  std::optional<Name> globalName;
+  std::optional<GlobalInfo> global;
   if (isGlobal()) {
-    globalName = getGlobal();
+    global = getGlobal();
   }
 
   if (hasFullCone() && other.hasFullCone()) {
@@ -230,9 +231,9 @@ void PossibleContents::intersect(const PossibleContents& other) {
     value = ConeType{newType, std::min(newDepth, otherNewDepth)};
   }
 
-  if (globalName) {
+  if (global) {
     // Restore the global but keep the new and refined type.
-    value = GlobalInfo{*globalName, getType()};
+    value = GlobalInfo{global->name, global->kind, getType()};
   }
 }
 
@@ -631,9 +632,17 @@ struct InfoCollector
     addRoot(curr);
   }
   void visitRefFunc(RefFunc* curr) {
-    addRoot(curr,
-            PossibleContents::literal(
-              Literal::makeFunc(curr->func, curr->type.getHeapType())));
+    if (!getModule()->getFunction(curr->func)->imported()) {
+      // This is not imported, so we know the exact function literal.
+      addRoot(
+        curr,
+        PossibleContents::literal(Literal::makeFunc(curr->func, *getModule())));
+    } else {
+      // This is imported, so it is effectively a global.
+      addRoot(curr,
+              PossibleContents::global(
+                curr->func, ExternalKind::Function, curr->type));
+    }
 
     // The presence of a RefFunc indicates the function may be called
     // indirectly, so add the relevant connections for this particular function.
@@ -641,12 +650,13 @@ struct InfoCollector
     // actually have a RefFunc.
     auto* func = getModule()->getFunction(curr->func);
     for (Index i = 0; i < func->getParams().size(); i++) {
-      info.links.push_back(
-        {SignatureParamLocation{func->type, i}, ParamLocation{func, i}});
+      info.links.push_back({SignatureParamLocation{func->type.getHeapType(), i},
+                            ParamLocation{func, i}});
     }
     for (Index i = 0; i < func->getResults().size(); i++) {
       info.links.push_back(
-        {ResultLocation{func, i}, SignatureResultLocation{func->type, i}});
+        {ResultLocation{func, i},
+         SignatureResultLocation{func->type.getHeapType(), i}});
     }
 
     if (!options.closedWorld) {
@@ -1750,9 +1760,9 @@ void TNHOracle::infer() {
         continue;
       }
       while (1) {
-        typeFunctions[type].push_back(func.get());
-        if (auto super = type.getDeclaredSuperType()) {
-          type = *super;
+        typeFunctions[type.getHeapType()].push_back(func.get());
+        if (auto super = type.getHeapType().getDeclaredSuperType()) {
+          type = type.with(*super);
         } else {
           break;
         }
@@ -1850,8 +1860,8 @@ void TNHOracle::infer() {
         //       as other opts will make this call direct later, after which a
         //       lot of other optimizations become possible anyhow.
         auto target = possibleTargets[0]->name;
-        info.inferences[call->target] = PossibleContents::literal(
-          Literal::makeFunc(target, wasm.getFunction(target)->type));
+        info.inferences[call->target] =
+          PossibleContents::literal(Literal::makeFunc(target, wasm));
         continue;
       }
 
@@ -2405,6 +2415,27 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     }
   }
 
+  // In open world, public heap types may be written to from the outside.
+  if (!options.closedWorld) {
+    for (auto type : ModuleUtils::getPublicHeapTypes(wasm)) {
+      if (type.isStruct()) {
+        auto& fields = type.getStruct().fields;
+        for (Index i = 0; i < fields.size(); i++) {
+          roots[DataLocation{type, i}] =
+            PossibleContents::fromType(fields[i].type);
+        }
+        if (auto desc = type.getDescriptorType()) {
+          auto descType = Type(*desc, Nullable, Inexact);
+          roots[DataLocation{type, DataLocation::DescriptorIndex}] =
+            PossibleContents::fromType(descType);
+        }
+      } else if (type.isArray()) {
+        roots[DataLocation{type, 0}] =
+          PossibleContents::fromType(type.getArray().element.type);
+      }
+    }
+  }
+
 #ifdef POSSIBLE_CONTENTS_DEBUG
   std::cout << "struct phase\n";
 #endif
@@ -2828,7 +2859,8 @@ void Flower::filterGlobalContents(PossibleContents& contents,
     // a cone/exact type *and* that something is equal to a global, in some
     // cases. See https://github.com/WebAssembly/binaryen/pull/5083
     if (contents.isMany() || contents.isConeType()) {
-      contents = PossibleContents::global(global->name, global->type);
+      contents = PossibleContents::global(
+        global->name, ExternalKind::Global, global->type);
 
       // TODO: We could do better here, to set global->init->type instead of
       //       global->type, or even the contents.getType() - either of those
