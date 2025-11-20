@@ -233,6 +233,9 @@ struct DAE : public Pass {
   // and then use that possibly-over-approximating data.
   std::vector<std::vector<Name>> callers;
 
+  // YODO comment
+  std::unordered_set<Function*> worthOptimizing;
+
   bool iteration(Module* module, DAEFunctionInfoMap& infoMap) {
     allDroppedCalls.clear();
 
@@ -301,7 +304,7 @@ struct DAE : public Pass {
     }
 
     // Track which functions we changed that are worth re-optimizing at the end.
-    std::unordered_set<Function*> worthOptimizing;
+    std::unordered_set<Function*> newWorthOptimizing;
 
     // If we refine return types then we will need to do more type updating
     // at the end.
@@ -354,7 +357,7 @@ struct DAE : public Pass {
       // where possible.
       auto name = func->name;
       if (refineArgumentTypes(func, calls, module, infoMap[name])) {
-        worthOptimizing.insert(func);
+        newWorthOptimizing.insert(func);
         markStale(func->name);
       }
       // Refine return types as well.
@@ -402,7 +405,7 @@ struct DAE : public Pass {
         {func}, infoMap[name].unusedParams, calls, {}, module, getPassRunner());
       if (!removedIndexes.empty()) {
         // Success!
-        worthOptimizing.insert(func);
+        newWorthOptimizing.insert(func);
         markStale(name);
         markCallersStale(index);
       }
@@ -414,7 +417,7 @@ struct DAE : public Pass {
     // that we can't do this if we changed anything so far, as we may have
     // modified allCalls (we can't modify a call site twice in one iteration,
     // once to remove a param, once to drop the return value).
-    if (worthOptimizing.empty()) {
+    if (newWorthOptimizing.empty()) {
       for (Index index = 0; index < numFunctions; index++) {
         auto& func = module->functions[index];
         if (func->imported()) {
@@ -447,12 +450,12 @@ struct DAE : public Pass {
         if (removeReturnValue(func.get(), calls, module)) {
           // We should optimize the callers.
           for (auto caller : callers[index]) {
-            worthOptimizing.insert(module->getFunction(caller));
+            newWorthOptimizing.insert(module->getFunction(caller));
           }
         }
         // TODO Removing a drop may also open optimization opportunities in the
         // callers.
-        worthOptimizing.insert(func.get());
+        newWorthOptimizing.insert(func.get());
         markStale(name);
         markCallersStale(index);
       }
@@ -463,12 +466,21 @@ struct DAE : public Pass {
           markStale(func->name);
         });
     }
-    if (optimize && !worthOptimizing.empty()) {
-      OptUtils::optimizeAfterInlining(worthOptimizing, module, getPassRunner());
+    auto didWork = !newWorthOptimizing.empty() || refinedReturnTypes ||
+                   !callTargetsToLocalize.empty();
+    if (optimize) {
+      // Accumulate the newly-worth-optimizing functions.
+      worthOptimizing.insert(newWorthOptimizing.begin(),
+                             newWorthOptimizing.end());
+      // If we did no work, and we have things worth optimizing, optimize them
+      // now - that may open up more optimization opportunities.
+      if (!didWork && !worthOptimizing.empty()) {
+        OptUtils::optimizeAfterInlining(worthOptimizing, module, getPassRunner());
+        // This counts as work, telling the caller to try another iteration.
+        didWork = true;
+      }
     }
-
-    return !worthOptimizing.empty() || refinedReturnTypes ||
-           !callTargetsToLocalize.empty();
+    return didWork;
   }
 
 private:
