@@ -476,6 +476,7 @@ struct DAE : public Pass {
       // now - that may open up more optimization opportunities.
       if (!didWork && !worthOptimizing.empty()) {
         OptUtils::optimizeAfterInlining(worthOptimizing, module, getPassRunner());
+        worthOptimizing.clear();
         // This counts as work, telling the caller to try another iteration.
         didWork = true;
       }
