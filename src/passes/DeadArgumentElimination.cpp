@@ -234,6 +234,7 @@ struct DAE : public Pass {
   std::vector<std::vector<Name>> callers;
 
   // YODO comment
+  // helps most when many iters.. which is when we are slow and need halp
   std::unordered_set<Function*> worthOptimizing;
 
   bool iteration(Module* module, DAEFunctionInfoMap& infoMap) {
@@ -476,6 +477,9 @@ struct DAE : public Pass {
       // now - that may open up more optimization opportunities.
       if (!didWork && !worthOptimizing.empty()) {
         OptUtils::optimizeAfterInlining(worthOptimizing, module, getPassRunner());
+        for (auto* func : worthOptimizing) {
+          markStale(func->name);
+        }
         worthOptimizing.clear();
         // This counts as work, telling the caller to try another iteration.
         didWork = true;
