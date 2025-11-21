@@ -195,6 +195,12 @@ struct DAE : public Pass {
   // Map of function names to indexes. This lets us use indexes below for speed.
   std::unordered_map<Name, Index> indexes;
 
+  // TODO comment and move down
+  // rare to need updating, most ops do not remove or add calls. we modify calls
+  // but keep them 99% of the time
+  // remove params with call.without effects - such a call might br removed... but type-safe and logic-safe..?
+  std::vector<std::vector<Call*>> allCalls;
+
   void run(Module* module) override {
     DAEFunctionInfoMap infoMap;
     // Ensure all entries exist so the parallel threads don't modify the data
@@ -261,15 +267,21 @@ struct DAE : public Pass {
     scanner.run(getPassRunner(), module);
 
     // Combine all the info from the scan.
-    std::vector<std::vector<Call*>> allCalls(numFunctions);
+
+    if (allCalls.empty()) {
+      allCalls.resize(numFunctions);
+      for (auto& [func, info] : infoMap) {
+        for (auto& [name, calls] : info.calls) {
+          auto& allCallsToName = allCalls[indexes[name]];
+          allCallsToName.insert(allCallsToName.end(), calls.begin(), calls.end());
+        }
+      }
+    }
+
     std::vector<bool> tailCallees(numFunctions);
     std::vector<bool> hasUnseenCalls(numFunctions);
 
-    for (auto& [func, info] : infoMap) {
-      for (auto& [name, calls] : info.calls) {
-        auto& allCallsToName = allCalls[indexes[name]];
-        allCallsToName.insert(allCallsToName.end(), calls.begin(), calls.end());
-      }
+    for (auto& [_, info] : infoMap) {
       for (auto& callee : info.tailCallees) {
         tailCallees[indexes[callee]] = true;
       }
@@ -462,10 +474,15 @@ struct DAE : public Pass {
       }
     }
     if (!callTargetsToLocalize.empty()) {
+      std::atomic<bool> localized = false;
       ParamUtils::localizeCallsTo(
         callTargetsToLocalize, *module, getPassRunner(), [&](Function* func) {
           markStale(func->name);
+          localized = true;
         });
+      if (localized) {
+        allCalls.clear(); // XXX
+      }
     }
     auto didWork = !newWorthOptimizing.empty() || refinedReturnTypes ||
                    !callTargetsToLocalize.empty();
@@ -481,6 +498,9 @@ struct DAE : public Pass {
           markStale(func->name);
         }
         worthOptimizing.clear();
+        // Optimizations might remove or in theory even add calls, so clear
+        // |allCalls| to force recomputation.
+        allCalls.clear();
         // This counts as work, telling the caller to try another iteration.
         didWork = true;
       }
