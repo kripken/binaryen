@@ -84,6 +84,9 @@ struct DAEFunctionInfo {
   // This is built up in parallel in each function, and combined at the end.
   std::unordered_set<Name> hasUnseenCalls;
 
+  // LUB of the results.
+  LUBFinder resultsLUB;
+
   // Clears all data, which marks us as stale and in need of recomputation.
   void clear() { *this = DAEFunctionInfo(); }
 
@@ -167,11 +170,12 @@ struct DAEScanner
     info->clear();
     info->stale = false;
 
-    auto numParams = func->getNumParams();
     PostWalker<DAEScanner, Visitor<DAEScanner>>::doWalkFunction(func);
+
     // If there are params, check if they are used.
     // TODO: This work could be avoided if we cannot optimize for other reasons.
     //       That would require deferring this to later and checking that.
+    auto numParams = func->getNumParams();
     if (numParams > 0) {
       auto usedParams = ParamUtils::getUsedParams(func, getModule());
       for (Index i = 0; i < numParams; i++) {
@@ -180,6 +184,9 @@ struct DAEScanner
         }
       }
     }
+
+    // Compute results LUB. TODO: This could be done during the walk perhaps.
+    info->resultsLUB = LUB::getResultsLUB(func, *getModule());
   }
 };
 
@@ -370,12 +377,13 @@ struct DAE : public Pass {
       // affect whether an argument is used or not, it just refines the type
       // where possible.
       auto name = func->name;
-      if (refineArgumentTypes(func, calls, module, infoMap[name])) {
+      auto& info = infoMap[name];
+      if (refineArgumentTypes(func, calls, module, info)) {
         worthOptimizing.insert(func);
         markStale(func->name);
       }
       // Refine return types as well.
-      if (refineReturnTypes(func, calls, module)) {
+      if (refineReturnTypes(func, calls, info.resultsLUB)) {
         refinedReturnTypes = true;
         markStale(name);
         markCallersStale(index);
@@ -385,7 +393,7 @@ struct DAE : public Pass {
       for (auto i : optimizedIndexes) {
         // Mark it as unused, which we know it now is (no point to re-scan just
         // for that).
-        infoMap[name].unusedParams.insert(i);
+        info.unusedParams.insert(i);
       }
       if (!optimizedIndexes.empty()) {
         markStale(func->name);
@@ -634,8 +642,7 @@ private:
   //       the middle, etc.
   bool refineReturnTypes(Function* func,
                          const std::vector<Call*>& calls,
-                         Module* module) {
-    auto lub = LUB::getResultsLUB(func, *module);
+                         const LUBFinder& lub) {
     if (!lub.noted()) {
       return false;
     }

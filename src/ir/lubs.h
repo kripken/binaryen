@@ -36,10 +36,10 @@ struct LUBFinder {
   void note(Type type) { lub = Type::getLeastUpperBound(lub, type); }
 
   // Returns whether we noted any (reachable) value.
-  bool noted() { return lub != Type::unreachable; }
+  bool noted() const { return lub != Type::unreachable; }
 
   // Returns the lub.
-  Type getLUB() { return lub; }
+  Type getLUB() const { return lub; }
 
   // Combines the information in another LUBFinder into this one, and returns
   // whether we changed anything.
