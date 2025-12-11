@@ -95,12 +95,14 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
 
   for (auto& table : wasm.tables) {
     if (table->imported()) {
+      tables[table->name].public_ = true;
       tables[table->name].mayBeModified = true;
     }
   }
 
   for (auto& ex : wasm.exports) {
     if (ex->kind == ExternalKind::Table) {
+      tables[*ex->getInternalName()].public_ = true;
       tables[*ex->getInternalName()].mayBeModified = true;
     }
   }

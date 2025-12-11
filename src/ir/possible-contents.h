@@ -533,6 +533,21 @@ struct TypeLocation {
   }
 };
 
+// A location for an indirect call, used when we know it can only read from the
+// known data in the table. If, instead, the table is mutable (say, it is
+// exported) then instead we use SignatureParam|ResultLocation.
+struct CallIndirectResultLocation {
+  // The table being called.
+  Name table;
+  // The heap type it is being called with.
+  HeapType type;
+  // XXX complexity
+  Index index;
+  bool operator==(const ConeReadLocation& other) const {
+    return type == other.type && depth == other.depth && index == other.index;
+  }
+};
+
 // A special type of location that does not refer to something concrete in the
 // wasm, but is used to optimize the graph. A "cone read" is a struct.get or
 // array.get of a type that is not exact, so it can read from either that type

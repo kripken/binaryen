@@ -122,6 +122,9 @@ bool usesExpressions(ElementSegment* curr, Module* module);
 
 // Information about a table's optimizability.
 struct TableInfo {
+  // Whether the table is imported or exported and hence reachable externally.
+  bool public_ = false;
+
   // Whether the table may be modifed at runtime, either because it is imported
   // or exported, or table.set operations exist for it in the code.
   bool mayBeModified = false;

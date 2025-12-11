@@ -26,6 +26,7 @@
 #include "ir/local-graph.h"
 #include "ir/module-utils.h"
 #include "ir/possible-contents.h"
+#include "ir/table-utils.h"
 #include "support/insert_ordered.h"
 #include "wasm-type.h"
 #include "wasm.h"
@@ -449,8 +450,8 @@ struct SharedInfo {
   // Subtyping info.
   const SubTypes& subTypes;
 
-  // The names of tables that are imported or exported.
-  std::unordered_set<Name> publicTables;
+  // Table info.
+  TableUtils::TableInfoMap tableInfoMap;
 
   SharedInfo(const SubTypes& subTypes) : subTypes(subTypes) {}
 };
@@ -919,17 +920,24 @@ struct InfoCollector
     curr->operands.push_back(target);
   }
   void visitCallIndirect(CallIndirect* curr) {
-    // TODO: optimize the call target like CallRef
-    // CallIndirect only knows a heap type, so it is always inexact.
-    handleIndirectCall(curr, curr->heapType, Inexact);
-
-    // If this goes to a public table, then we must root the output, as the
-    // table could contain anything at all, and calling functions there could
-    // return anything at all.
-    if (shared.publicTables.count(curr->table)) {
-      addRoot(curr);
+    auto& tableInfo = shared.tableInfoMap[curr->table];
+    if (tableInfo.mayBeModified) {
+      // The table may change at runtime, so any function reference of the
+      // relevant type might be called, like CallRef here. Just use the type
+      // (which here is always inexact).
+      handleIndirectCall(curr, curr->heapType, Inexact);
+      if (tableInfo.public_ && !options.closedWorld) {
+        // The table is not only mutable, but also public, and we are not in
+        // closed world: Unseen functions might be written to the table and
+        // called, which means anything at all could be returned here, the same
+        // as calling an import or export.
+        addRoot(curr);
+      }
+      return;
     }
-    // TODO: the table identity could also be used here in more ways
+
+    // The table never changes, which means we only need to scan the initial
+    // data there. Use a cone XXX
   }
   void visitCallRef(CallRef* curr) {
     handleIndirectCall(curr, curr->target->type);
@@ -2285,18 +2293,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   // Compute shared info that we need for the main pass over each function, such
   // as the imported/exported tables.
   SharedInfo shared(*subTypes);
-
-  for (auto& table : wasm.tables) {
-    if (table->imported()) {
-      shared.publicTables.insert(table->name);
-    }
-  }
-
-  for (auto& ex : wasm.exports) {
-    if (ex->kind == ExternalKind::Table) {
-      shared.publicTables.insert(*ex->getInternalName());
-    }
-  }
+  shared.tableInfoMap = TableUtils::computeTableInfo(wasm);
 
   // Collect information from each function.
   ModuleUtils::ParallelFunctionAnalysis<CollectedFuncInfo> analysis(
