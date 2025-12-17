@@ -337,9 +337,6 @@ void BinaryenIRWriter<SubType>::visit(Expression* curr) {
           continue;
         }
         stack.push_back(Task{*child, Task::NotScannedChildren});
-        if ((*child)->type == Type::unreachable) {
-          break; // TODO: merge loops. maybe always put expr on, then clear it in the rare case of an unreach child?
-        }
       }
       continue;
     }
