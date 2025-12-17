@@ -324,7 +324,6 @@ void BinaryenIRWriter<SubType>::visit(Expression* curr) {
       if (!hasUnreachableChild) {
         // |expr| is reachable, so we can emit it after the children.
         stack.push_back(Task{expr, Task::ScannedChildren});
-        return;
       }
       for (auto* child : children.children) {
         stack.push_back(Task{*child, Task::NotScannedChildren});
