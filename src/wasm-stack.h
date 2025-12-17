@@ -264,7 +264,7 @@ void BinaryenIRWriter<SubType>::visit(Expression* curr) {
   // make the code more complicated and slower, so we only focus on avoiding
   // stack overflows in realistic cases).
   if (Properties::isControlFlowStructure(curr)) {
-    bool hasUnreachableChild = false;
+    bool hasUnreachableChild = false; // TODO: this is just for if condition...
     for (auto* child : ValueChildIterator(curr)) {
       visit(child);
       if (child->type == Type::unreachable) {
@@ -292,7 +292,7 @@ void BinaryenIRWriter<SubType>::visit(Expression* curr) {
       NotScannedChildren = 1
     } phase;
   };
-  SmallVector<Expression*, 4> stack; // TODO bench
+  SmallVector<Task, 4> stack; // TODO bench
   stack.push_back(Task{curr, Task::NotScannedChildren});
   while (!stack.empty()) {
     auto [expr, phase] = stack.back();
@@ -315,19 +315,19 @@ void BinaryenIRWriter<SubType>::visit(Expression* curr) {
       // errors.
       bool hasUnreachableChild = false;
       auto children = ChildIterator(expr);
-      for (auto* child : children.children)) {
-        if (child->type == Type::unreachable) {
+      for (auto* child : children.children) {
+        if ((*child)->type == Type::unreachable) {
           hasUnreachableChild = true;
           break;
         }
       }
       if (!hasUnreachableChild) {
         // |expr| is reachable, so we can emit it after the children.
-        stack.push_back(Task{child, Task::ScannedChildren});
+        stack.push_back(Task{expr, Task::ScannedChildren});
         return;
       }
-      for (auto* child : children.children)) {
-        stack.push_back(Task{child, Task::NotScannedChildren});
+      for (auto* child : children.children) {
+        stack.push_back(Task{*child, Task::NotScannedChildren});
       }
       continue;
     }
