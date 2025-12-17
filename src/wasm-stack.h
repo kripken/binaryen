@@ -251,7 +251,8 @@ template<typename SubType> void BinaryenIRWriter<SubType>::write() {
 // block without a name, since nothing branches to it, which makes it easy to
 // handle in optimization passes and when writing the binary out again).
 template<typename SubType>
-void BinaryenIRWriter<SubType>::visitPossibleBlockContents(SubType* self, Expression** currp) {
+void BinaryenIRWriter<SubType>::visitPossibleBlockContents(SubType* self,
+                                                           Expression** currp) {
   auto* curr = *currp;
   auto* block = curr->dynCast<Block>();
   // Even if the block has a name, check if the name is necessary (if it has no
@@ -275,7 +276,8 @@ void BinaryenIRWriter<SubType>::visitPossibleBlockContents(SubType* self, Expres
 }
 
 template<typename SubType>
-void BinaryenIRWriter<SubType>::visitGeneric(SubType* self, Expression** currp) {
+void BinaryenIRWriter<SubType>::visitGeneric(SubType* self,
+                                             Expression** currp) {
   auto* curr = *currp;
   // We emit unreachable instructions that create unreachability, but not
   // unreachable instructions that just inherit unreachability from their
@@ -300,7 +302,8 @@ void BinaryenIRWriter<SubType>::visitGeneric(SubType* self, Expression** currp) 
 }
 
 template<typename SubType>
-void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self, Expression** currp) {
+void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self,
+                                                        Expression** currp) {
   auto* curr = *currp;
   emitDebugLocation(curr);
 
@@ -310,26 +313,28 @@ void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self, Expressio
     case Expression::Id::BlockId: {
       auto* block = curr->cast<Block>();
       // A block with no name never needs to be emitted: we can just emit its
-      // contents. In some cases that will end up as "stacky" code, which is valid
-      // in wasm but not in Binaryen IR. This is similar to what we do in
-      // visitPossibleBlockContents(), and like there, when we reload such a binary
-      // we'll end up creating a block for it then.
+      // contents. In some cases that will end up as "stacky" code, which is
+      // valid in wasm but not in Binaryen IR. This is similar to what we do in
+      // visitPossibleBlockContents(), and like there, when we reload such a
+      // binary we'll end up creating a block for it then.
       //
-      // Note that in visitPossibleBlockContents() we also optimize the case of a
-      // block with a name but the name actually has no uses - that handles more
-      // cases, but it requires more work. It is reasonable to do it in
-      // visitPossibleBlockContents() which handles the common cases of blocks that
-      // are children of control flow structures (like an if arm); doing it here
-      // would affect every block, including highly-nested block stacks, which would
-      // end up as quadratic time. In optimized code the name will not exist if it's
-      // not used anyhow, so a minor optimization for the unoptimized case that
-      // leads to potential quadratic behavior is not worth it here.
+      // Note that in visitPossibleBlockContents() we also optimize the case of
+      // a block with a name but the name actually has no uses - that handles
+      // more cases, but it requires more work. It is reasonable to do it in
+      // visitPossibleBlockContents() which handles the common cases of blocks
+      // that are children of control flow structures (like an if arm); doing it
+      // here would affect every block, including highly-nested block stacks,
+      // which would end up as quadratic time. In optimized code the name will
+      // not exist if it's not used anyhow, so a minor optimization for the
+      // unoptimized case that leads to potential quadratic behavior is not
+      // worth it here.
       if (curr->name.is()) {
         self->pushTask(SubType::visitBlockPost, currp);
       }
       auto& list = block->list;
       for (int i = int(list.size()) - 1; i >= 0; i--) {
-        self->pushTask(SubType::visitGeneric, list[i]); // TODO: rename visitStart?
+        self->pushTask(SubType::visitGeneric,
+                       list[i]); // TODO: rename visitStart?
       }
       if (curr->name.is()) {
         self->pushTask(SubType::visitBlockPre, currp);
@@ -373,12 +378,14 @@ void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self, Expressio
 }
 
 template<typename SubType>
-void BinaryenIRWriter<SubType>::visitBlockPre(SubType* self, Expression** currp) {
+void BinaryenIRWriter<SubType>::visitBlockPre(SubType* self,
+                                              Expression** currp) {
   auto* curr = (*currp)->cast<Block>();
   self->emit(curr);
 }
 
-void BinaryenIRWriter<SubType>::visitBlockPost(SubType* self, Expression** currp) {
+void BinaryenIRWriter<SubType>::visitBlockPost(SubType* self,
+                                               Expression** currp) {
   auto* curr = (*currp)->cast<Block>();
   self->emitScopeEnd(curr);
   if (curr->type == Type::unreachable) {
@@ -394,18 +401,21 @@ void BinaryenIRWriter<SubType>::visitBlockPost(SubType* self, Expression** currp
   }
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitIfPre(SubType* self, Expression** currp) {
-  auto* curr = (*currp)->cast<If>();  
+template<typename SubType>
+void BinaryenIRWriter<SubType>::visitIfPre(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<If>();
   self->emit(curr);
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitIfMid(SubType* self, Expression** currp) {
-  auto* curr = (*currp)->cast<If>();  
+template<typename SubType>
+void BinaryenIRWriter<SubType>::visitIfMid(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<If>();
   self->emitIfElse(curr);
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitIfPost(SubType* self, Expression** currp) {
-  auto* curr = (*currp)->cast<If>();  
+template<typename SubType>
+void BinaryenIRWriter<SubType>::visitIfPost(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<If>();
   self->emitScopeEnd(curr);
   if (curr->type == Type::unreachable) {
     // We already handled the case of the condition being unreachable in
@@ -417,13 +427,17 @@ template<typename SubType> void BinaryenIRWriter<SubType>::visitIfPost(SubType* 
   }
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitLoopPre(SubType* self, Expression** currp) {
-  auto* curr = (*currp)->cast<Loop>();  
+template<typename SubType>
+void BinaryenIRWriter<SubType>::visitLoopPre(SubType* self,
+                                             Expression** currp) {
+  auto* curr = (*currp)->cast<Loop>();
   self->emit(curr);
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitLoopPost(SubType* self, Expression** currp) {
-  auto* curr = (*currp)->cast<Loop>();  
+template<typename SubType>
+void BinaryenIRWriter<SubType>::visitLoopPost(SubType* self,
+                                              Expression** currp) {
+  auto* curr = (*currp)->cast<Loop>();
   self->emitScopeEnd(curr);
   if (curr->type == Type::unreachable) {
     // we emitted a loop without a return type, so it must not be consumed
@@ -454,13 +468,17 @@ template<typename SubType> void BinaryenIRWriter<SubType>::visitTry(Try* curr) {
   }
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitTryTablePre(SubType* self, Expression** currp) {
-  auto* curr = (*currp)->cast<TryTable>();  
+template<typename SubType>
+void BinaryenIRWriter<SubType>::visitTryTablePre(SubType* self,
+                                                 Expression** currp) {
+  auto* curr = (*currp)->cast<TryTable>();
   self->emit(curr); // doEmit for all these?
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitTryTablePost(SubType* self, Expression** currp) {
-  auto* curr = (*currp)->cast<TryTable>();  
+template<typename SubType>
+void BinaryenIRWriter<SubType>::visitTryTablePost(SubType* self,
+                                                  Expression** currp) {
+  auto* curr = (*currp)->cast<TryTable>();
   self->emitScopeEnd(curr);
   if (curr->type == Type::unreachable) {
     self->emitUnreachable();
