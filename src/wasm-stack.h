@@ -186,11 +186,21 @@ public:
   // Second part of a generic visit: After value children are visited.
   static void visitAfterValueChildren(SubType* self, Expression** currp);
 
-  void visitBlock(Block* curr);
-  void visitIf(If* curr);
-  void visitLoop(Loop* curr);
-  void visitTry(Try* curr);
-  void visitTryTable(TryTable* curr);
+  static void visitBlockPre(SubType* self, Expression** currp);
+  static void visitBlockPost(SubType* self, Expression** currp);
+
+  static void visitIfPre(SubType* self, Expression** currp);
+  static void visitIfMid(SubType* self, Expression** currp);
+  static void visitIfPost(SubType* self, Expression** currp);
+
+  static void visitLoopPre(SubType* self, Expression** currp);
+  static void visitLoopPost(SubType* self, Expression** currp);
+
+  static void visitTryPre(SubType* self, Expression** currp);
+  static void visitTryPost(SubType* self, Expression** currp);
+
+  static void visitTryTablePre(SubType* self, Expression** currp);
+  static void visitTryTable(SubType* self, Expression** currp);
 
 protected:
   Function* func = nullptr;
@@ -448,7 +458,7 @@ template<typename SubType> void BinaryenIRWriter<SubType>::visitTryTablePre(SubT
   self->emit(curr); // doEmit for all these?
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitTryTablePre(SubType* self, Expression** currp) {
+template<typename SubType> void BinaryenIRWriter<SubType>::visitTryTablePost(SubType* self, Expression** currp) {
   auto* curr = (*currp)->cast<TryTable>();  
   self->emitScopeEnd(curr);
   if (curr->type == Type::unreachable) {
