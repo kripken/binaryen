@@ -176,14 +176,16 @@ private:
 
 // Takes binaryen IR and converts it to something else (binary or stack IR)
 template<typename SubType>
-class BinaryenIRWriter : public Visitor<BinaryenIRWriter<SubType>> {
+class BinaryenIRWriter : public Walker<BinaryenIRWriter<SubType>> {
 public:
   BinaryenIRWriter(Function* func) : func(func) {}
 
   void write();
 
-  // visits a node, emitting the proper code for it
-  void visit(Expression* curr);
+  // Visits a node in a generic way.
+  static void visitGeneric(SubType* self, Expression** currp);
+  // Second part of a generic visit: After value children are visited.
+  static void visitAfterValueChildren(SubType* self, Expression** currp);
 
   void visitBlock(Block* curr);
   void visitIf(If* curr);
@@ -215,13 +217,20 @@ private:
   void emitDebugLocation(Expression* curr) {
     static_cast<SubType*>(this)->emitDebugLocation(curr);
   }
-  void visitPossibleBlockContents(Expression* curr);
+  static void visitPossibleBlockContents(SubType* self, Expression** currp);
 };
 
 template<typename SubType> void BinaryenIRWriter<SubType>::write() {
   assert(func && "BinaryenIRWriter: function is not set");
   emitHeader();
-  visitPossibleBlockContents(func->body);
+
+  assert(stack.size() == 0);
+  pushTask(SubType::visitPossibleBlockContents, &func->body);
+  while (stack.size() > 0) {
+    auto task = popTask();
+    task.func(static_cast<SubType*>(this), task.currp);
+  }
+
   emitFunctionEnd();
 }
 
@@ -233,7 +242,8 @@ template<typename SubType> void BinaryenIRWriter<SubType>::write() {
 // block without a name, since nothing branches to it, which makes it easy to
 // handle in optimization passes and when writing the binary out again).
 template<typename SubType>
-void BinaryenIRWriter<SubType>::visitPossibleBlockContents(Expression* curr) {
+void BinaryenIRWriter<SubType>::visitPossibleBlockContents(SubType* self, Expression** currp) {
+  auto* curr = *currp;
   auto* block = curr->dynCast<Block>();
   // Even if the block has a name, check if the name is necessary (if it has no
   // uses, it is equivalent to not having one). Scanning the children of the
@@ -241,11 +251,11 @@ void BinaryenIRWriter<SubType>::visitPossibleBlockContents(Expression* curr) {
   // small N since the number of nested non-block control flow structures tends
   // to be very reasonable.
   if (!block || BranchUtils::BranchSeeker::has(block, block->name)) {
-    visit(curr);
+    visitGeneric(self, currp);
     return;
   }
-  for (auto* child : block->list) {
-    visit(child);
+  for (auto*& child : block->list) {
+    self->pushTask(SubType::visitGeneric, &child);
     // Since this child was unreachable, either this child or one of its
     // descendants was a source of unreachability that was actually
     // emitted. Subsequent children won't be reachable, so skip them.
@@ -256,7 +266,8 @@ void BinaryenIRWriter<SubType>::visitPossibleBlockContents(Expression* curr) {
 }
 
 template<typename SubType>
-void BinaryenIRWriter<SubType>::visit(Expression* curr) {
+void BinaryenIRWriter<SubType>::visitGeneric(SubType* self, Expression** currp) {
+  auto* curr = *currp;
   // We emit unreachable instructions that create unreachability, but not
   // unreachable instructions that just inherit unreachability from their
   // children, since the latter won't be reached. This (together with logic in
@@ -265,8 +276,8 @@ void BinaryenIRWriter<SubType>::visit(Expression* curr) {
   // to emit an extra `unreachable` before the end of the block to prevent type
   // errors.
   bool hasUnreachableChild = false;
-  for (auto* child : ValueChildIterator(curr)) {
-    visit(child);
+  for (auto*& child : ValueChildIterator(curr)) {
+    self->pushTask(SubType::visitGeneric, &child);
     if (child->type == Type::unreachable) {
       hasUnreachableChild = true;
       break;
@@ -276,6 +287,12 @@ void BinaryenIRWriter<SubType>::visit(Expression* curr) {
     // `curr` is not reachable, so don't emit it.
     return;
   }
+  self->pushTask(SubType::visitAfterValueChildren, currp);
+}
+
+template<typename SubType>
+void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self, Expression** currp) {
+  auto* curr = *currp;
   emitDebugLocation(curr);
   // Control flow requires special handling, but most instructions can be
   // emitted directly after their children.
