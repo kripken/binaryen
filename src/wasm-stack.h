@@ -19,7 +19,6 @@
 
 #include "ir/branch-utils.h"
 #include "ir/module-utils.h"
-#include "ir/properties.h"
 #include "pass.h"
 #include "support/insert_ordered.h"
 #include "wasm-binary.h"
@@ -294,12 +293,48 @@ template<typename SubType>
 void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self, Expression** currp) {
   auto* curr = *currp;
   emitDebugLocation(curr);
+
   // Control flow requires special handling, but most instructions can be
   // emitted directly after their children.
-  if (Properties::isControlFlowStructure(curr)) {
-    Visitor<BinaryenIRWriter>::visit(curr);
-  } else {
-    emit(curr);
+  switch (curr->_id) {
+    case Expression::Id::BlockId: {
+      auto* block = curr->cast<Block>();
+      self->pushTask(SubType::visitBlockPost, currp);
+      auto& list = block->list;
+      for (int i = int(list.size()) - 1; i >= 0; i--) {
+        self->pushTask(SubType::visitGeneric, list[i]); // TODO: rename visitStart?
+      }
+      self->pushTask(SubType::visitBlockPre, currp);
+      break;
+    }
+    case Expression::Id::IfId: {
+      auto* iff = curr->cast<If>();
+      self->pushTask(SubType::visitIfPost, currp);
+      if (iff->ifFalse) {
+        self->pushTask(SubType::visitGeneric, &iff->ifFalse);
+        self->pushTask(SubType::visitIfMid, currp);
+      }
+      self->pushTask(SubType::visitGeneric, &iff->ifTrue);
+      self->pushTask(SubType::visitIfPre, currp);
+      break;
+    }
+    case Expression::Id::LoopId: {
+      auto* loop = curr->cast<Loop>();
+      self->pushTask(SubType::visitLoopPost, currp);
+      self->pushTask(SubType::visitGeneric, &loop->body);
+      self->pushTask(SubType::visitLoopPre, currp);
+      break;
+    }
+    case Expression::Id::TryId: {
+      auto* tryy = curr->cast<Try>();
+      break;
+    }
+    case Expression::Id::TryTableId: {
+      auto* tryTable = curr->cast<TryTable>();
+    }
+    default: {
+      emit(curr);
+    }
   }
 }
 
