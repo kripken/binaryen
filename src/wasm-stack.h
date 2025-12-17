@@ -355,8 +355,9 @@ void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self, Expressio
       break;
     }
     case Expression::Id::TryId: {
-      Fatal() << "TODO";
-      //auto* tryy = curr->cast<Try>();
+      // TODO: unrecurse this too, but it is trickier than the others.
+      auto* tryy = curr->cast<Try>();
+      visitTry(tryy);
       break;
     }
     case Expression::Id::TryTableId: {
