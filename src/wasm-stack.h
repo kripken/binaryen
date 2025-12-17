@@ -313,20 +313,33 @@ void BinaryenIRWriter<SubType>::visit(Expression* curr) {
       // unreachable block is a source of unreachability, which means we don't need
       // to emit an extra |unreachable| before the end of the block to prevent type
       // errors.
-      bool hasUnreachableChild = false;
+      // Iterate in the normal order to find the first unreachable chlid...
+      Expression* firstUnreachableChild = nullptr;
       auto children = ChildIterator(expr);
-      for (auto* child : children.children) {
-        if ((*child)->type == Type::unreachable) {
-          hasUnreachableChild = true;
+      for (auto* child : children) {
+        if (child->type == Type::unreachable) {
+          firstUnreachableChild = child;
           break;
         }
       }
-      if (!hasUnreachableChild) {
+      if (!firstUnreachableChild) {
         // |expr| is reachable, so we can emit it after the children.
         stack.push_back(Task{expr, Task::ScannedChildren});
       }
-      for (auto* child : children.children) {
+      // Iterate in reverse order up to that unreachable child, as we do not
+      // want to emit anything after.
+      for (auto** child : children.children) {
+        if (firstUnreachableChild == *child) {
+          // This is the first thing we emit, and all things after.
+          firstUnreachableChild = nullptr;
+        } else if (firstUnreachableChild) {
+          // We are skipping until that first unreachable child.
+          continue;
+        }
         stack.push_back(Task{*child, Task::NotScannedChildren});
+        if ((*child)->type == Type::unreachable) {
+          break; // TODO: merge loops. maybe always put expr on, then clear it in the rare case of an unreach child?
+        }
       }
       continue;
     }
