@@ -299,38 +299,61 @@ void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self, Expressio
   switch (curr->_id) {
     case Expression::Id::BlockId: {
       auto* block = curr->cast<Block>();
-      self->pushTask(SubType::visitBlockPost, currp);
+      // A block with no name never needs to be emitted: we can just emit its
+      // contents. In some cases that will end up as "stacky" code, which is valid
+      // in wasm but not in Binaryen IR. This is similar to what we do in
+      // visitPossibleBlockContents(), and like there, when we reload such a binary
+      // we'll end up creating a block for it then.
+      //
+      // Note that in visitPossibleBlockContents() we also optimize the case of a
+      // block with a name but the name actually has no uses - that handles more
+      // cases, but it requires more work. It is reasonable to do it in
+      // visitPossibleBlockContents() which handles the common cases of blocks that
+      // are children of control flow structures (like an if arm); doing it here
+      // would affect every block, including highly-nested block stacks, which would
+      // end up as quadratic time. In optimized code the name will not exist if it's
+      // not used anyhow, so a minor optimization for the unoptimized case that
+      // leads to potential quadratic behavior is not worth it here.
+      if (curr->name.is()) {
+        self->pushTask(SubType::visitBlockPost, currp);
+      }
       auto& list = block->list;
       for (int i = int(list.size()) - 1; i >= 0; i--) {
         self->pushTask(SubType::visitGeneric, list[i]); // TODO: rename visitStart?
       }
-      self->pushTask(SubType::visitBlockPre, currp);
+      if (curr->name.is()) {
+        self->pushTask(SubType::visitBlockPre, currp);
+      }
       break;
     }
     case Expression::Id::IfId: {
       auto* iff = curr->cast<If>();
       self->pushTask(SubType::visitIfPost, currp);
       if (iff->ifFalse) {
-        self->pushTask(SubType::visitGeneric, &iff->ifFalse);
+        self->pushTask(SubType::visitPossibleBlockContents, &iff->ifFalse);
         self->pushTask(SubType::visitIfMid, currp);
       }
-      self->pushTask(SubType::visitGeneric, &iff->ifTrue);
+      self->pushTask(SubType::visitPossibleBlockContents, &iff->ifTrue);
       self->pushTask(SubType::visitIfPre, currp);
       break;
     }
     case Expression::Id::LoopId: {
       auto* loop = curr->cast<Loop>();
       self->pushTask(SubType::visitLoopPost, currp);
-      self->pushTask(SubType::visitGeneric, &loop->body);
+      self->pushTask(SubType::visitPossibleBlockContents, &loop->body);
       self->pushTask(SubType::visitLoopPre, currp);
       break;
     }
     case Expression::Id::TryId: {
-      auto* tryy = curr->cast<Try>();
+      Fatal() << "TODO";
+      //auto* tryy = curr->cast<Try>();
       break;
     }
     case Expression::Id::TryTableId: {
       auto* tryTable = curr->cast<TryTable>();
+      self->pushTask(SubType::visitTryTablePost, currp);
+      self->pushTask(SubType::visitPossibleBlockContents, &tryTable->body);
+      self->pushTask(SubType::visitTryTablePre, currp);
     }
     default: {
       emit(curr);
@@ -339,88 +362,25 @@ void BinaryenIRWriter<SubType>::visitAfterValueChildren(SubType* self, Expressio
 }
 
 template<typename SubType>
-void BinaryenIRWriter<SubType>::visitBlock(Block* curr) {
-  auto visitChildren = [this](Block* curr, Index from) {
-    auto& list = curr->list;
-    while (from < list.size()) {
-      auto* child = list[from];
-      visit(child);
-      if (child->type == Type::unreachable) {
-        break;
-      }
-      ++from;
-    }
-  };
+void BinaryenIRWriter<SubType>::visitBlockPre(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<Block>();
+  self->emit(curr);
+}
 
-  // A block with no name never needs to be emitted: we can just emit its
-  // contents. In some cases that will end up as "stacky" code, which is valid
-  // in wasm but not in Binaryen IR. This is similar to what we do in
-  // visitPossibleBlockContents(), and like there, when we reload such a binary
-  // we'll end up creating a block for it then.
-  //
-  // Note that in visitPossibleBlockContents() we also optimize the case of a
-  // block with a name but the name actually has no uses - that handles more
-  // cases, but it requires more work. It is reasonable to do it in
-  // visitPossibleBlockContents() which handles the common cases of blocks that
-  // are children of control flow structures (like an if arm); doing it here
-  // would affect every block, including highly-nested block stacks, which would
-  // end up as quadratic time. In optimized code the name will not exist if it's
-  // not used anyhow, so a minor optimization for the unoptimized case that
-  // leads to potential quadratic behavior is not worth it here.
-  if (!curr->name.is()) {
-    visitChildren(curr, 0);
-    return;
+void BinaryenIRWriter<SubType>::visitBlockPost(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<Block>();
+  self->emitScopeEnd(curr);
+  if (curr->type == Type::unreachable) {
+    // Since this block is unreachable, no instructions will be emitted after
+    // it in its enclosing scope. That means that this block will be the last
+    // instruction before the end of its parent scope, so its type must match
+    // the type of its parent. But we don't have a concrete type for this
+    // block and we don't know what type its parent expects, so we can't
+    // ensure the types match. To work around this, we insert an `unreachable`
+    // instruction after every unreachable control flow structure and depend
+    // on its polymorphic behavior to paper over any type mismatches.
+    self->emitUnreachable();
   }
-
-  auto afterChildren = [this](Block* curr) {
-    emitScopeEnd(curr);
-    if (curr->type == Type::unreachable) {
-      // Since this block is unreachable, no instructions will be emitted after
-      // it in its enclosing scope. That means that this block will be the last
-      // instruction before the end of its parent scope, so its type must match
-      // the type of its parent. But we don't have a concrete type for this
-      // block and we don't know what type its parent expects, so we can't
-      // ensure the types match. To work around this, we insert an `unreachable`
-      // instruction after every unreachable control flow structure and depend
-      // on its polymorphic behavior to paper over any type mismatches.
-      emitUnreachable();
-    }
-  };
-
-  // Handle very deeply nested blocks in the first position efficiently,
-  // avoiding heavy recursion. We only start to do this if we see it will help
-  // us (to avoid allocation of the vector).
-  if (!curr->list.empty() && curr->list[0]->is<Block>()) {
-    std::vector<Block*> parents;
-    Block* child;
-    while (!curr->list.empty() && (child = curr->list[0]->dynCast<Block>())) {
-      parents.push_back(curr);
-      emit(curr);
-      curr = child;
-      emitDebugLocation(curr);
-    }
-    // Emit the current block, which does not have a block as a child in the
-    // first position.
-    emit(curr);
-    visitChildren(curr, 0);
-    afterChildren(curr);
-    bool childUnreachable = curr->type == Type::unreachable;
-    // Finish the later parts of all the parent blocks.
-    while (!parents.empty()) {
-      auto* parent = parents.back();
-      parents.pop_back();
-      if (!childUnreachable) {
-        visitChildren(parent, 1);
-      }
-      afterChildren(parent);
-      childUnreachable = parent->type == Type::unreachable;
-    }
-    return;
-  }
-  // Simple case of not having a nested block in the first position.
-  emit(curr);
-  visitChildren(curr, 0);
-  afterChildren(curr);
 }
 
 template<typename SubType> void BinaryenIRWriter<SubType>::visitIf(If* curr) {
