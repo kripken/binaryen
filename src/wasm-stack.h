@@ -383,34 +383,40 @@ void BinaryenIRWriter<SubType>::visitBlockPost(SubType* self, Expression** currp
   }
 }
 
-template<typename SubType> void BinaryenIRWriter<SubType>::visitIf(If* curr) {
-  emit(curr);
-  visitPossibleBlockContents(curr->ifTrue);
+template<typename SubType> void BinaryenIRWriter<SubType>::visitIfPre(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<If>();  
+  self->emit(curr);
+}
 
-  if (curr->ifFalse) {
-    emitIfElse(curr);
-    visitPossibleBlockContents(curr->ifFalse);
-  }
+template<typename SubType> void BinaryenIRWriter<SubType>::visitIfMid(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<If>();  
+  self->emitIfElse(curr);
+}
 
-  emitScopeEnd(curr);
+template<typename SubType> void BinaryenIRWriter<SubType>::visitIfPost(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<If>();  
+  self->emitScopeEnd(curr);
   if (curr->type == Type::unreachable) {
     // We already handled the case of the condition being unreachable in
     // `visit`.  Otherwise, we may still be unreachable, if we are an if-else
     // with both sides unreachable. Just like with blocks, we emit an extra
     // `unreachable` to work around potential type mismatches.
     assert(curr->ifFalse);
-    emitUnreachable();
+    self->emitUnreachable();
   }
 }
 
-template<typename SubType>
-void BinaryenIRWriter<SubType>::visitLoop(Loop* curr) {
-  emit(curr);
-  visitPossibleBlockContents(curr->body);
-  emitScopeEnd(curr);
+template<typename SubType> void BinaryenIRWriter<SubType>::visitLoopPre(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<Loop>();  
+  self->emit(curr);
+}
+
+template<typename SubType> void BinaryenIRWriter<SubType>::visitLoopPost(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<Loop>();  
+  self->emitScopeEnd(curr);
   if (curr->type == Type::unreachable) {
     // we emitted a loop without a return type, so it must not be consumed
-    emitUnreachable();
+    self->emitUnreachable();
   }
 }
 
@@ -437,14 +443,17 @@ template<typename SubType> void BinaryenIRWriter<SubType>::visitTry(Try* curr) {
   }
 }
 
-template<typename SubType>
-void BinaryenIRWriter<SubType>::visitTryTable(TryTable* curr) {
-  emit(curr);
-  visitPossibleBlockContents(curr->body);
-  emitScopeEnd(curr);
+template<typename SubType> void BinaryenIRWriter<SubType>::visitTryTablePre(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<TryTable>();  
+  self->emit(curr); // doEmit for all these?
+}
+
+template<typename SubType> void BinaryenIRWriter<SubType>::visitTryTablePre(SubType* self, Expression** currp) {
+  auto* curr = (*currp)->cast<TryTable>();  
+  self->emitScopeEnd(curr);
   if (curr->type == Type::unreachable) {
-    emitUnreachable();
-  }
+    self->emitUnreachable();
+  } // merge these "end, mabe unreach"?
 }
 
 // Binaryen IR to binary writer
