@@ -22,6 +22,7 @@
 #include "ir/properties.h"
 #include "pass.h"
 #include "support/insert_ordered.h"
+#include "support/small_vector.h"
 #include "wasm-binary.h"
 #include "wasm-traversal.h"
 #include "wasm.h"
@@ -257,32 +258,84 @@ void BinaryenIRWriter<SubType>::visitPossibleBlockContents(Expression* curr) {
 
 template<typename SubType>
 void BinaryenIRWriter<SubType>::visit(Expression* curr) {
-  // We emit unreachable instructions that create unreachability, but not
-  // unreachable instructions that just inherit unreachability from their
-  // children, since the latter won't be reached. This (together with logic in
-  // the control flow visitors) also ensures that the final instruction in each
-  // unreachable block is a source of unreachability, which means we don't need
-  // to emit an extra `unreachable` before the end of the block to prevent type
-  // errors.
-  bool hasUnreachableChild = false;
-  for (auto* child : ValueChildIterator(curr)) {
-    visit(child);
-    if (child->type == Type::unreachable) {
-      hasUnreachableChild = true;
-      break;
+  // Un-recurse the common case of nested non-control flow expressions (there is
+  // one common case of high nesting with control flow, nested blocks, which are
+  // handled below; we do not un-recurse all the code in this class as it would
+  // make the code more complicated and slower, so we only focus on avoiding
+  // stack overflows in realistic cases).
+  if (Properties::isControlFlowStructure(curr)) {
+    bool hasUnreachableChild = false;
+    for (auto* child : ValueChildIterator(curr)) {
+      visit(child);
+      if (child->type == Type::unreachable) {
+        hasUnreachableChild = true;
+        break;
+      }
     }
-  }
-  if (hasUnreachableChild) {
-    // `curr` is not reachable, so don't emit it.
+    if (hasUnreachableChild) {
+      // |curr| is not reachable, so don't emit it.
+      return;
+    }
+    emitDebugLocation(curr);
+    Visitor<BinaryenIRWriter>::visit(curr);
     return;
   }
-  emitDebugLocation(curr);
-  // Control flow requires special handling, but most instructions can be
-  // emitted directly after their children.
-  if (Properties::isControlFlowStructure(curr)) {
-    Visitor<BinaryenIRWriter>::visit(curr);
-  } else {
-    emit(curr);
+
+  // We now handle the case of |curr| being a non-control flow instruction,
+  // using a stack instead of recursion, as much as we can.
+  struct Task {
+    // The expression to handle.
+    Expression* expr;
+    // Whether we have already scanned children.
+    enum Phase {
+      ScannedChildren = 0,
+      NotScannedChildren = 1
+    } phase;
+  };
+  SmallVector<Expression*, 4> stack; // TODO bench
+  stack.push_back(Task{curr, Task::NotScannedChildren});
+  while (!stack.empty()) {
+    auto [expr, phase] = stack.back();
+    stack.pop_back();
+    if (phase == Task::NotScannedChildren) {
+      if (Properties::isControlFlowStructure(expr)) {
+        // We cannot handle this with our stack, use the generic path. (This
+        // cannot be the original |curr|, which we know was not control flow, so
+        // it is a nested child.)
+        visit(expr);
+        continue;
+      }
+
+      // We emit unreachable instructions that create unreachability, but not
+      // unreachable instructions that just inherit unreachability from their
+      // children, since the latter won't be reached. This (together with logic in
+      // the control flow visitors) also ensures that the final instruction in each
+      // unreachable block is a source of unreachability, which means we don't need
+      // to emit an extra |unreachable| before the end of the block to prevent type
+      // errors.
+      bool hasUnreachableChild = false;
+      auto children = ChildIterator(expr);
+      for (auto* child : children.children)) {
+        if (child->type == Type::unreachable) {
+          hasUnreachableChild = true;
+          break;
+        }
+      }
+      if (!hasUnreachableChild) {
+        // |expr| is reachable, so we can emit it after the children.
+        stack.push_back(Task{child, Task::ScannedChildren});
+        return;
+      }
+      for (auto* child : children.children)) {
+        stack.push_back(Task{child, Task::NotScannedChildren});
+      }
+      continue;
+    }
+
+    // phase == ScannedChildren, so all we have left after the children is to
+    // emit ourselves.
+    emitDebugLocation(expr);
+    emit(expr);
   }
 }
 
