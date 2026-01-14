@@ -75,9 +75,32 @@ std::unordered_set<Index> getUsedParams(Function* func, Module* module) {
   return usedParams;
 }
 
+namespace {
+
+struct LocalUpdater : public PostWalker<LocalUpdater> {
+  Index removedIndex;
+  Index newIndex;
+  LocalUpdater(Function* func, Index removedIndex, Index newIndex)
+    : removedIndex(removedIndex), newIndex(newIndex) {
+    walk(func->body);
+  }
+  void visitLocalGet(LocalGet* curr) { updateIndex(curr->index); }
+  void visitLocalSet(LocalSet* curr) { updateIndex(curr->index); }
+  void updateIndex(Index& index) {
+    if (index == removedIndex) {
+      index = newIndex;
+    } else if (index > removedIndex) {
+      index--;
+    }
+  }
+};
+
+}
+
+template<typename T>
 RemovalOutcome removeParameter(const std::vector<Function*>& funcs,
                                Index index,
-                               const std::vector<Call*>& calls,
+                               const T& calls,
                                const std::vector<CallRef*>& callRefs,
                                Module* module,
                                PassRunner* runner) {
@@ -161,23 +184,6 @@ RemovalOutcome removeParameter(const std::vector<Function*>& funcs,
     newIndexes.push_back(Builder::addVar(func, type));
   }
   // Update local operations.
-  struct LocalUpdater : public PostWalker<LocalUpdater> {
-    Index removedIndex;
-    Index newIndex;
-    LocalUpdater(Function* func, Index removedIndex, Index newIndex)
-      : removedIndex(removedIndex), newIndex(newIndex) {
-      walk(func->body);
-    }
-    void visitLocalGet(LocalGet* curr) { updateIndex(curr->index); }
-    void visitLocalSet(LocalSet* curr) { updateIndex(curr->index); }
-    void updateIndex(Index& index) {
-      if (index == removedIndex) {
-        index = newIndex;
-      } else if (index > removedIndex) {
-        index--;
-      }
-    }
-  };
   for (Index i = 0; i < funcs.size(); i++) {
     auto* func = funcs[i];
     if (!func->imported()) {
@@ -197,10 +203,11 @@ RemovalOutcome removeParameter(const std::vector<Function*>& funcs,
   return Success;
 }
 
+template<typename T>
 std::pair<SortedVector, RemovalOutcome>
 removeParameters(const std::vector<Function*>& funcs,
                  SortedVector indexes,
-                 const std::vector<Call*>& calls,
+                 const T& calls,
                  const std::vector<CallRef*>& callRefs,
                  Module* module,
                  PassRunner* runner) {
@@ -239,8 +246,9 @@ removeParameters(const std::vector<Function*>& funcs,
   return {removed, finalOutcome};
 }
 
+template<typename T>
 SortedVector applyConstantValues(const std::vector<Function*>& funcs,
-                                 const std::vector<Call*>& calls,
+                                 const T& calls,
                                  const std::vector<CallRef*>& callRefs,
                                  Module* module) {
   assert(funcs.size() > 0);

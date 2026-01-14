@@ -74,9 +74,10 @@ enum RemovalOutcome {
 // need adjusting and it is easier to do it all in one place. Also, the caller
 // can update all the types at once throughout the program after making
 // multiple calls to removeParameter().
+template<typename T>
 RemovalOutcome removeParameter(const std::vector<Function*>& funcs,
                                Index index,
-                               const std::vector<Call*>& calls,
+                               const T& calls,
                                const std::vector<CallRef*>& callRefs,
                                Module* module,
                                PassRunner* runner);
@@ -87,10 +88,11 @@ RemovalOutcome removeParameter(const std::vector<Function*>& funcs,
 // we return Success if we removed any index, Failure if we removed none, and
 // FailureDueToEffects if at least one index could have been removed but for
 // effects).
+template<typename T>
 std::pair<SortedVector, RemovalOutcome>
 removeParameters(const std::vector<Function*>& funcs,
                  SortedVector indexes,
-                 const std::vector<Call*>& calls,
+                 const T& calls,
                  const std::vector<CallRef*>& callRefs,
                  Module* module,
                  PassRunner* runner);
@@ -102,8 +104,9 @@ removeParameters(const std::vector<Function*>& funcs,
 // which allows other optimizations to remove it.
 //
 // Returns the indexes that were optimized.
+template<typename T>
 SortedVector applyConstantValues(const std::vector<Function*>& funcs,
-                                 const std::vector<Call*>& calls,
+                                 const T& calls,
                                  const std::vector<CallRef*>& callRefs,
                                  Module* module);
 

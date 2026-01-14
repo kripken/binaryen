@@ -183,6 +183,29 @@ struct DAEScanner
   }
 };
 
+template <typename T>
+struct ArenaAllocator {
+  using value_type = T;
+
+  MixedArena* arena; // Shared state via pointer
+
+  ArenaAllocator(MixedArena& a) : arena(&a) {}
+
+  template <typename U>
+  ArenaAllocator(const ArenaAllocator<U>& other) : arena(other.arena) {}
+
+  T* allocate(size_t n) {
+    // TODO: smarter alignment
+    return static_cast<T*>(arena->allocSpace(n * sizeof(T), sizeof(void*)));
+  }
+
+  void deallocate(T* p, size_t n) {
+  }
+
+  bool operator==(const ArenaAllocator& other) const { return arena == other.arena; }
+  bool operator!=(const ArenaAllocator& other) const { return arena != other.arena; }
+};
+
 struct DAE : public Pass {
   // This pass changes locals and parameters.
   // FIXME DWARF updating does not handle local changes yet.
@@ -274,7 +297,15 @@ struct DAE : public Pass {
     scanner.run(getPassRunner(), module);
 
     // Combine all the info from the scan.
-    std::vector<std::vector<Call*>> allCalls(numFunctions);
+    using CallVector = std::vector<Call*, ArenaAllocator<Call*>>;
+
+    MixedArena arena;
+    std::vector<CallVector> allCalls;
+    allCalls.reserve(numFunctions);
+    for (Index i = 0; i < numFunctions; i++) {
+      allCalls.emplace_back(arena);
+    }
+
     std::vector<bool> tailCallees(numFunctions);
     std::vector<bool> hasUnseenCalls(numFunctions);
 
@@ -517,8 +548,9 @@ private:
   std::unordered_map<Call*, Expression**> allDroppedCalls;
 
   // Returns `true` if the caller should be optimized.
+  template<typename T>
   bool
-  removeReturnValue(Function* func, std::vector<Call*>& calls, Module* module) {
+  removeReturnValue(Function* func, const T& calls, Module* module) {
     // If the result type is uninhabitable, then the caller knows the call will
     // never return. That useful information would be lost if we did nothing
     // else when removing the return value, but we will insert an `unreachable`
@@ -561,8 +593,9 @@ private:
   //
   // This assumes that the function has no calls aside from |calls|, that is, it
   // is not exported or called from the table or by reference.
+  template<typename T>
   bool refineArgumentTypes(Function* func,
-                           const std::vector<Call*>& calls,
+                           const T& calls,
                            Module* module,
                            const DAEFunctionInfo& info) {
     if (!module->features.hasGC()) {
@@ -632,8 +665,9 @@ private:
   //       as one of the return values is exactly what it already is. Similar
   //       unoptimality can happen with multiple functions, more local code in
   //       the middle, etc.
+  template<typename T>
   bool refineReturnTypes(Function* func,
-                         const std::vector<Call*>& calls,
+                         const T& calls,
                          Module* module) {
     auto lub = LUB::getResultsLUB(func, *module);
     if (!lub.noted()) {
