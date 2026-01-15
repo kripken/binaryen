@@ -347,17 +347,17 @@ namespace {
 
 // Helper for collecting HeapTypes and their frequencies.
 struct TypeInfos {
-  InsertOrderedMap<HeapType, HeapTypeInfo> info;
+  InsertOrderedMap<HeapType, Index> info;
 
   // Multivalue control flow structures need a function type, but the identity
   // of the function type (i.e. what recursion group it is in or whether it is
   // final) doesn't matter. Save them for the end to see if we can re-use an
   // existing function type with the necessary signature.
-  InsertOrderedMap<Signature, size_t> controlFlowSignatures;
+  InsertOrderedMap<Signature, Index> controlFlowSignatures;
 
   void note(HeapType type) {
     if (!type.isBasic()) {
-      ++info[type].useCount;
+      ++info[type];
     }
   }
   void note(Type type) {
@@ -504,7 +504,7 @@ InsertOrderedMap<HeapType, HeapTypeInfo> collectHeapTypeInfo(
   // Combine the function info with the module info.
   for (auto& [_, functionInfo] : analysis.map) {
     for (auto& [type, typeInfo] : functionInfo.info) {
-      info.info[type].useCount += typeInfo.useCount;
+      info.info[type] += typeInfo;
     }
     for (auto& [sig, count] : functionInfo.controlFlowSignatures) {
       info.controlFlowSignatures[sig] += count;
@@ -564,22 +564,27 @@ InsertOrderedMap<HeapType, HeapTypeInfo> collectHeapTypeInfo(
     for (; controlFlowIt != info.controlFlowSignatures.end(); ++controlFlowIt) {
       auto& [sig, count] = *controlFlowIt;
       if (auto it = seenSigs.find(sig); it != seenSigs.end()) {
-        info.info[it->second].useCount += count;
+        info.info[it->second] += count;
       } else {
         // We've never seen this signature before, so add a type for it.
         HeapType type(sig);
         noteNewType(type);
-        info.info[type].useCount += count;
+        info.info[type] += count;
         break;
       }
     }
   }
 
+  // Add visibility info to the counts.
+  InsertOrderedMap<HeapType, HeapTypeInfo> ret;
+  for (auto& [type, count] : info.info) {
+    ret[type].useCount = count;
+  }
   if (visibility == VisibilityHandling::FindVisibility) {
-    classifyTypeVisibility(wasm, info.info);
+    classifyTypeVisibility(wasm, ret);
   }
 
-  return std::move(info.info);
+  return ret;
 }
 
 namespace {
