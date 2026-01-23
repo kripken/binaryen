@@ -115,7 +115,9 @@ namespace std {
 
 template<> struct hash<wasm::IString> {
   size_t operator()(const wasm::IString& str) const {
-    return std::hash<size_t>{}(uintptr_t(str.str.data()));
+    // data() is unique for each unique string, so we can just use those
+    // pointers as the hash, saving work.
+    return size_t((uintptr_t(str.str.data())));
   }
 };
 
