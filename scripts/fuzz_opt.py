@@ -665,10 +665,15 @@ def run_bynterp(wasm, args):
 # Enable even more things than V8_OPTS. V8_OPTS are the flags we want to use
 # when testing, on our fixed test suite, but when fuzzing we may want more.
 def get_v8_extra_flags():
-    # It is important to use the --fuzzing flag because it does things like
-    # enable mixed old and new EH (which is an issue since
+    # Enable mixed old and new EH (which is an issue since
     # https://github.com/WebAssembly/exception-handling/issues/344 )
-    flags = ['--fuzzing']
+    flags = ['--wasm-allow-mixed-eh-for-testing']
+
+    # Usually add --fuzzing, the main V8 fuzzing flag. This generally helps
+    # fuzzing, but we also want a chance to run in a more production-like
+    # setting, without it.
+    if random.random() < 0.75:
+        flags += ['--fuzzing']
 
     # Sometimes add --future, which may enable new JITs and such, which is good
     # to fuzz for V8's sake.
