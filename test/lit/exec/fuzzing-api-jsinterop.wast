@@ -14,7 +14,7 @@
 
   (data $data "12345678")
   (elem $prototypes externref (ref.null extern))
-  (elem $funcs funcref (ref.func $return-struct-proto) (ref.func $return-struct-no-proto) (ref.func $receive-proto) (ref.func $receive) (ref.func $return))
+  (elem $funcs funcref (ref.func $js-called))
 
   (start $start)
 
@@ -38,9 +38,12 @@
   (func $start
     (call $configureAll
       (array.new_elem $prototypes $prototypes (i32.const 0) (i32.const 1))
-      (array.new_elem $funcs $funcs (i32.const 0) (i32.const 5))
+      (array.new_elem $funcs $funcs (i32.const 0) (i32.const 1))
       (array.new_data $data $data (i32.const 0) (i32.const 8))
       (ref.null extern)
     )
+  )
+
+  (func $js-called
   )
 )
