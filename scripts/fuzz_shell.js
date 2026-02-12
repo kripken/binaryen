@@ -390,10 +390,20 @@ var imports = {
       console.log(`[LoggingExternalInterface log-branch ${id} ${expected} ${actual}]`);
     },
   },
+
   // Emscripten support.
   'env': {
-    'setTempRet0': function(x) { tempRet0 = x },
-    'getTempRet0': function() { return tempRet0 },
+    'setTempRet0': (x) => { tempRet0 = x },
+    'getTempRet0': () => { return tempRet0 },
+  },
+
+  // JS interop support.
+  'wasm:js-prototypes': {
+    'configureAll': (prototypes, funcs, data, extern) => {
+      // Stash the functions here so they can be called from JS by index.
+      jsCalledFuncs = funcs;
+      console.log(JSON.stringify(funcs)); // XXX opaque and trapps
+    },
   },
 };
 
