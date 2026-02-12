@@ -18,23 +18,6 @@
 
   (start $start)
 
-  ;; CHECK:      (func $start (type $8)
-  ;; CHECK-NEXT:  (call $configureAll
-  ;; CHECK-NEXT:   (array.new_elem $prototypes $prototypes
-  ;; CHECK-NEXT:    (i32.const 0)
-  ;; CHECK-NEXT:    (i32.const 1)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (array.new_elem $funcs $funcs
-  ;; CHECK-NEXT:    (i32.const 0)
-  ;; CHECK-NEXT:    (i32.const 5)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (array.new_data $data $data
-  ;; CHECK-NEXT:    (i32.const 0)
-  ;; CHECK-NEXT:    (i32.const 8)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (ref.null noextern)
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT: )
   (func $start
     (call $configureAll
       (array.new_elem $prototypes $prototypes (i32.const 0) (i32.const 1))
@@ -46,4 +29,12 @@
 
   (func $js-called
   )
+
+  ;; CHECK:      [fuzz-exec] calling export
+  ;; CHECK-NEXT: warning: no passes specified, not doing any work
+  ;; CHECK-NEXT: [LoggingExternalInterface ignoring an unknown import wasm:js-prototypes . configureAll
+  (func $export (export "export")
+  )
 )
+;; CHECK:      [fuzz-exec] calling export
+;; CHECK-NEXT: [fuzz-exec] comparing export

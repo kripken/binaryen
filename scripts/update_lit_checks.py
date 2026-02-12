@@ -175,8 +175,10 @@ def parse_output_fuzz_exec(text):
             # and we'd error on the code below.
             pass
         elif line:
-            assert items, 'unexpected non-invocation line'
-            items[-1][1].append(line)
+            # |items| may not exist if these execution lines are from calling
+            # the start function, that is, not from an export.
+            if items:
+                items[-1][1].append(line)
     return [items]
 
 
