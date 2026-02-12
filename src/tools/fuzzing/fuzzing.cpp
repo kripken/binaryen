@@ -2233,6 +2233,31 @@ void TranslateToFuzzReader::fixAfterChanges(Function* func) {
   ReFinalize().walkFunctionInModule(func, &wasm);
 }
 
+namespace {
+
+// Check if an import is a known import in our fuzzer. We can keep such imports
+// around, while anything else must be fixed up.
+bool isKnownImport(Importable* import) {
+  if (!import->imported()) {
+    // Not even an import.
+    return false;
+  }
+  if (import->module == "fuzzing-support") {
+    // One of our fuzzing support imports.
+    return true;
+  }
+  if (import->module == "wasm:js-prototypes" &&
+      import->base == "configureAll") {
+    // The special configureAll import.
+    return true;
+  }
+
+  // Unknown.
+  return false;
+}
+
+} // anonymous namespace
+
 void TranslateToFuzzReader::modifyInitialFunctions() {
   if (wasm.functions.empty()) {
     return;
@@ -2246,10 +2271,9 @@ void TranslateToFuzzReader::modifyInitialFunctions() {
   for (Index i = 0; i < wasm.functions.size(); i++) {
     auto* func = wasm.functions[i].get();
     // We can't allow extra imports, as the fuzzing infrastructure wouldn't
-    // know what to provide. Keep only our own fuzzer imports (or, if we are
+    // know what to provide. Keep only the known fuzzer imports (or, if we are
     // preserving imports, keep them all).
-    if (func->imported() &&
-        (func->module == "fuzzing-support" || preserveImportsAndExports)) {
+    if (isKnownImport(func) || preserveImportsAndExports) {
       continue;
     }
     if (func->imported()) {
