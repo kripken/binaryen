@@ -2680,10 +2680,8 @@ public:
     auto& refValues = refData->values;
     auto startVal = start.getSingleValue().getUnsigned();
     auto endVal = end.getSingleValue().getUnsigned();
-    endVal = std::min(endVal, refValues.size());
-    if (hasNonAsciiUpTo(refValues, endVal)) {
-      return Flow(NONCONSTANT_FLOW);
-    }
+    endVal = std::min<size_t>(endVal, refValues.size());
+
     Literals contents;
     if (endVal > startVal) {
       contents.reserve(endVal - startVal);
