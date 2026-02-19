@@ -389,7 +389,7 @@ public:
   }
 
   // A debug utility, prints out the graph
-  void dump() {
+  void dump() const {
     std::cout << "=== graph ===\n";
     for (auto root : roots) {
       std::cout << "root: " << root << '\n';
@@ -674,4 +674,6 @@ int main(int argc, const char* argv[]) {
 
   // Clean up
   free(copy);
+
+  flush_and_quick_exit(0);
 }

@@ -15,20 +15,15 @@
  */
 
 #include <algorithm>
-#include <array>
 #include <cassert>
-#include <map>
-#include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
-#include <variant>
 
-#include "compiler-support.h"
 #include "support/hash.h"
-#include "support/insert_ordered.h"
 #include "wasm-features.h"
 #include "wasm-type-printing.h"
+#include "wasm-type-shape.h"
 #include "wasm-type.h"
 
 #define TRACE_CANONICALIZATION 0
@@ -623,6 +618,8 @@ bool Type::isDefaultable() const {
   return isConcrete() && !isNonNullable();
 }
 
+bool Type::isCastable() const { return isRef() && getHeapType().isCastable(); }
+
 unsigned Type::getByteSize() const {
   // TODO: alignment?
   auto getSingleByteSize = [](Type t) {
@@ -887,6 +884,11 @@ Shareability HeapType::getShared() const {
   } else {
     return getHeapTypeInfo(*this)->share;
   }
+}
+
+bool HeapType::isCastable() {
+  return !isContinuation() && !isMaybeShared(HeapType::cont) &&
+         !isMaybeShared(HeapType::nocont);
 }
 
 Signature HeapType::getSignature() const {
@@ -1324,6 +1326,9 @@ FeatureSet HeapType::getFeatures() const {
 
       // In addition, scan their non-ref children, to add dependencies on
       // things like SIMD.
+      // XXX This will not scan HeapType children that are not also children of
+      //     Type children, which happens with Continuation (has a HeapType
+      //     child that is not a Type).
       for (auto child : heapType.getTypeChildren()) {
         if (!child.isRef()) {
           feats |= child.getFeatures();
@@ -1440,6 +1445,10 @@ std::ostream& operator<<(std::ostream& os, TypeBuilder::ErrorReason reason) {
       return os << "Heap type has an undeclared child";
     case TypeBuilder::ErrorReason::InvalidFuncType:
       return os << "Continuation has invalid function type";
+    case TypeBuilder::ErrorReason::InvalidSharedType:
+      return os << "Shared types require shared-everything";
+    case TypeBuilder::ErrorReason::InvalidStringType:
+      return os << "String types require strings feature";
     case TypeBuilder::ErrorReason::InvalidUnsharedField:
       return os << "Heap type has an invalid unshared field";
     case TypeBuilder::ErrorReason::NonStructDescribes:
@@ -1458,6 +1467,9 @@ std::ostream& operator<<(std::ostream& os, TypeBuilder::ErrorReason reason) {
       return os << "Heap type describes an invalid unshared type";
     case TypeBuilder::ErrorReason::RequiresCustomDescriptors:
       return os << "custom descriptors required but not enabled";
+    case TypeBuilder::ErrorReason::RecGroupCollision:
+      return os
+             << "distinct rec groups would be identical after binary writing";
   }
   WASM_UNREACHABLE("Unexpected error reason");
 }
@@ -1471,8 +1483,11 @@ unsigned Field::getByteSize() const {
       return 1;
     case Field::PackedType::i16:
       return 2;
-    case Field::PackedType::not_packed:
+    case Field::PackedType::NotPacked:
       return 4;
+    case Field::PackedType::WaitQueue:
+      WASM_UNREACHABLE("waitqueue not implemented");
+      break;
   }
   WASM_UNREACHABLE("impossible packed type");
 }
@@ -1813,12 +1828,12 @@ std::ostream& TypePrinter::print(HeapType type) {
   if (auto desc = type.getDescribedType()) {
     os << "(describes ";
     printHeapTypeName(*desc);
-    os << ' ';
+    os << ") ";
   }
   if (auto desc = type.getDescriptorType()) {
     os << "(descriptor ";
     printHeapTypeName(*desc);
-    os << ' ';
+    os << ") ";
   }
   switch (type.getKind()) {
     case HeapTypeKind::Func:
@@ -1835,12 +1850,6 @@ std::ostream& TypePrinter::print(HeapType type) {
       break;
     case HeapTypeKind::Basic:
       WASM_UNREACHABLE("unexpected kind");
-  }
-  if (type.getDescriptorType()) {
-    os << ')';
-  }
-  if (type.getDescribedType()) {
-    os << ')';
   }
   if (type.isShared()) {
     os << ')';
@@ -1870,6 +1879,8 @@ std::ostream& TypePrinter::print(const Field& field) {
       os << "i8";
     } else if (packedType == Field::PackedType::i16) {
       os << "i16";
+    } else if (packedType == Field::PackedType::WaitQueue) {
+      os << "waitqueue";
     } else {
       WASM_UNREACHABLE("unexpected packed type");
     }
@@ -2248,7 +2259,7 @@ struct TypeBuilder::Impl {
       }
       initialized = true;
     }
-    HeapType get() { return HeapType(TypeID(info.get())); }
+    HeapType get() const { return HeapType(TypeID(info.get())); }
   };
 
   std::vector<Entry> entries;
@@ -2256,7 +2267,19 @@ struct TypeBuilder::Impl {
   // We will validate features as we go.
   FeatureSet features;
 
-  Impl(size_t n, FeatureSet features) : entries(n), features(features) {}
+  // We allow some types to be used even if their corresponding features are not
+  // enabled. For example, we allow exact references without custom descriptors
+  // and typed function references without GC. Allowing these more-refined types
+  // in the IR helps the optimizer be more powerful. However, these disallowed
+  // refinements will be erased when a module is written out as a binary, which
+  // could cause distinct rec groups to become identical and potentially change
+  // the results of casts, etc. To avoid this, we must disallow building rec
+  // groups that vary only in some refinement that will be removed in binary
+  // writing. Track this with a UniqueRecGroups set, which is feature-aware.
+  UniqueRecGroups unique;
+
+  Impl(size_t n, FeatureSet features)
+    : entries(n), features(features), unique(features) {}
 };
 
 TypeBuilder::TypeBuilder(size_t n, FeatureSet features) {
@@ -2273,7 +2296,7 @@ void TypeBuilder::grow(size_t n) {
   impl->entries.resize(size() + n);
 }
 
-size_t TypeBuilder::size() { return impl->entries.size(); }
+size_t TypeBuilder::size() const { return impl->entries.size(); }
 
 void TypeBuilder::setHeapType(size_t i, Signature signature) {
   assert(i < size() && "index out of bounds");
@@ -2300,7 +2323,7 @@ void TypeBuilder::setHeapType(size_t i, Array array) {
   impl->entries[i].set(array);
 }
 
-HeapType TypeBuilder::getTempHeapType(size_t i) {
+HeapType TypeBuilder::getTempHeapType(size_t i) const {
   assert(i < size() && "index out of bounds");
   return impl->entries[i].get();
 }
@@ -2386,10 +2409,12 @@ bool isValidSupertype(const HeapTypeInfo& sub, const HeapTypeInfo& super) {
       return false;
     }
   }
-  // A supertype of a type must have a describes clause iff the type has a
-  // describes clause.
-  if (bool(sub.described) != bool(super.described)) {
-    return false;
+  // A supertype of a type with a (describes $x) clause must have a (describes
+  // $y) clause where $y is the declared supertype of $x.
+  if (sub.described) {
+    if (!super.described || sub.described->supertype != super.described) {
+      return false;
+    }
   }
   SubTyper typer;
   switch (sub.kind) {
@@ -2408,9 +2433,69 @@ bool isValidSupertype(const HeapTypeInfo& sub, const HeapTypeInfo& super) {
 }
 
 std::optional<TypeBuilder::ErrorReason>
-validateType(HeapTypeInfo& info,
-             std::unordered_set<HeapType>& seenTypes,
-             FeatureSet features) {
+validateType(Type type, FeatureSet feats, bool isShared) {
+  if (type.isRef()) {
+    auto heapType = type.getHeapType();
+    if (isShared && !heapType.isShared()) {
+      return TypeBuilder::ErrorReason::InvalidUnsharedField;
+    }
+    if (heapType.isShared() && !feats.hasSharedEverything()) {
+      return TypeBuilder::ErrorReason::InvalidSharedType;
+    }
+    if (heapType.isString() && !feats.hasStrings()) {
+      return TypeBuilder::ErrorReason::InvalidStringType;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<TypeBuilder::ErrorReason>
+validateStruct(const Struct& struct_, FeatureSet feats, bool isShared) {
+  for (auto& field : struct_.fields) {
+    if (auto err = validateType(field.type, feats, isShared)) {
+      return err;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<TypeBuilder::ErrorReason>
+validateArray(Array array, FeatureSet feats, bool isShared) {
+  return validateType(array.element.type, feats, isShared);
+}
+
+std::optional<TypeBuilder::ErrorReason>
+validateSignature(Signature sig, FeatureSet feats, bool isShared) {
+  // Allow unshared parameters and results even in shared functions.
+  // TODO: Figure out and enforce shared function rules.
+  for (auto t : sig.params) {
+    if (auto err = validateType(t, feats, /*isShared=*/false)) {
+      return err;
+    }
+  }
+  for (auto t : sig.results) {
+    if (auto err = validateType(t, feats, /*isShared*/ false)) {
+      return err;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<TypeBuilder::ErrorReason>
+validateContinuation(Continuation cont, FeatureSet feats, bool isShared) {
+  if (!cont.type.isSignature()) {
+    return TypeBuilder::ErrorReason::InvalidFuncType;
+  }
+  if (isShared != cont.type.isShared()) {
+    return TypeBuilder::ErrorReason::InvalidFuncType;
+  }
+  return std::nullopt;
+}
+
+std::optional<TypeBuilder::ErrorReason>
+validateTypeInfo(HeapTypeInfo& info,
+                 std::unordered_set<HeapType>& seenTypes,
+                 FeatureSet features) {
   if (auto* super = info.supertype) {
     // The supertype must be canonical (i.e. defined in a previous rec group)
     // or have already been defined in this rec group.
@@ -2448,44 +2533,33 @@ validateType(HeapTypeInfo& info,
       return TypeBuilder::ErrorReason::MismatchedDescriptor;
     }
   }
-  if (info.isContinuation()) {
-    if (!info.continuation.type.isSignature()) {
-      return TypeBuilder::ErrorReason::InvalidFuncType;
-    }
-  }
   if (info.share == Shared) {
+    if (!features.hasSharedEverything()) {
+      return TypeBuilder::ErrorReason::InvalidSharedType;
+    }
     if (info.described && info.described->share != Shared) {
       return TypeBuilder::ErrorReason::InvalidUnsharedDescribes;
     }
     if (info.descriptor && info.descriptor->share != Shared) {
       return TypeBuilder::ErrorReason::InvalidUnsharedDescriptor;
     }
-    switch (info.kind) {
-      case HeapTypeKind::Func:
-        // TODO: Figure out and enforce shared function rules.
-        break;
-      case HeapTypeKind::Cont:
-        if (!info.continuation.type.isShared()) {
-          return TypeBuilder::ErrorReason::InvalidFuncType;
-        }
-        break;
-      case HeapTypeKind::Struct:
-        for (auto& field : info.struct_.fields) {
-          if (field.type.isRef() && !field.type.getHeapType().isShared()) {
-            return TypeBuilder::ErrorReason::InvalidUnsharedField;
-          }
-        }
-        break;
-      case HeapTypeKind::Array: {
-        auto elem = info.array.element.type;
-        if (elem.isRef() && !elem.getHeapType().isShared()) {
-          return TypeBuilder::ErrorReason::InvalidUnsharedField;
-        }
-        break;
-      }
-      case HeapTypeKind::Basic:
-        WASM_UNREACHABLE("unexpected kind");
-    }
+  }
+  bool isShared = info.share == Shared;
+  switch (info.kind) {
+    case HeapTypeKind::Func:
+      return validateSignature(info.signature, features, isShared);
+      break;
+    case HeapTypeKind::Cont:
+      return validateContinuation(info.continuation, features, isShared);
+      break;
+    case HeapTypeKind::Struct:
+      return validateStruct(info.struct_, features, isShared);
+      break;
+    case HeapTypeKind::Array:
+      return validateArray(info.array, features, isShared);
+      break;
+    case HeapTypeKind::Basic:
+      WASM_UNREACHABLE("unexpected kind");
   }
   return std::nullopt;
 }
@@ -2569,7 +2643,7 @@ buildRecGroup(std::unique_ptr<RecGroupInfo>&& groupInfo,
   std::unordered_set<HeapType> seenTypes;
   for (size_t i = 0; i < typeInfos.size(); ++i) {
     auto& info = typeInfos[i];
-    if (auto err = validateType(*info, seenTypes, features)) {
+    if (auto err = validateTypeInfo(*info, seenTypes, features)) {
       return {TypeBuilder::Error{i, *err}};
     }
     seenTypes.insert(asHeapType(info));
@@ -2686,16 +2760,27 @@ TypeBuilder::BuildResult TypeBuilder::build() {
     assert(built->size() == groupSize);
     results.insert(results.end(), built->begin(), built->end());
 
+    // If we are building multiple groups, make sure there will be no conflicts
+    // after disallowed features are taken into account.
+    if (groupSize > 0 && groupSize != entryCount) {
+      auto group = (*built)[0].getRecGroup();
+      auto uniqueGroup = impl->unique.insertOrGet(group);
+      if (group != uniqueGroup) {
+        return {TypeBuilder::Error{
+          groupStart, TypeBuilder::ErrorReason::RecGroupCollision}};
+      }
+    }
+
     groupStart += groupSize;
   }
 
   return {results};
 }
 
-void TypeBuilder::dump() {
+void TypeBuilder::dump() const {
   std::vector<HeapType> types;
   for (size_t i = 0; i < size(); ++i) {
-    types.push_back((*this)[i]);
+    types.push_back(getTempHeapType(i));
   }
   IndexedTypeNameGenerator<DefaultTypeNameGenerator> print(types);
 

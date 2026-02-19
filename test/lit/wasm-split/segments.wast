@@ -14,7 +14,7 @@
  ;; PRIMARY:      (type $elem-array (array externref))
  (type $elem-array (array externref))
 
- ;; PRIMARY:      (import "placeholder" "0" (func $placeholder_0 (type $0)))
+ ;; PRIMARY:      (import "placeholder.deferred" "0" (func $placeholder_0))
 
  ;; PRIMARY:      (memory $mem 0)
  (memory $mem 0)
@@ -29,18 +29,16 @@
 
  ;; PRIMARY:      (elem $1 (i32.const 0) $placeholder_0)
 
- ;; PRIMARY:      (export "memory" (memory $mem))
-
  ;; PRIMARY:      (export "table" (table $0))
 
- ;; PRIMARY:      (func $data.drop (type $0)
+ ;; PRIMARY:      (func $data.drop
  ;; PRIMARY-NEXT:  (data.drop $data)
  ;; PRIMARY-NEXT: )
  (func $data.drop
   (data.drop $data)
  )
 
- ;; PRIMARY:      (func $memory.init (type $0)
+ ;; PRIMARY:      (func $memory.init
  ;; PRIMARY-NEXT:  (memory.init $data
  ;; PRIMARY-NEXT:   (i32.const 0)
  ;; PRIMARY-NEXT:   (i32.const 0)
@@ -55,7 +53,7 @@
   )
  )
 
- ;; PRIMARY:      (func $array.new_data (type $0)
+ ;; PRIMARY:      (func $array.new_data
  ;; PRIMARY-NEXT:  (drop
  ;; PRIMARY-NEXT:   (array.new_data $data-array $data
  ;; PRIMARY-NEXT:    (i32.const 0)
@@ -72,7 +70,7 @@
   )
  )
 
- ;; PRIMARY:      (func $array.new_elem (type $0)
+ ;; PRIMARY:      (func $array.new_elem
  ;; PRIMARY-NEXT:  (drop
  ;; PRIMARY-NEXT:   (array.new_elem $elem-array $elem
  ;; PRIMARY-NEXT:    (i32.const 0)
@@ -95,19 +93,19 @@
 
  ;; SECONDARY:      (elem $0 (i32.const 0) $no-segment)
 
- ;; SECONDARY:      (func $no-segment (type $0)
+ ;; SECONDARY:      (func $no-segment
  ;; SECONDARY-NEXT:  (nop)
  ;; SECONDARY-NEXT: )
  (func $no-segment
   (nop)
  )
 
- ;; PRIMARY:      (func $use-funcs (type $0)
+ ;; PRIMARY:      (func $use-funcs
  ;; PRIMARY-NEXT:  (call $data.drop)
  ;; PRIMARY-NEXT:  (call $memory.init)
  ;; PRIMARY-NEXT:  (call $array.new_data)
  ;; PRIMARY-NEXT:  (call $array.new_elem)
- ;; PRIMARY-NEXT:  (call_indirect $0 (type $0)
+ ;; PRIMARY-NEXT:  (call_indirect (type $0)
  ;; PRIMARY-NEXT:   (i32.const 0)
  ;; PRIMARY-NEXT:  )
  ;; PRIMARY-NEXT: )

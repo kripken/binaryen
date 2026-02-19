@@ -57,7 +57,6 @@ set(passes_SOURCES
   Intrinsics.cpp
   J2CLItableMerging.cpp
   J2CLOpts.cpp
-  JSPI.cpp
   LegalizeJSInterface.cpp
   LimitSegments.cpp
   LLVMMemoryCopyFillLowering.cpp
@@ -101,12 +100,14 @@ set(passes_SOURCES
   StringLowering.cpp
   Strip.cpp
   StripTargetFeatures.cpp
+  StripToolchainAnnotations.cpp
   TraceCalls.cpp
   RandomizeBranchHints.cpp
   RedundantSetElimination.cpp
   RemoveImports.cpp
   RemoveMemoryInit.cpp
   RemoveNonJSOps.cpp
+  RemoveRelaxedSIMD.cpp
   RemoveUnusedBrs.cpp
   RemoveUnusedNames.cpp
   RemoveUnusedModuleElements.cpp
@@ -114,6 +115,7 @@ set(passes_SOURCES
   ReorderFunctions.cpp
   ReorderGlobals.cpp
   ReorderLocals.cpp
+  ReorderTypes.cpp
   ReReloop.cpp
   TrapMode.cpp
   TypeGeneralizing.cpp

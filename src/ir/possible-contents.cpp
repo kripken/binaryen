@@ -27,6 +27,10 @@
 #include "ir/module-utils.h"
 #include "ir/possible-contents.h"
 #include "support/insert_ordered.h"
+#ifdef POSSIBLE_CONTENTS_DEBUG
+#include "support/timing.h"
+#endif
+#include "wasm-type.h"
 #include "wasm.h"
 
 namespace std {
@@ -208,9 +212,9 @@ void PossibleContents::intersect(const PossibleContents& other) {
   // Note the global's information, if we started as a global. In that case, the
   // code below will refine our type but we can remain a global, which we will
   // accomplish by restoring our global status at the end.
-  std::optional<Name> globalName;
+  std::optional<GlobalInfo> global;
   if (isGlobal()) {
-    globalName = getGlobal();
+    global = getGlobal();
   }
 
   if (hasFullCone() && other.hasFullCone()) {
@@ -230,9 +234,9 @@ void PossibleContents::intersect(const PossibleContents& other) {
     value = ConeType{newType, std::min(newDepth, otherNewDepth)};
   }
 
-  if (globalName) {
+  if (global) {
     // Restore the global but keep the new and refined type.
-    value = GlobalInfo{*globalName, getType()};
+    value = GlobalInfo{global->name, global->kind, getType()};
   }
 }
 
@@ -445,8 +449,13 @@ namespace {
 
 // Information that is shared with InfoCollector.
 struct SharedInfo {
+  // Subtyping info.
+  const SubTypes& subTypes;
+
   // The names of tables that are imported or exported.
   std::unordered_set<Name> publicTables;
+
+  SharedInfo(const SubTypes& subTypes) : subTypes(subTypes) {}
 };
 
 // The data we gather from each function, as we process them in parallel. Later
@@ -641,9 +650,17 @@ struct InfoCollector
     addRoot(curr);
   }
   void visitRefFunc(RefFunc* curr) {
-    addRoot(curr,
-            PossibleContents::literal(
-              Literal::makeFunc(curr->func, curr->type.getHeapType())));
+    if (!getModule()->getFunction(curr->func)->imported()) {
+      // This is not imported, so we know the exact function literal.
+      addRoot(
+        curr,
+        PossibleContents::literal(Literal::makeFunc(curr->func, *getModule())));
+    } else {
+      // This is imported, so it is effectively a global.
+      addRoot(curr,
+              PossibleContents::global(
+                curr->func, ExternalKind::Function, curr->type));
+    }
 
     // The presence of a RefFunc indicates the function may be called
     // indirectly, so add the relevant connections for this particular function.
@@ -651,12 +668,13 @@ struct InfoCollector
     // actually have a RefFunc.
     auto* func = getModule()->getFunction(curr->func);
     for (Index i = 0; i < func->getParams().size(); i++) {
-      info.links.push_back(
-        {SignatureParamLocation{func->type, i}, ParamLocation{func, i}});
+      info.links.push_back({SignatureParamLocation{func->type.getHeapType(), i},
+                            ParamLocation{func, i}});
     }
     for (Index i = 0; i < func->getResults().size(); i++) {
       info.links.push_back(
-        {ResultLocation{func, i}, SignatureResultLocation{func->type, i}});
+        {ResultLocation{func, i},
+         SignatureResultLocation{func->type.getHeapType(), i}});
     }
 
     if (!options.closedWorld) {
@@ -704,8 +722,12 @@ struct InfoCollector
   void visitRefCast(RefCast* curr) { receiveChildValue(curr->ref, curr); }
   void visitRefTest(RefTest* curr) { addRoot(curr); }
   void visitRefGetDesc(RefGetDesc* curr) {
-    // TODO: Do something more similar to struct.get here
-    addRoot(curr);
+    // Parallel to StructGet.
+    if (!isRelevant(curr->ref)) {
+      addRoot(curr);
+      return;
+    }
+    addChildParentLink(curr->ref, curr);
   }
   void visitBrOn(BrOn* curr) {
     // TODO: optimize when possible
@@ -812,29 +834,53 @@ struct InfoCollector
         return ResultLocation{target, i};
       });
   }
-  template<typename T> void handleIndirectCall(T* curr, HeapType targetType) {
+  template<typename T>
+  void handleIndirectCall(T* curr, HeapType targetType, Exactness exact) {
     // If the heap type is not a signature, which is the case for a bottom type
     // (null) then nothing can be called.
     if (!targetType.isSignature()) {
       assert(targetType.isBottom());
       return;
     }
+    // Connect us to the given type.
+    auto sig = targetType.getSignature();
     handleCall(
       curr,
       [&](Index i) {
-        assert(i <= targetType.getSignature().params.size());
+        assert(i <= sig.params.size());
         return SignatureParamLocation{targetType, i};
       },
       [&](Index i) {
-        assert(i <= targetType.getSignature().results.size());
+        assert(i <= sig.results.size());
         return SignatureResultLocation{targetType, i};
       });
+    // If the type is exact, we only need to read SignatureParamLocation /
+    // SignatureResultLocation of this exact type, and we are done.
+    if (exact == Exact) {
+      return;
+    }
+    // Inexact type, so subtyping is relevant: add the relevant links.
+    // TODO: SignatureParamLocation is handled below in an inefficient way, see
+    //       there.
+    // TODO: For CallRef, we could do something like readFromData() and use the
+    //       flowing function reference's type, not the static type. We could
+    //       even reuse ConeReadLocation if we generalized it to function types.
+    for (Index i = 0; i < sig.results.size(); i++) {
+      if (isRelevant(sig.results[i])) {
+        shared.subTypes.iterSubTypes(
+          targetType, [&](HeapType subType, Index depth) {
+            info.links.push_back({SignatureResultLocation{subType, i},
+                                  ExpressionLocation{curr, i}});
+          });
+      }
+    }
   }
   template<typename T> void handleIndirectCall(T* curr, Type targetType) {
     // If the type is unreachable, nothing can be called (and there is no heap
     // type to get).
     if (targetType != Type::unreachable) {
-      handleIndirectCall(curr, targetType.getHeapType());
+      handleIndirectCall(
+        curr, targetType.getHeapType(), targetType.getExactness());
     }
   }
 
@@ -877,7 +923,8 @@ struct InfoCollector
   }
   void visitCallIndirect(CallIndirect* curr) {
     // TODO: optimize the call target like CallRef
-    handleIndirectCall(curr, curr->heapType);
+    // CallIndirect only knows a heap type, so it is always inexact.
+    handleIndirectCall(curr, curr->heapType, Inexact);
 
     // If this goes to a public table, then we must root the output, as the
     // table could contain anything at all, and calling functions there could
@@ -891,9 +938,12 @@ struct InfoCollector
     handleIndirectCall(curr, curr->target->type);
   }
 
-  // Creates a location for a null of a particular type and adds a root for it.
-  // Such roots are where the default value of an i32 local comes from, or the
-  // value in a ref.null.
+  Location getTypeLocation(Type type) {
+    auto location = TypeLocation{type};
+    addRoot(location, PossibleContents::fromType(type));
+    return location;
+  }
+
   Location getNullLocation(Type type) {
     auto location = NullLocation{type};
     addRoot(location, PossibleContents::literal(Literal::makeZero(type)));
@@ -932,9 +982,12 @@ struct InfoCollector
       }
     } else {
       // Link the operands to the struct's fields.
-      linkChildList(curr->operands, [&](Index i) {
-        return DataLocation{type, i};
-      });
+      linkChildList(curr->operands,
+                    [&](Index i) { return DataLocation{type, i}; });
+    }
+    if (curr->desc) {
+      info.links.push_back({ExpressionLocation{curr->desc, 0},
+                            DataLocation{type, DataLocation::DescriptorIndex}});
     }
     addRoot(curr, PossibleContents::exactType(curr->type));
   }
@@ -1220,15 +1273,13 @@ struct InfoCollector
       }
 
       if (curr->catchRefs[tagIndex]) {
-        auto location = CaughtExnRefLocation{};
-        addRoot(location,
-                PossibleContents::fromType(Type(HeapType::exn, NonNullable)));
+        auto location = getTypeLocation(Type(HeapType::exn, NonNullable));
         info.links.push_back(
           {location, getBreakTargetLocation(target, exnrefIndex)});
       }
     }
   }
-  void visitThrow(Throw* curr) {
+  template<typename T> void handleThrow(T* curr) {
     auto& operands = curr->operands;
     if (!isRelevant(operands)) {
       return;
@@ -1240,6 +1291,7 @@ struct InfoCollector
         {ExpressionLocation{operands[i], 0}, TagLocation{tag, i}});
     }
   }
+  void visitThrow(Throw* curr) { handleThrow(curr); }
   void visitRethrow(Rethrow* curr) {}
   void visitThrowRef(ThrowRef* curr) {}
 
@@ -1274,6 +1326,31 @@ struct InfoCollector
   void visitContNew(ContNew* curr) {
     // TODO: optimize when possible
     addRoot(curr);
+
+    // The function reference that is passed in here will be called, just as if
+    // we were a call_ref, except at a potentially later time.
+    if (!curr->func->type.isRef()) {
+      return;
+    }
+    auto targetType = curr->func->type.getHeapType();
+    if (!targetType.isSignature()) {
+      assert(targetType.isBottom());
+      return;
+    }
+    // Unlike call_ref, we do not have the call operands here. Assume any
+    // value for the signature for now, but we could track them from cont.bind
+    // and resume TODO (it is simpler for now to do it here, where we have the
+    // original funcref that is called, before cont.bind alters the signature)
+    Index i = 0;
+    for (auto param : targetType.getSignature().params) {
+      if (isRelevant(param)) {
+        // Send anything of the proper type to all functions of this signature,
+        // since they are all callable.
+        info.links.push_back(
+          {getTypeLocation(param), SignatureParamLocation{targetType, i}});
+      }
+      i++;
+    }
   }
   void visitContBind(ContBind* curr) {
     // TODO: optimize when possible
@@ -1283,13 +1360,42 @@ struct InfoCollector
     // TODO: optimize when possible
     addRoot(curr);
   }
-  void visitResume(Resume* curr) {
+
+  template<typename T> void handleResume(T* curr) {
     // TODO: optimize when possible
     addRoot(curr);
+
+    // Connect handled tags with their branch targets, and materialize non-null
+    // continuation values.
+    auto numTags = curr->handlerTags.size();
+    for (Index tagIndex = 0; tagIndex < numTags; tagIndex++) {
+      auto tag = curr->handlerTags[tagIndex];
+      auto target = curr->handlerBlocks[tagIndex];
+      auto params = getModule()->getTag(tag)->params();
+
+      // Add the values from the tag.
+      for (Index i = 0; i < params.size(); i++) {
+        if (isRelevant(params[i])) {
+          info.links.push_back(
+            {TagLocation{tag, i}, getBreakTargetLocation(target, i)});
+        }
+      }
+
+      // Add the continuation. Its type is determined by the block we break to,
+      // as the last result.
+      auto targetType = findBreakTarget(target)->type;
+      assert(targetType.size() >= 1);
+      auto contType = targetType[targetType.size() - 1];
+      auto location = getTypeLocation(contType);
+      info.links.push_back(
+        {location, getBreakTargetLocation(target, params.size())});
+    }
   }
+
+  void visitResume(Resume* curr) { handleResume(curr); }
   void visitResumeThrow(ResumeThrow* curr) {
-    // TODO: optimize when possible
-    addRoot(curr);
+    handleResume(curr);
+    handleThrow(curr);
   }
   void visitStackSwitch(StackSwitch* curr) {
     // TODO: optimize when possible
@@ -1699,9 +1805,9 @@ void TNHOracle::infer() {
         continue;
       }
       while (1) {
-        typeFunctions[type].push_back(func.get());
-        if (auto super = type.getDeclaredSuperType()) {
-          type = *super;
+        typeFunctions[type.getHeapType()].push_back(func.get());
+        if (auto super = type.getHeapType().getDeclaredSuperType()) {
+          type = type.with(*super);
         } else {
           break;
         }
@@ -1799,8 +1905,8 @@ void TNHOracle::infer() {
         //       as other opts will make this call direct later, after which a
         //       lot of other optimizations become possible anyhow.
         auto target = possibleTargets[0]->name;
-        info.inferences[call->target] = PossibleContents::literal(
-          Literal::makeFunc(target, wasm.getFunction(target)->type));
+        info.inferences[call->target] =
+          PossibleContents::literal(Literal::makeFunc(target, wasm));
         continue;
       }
 
@@ -2139,7 +2245,11 @@ private:
   // For a non-full cone, we also reduce the depth as much as possible, so it is
   // equal to the maximum depth of an existing subtype.
   Index getNormalizedConeDepth(Type type, Index depth) {
-    return std::min(depth, maxDepths[type.getHeapType()]);
+    auto iter = maxDepths.find(type.getHeapType());
+    // A max depth must be in the map (otherwise we would use the default 0,
+    // making it exact, almost certainly incorrectly).
+    assert(iter != maxDepths.end());
+    return std::min(depth, iter->second);
   }
 
   void normalizeConeType(PossibleContents& cone) {
@@ -2167,17 +2277,30 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   if (options.trapsNeverHappen && wasm.features.hasGC()) {
 #ifdef POSSIBLE_CONTENTS_DEBUG
     std::cout << "tnh phase\n";
+    Timer timer;
 #endif
     tnhOracle = std::make_unique<TNHOracle>(wasm, options);
+#ifdef POSSIBLE_CONTENTS_DEBUG
+    std::cout << "... " << timer.lastElapsed() << "\n";
+#endif
   }
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "subtypes phase\n";
+  Timer timer;
+#endif
+
+  subTypes = std::make_unique<SubTypes>(wasm);
+  maxDepths = subTypes->getMaxDepths();
+
+#ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
   std::cout << "parallel phase\n";
 #endif
 
   // Compute shared info that we need for the main pass over each function, such
   // as the imported/exported tables.
-  SharedInfo shared;
+  SharedInfo shared(*subTypes);
 
   for (auto& table : wasm.tables) {
     if (table->imported()) {
@@ -2210,6 +2333,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     });
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
   std::cout << "single phase\n";
 #endif
 
@@ -2220,6 +2344,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   finder.walkModuleCode(&wasm);
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
   std::cout << "global init phase\n";
 #endif
 
@@ -2244,6 +2369,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   // go.
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
   std::cout << "merging+indexing phase\n";
 #endif
 
@@ -2253,24 +2379,19 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   //
   // This must be insert-ordered for the same reason as |workQueue| is, see
   // above.
-  InsertOrderedMap<Location, PossibleContents> roots;
+  InsertOrderedMap<LocationIndex, PossibleContents> roots;
 
   // Any function that may be called from the outside, like an export, is a
-  // root, since they can be called with unknown parameters.
-  auto calledFromOutside = [&](Name funcName) {
-    auto* func = wasm.getFunction(funcName);
-    auto params = func->getParams();
-    for (Index i = 0; i < func->getParams().size(); i++) {
-      roots[ParamLocation{func, i}] = PossibleContents::fromType(params[i]);
-    }
-  };
+  // root, since they can be called with unknown parameters. Collect all such
+  // functions.
+  std::unordered_set<Name> calledFromOutside;
 
   for (auto& [func, info] : analysis.map) {
     for (auto& link : info.links) {
       links.insert(getIndexes(link));
     }
     for (auto& [root, value] : info.roots) {
-      roots[root] = value;
+      roots[getIndex(root)] = value;
 
       // Ensure an index even for a root with no links to it - everything needs
       // an index.
@@ -2285,7 +2406,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
     }
 
     for (auto func : info.calledFromOutside) {
-      calledFromOutside(func);
+      calledFromOutside.insert(func);
     }
   }
 
@@ -2293,13 +2414,14 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   analysis.map.clear();
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
   std::cout << "external phase\n";
 #endif
 
   // Exports can be modified from the outside.
   for (auto& ex : wasm.exports) {
     if (ex->kind == ExternalKind::Function) {
-      calledFromOutside(*ex->getInternalName());
+      calledFromOutside.insert(*ex->getInternalName());
     } else if (ex->kind == ExternalKind::Table) {
       // If any table is exported, assume any function in any table (including
       // other tables) can be called from the outside.
@@ -2316,7 +2438,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
       for (auto& elementSegment : wasm.elementSegments) {
         for (auto* curr : elementSegment->data) {
           if (auto* refFunc = curr->dynCast<RefFunc>()) {
-            calledFromOutside(refFunc->func);
+            calledFromOutside.insert(refFunc->func);
           }
         }
       }
@@ -2326,8 +2448,24 @@ Flower::Flower(Module& wasm, const PassOptions& options)
       auto name = *ex->getInternalName();
       auto* global = wasm.getGlobal(name);
       if (global->mutable_) {
-        roots[GlobalLocation{name}] = PossibleContents::fromType(global->type);
+        roots[getIndex(GlobalLocation{name})] =
+          PossibleContents::fromType(global->type);
       }
+    }
+  }
+
+  // JS-called functions are called from outside the module, as if exported.
+  for (auto func : Intrinsics(wasm).getJSCalledFunctions()) {
+    calledFromOutside.insert(func);
+  }
+
+  // Apply changes to all functions called from outside.
+  for (auto funcName : calledFromOutside) {
+    auto* func = wasm.getFunction(funcName);
+    auto params = func->getParams();
+    for (Index i = 0; i < func->getParams().size(); i++) {
+      roots[getIndex(ParamLocation{func, i})] =
+        PossibleContents::fromType(params[i]);
     }
   }
 
@@ -2347,18 +2485,60 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   for (auto tag : publicTags) {
     auto params = wasm.getTag(tag)->params();
     for (Index i = 0; i < params.size(); i++) {
-      roots[TagLocation{tag, i}] = PossibleContents::fromType(params[i]);
+      roots[getIndex(TagLocation{tag, i})] =
+        PossibleContents::fromType(params[i]);
+    }
+  }
+
+  // In open world, public heap types may be written to from the outside.
+  if (!options.closedWorld) {
+    for (auto type : ModuleUtils::getPublicHeapTypes(wasm)) {
+      if (type.isStruct()) {
+        auto& fields = type.getStruct().fields;
+        for (Index i = 0; i < fields.size(); i++) {
+          roots[getIndex(DataLocation{type, i})] =
+            PossibleContents::fromType(fields[i].type);
+        }
+        if (auto desc = type.getDescriptorType()) {
+          auto descType = Type(*desc, Nullable, Inexact);
+          roots[getIndex(DataLocation{type, DataLocation::DescriptorIndex})] =
+            PossibleContents::fromType(descType);
+        }
+      } else if (type.isArray()) {
+        roots[getIndex(DataLocation{type, 0})] =
+          PossibleContents::fromType(type.getArray().element.type);
+      }
     }
   }
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
-  std::cout << "struct phase\n";
+  std::cout << "... " << timer.lastElapsed() << "\n";
+  std::cout << "function subtyping phase\n";
 #endif
 
-  subTypes = std::make_unique<SubTypes>(wasm);
-  maxDepths = subTypes->getMaxDepths();
+  // Link function subtyping params. When a function of type B has a supertype
+  // A, then we may call B using A's type. That means the parameters to
+  // (indirect) calls to B must look at supertypes, which is the opposite of the
+  // logic for results, readFromData(), etc. For now, we just connect these
+  // types directly, which does not fully optimize exact types. TODO: Add a new
+  // mechanism to optimize here.
+  for (auto type : subTypes->types) {
+    if (!type.isFunction()) {
+      continue;
+    }
+    auto super = type.getSuperType();
+    if (!super) {
+      continue;
+    }
+    auto params = type.getSignature().params;
+    for (Index i = 0; i < params.size(); i++) {
+      links.insert(getIndexes(LocationLink{SignatureParamLocation{*super, i},
+                                           SignatureParamLocation{type, i}}));
+    }
+  }
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
   std::cout << "Link-targets phase\n";
 #endif
 
@@ -2377,6 +2557,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
 #endif
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
   std::cout << "roots phase\n";
 #endif
 
@@ -2394,6 +2575,7 @@ Flower::Flower(Module& wasm, const PassOptions& options)
   }
 
 #ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
   std::cout << "flow phase\n";
   size_t iters = 0;
 #endif
@@ -2413,6 +2595,10 @@ Flower::Flower(Module& wasm, const PassOptions& options)
 
     flowAfterUpdate(locationIndex);
   }
+
+#ifdef POSSIBLE_CONTENTS_DEBUG
+  std::cout << "... " << timer.lastElapsed() << "\n";
+#endif
 
   // TODO: Add analysis and retrieval logic for fields of immutable globals,
   //       including multiple levels of depth (necessary for itables in j2wasm).
@@ -2489,6 +2675,12 @@ bool Flower::updateContents(LocationIndex locationIndex,
     // more later (we compute that at the end), so use a temp out var for that.
     bool worthSendingMoreTemp = true;
     filterExpressionContents(newContents, *exprLoc, worthSendingMoreTemp);
+
+#if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2
+    std::cout << "  post-filtered exprLoc:\n";
+    newContents.dump(std::cout, &wasm);
+    std::cout << '\n';
+#endif
   } else if (auto* globalLoc = std::get_if<GlobalLocation>(&location)) {
     // Generic filtering. We do this both before and after.
     filterGlobalContents(newContents, *globalLoc);
@@ -2627,6 +2819,11 @@ void Flower::flowAfterUpdate(LocationIndex locationIndex) {
     } else if (auto* set = parent->dynCast<ArraySet>()) {
       assert(set->ref == child || set->value == child);
       writeToData(set->ref, set->value, 0);
+    } else if (auto* get = parent->dynCast<RefGetDesc>()) {
+      // Similar to struct.get.
+      assert(get->ref == child);
+      readFromData(
+        get->ref->type, DataLocation::DescriptorIndex, contents, get);
     } else {
       // TODO: ref.test and all other casts can be optimized (see the cast
       //       helper code used in OptimizeInstructions and RemoveUnusedBrs)
@@ -2769,7 +2966,8 @@ void Flower::filterGlobalContents(PossibleContents& contents,
     // a cone/exact type *and* that something is equal to a global, in some
     // cases. See https://github.com/WebAssembly/binaryen/pull/5083
     if (contents.isMany() || contents.isConeType()) {
-      contents = PossibleContents::global(global->name, global->type);
+      contents = PossibleContents::global(
+        global->name, ExternalKind::Global, global->type);
 
       // TODO: We could do better here, to set global->init->type instead of
       //       global->type, or even the contents.getType() - either of those
@@ -2787,6 +2985,10 @@ void Flower::filterGlobalContents(PossibleContents& contents,
 
 void Flower::filterDataContents(PossibleContents& contents,
                                 const DataLocation& dataLoc) {
+  if (dataLoc.index == DataLocation::DescriptorIndex) {
+    // Nothing to filter (packing is not relevant for a descriptor).
+    return;
+  }
   auto field = GCTypeUtils::getField(dataLoc.type, dataLoc.index);
   if (!field) {
     // This is a bottom type; nothing will be written here.
@@ -2960,12 +3162,12 @@ void Flower::readFromData(Type declaredType,
   if (!hasIndex(coneReadLocation)) {
     // This is the first time we use this location, so create the links for it
     // in the graph.
-    subTypes->iterSubTypes(
-      cone.type.getHeapType(),
-      normalizedDepth,
-      [&](HeapType type, Index depth) {
-        connectDuringFlow(DataLocation{type, fieldIndex}, coneReadLocation);
-      });
+    subTypes->iterSubTypes(cone.type.getHeapType(),
+                           normalizedDepth,
+                           [&](HeapType type, Index depth) {
+                             connectDuringFlow(DataLocation{type, fieldIndex},
+                                               coneReadLocation);
+                           });
 
     // TODO: we can end up with redundant links here if we see one cone first
     //       and then a larger one later. But removing links is not efficient,
@@ -3062,8 +3264,6 @@ void Flower::dump(Location location) {
     std::cout << "  sigparamloc " << '\n';
   } else if (auto* loc = std::get_if<SignatureResultLocation>(&location)) {
     std::cout << "  sigresultloc " << loc->type << " : " << loc->index << '\n';
-  } else if (auto* loc = std::get_if<NullLocation>(&location)) {
-    std::cout << "  Nullloc " << loc->type << '\n';
   } else {
     std::cout << "  (other)\n";
   }

@@ -30,6 +30,7 @@
 #include "parsing.h"
 #include "source-map.h"
 #include "wasm-builder.h"
+#include "wasm-features.h"
 #include "wasm-ir-builder.h"
 #include "wasm-traversal.h"
 #include "wasm-validator.h"
@@ -355,6 +356,11 @@ enum BrOnCastFlag {
   OutputNullable = 1 << 1,
 };
 
+constexpr uint32_t ExactImport = 1 << 5;
+
+constexpr uint32_t HasMemoryOrderMask = 1 << 5;
+constexpr uint32_t HasMemoryIndexMask = 1 << 6;
+
 enum EncodedType {
   // value types
   i32 = -0x1,  // 0x7f
@@ -363,8 +369,9 @@ enum EncodedType {
   f64 = -0x4,  // 0x7c
   v128 = -0x5, // 0x7b
   // packed types
-  i8 = -0x8,  // 0x78
-  i16 = -0x9, // 0x77
+  i8 = -0x8,         // 0x78
+  i16 = -0x9,        // 0x77
+  waitQueue = -0x24, // 0x5c
   // reference types
   nullfuncref = -0xd,   // 0x73
   nullexternref = -0xe, // 0x72
@@ -454,6 +461,7 @@ extern const char* FP16Feature;
 extern const char* BulkMemoryOptFeature;
 extern const char* CallIndirectOverlongFeature;
 extern const char* CustomDescriptorsFeature;
+extern const char* RelaxedAtomicsFeature;
 
 enum Subsection {
   NameModule = 0,
@@ -1152,6 +1160,8 @@ enum ASTNodes {
 
   StructNew = 0x00,
   StructNewDefault = 0x01,
+  StructNewDesc = 0x20,
+  StructNewDefaultDesc = 0x21,
   StructGet = 0x02,
   StructGetS = 0x03,
   StructGetU = 0x04,
@@ -1174,12 +1184,12 @@ enum ASTNodes {
   RefTestNull = 0x15,
   RefCast = 0x16,
   RefCastNull = 0x17,
-  RefCastDesc = 0x23,
-  RefCastDescNull = 0x24,
+  RefCastDescEq = 0x23,
+  RefCastDescEqNull = 0x24,
   BrOnCast = 0x18,
   BrOnCastFail = 0x19,
-  BrOnCastDesc = 0x25,
-  BrOnCastDescFail = 0x26,
+  BrOnCastDescEq = 0x25,
+  BrOnCastDescEqFail = 0x26,
   AnyConvertExtern = 0x1a,
   ExternConvertAny = 0x1b,
   RefI31 = 0x1c,
@@ -1241,7 +1251,8 @@ enum ASTNodes {
   Suspend = 0xe2,
   Resume = 0xe3,
   ResumeThrow = 0xe4,
-  Switch = 0xe5,  // NOTE(dhil): the internal class is known as
+  ResumeThrowRef = 0xe5,
+  Switch = 0xe6,  // NOTE(dhil): the internal class is known as
                   // StackSwitch to avoid conflict with the existing
                   // 'switch table'.
   OnLabel = 0x00, // (on $tag $label)
@@ -1431,6 +1442,8 @@ public:
 
   std::optional<BufferWithRandomAccess> getBranchHintsBuffer();
   std::optional<BufferWithRandomAccess> getInlineHintsBuffer();
+  std::optional<BufferWithRandomAccess> getRemovableIfUnusedHintsBuffer();
+  std::optional<BufferWithRandomAccess> getJSCalledHintsBuffer();
 
   // helpers
   void writeInlineString(std::string_view name);
@@ -1709,20 +1722,27 @@ public:
   void readDylink(size_t payloadLen);
   void readDylink0(size_t payloadLen);
 
-  // We read branch hints *after* the code section, even though they appear
+  // We read code annotations *after* the code section, even though they appear
   // earlier. That is simpler for us as we note expression locations as we scan
-  // code, and then just need to match them up. To do this, we note the branch
-  // hint position and size in the first pass, and handle it later.
-  size_t branchHintsPos = 0;
-  size_t branchHintsLen = 0;
+  // code, and then just need to match them up. To do this, we note the
+  // positions of annotation sections in the first pass, and handle them later.
+  struct AnnotationSectionInfo {
+    // The start position of the section. We will rewind to there to read it.
+    size_t pos;
+    // A lambda that will read the section, from that position.
+    std::function<void()> read;
+  };
+  std::vector<AnnotationSectionInfo> deferredAnnotationSections;
+
   void readBranchHints(size_t payloadLen);
-
-  // Like branch hints, we note where the section is to read it later.
-  size_t inlineHintsPos = 0;
-  size_t inlineHintsLen = 0;
   void readInlineHints(size_t payloadLen);
+  void readRemovableIfUnusedHints(size_t payloadLen);
+  void readJSCalledHints(size_t payloadLen);
 
-  Index readMemoryAccess(Address& alignment, Address& offset);
+  std::tuple<Address, Address, Index, MemoryOrder>
+  readMemoryAccess(bool isAtomic, bool isRMW);
+  std::tuple<Name, Address, Address, MemoryOrder> getAtomicMemarg();
+  std::tuple<Name, Address, Address, MemoryOrder> getRMWMemarg();
   std::tuple<Name, Address, Address> getMemarg();
   MemoryOrder getMemoryOrder(bool isRMW = false);
 
@@ -1730,11 +1750,18 @@ public:
     throw ParseException(text, 0, pos);
   }
 
+  // Allow users to query the target features section features after parsing.
+  FeatureSet getFeaturesSectionFeatures() { return featuresSectionFeatures; }
+
 private:
   // In certain modes we need to note the locations of expressions, to match
   // them against sections like DWARF or custom annotations. As this incurs
   // overhead, we only note locations when we actually need to.
   bool needCodeLocations = false;
+
+  // The features enabled by the target features section, which may be a subset
+  // of the features enabled for the module.
+  FeatureSet featuresSectionFeatures;
 
   // Scans ahead in the binary to check certain conditions like
   // needCodeLocations.

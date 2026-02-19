@@ -47,7 +47,8 @@ BinaryenFeatureMemory64: 2048
 BinaryenFeatureRelaxedSIMD: 4096
 BinaryenFeatureExtendedConst: 8192
 BinaryenFeatureStrings: 16384
-BinaryenFeatureAll: 4194303
+BinaryenFeatureRelaxedAtomics: 4194304
+BinaryenFeatureAll: 8388607
 (f32.neg
  (f32.const -33.61199951171875)
 )
@@ -2111,6 +2112,13 @@ BinaryenFeatureAll: 4194303
        (f64.const 3.7)
        (i32.const 2449)
       )
+      (return_call_ref $2
+       (i32.const 13)
+       (i64.const 37)
+       (f32.const 1.2999999523162842)
+       (f64.const 3.7)
+       (ref.func $"kitchen()sinker")
+      )
       (drop
        (ref.is_null
         (ref.null noextern)
@@ -3081,6 +3089,41 @@ module with a call_ref:
  (func $tiny (type $0)
   (call_ref $0
    (ref.func $tiny)
+  )
+ )
+)
+Load memory order: 2
+Store memory order: 2
+RMW memory order: 2
+Cmpxchg memory order: 2
+(module
+ (type $0 (func))
+ (memory $0 1 1)
+ (export "memory" (memory $0))
+ (func $relaxed-atomics (type $0)
+  (block $body
+   (drop
+    (i32.atomic.load acqrel
+     (i32.const 0)
+    )
+   )
+   (i32.atomic.store acqrel
+    (i32.const 0)
+    (i32.const 1)
+   )
+   (drop
+    (i32.atomic.rmw.add acqrel
+     (i32.const 0)
+     (i32.const 1)
+    )
+   )
+   (drop
+    (i32.atomic.rmw.cmpxchg acqrel
+     (i32.const 0)
+     (i32.const 0)
+     (i32.const 1)
+    )
+   )
   )
  )
 )

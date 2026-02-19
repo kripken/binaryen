@@ -478,3 +478,116 @@
     )
   )
 )
+
+;; Test we do not error on resume_throw_ref. It adds no subtyping constraints
+;; between declared types besides those from the handlers.
+(module
+  ;; CHECK:      (rec
+  ;; CHECK-NEXT:  (type $f (func))
+
+  ;; CHECK:       (type $k (cont $f))
+
+  ;; CHECK:      (elem declare func $no_handler)
+
+  ;; CHECK:      (tag $e0 (type $f))
+  (tag $e0)
+
+  (type $f (func))
+  (type $k (cont $f))
+
+  ;; CHECK:      (func $no_handler (type $f)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  (func $no_handler
+    (unreachable)
+  )
+
+  ;; CHECK:      (func $throw_unhandled_ref (type $f)
+  ;; CHECK-NEXT:  (resume_throw_ref $k
+  ;; CHECK-NEXT:   (block $h (result (ref exn))
+  ;; CHECK-NEXT:    (try_table (catch_ref $e0 $h)
+  ;; CHECK-NEXT:     (throw $e0)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (unreachable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (cont.new $k
+  ;; CHECK-NEXT:    (ref.func $no_handler)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $throw_unhandled_ref
+    (block $h (result exnref)
+      (try_table (catch_ref $e0 $h) (throw $e0))
+      (unreachable)
+    )
+    (resume_throw_ref $k (cont.new $k (ref.func $no_handler)))
+  )
+)
+
+;; Test that processResumeHandlers correctly iterates handler tag parameters
+;; using the inner loop variable. With two handlers where handler 1 has multiple
+;; parameters, the subtyping constraint at param index 0 of handler 1 must be
+;; noted (not the constraint at param index 1 repeated).
+(module
+  ;; CHECK:      (rec
+  ;; CHECK-NEXT:  (type $super (sub (struct)))
+  (type $super (sub (struct)))
+  ;; CHECK:       (type $sub (sub $super (struct)))
+  (type $sub (sub $super (struct)))
+
+  ;; CHECK:       (type $f (func))
+  (type $f (func))
+  ;; CHECK:       (type $cont (cont $f))
+  (type $cont (cont $f))
+
+  ;; First tag has 1 param; second tag has 2 params with $sub at index 0.
+  ;; CHECK:       (type $4 (func (param i32)))
+
+  ;; CHECK:       (type $5 (func (param (ref null $sub) i32)))
+
+  ;; CHECK:       (type $6 (func (result (ref null $super) i32 (ref null $cont))))
+
+  ;; CHECK:       (type $7 (func (result i32 (ref null $cont))))
+
+  ;; CHECK:      (tag $e0 (type $4) (param i32))
+  (tag $e0 (param i32))
+  ;; CHECK:      (tag $e1 (type $5) (param (ref null $sub) i32))
+  (tag $e1 (param (ref null $sub) i32))
+
+  ;; CHECK:      (func $resume-handler-multi-param (type $f)
+  ;; CHECK-NEXT:  (local $c (ref null $cont))
+  ;; CHECK-NEXT:  (tuple.drop 2
+  ;; CHECK-NEXT:   (block $l0 (type $7) (result i32 (ref null $cont))
+  ;; CHECK-NEXT:    (tuple.drop 3
+  ;; CHECK-NEXT:     (block $l1 (type $6) (result (ref null $super) i32 (ref null $cont))
+  ;; CHECK-NEXT:      (resume $cont (on $e0 $l0) (on $e1 $l1)
+  ;; CHECK-NEXT:       (local.get $c)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (unreachable)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (unreachable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $resume-handler-multi-param
+    (local $c (ref null $cont))
+    (tuple.drop 2
+      (block $l0 (result i32 (ref null $cont))
+        (tuple.drop 3
+          (block $l1 (result (ref null $super) i32 (ref null $cont))
+            ;; Handler 1 sends (ref null $sub, i32) to $l1 which expects
+            ;; (ref null $super, i32, ref null $cont). This requires
+            ;; $sub <: $super at param index 0 of handler 1.
+            (resume $cont (on $e0 $l0) (on $e1 $l1)
+              (local.get $c)
+            )
+            (unreachable)
+          )
+        )
+        (unreachable)
+      )
+    )
+  )
+)
+

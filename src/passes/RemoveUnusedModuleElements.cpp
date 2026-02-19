@@ -45,6 +45,7 @@
 #include "ir/module-utils.h"
 #include "ir/struct-utils.h"
 #include "ir/subtypes.h"
+#include "ir/table-utils.h"
 #include "ir/utils.h"
 #include "pass.h"
 #include "support/insert_ordered.h"
@@ -136,7 +137,8 @@ struct Noter : public PostWalker<Noter, UnifiedExpressionVisitor<Noter>> {
   void visitCall(Call* curr) {
     use({ModuleElementKind::Function, curr->target});
 
-    if (Intrinsics(*getModule()).isCallWithoutEffects(curr)) {
+    Intrinsics intrinsics(*getModule());
+    if (intrinsics.isCallWithoutEffects(curr)) {
       // A call-without-effects receives a function reference and calls it, the
       // same as a CallRef. When we have a flag for non-closed-world, we should
       // handle this automatically by the reference flowing out to an import,
@@ -157,6 +159,12 @@ struct Noter : public PostWalker<Noter, UnifiedExpressionVisitor<Noter>> {
         callRef.target = target;
         visitCallRef(&callRef);
       }
+    } else if (intrinsics.isConfigureAll(curr)) {
+      // Every function that configureAll refers to is signature-called. Mark
+      // them all as called, as JS can call them.
+      for (auto func : intrinsics.getConfigureAllFunctions(curr)) {
+        use({ModuleElementKind::Function, func});
+      }
     }
   }
 
@@ -165,11 +173,6 @@ struct Noter : public PostWalker<Noter, UnifiedExpressionVisitor<Noter>> {
     // the heap type we call with.
     reference({ModuleElementKind::Table, curr->table});
     noteIndirectCall(curr->table, curr->heapType);
-    // Note a possible call of a function reference as well, as something might
-    // be written into the table during runtime. With precise tracking of what
-    // is written into the table we could do better here; we could also see
-    // which tables are immutable. TODO
-    noteCallRef(curr->heapType);
   }
 
   void visitCallRef(CallRef* curr) {
@@ -181,7 +184,16 @@ struct Noter : public PostWalker<Noter, UnifiedExpressionVisitor<Noter>> {
     noteCallRef(curr->target->type.getHeapType());
   }
 
-  void visitRefFunc(RefFunc* curr) { noteRefFunc(curr->func); }
+  void visitRefFunc(RefFunc* curr) {
+    // If the target is js-called then a reference is as strong as a use.
+    auto target = curr->func;
+    Intrinsics intrinsics(*getModule());
+    if (intrinsics.getAnnotations(getModule()->getFunction(target)).jsCalled) {
+      use({ModuleElementKind::Function, target});
+    } else {
+      noteRefFunc(target);
+    }
+  }
 
   void visitStructGet(StructGet* curr) {
     if (curr->ref->type == Type::unreachable || curr->ref->type.isNull()) {
@@ -189,6 +201,16 @@ struct Noter : public PostWalker<Noter, UnifiedExpressionVisitor<Noter>> {
     }
     auto type = curr->ref->type.getHeapType();
     noteStructField(StructField{type, curr->index});
+  }
+
+  void visitContNew(ContNew* curr) {
+    // The function reference that is passed in here will be called, just as if
+    // we were a call_ref, except at a potentially later time.
+    if (!curr->func->type.isRef()) {
+      return;
+    }
+
+    noteCallRef(curr->func->type.getHeapType());
   }
 };
 
@@ -258,10 +280,27 @@ struct Analyzer {
   std::unordered_map<StructField, std::vector<Expression*>>
     unreadStructFieldExprMap;
 
+  // Cached table data. Each time we see a new call_indirect form (a table and a
+  // type), we must find all the functions that might be called, and their
+  // element segments, as those are now reachable. We parse element segments
+  // once at the start to build an efficient "flat" data structure for later
+  // queries.
+  struct FlatTableInfo {
+    // Maps each heap type that is in this table to the items it can call: the
+    // functions, and their segments. This takes into account subtyping, that
+    // is, typeItemMap[foo] includes data for subtypes of foo, so that we just
+    // need to read one place.
+    std::unordered_map<HeapType, std::unordered_set<Name>> typeFuncs;
+    std::unordered_map<HeapType, std::unordered_set<Name>> typeElems;
+  };
+  std::unordered_map<Name, FlatTableInfo> flatTableInfoMap;
+
   Analyzer(Module* module,
            const PassOptions& options,
            const std::vector<ModuleElement>& roots)
     : module(module), options(options) {
+
+    prepare();
 
     // All roots are used.
     for (auto& element : roots) {
@@ -270,6 +309,28 @@ struct Analyzer {
 
     // Main loop on both the module and the expression queues.
     while (processExpressions() || processModule()) {
+    }
+  }
+
+  void prepare() {
+    for (auto& elem : module->elementSegments) {
+      if (!elem->table) {
+        continue;
+      }
+      auto& flatTableInfo = flatTableInfoMap[elem->table];
+      for (auto* item : elem->data) {
+        if (auto* refFunc = item->dynCast<RefFunc>()) {
+          auto* func = module->getFunction(refFunc->func);
+          std::optional<HeapType> type = func->type.getHeapType();
+          // Add this function and element to all relevant types: each function
+          // might be called by its type, or a supertype.
+          while (type) {
+            flatTableInfo.typeFuncs[*type].insert(func->name);
+            flatTableInfo.typeElems[*type].insert(elem->name);
+            type = type->getSuperType();
+          }
+        }
+      }
     }
   }
 
@@ -351,33 +412,33 @@ struct Analyzer {
 
   std::unordered_set<IndirectCall> usedIndirectCalls;
 
+  std::optional<TableUtils::TableInfoMap> tableInfoMap;
+
   void useIndirectCall(IndirectCall call) {
     auto [_, inserted] = usedIndirectCalls.insert(call);
     if (!inserted) {
       return;
     }
 
-    // TODO: use structured bindings with c++20, needed for the capture below
-    auto table = call.first;
-    auto type = call.second;
+    auto [table, type] = call;
 
-    // Any function in the table of that signature may be called.
-    ModuleUtils::iterTableSegments(
-      *module, table, [&](ElementSegment* segment) {
-        auto segmentReferenced = false;
-        for (auto* item : segment->data) {
-          if (auto* refFunc = item->dynCast<RefFunc>()) {
-            auto* func = module->getFunction(refFunc->func);
-            if (HeapType::isSubType(func->type, type)) {
-              use({ModuleElementKind::Function, refFunc->func});
-              segmentReferenced = true;
-            }
-          }
-        }
-        if (segmentReferenced) {
-          reference({ModuleElementKind::ElementSegment, segment->name});
-        }
-      });
+    // Find callable functions and segments.
+    for (auto& func : flatTableInfoMap[table].typeFuncs[type]) {
+      use({ModuleElementKind::Function, func});
+    }
+    for (auto& elem : flatTableInfoMap[table].typeElems[type]) {
+      reference({ModuleElementKind::ElementSegment, elem});
+    }
+
+    // Note a possible call of a function reference as well, if something else
+    // might be written into the table during runtime.
+    // TODO: Add an option for immutable initial content like Directize?
+    if (!tableInfoMap) {
+      tableInfoMap = TableUtils::computeTableInfo(*module);
+    }
+    if ((*tableInfoMap)[table].mayBeModified) {
+      useCallRefType(type);
+    }
   }
 
   void useRefFunc(Name func) {
@@ -392,7 +453,7 @@ struct Analyzer {
     // case where the target function is referenced but not used.
     auto element = ModuleElement{ModuleElementKind::Function, func};
 
-    auto type = module->getFunction(func)->type;
+    auto type = module->getFunction(func)->type.getHeapType();
     if (calledSignatures.count(type)) {
       // We must not have a type in both calledSignatures and
       // uncalledRefFuncMap: once it is called, we do not track RefFuncs for it
@@ -551,8 +612,26 @@ struct Analyzer {
 
     auto* new_ = curr->cast<StructNew>();
 
-    // Use the descriptor right now, normally. (We only have special
-    // optimization for struct.new operands, below.)
+    // Use the descriptor right now, normally. We only have special
+    // optimization for struct.new operands, below, because this is not needed
+    // for descriptors: a descriptor must be a struct, and our "lazy reading"
+    // optimization operates on it (if it could be a function, then we'd need to
+    // do more here). In other words, descriptor reads always have a struct "in
+    // the middle", that we can optimize, like here:
+    //
+    //  (struct.new $A
+    //    (ref.func $c)
+    //    (struct.new $A.desc
+    //      (ref.func $d)
+    //    )
+    //  )
+    //
+    // The struct has a ref.func on it, and the descriptor as well. Say we never
+    // read field 0 from $A, then we can avoid marking $c as reached; this is
+    // the usual struct optimization we do, below. Now, say we never read the
+    // descriptor, then we also never read field 0 from $A.desc, that is, the
+    // usual struct optimization on the descriptor class is enough for us to
+    // avoid marking $d as reached.
     if (new_->desc) {
       use(new_->desc);
     }
@@ -844,9 +923,8 @@ struct RemoveUnusedModuleElements : public Pass {
       // See TODO in addReferences - we may be able to do better here.
       return !needed({ModuleElementKind::Global, curr->name});
     });
-    module->removeTags([&](Tag* curr) {
-      return !needed({ModuleElementKind::Tag, curr->name});
-    });
+    module->removeTags(
+      [&](Tag* curr) { return !needed({ModuleElementKind::Tag, curr->name}); });
     module->removeMemories([&](Memory* curr) {
       return !needed(ModuleElement(ModuleElementKind::Memory, curr->name));
     });

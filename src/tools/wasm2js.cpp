@@ -126,8 +126,7 @@ static void traversePrePost(Ref node,
 }
 
 static void traversePost(Ref node, std::function<void(Ref)> visit) {
-  traversePrePost(
-    node, [](Ref node) {}, visit);
+  traversePrePost(node, [](Ref node) {}, visit);
 }
 
 static void replaceInPlace(Ref target, Ref value) {
@@ -788,7 +787,11 @@ void AssertionEmitter::emit() {
     Name testFuncName("check" + std::to_string(i));
     auto& cmd = script[i].cmd;
     if (auto* mod = std::get_if<WASTModule>(&cmd)) {
-      if (auto* w = std::get_if<std::shared_ptr<Module>>(mod)) {
+      if (mod->isDefinition) {
+        Fatal() << "Module definition is not supported on line "
+                << script[i].line;
+      }
+      if (auto* w = std::get_if<std::shared_ptr<Module>>(&mod->module)) {
         wasm = *w;
         // We have already done the parse, but we still do this to apply the
         // features from the command line.
@@ -951,7 +954,10 @@ int main(int argc, const char* argv[]) {
         Fatal() << "expected module";
       }
       if (auto* mod = std::get_if<WASTModule>(&(*script)[0].cmd)) {
-        if (auto* w = std::get_if<std::shared_ptr<Module>>(mod)) {
+        if (mod->isDefinition) {
+          Fatal() << "module definition is not supported";
+        }
+        if (auto* w = std::get_if<std::shared_ptr<Module>>(&mod->module)) {
           wasm = *w;
           // This isn't actually before the parse, but we can't apply the
           // feature options any earlier. FIXME.
@@ -986,14 +992,20 @@ int main(int argc, const char* argv[]) {
   if (options.debug) {
     std::cerr << "j-printing..." << std::endl;
   }
-  Output output(options.extra["output"], Flags::Text);
-  if (script && options.extra["asserts"] == "1") {
-    AssertionEmitter(*script, output, flags, options).emit();
-  } else {
-    emitWasm(*wasm, output, flags, options.passOptions, "asmFunc");
+
+  // Ensure the destructor of Output runs before quick_exit.
+  {
+    Output output(options.extra["output"], Flags::Text);
+    if (script && options.extra["asserts"] == "1") {
+      AssertionEmitter(*script, output, flags, options).emit();
+    } else {
+      emitWasm(*wasm, output, flags, options.passOptions, "asmFunc");
+    }
   }
 
   if (options.debug) {
     std::cerr << "done." << std::endl;
   }
+
+  flush_and_quick_exit(0);
 }

@@ -19,6 +19,7 @@
 #include "ir/child-typer.h"
 #include "ir/eh-utils.h"
 #include "ir/names.h"
+#include "ir/principal-type.h"
 #include "ir/properties.h"
 #include "ir/utils.h"
 #include "wasm-ir-builder.h"
@@ -75,15 +76,22 @@ MaybeResult<IRBuilder::HoistedVal> IRBuilder::hoistLastValue() {
     return HoistedVal{Index(index), nullptr};
   }
   auto*& expr = stack[index];
-  auto type = expr->type;
-  if (type == Type::unreachable) {
+  if (expr->type == Type::unreachable) {
     // Make sure the top of the stack also has an unreachable expression.
     if (stack.back()->type != Type::unreachable) {
       pushSynthetic(builder.makeUnreachable());
     }
     return HoistedVal{Index(index), nullptr};
   }
-  // Hoist with a scratch local.
+  // Hoist with a scratch local. Normally the scratch local is the same type as
+  // the hoisted expression, but we may need to adjust it given the enabled
+  // features. Otherwise, if the expression has a tuple type with a more refined
+  // element than would be written to a binary, then that refined element type
+  // would end up in a multivalue block return. But that could cause us to fail
+  // text roundtripping if the block type would conflict after binary writing
+  // with another function type in the module. Avoid this problem by
+  // generalizing the scratch local type eagerly.
+  auto type = expr->type.asWrittenGivenFeatures(wasm.features);
   auto scratchIdx = addScratchLocal(type);
   CHECK_ERR(scratchIdx);
   expr = builder.makeLocalSet(*scratchIdx, expr);
@@ -293,71 +301,13 @@ void IRBuilder::dump() {
 
 struct IRBuilder::ChildPopper
   : UnifiedExpressionVisitor<ChildPopper, Result<>> {
-  struct Subtype {
-    Type bound;
-  };
 
-  struct AnyType {};
-
-  struct AnyReference {};
-
-  struct AnyTuple {
-    size_t arity;
-  };
-
-  struct AnyI8ArrayReference {};
-
-  struct AnyI16ArrayReference {};
-
-  struct Constraint : std::variant<Subtype,
-                                   AnyType,
-                                   AnyReference,
-                                   AnyTuple,
-                                   AnyI8ArrayReference,
-                                   AnyI16ArrayReference> {
-    std::optional<Type> getSubtype() const {
-      if (auto* subtype = std::get_if<Subtype>(this)) {
-        return subtype->bound;
-      }
-      return std::nullopt;
-    }
-    bool isAnyType() const { return std::get_if<AnyType>(this); }
-    bool isAnyReference() const { return std::get_if<AnyReference>(this); }
-    bool isAnyI8ArrayReference() const {
-      return std::get_if<AnyI8ArrayReference>(this);
-    }
-    bool isAnyI16ArrayReference() const {
-      return std::get_if<AnyI16ArrayReference>(this);
-    }
-    std::optional<size_t> getAnyTuple() const {
-      if (auto* tuple = std::get_if<AnyTuple>(this)) {
-        return tuple->arity;
-      }
-      return std::nullopt;
-    }
-    size_t size() const {
-      if (auto type = getSubtype()) {
-        return type->size();
-      }
-      if (auto arity = getAnyTuple()) {
-        return *arity;
-      }
-      return 1;
-    }
-    Constraint operator[](size_t i) const {
-      if (auto type = getSubtype()) {
-        return {Subtype{(*type)[i]}};
-      }
-      if (getAnyTuple()) {
-        return {AnyType{}};
-      }
-      return *this;
-    }
-  };
+  struct ConstraintCollector;
+  using Constraints = ChildTyper<ConstraintCollector>::Constraints;
 
   struct Child {
     Expression** childp;
-    Constraint constraint;
+    Constraints constraint;
   };
 
   struct ConstraintCollector : ChildTyper<ConstraintCollector> {
@@ -368,28 +318,8 @@ struct IRBuilder::ChildPopper
       : ChildTyper(builder.wasm, builder.func), builder(builder),
         children(children) {}
 
-    void noteSubtype(Expression** childp, Type type) {
-      children.push_back({childp, {Subtype{type}}});
-    }
-
-    void noteAnyType(Expression** childp) {
-      children.push_back({childp, {AnyType{}}});
-    }
-
-    void noteAnyReferenceType(Expression** childp) {
-      children.push_back({childp, {AnyReference{}}});
-    }
-
-    void noteAnyTupleType(Expression** childp, size_t arity) {
-      children.push_back({childp, {AnyTuple{arity}}});
-    }
-
-    void noteAnyI8ArrayReferenceType(Expression** childp) {
-      children.push_back({childp, {AnyI8ArrayReference{}}});
-    }
-
-    void noteAnyI16ArrayReferenceType(Expression** childp) {
-      children.push_back({childp, {AnyI16ArrayReference{}}});
+    void note(Expression** childp, Constraints type) {
+      children.push_back({childp, type});
     }
 
     Type getLabelType(Name label) {
@@ -399,7 +329,7 @@ struct IRBuilder::ChildPopper
     void visitIf(If* curr) {
       // Skip the control flow children because we only want to pop the
       // condition.
-      children.push_back({&curr->condition, {Subtype{Type::i32}}});
+      children.push_back({&curr->condition, {Type(Type::i32)}});
     }
 
     // It is a bug if we ever have insufficient type information.
@@ -513,18 +443,8 @@ private:
       auto type = scope.exprStack[stackIndex]->type[stackTupleIndex];
       if (unreachableIndex) {
         auto constraint = children[childIndex].constraint[childTupleIndex];
-        if (constraint.isAnyType()) {
-          // Always succeeds.
-        } else if (constraint.isAnyReference()) {
-          if (!type.isRef() && type != Type::unreachable) {
-            return true;
-          }
-        } else if (auto bound = constraint.getSubtype()) {
-          if (!Type::isSubType(type, *bound)) {
-            return true;
-          }
-        } else {
-          WASM_UNREACHABLE("unexpected constraint");
+        if (!PrincipalType::matches(type, constraint)) {
+          return true;
         }
       }
 
@@ -1162,7 +1082,7 @@ Result<> IRBuilder::visitEnd() {
     tryy->name = scope.label;
     tryy->finalize(tryy->type);
     push(maybeWrapForLabel(tryy));
-  } else if (Try * tryy;
+  } else if (Try* tryy;
              (tryy = scope.getCatch()) || (tryy = scope.getCatchAll())) {
     auto index = scope.getIndex();
     setCatchBody(tryy, *expr, index);
@@ -1253,7 +1173,6 @@ IRBuilder::fixExtraOutput(ScopeCtx& scope, Name label, Expression* curr) {
 
     // If all the received values are in the scratch local, just fetch them out.
     if (receivedType == Type::none) {
-      assert(extraType == labelType);
       curr = builder.makeSequence(
         curr, builder.makeLocalGet(extraLocal, extraType), extraType);
       continue;
@@ -1401,11 +1320,12 @@ Result<> IRBuilder::makeBlock(Name label, Signature sig) {
   return visitBlockStart(block, sig.params);
 }
 
-Result<>
-IRBuilder::makeIf(Name label, Signature sig, std::optional<bool> likely) {
+Result<> IRBuilder::makeIf(Name label,
+                           Signature sig,
+                           const CodeAnnotation& annotations) {
   auto* iff = wasm.allocator.alloc<If>();
   iff->type = sig.results;
-  addBranchHint(iff, likely);
+  applyAnnotations(iff, annotations);
   return visitIfStart(iff, label, sig.params);
 }
 
@@ -1418,7 +1338,7 @@ Result<> IRBuilder::makeLoop(Name label, Signature sig) {
 
 Result<> IRBuilder::makeBreak(Index label,
                               bool isConditional,
-                              std::optional<bool> likely) {
+                              const CodeAnnotation& annotations) {
   auto name = getLabelName(label);
   CHECK_ERR(name);
   auto labelType = getLabelType(label);
@@ -1430,7 +1350,7 @@ Result<> IRBuilder::makeBreak(Index label,
   curr.condition = isConditional ? &curr : nullptr;
   CHECK_ERR(ChildPopper{*this}.visitBreak(&curr, *labelType));
   auto* br = builder.makeBreak(curr.name, curr.value, curr.condition);
-  addBranchHint(br, likely);
+  applyAnnotations(br, annotations);
   push(br);
 
   return Ok{};
@@ -1464,7 +1384,7 @@ Result<> IRBuilder::makeSwitch(const std::vector<Index>& labels,
 
 Result<> IRBuilder::makeCall(Name func,
                              bool isReturn,
-                             std::optional<std::uint8_t> inline_) {
+                             const CodeAnnotation& annotations) {
   auto sig = wasm.getFunction(func)->getSig();
   Call curr(wasm.allocator);
   curr.target = func;
@@ -1473,14 +1393,14 @@ Result<> IRBuilder::makeCall(Name func,
   auto* call =
     builder.makeCall(curr.target, curr.operands, sig.results, isReturn);
   push(call);
-  addInlineHint(call, inline_);
+  applyAnnotations(call, annotations);
   return Ok{};
 }
 
 Result<> IRBuilder::makeCallIndirect(Name table,
                                      HeapType type,
                                      bool isReturn,
-                                     std::optional<std::uint8_t> inline_) {
+                                     const CodeAnnotation& annotations) {
   if (!type.isSignature()) {
     return Err{"expected function type annotation on call_indirect"};
   }
@@ -1491,13 +1411,16 @@ Result<> IRBuilder::makeCallIndirect(Name table,
   auto* call =
     builder.makeCallIndirect(table, curr.target, curr.operands, type, isReturn);
   push(call);
-  addInlineHint(call, inline_);
+  applyAnnotations(call, annotations);
   return Ok{};
 }
 
 Result<> IRBuilder::makeLocalGet(Index local) {
   if (!func) {
     return Err{"local.get is only valid in a function context"};
+  }
+  if (local >= func->getNumLocals()) {
+    return Err{"invalid local.get index"};
   }
   push(builder.makeLocalGet(local, func->getLocalType(local)));
   return Ok{};
@@ -1506,6 +1429,9 @@ Result<> IRBuilder::makeLocalGet(Index local) {
 Result<> IRBuilder::makeLocalSet(Index local) {
   if (!func) {
     return Err{"local.set is only valid in a function context"};
+  }
+  if (local >= func->getNumLocals()) {
+    return Err{"invalid local.set index"};
   }
   LocalSet curr;
   curr.index = local;
@@ -1517,6 +1443,9 @@ Result<> IRBuilder::makeLocalSet(Index local) {
 Result<> IRBuilder::makeLocalTee(Index local) {
   if (!func) {
     return Err{"local.tee is only valid in a function context"};
+  }
+  if (local >= func->getNumLocals()) {
+    return Err{"invalid local.tee index"};
   }
   LocalSet curr;
   curr.index = local;
@@ -1562,47 +1491,54 @@ Result<> IRBuilder::makeStore(
   return Ok{};
 }
 
-Result<>
-IRBuilder::makeAtomicLoad(unsigned bytes, Address offset, Type type, Name mem) {
+Result<> IRBuilder::makeAtomicLoad(
+  unsigned bytes, Address offset, Type type, Name mem, MemoryOrder order) {
   Load curr;
   curr.memory = mem;
   CHECK_ERR(visitLoad(&curr));
-  push(builder.makeAtomicLoad(bytes, offset, curr.ptr, type, mem));
+  push(builder.makeAtomicLoad(bytes, offset, curr.ptr, type, mem, order));
   return Ok{};
 }
 
-Result<> IRBuilder::makeAtomicStore(unsigned bytes,
-                                    Address offset,
-                                    Type type,
-                                    Name mem) {
+Result<> IRBuilder::makeAtomicStore(
+  unsigned bytes, Address offset, Type type, Name mem, MemoryOrder order) {
   Store curr;
   curr.memory = mem;
   curr.valueType = type;
   CHECK_ERR(visitStore(&curr));
-  push(builder.makeAtomicStore(bytes, offset, curr.ptr, curr.value, type, mem));
+  push(builder.makeAtomicStore(
+    bytes, offset, curr.ptr, curr.value, type, mem, order));
   return Ok{};
 }
 
-Result<> IRBuilder::makeAtomicRMW(
-  AtomicRMWOp op, unsigned bytes, Address offset, Type type, Name mem) {
+Result<> IRBuilder::makeAtomicRMW(AtomicRMWOp op,
+                                  unsigned bytes,
+                                  Address offset,
+                                  Type type,
+                                  Name mem,
+                                  MemoryOrder order) {
   AtomicRMW curr;
   curr.memory = mem;
   curr.type = type;
   CHECK_ERR(visitAtomicRMW(&curr));
-  push(
-    builder.makeAtomicRMW(op, bytes, offset, curr.ptr, curr.value, type, mem));
+  push(builder.makeAtomicRMW(
+    op, bytes, offset, curr.ptr, curr.value, type, mem, order));
   return Ok{};
 }
 
-Result<> IRBuilder::makeAtomicCmpxchg(unsigned bytes,
-                                      Address offset,
-                                      Type type,
-                                      Name mem) {
+Result<> IRBuilder::makeAtomicCmpxchg(
+  unsigned bytes, Address offset, Type type, Name mem, MemoryOrder order) {
   AtomicCmpxchg curr;
   curr.memory = mem;
   CHECK_ERR(ChildPopper{*this}.visitAtomicCmpxchg(&curr, type));
-  push(builder.makeAtomicCmpxchg(
-    bytes, offset, curr.ptr, curr.expected, curr.replacement, type, mem));
+  push(builder.makeAtomicCmpxchg(bytes,
+                                 offset,
+                                 curr.ptr,
+                                 curr.expected,
+                                 curr.replacement,
+                                 type,
+                                 mem,
+                                 order));
   return Ok{};
 }
 
@@ -1823,7 +1759,7 @@ Result<> IRBuilder::makeRefIsNull() {
 }
 
 Result<> IRBuilder::makeRefFunc(Name func) {
-  push(builder.makeRefFunc(func, wasm.getFunction(func)->type));
+  push(builder.makeRefFunc(func));
   return Ok{};
 }
 
@@ -1993,7 +1929,7 @@ Result<> IRBuilder::makeI31Get(bool signed_) {
 
 Result<> IRBuilder::makeCallRef(HeapType type,
                                 bool isReturn,
-                                std::optional<std::uint8_t> inline_) {
+                                const CodeAnnotation& annotations) {
   if (!type.isSignature()) {
     return Err{"expected function type annotation on call_ref"};
   }
@@ -2008,7 +1944,7 @@ Result<> IRBuilder::makeCallRef(HeapType type,
   auto* call =
     builder.makeCallRef(curr.target, curr.operands, sig.results, isReturn);
   push(call);
-  addInlineHint(call, inline_);
+  applyAnnotations(call, annotations);
   return Ok{};
 }
 
@@ -2032,7 +1968,7 @@ Result<> IRBuilder::makeRefCast(Type type, bool isDesc) {
 
   RefCast curr;
   curr.type = type;
-  // Placeholder value to differentiate ref.cast_desc.
+  // Placeholder value to differentiate ref.cast_desc_eq.
   curr.desc = isDesc ? &curr : nullptr;
   CHECK_ERR(visitRefCast(&curr));
 
@@ -2056,10 +1992,13 @@ Result<> IRBuilder::makeRefGetDesc(HeapType type) {
   return Ok{};
 }
 
-Result<> IRBuilder::makeBrOn(
-  Index label, BrOnOp op, Type in, Type out, std::optional<bool> likely) {
+Result<> IRBuilder::makeBrOn(Index label,
+                             BrOnOp op,
+                             Type in,
+                             Type out,
+                             const CodeAnnotation& annotations) {
   std::optional<HeapType> descriptor;
-  if (op == BrOnCastDesc || op == BrOnCastDescFail) {
+  if (op == BrOnCastDescEq || op == BrOnCastDescEqFail) {
     assert(out.isRef());
     descriptor = out.getHeapType().getDescriptorType();
     if (!descriptor) {
@@ -2078,8 +2017,8 @@ Result<> IRBuilder::makeBrOn(
     case BrOnNull:
     case BrOnNonNull:
       break;
-    case BrOnCastDesc:
-    case BrOnCastDescFail: {
+    case BrOnCastDescEq:
+    case BrOnCastDescEqFail: {
       CHECK_ERR(validateTypeAnnotation(out.with(*descriptor).with(Nullable),
                                        curr.desc));
     }
@@ -2101,8 +2040,8 @@ Result<> IRBuilder::makeBrOn(
     case BrOnNonNull:
     case BrOnCast:
     case BrOnCastFail:
-    case BrOnCastDesc:
-    case BrOnCastDescFail:
+    case BrOnCastDescEq:
+    case BrOnCastDescEqFail:
       // Modeled as sending one value.
       if (extraArity == 0) {
         return Err{"br_on target does not expect a value"};
@@ -2122,8 +2061,8 @@ Result<> IRBuilder::makeBrOn(
       break;
     case BrOnCast:
     case BrOnCastFail:
-    case BrOnCastDesc:
-    case BrOnCastDescFail:
+    case BrOnCastDescEq:
+    case BrOnCastDescEqFail:
       testType = in;
       break;
   }
@@ -2138,7 +2077,7 @@ Result<> IRBuilder::makeBrOn(
     CHECK_ERR(name);
 
     auto* br = builder.makeBrOn(op, *name, curr.ref, out, curr.desc);
-    addBranchHint(br, likely);
+    applyAnnotations(br, annotations);
     push(br);
     return Ok{};
   }
@@ -2162,7 +2101,7 @@ Result<> IRBuilder::makeBrOn(
   // Perform the branch.
   CHECK_ERR(visitBrOn(&curr));
   auto* br = builder.makeBrOn(op, extraLabel, curr.ref, out, curr.desc);
-  addBranchHint(br, likely);
+  applyAnnotations(br, annotations);
   push(br);
 
   // If the branch wasn't taken, we need to leave the extra values on the
@@ -2182,7 +2121,7 @@ Result<> IRBuilder::makeBrOn(
     case BrOnNonNull:
       WASM_UNREACHABLE("unexpected op");
     case BrOnCast:
-    case BrOnCastDesc:
+    case BrOnCastDescEq:
       if (out.isNullable()) {
         resultType = Type(in.getHeapType(), NonNullable);
       } else {
@@ -2190,7 +2129,7 @@ Result<> IRBuilder::makeBrOn(
       }
       break;
     case BrOnCastFail:
-    case BrOnCastDescFail:
+    case BrOnCastDescEqFail:
       if (in.isNonNullable()) {
         resultType = Type(out.getHeapType(), NonNullable);
       } else {
@@ -2208,9 +2147,15 @@ Result<> IRBuilder::makeBrOn(
   return Ok{};
 }
 
-Result<> IRBuilder::makeStructNew(HeapType type) {
+Result<> IRBuilder::makeStructNew(HeapType type, bool isDesc) {
   if (!type.isStruct()) {
     return Err{"expected struct type annotation on struct.new"};
+  }
+  if (isDesc && !type.getDescriptorType()) {
+    return Err{"struct.new_desc of type without descriptor"};
+  }
+  if (!isDesc && type.getDescriptorType()) {
+    return Err{"type with descriptor requires struct.new_desc"};
   }
   StructNew curr(wasm.allocator);
   curr.type = Type(type, NonNullable, Exact);
@@ -2220,7 +2165,13 @@ Result<> IRBuilder::makeStructNew(HeapType type) {
   return Ok{};
 }
 
-Result<> IRBuilder::makeStructNewDefault(HeapType type) {
+Result<> IRBuilder::makeStructNewDefault(HeapType type, bool isDesc) {
+  if (isDesc && !type.getDescriptorType()) {
+    return Err{"struct.new_default_desc of type without descriptor"};
+  }
+  if (!isDesc && type.getDescriptorType()) {
+    return Err{"type with descriptor requires struct.new_default_desc"};
+  }
   StructNew curr(wasm.allocator);
   curr.type = Type(type, NonNullable, Exact);
   CHECK_ERR(visitStructNew(&curr));
@@ -2232,6 +2183,9 @@ Result<> IRBuilder::makeStructGet(HeapType type,
                                   Index field,
                                   bool signed_,
                                   MemoryOrder order) {
+  if (!type.isStruct()) {
+    return Err{"expected struct type annotation on struct.get"};
+  }
   const auto& fields = type.getStruct().fields;
   StructGet curr;
   CHECK_ERR(ChildPopper{*this}.visitStructGet(&curr, type));
@@ -2332,6 +2286,9 @@ Result<> IRBuilder::makeArrayNewFixed(HeapType type, uint32_t arity) {
 
 Result<>
 IRBuilder::makeArrayGet(HeapType type, bool signed_, MemoryOrder order) {
+  if (!type.isArray()) {
+    return Err{"expected array type annotation on array.get"};
+  }
   ArrayGet curr;
   CHECK_ERR(ChildPopper{*this}.visitArrayGet(&curr, type));
   CHECK_ERR(validateTypeAnnotation(type, curr.ref));
@@ -2650,7 +2607,13 @@ IRBuilder::makeResumeThrow(HeapType ct,
 
   ResumeThrow curr(wasm.allocator);
   curr.tag = tag;
-  curr.operands.resize(wasm.getTag(tag)->params().size());
+  if (tag) {
+    // This is a normal resume_throw.
+    curr.operands.resize(wasm.getTag(tag)->params().size());
+  } else {
+    // This is a resume_throw_ref.
+    curr.operands.resize(1);
+  }
 
   Result<ResumeTable> resumetable = makeResumeTable(
     labels,
@@ -2692,20 +2655,27 @@ Result<> IRBuilder::makeStackSwitch(HeapType ct, Name tag) {
   return Ok{};
 }
 
-void IRBuilder::addBranchHint(Expression* expr, std::optional<bool> likely) {
-  if (likely) {
+void IRBuilder::applyAnnotations(Expression* expr,
+                                 const CodeAnnotation& annotation) {
+  if (annotation.branchLikely) {
     // Branches are only possible inside functions.
     assert(func);
-    func->codeAnnotations[expr].branchLikely = likely;
+    func->codeAnnotations[expr].branchLikely = annotation.branchLikely;
   }
-}
 
-void IRBuilder::addInlineHint(Expression* expr,
-                              std::optional<uint8_t> inline_) {
-  if (inline_) {
-    // Branches are only possible inside functions.
+  if (annotation.inline_) {
     assert(func);
-    func->codeAnnotations[expr].inline_ = inline_;
+    func->codeAnnotations[expr].inline_ = annotation.inline_;
+  }
+
+  if (annotation.removableIfUnused) {
+    assert(func);
+    func->codeAnnotations[expr].removableIfUnused = true;
+  }
+
+  if (annotation.jsCalled) {
+    assert(func);
+    func->codeAnnotations[expr].jsCalled = true;
   }
 }
 

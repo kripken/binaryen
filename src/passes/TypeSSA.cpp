@@ -48,101 +48,45 @@
 //
 
 #include "ir/child-typer.h"
-#include "ir/find_all.h"
 #include "ir/module-utils.h"
 #include "ir/names.h"
 #include "ir/possible-constant.h"
 #include "ir/utils.h"
 #include "pass.h"
 #include "support/hash.h"
-#include "wasm-builder.h"
+#include "wasm-type-shape.h"
 #include "wasm.h"
 
 namespace wasm {
 
 namespace {
 
-// Given some TypeBuilder items that we want to build new types with, this
-// function builds the types in a new rec group.
-//
-// This is almost the same as just calling build(), but there is a risk of a
-// collision with an existing rec group. This function handles that by finding a
-// way to ensure that the new types are in fact in a new rec group.
-//
-// TODO: Move this outside if we find more uses.
-std::vector<HeapType> ensureTypesAreInNewRecGroup(RecGroup recGroup,
-                                                  Module& wasm) {
-  auto num = recGroup.size();
-
-  std::vector<HeapType> types;
-  types.reserve(num);
-  for (auto type : recGroup) {
-    types.push_back(type);
+// Ensure there are no conflicts between the newly built types in the given
+// RecGroup and any existing types.
+std::vector<HeapType> ensureRecGroupIsUnique(RecGroup group, Module& wasm) {
+  std::unordered_set<RecGroup> existing;
+  for (auto type : ModuleUtils::collectHeapTypes(wasm)) {
+    existing.insert(type.getRecGroup());
   }
 
-  // Find all the heap types present before we create the new ones. The new
-  // types must not appear in |existingSet|.
-  std::vector<HeapType> existing = ModuleUtils::collectHeapTypes(wasm);
-  std::unordered_set<HeapType> existingSet(existing.begin(), existing.end());
-
-  // Check for a collision with an existing rec group. Note that it is enough to
-  // check one of the types: either the entire rec group gets merged, so they
-  // are all merged, or not.
-  if (existingSet.count(types[0])) {
-    // Unfortunately there is a conflict. Handle it by adding a "hash" - a
-    // "random" extra item in the rec group that is so outlandish it will
-    // surely (?) never collide with anything. We must loop while doing so,
-    // until we find a hash that does not collide.
-    //
-    // Note that we use uint64_t here, and deterministic_hash_combine below, to
-    // ensure our output is fully deterministic - the types we add here are
-    // observable in the output.
-    uint64_t hashSize = num + 10;
-    uint64_t random = num;
-    while (1) {
-      // Make a builder and add a slot for the hash.
-      TypeBuilder builder(num + 1);
-      for (Index i = 0; i < num; i++) {
-        builder[i].copy(types[i]);
-      }
-
-      // Implement the hash as a struct with "random" fields, and add it.
-      Struct hashStruct;
-      for (Index i = 0; i < hashSize; i++) {
-        // TODO: a denser encoding?
-        auto type = (random & 1) ? Type::i32 : Type::f64;
-        deterministic_hash_combine(random, hashSize + i);
-        hashStruct.fields.push_back(Field(type, Mutable));
-      }
-      builder[num] = hashStruct;
-
-      // Build and hope for the best.
-      builder.createRecGroup(0, num + 1);
-      auto result = builder.build();
-      assert(!result.getError());
-      types = *result;
-      assert(types.size() == num + 1);
-
-      if (existingSet.count(types[0])) {
-        // There is still a collision. Exponentially use larger hashes to
-        // quickly find one that works. Note that we also use different
-        // pseudorandom values while doing so in the for-loop above.
-        hashSize *= 2;
-      } else {
-        // Success! Leave the loop.
-        break;
-      }
-    }
+  UniqueRecGroups unique(wasm.features);
+  for (auto group : existing) {
+    // N.B. we use `insertOrGet` rather than `insert` because some passes (DAE,
+    // BlockMerging) can create multiple types with the same shape, so we can't
+    // assume all the rec groups are already unique. The rec groups will have
+    // different types, but their shapes will match considering how exactness,
+    // etc. will be erased by the binary writer.
+    unique.insertOrGet(group);
   }
 
-#ifndef NDEBUG
-  // Verify the lack of a collision, just to be safe.
-  for (auto newType : types) {
-    assert(!existingSet.count(newType));
+  RecGroup uniqueGroup = unique.insert(group);
+  std::vector<HeapType> uniqueTypes(uniqueGroup.begin(), uniqueGroup.end());
+  if (uniqueTypes.size() != group.size()) {
+    // Remove the brand type, which we do not need to consider further.
+    uniqueTypes.pop_back();
   }
-#endif
-
-  return types;
+  assert(uniqueTypes.size() == group.size());
+  return uniqueTypes;
 }
 
 // A vector of struct.new or one of the variations on array.new.
@@ -221,20 +165,18 @@ struct Analyzer
         : ChildTyper(*parent.getModule(), parent.getFunction()),
           parent(parent) {}
 
-      void noteSubtype(Expression**, Type type) {
-        for (Type t : type) {
-          if (t.isExact()) {
-            parent.disallowedTypes.insert(t.getHeapType());
+      void note(Expression**, Constraints type) {
+        // Check closed type constraints for exactness. Other kinds of type
+        // constaints do not concern us.
+        // TODO: Handle tuples?
+        for (auto varType : type) {
+          if (auto* t = std::get_if<Type>(&varType)) {
+            if (t->isExact()) {
+              parent.disallowedTypes.insert(t->getHeapType());
+            }
           }
         }
       }
-
-      // Other constraints do not matter to us.
-      void noteAnyType(Expression**) {}
-      void noteAnyReferenceType(Expression**) {}
-      void noteAnyTupleType(Expression**, size_t) {}
-      void noteAnyI8ArrayReferenceType(Expression**) {}
-      void noteAnyI16ArrayReferenceType(Expression**) {}
 
       Type getLabelType(Name label) { WASM_UNREACHABLE("unexpected branch"); }
 
@@ -411,8 +353,7 @@ struct TypeSSA : public Pass {
     assert(newTypes.size() == num);
 
     // Make sure this is actually a new rec group.
-    auto recGroup = newTypes[0].getRecGroup();
-    newTypes = ensureTypesAreInNewRecGroup(recGroup, *module);
+    newTypes = ensureRecGroupIsUnique(newTypes[0].getRecGroup(), *module);
 
     // Success: we can apply the new types.
 

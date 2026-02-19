@@ -136,6 +136,10 @@ template<typename CompareTypes> struct RecGroupComparator {
   }
 
   Comparison compare(Type a, Type b) {
+    // Compare types as they will eventually be written out, not as they are in
+    // the IR.
+    a = a.asWrittenGivenFeatures(features);
+    b = b.asWrittenGivenFeatures(features);
     if (a.isBasic() != b.isBasic()) {
       return b.isBasic() < a.isBasic() ? LT : GT;
     }
@@ -152,13 +156,11 @@ template<typename CompareTypes> struct RecGroupComparator {
       return compare(a.getTuple(), b.getTuple());
     }
     assert(a.isRef() && b.isRef());
-    // Only consider exactness if custom descriptors are enabled. Otherwise, it
-    // will be erased when the types are written, so we ignore it here, too.
-    if (features.hasCustomDescriptors() && a.isExact() != b.isExact()) {
-      return a.isExact() < b.isExact() ? LT : GT;
-    }
     if (a.isNullable() != b.isNullable()) {
       return a.isNullable() < b.isNullable() ? LT : GT;
+    }
+    if (a.isExact() != b.isExact()) {
+      return a.isExact() < b.isExact() ? LT : GT;
     }
     return compare(a.getHeapType(), b.getHeapType());
   }
@@ -294,6 +296,9 @@ struct RecGroupHasher {
   }
 
   size_t hash(Type type) {
+    // Hash types as they will eventually be written out, not as they are in the
+    // IR.
+    type = type.asWrittenGivenFeatures(features);
     size_t digest = wasm::hash(type.isBasic());
     if (type.isBasic()) {
       wasm::rehash(digest, type.getBasic());
@@ -305,10 +310,8 @@ struct RecGroupHasher {
       return digest;
     }
     assert(type.isRef());
-    if (features.hasCustomDescriptors()) {
-      wasm::rehash(digest, type.isExact());
-    }
     wasm::rehash(digest, type.isNullable());
+    wasm::rehash(digest, type.isExact());
     hash_combine(digest, hash(type.getHeapType()));
     return digest;
   }
@@ -368,6 +371,53 @@ bool ComparableRecGroupShape::operator<(const RecGroupShape& other) const {
 
 bool ComparableRecGroupShape::operator>(const RecGroupShape& other) const {
   return GT == compareComparable(*this, other);
+}
+
+RecGroup UniqueRecGroups::insert(RecGroup group) {
+  auto typesIt = groups.emplace(groups.end(), group.begin(), group.end());
+  auto& types = *typesIt;
+  if (shapes.emplace(RecGroupShape(types, features), group).second) {
+    // The types are already unique.
+    return group;
+  }
+  // There is a conflict. Find a brand that makes the group unique.
+  BrandTypeIterator brand;
+  types.push_back(*brand);
+  Index size = types.size();
+  do {
+    types.back() = *brand;
+    ++brand;
+    TypeBuilder builder(size);
+    // Map the old types (excluding the brand) to their corresponding new types
+    // to preserve recursions within the group.
+    std::unordered_map<HeapType, HeapType> newTypes;
+    for (Index i = 0; i < size - 1; ++i) {
+      newTypes[group[i]] = builder[i];
+    }
+    for (Index i = 0; i < size; ++i) {
+      builder[i].copy(types[i], [&](HeapType type) {
+        if (auto newType = newTypes.find(type); newType != newTypes.end()) {
+          return newType->second;
+        }
+        return type;
+      });
+    }
+    builder.createRecGroup(0, size);
+    types = *builder.build();
+    group = types[0].getRecGroup();
+  } while (!shapes.emplace(RecGroupShape(types, features), group).second);
+
+  return group;
+}
+
+RecGroup UniqueRecGroups::insertOrGet(RecGroup group) {
+  auto typesIt = groups.emplace(groups.end(), group.begin(), group.end());
+  auto [it, inserted] =
+    shapes.emplace(RecGroupShape(*typesIt, features), group);
+  if (!inserted) {
+    groups.erase(typesIt);
+  }
+  return it->second;
 }
 
 } // namespace wasm

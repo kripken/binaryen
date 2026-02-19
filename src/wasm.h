@@ -33,9 +33,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ir/import-names.h"
 #include "literal.h"
-#include "mixed_arena.h"
 #include "support/index.h"
+#include "support/mixed_arena.h"
 #include "support/name.h"
 #include "wasm-features.h"
 #include "wasm-type.h"
@@ -65,7 +66,7 @@ struct Address {
   }
 };
 
-enum class MemoryOrder {
+enum class MemoryOrder : uint8_t {
   Unordered,
   SeqCst,
   AcqRel,
@@ -608,8 +609,8 @@ enum BrOnOp {
   BrOnNonNull,
   BrOnCast,
   BrOnCastFail,
-  BrOnCastDesc,
-  BrOnCastDescFail,
+  BrOnCastDescEq,
+  BrOnCastDescEqFail,
 };
 
 enum StringNewOp {
@@ -993,9 +994,11 @@ public:
   bool signed_ = false;
   Address offset;
   Address align;
-  bool isAtomic;
   Expression* ptr;
   Name memory;
+  MemoryOrder order = MemoryOrder::Unordered;
+
+  bool isAtomic() const { return order != MemoryOrder::Unordered; }
 
   // type must be set during creation, cannot be inferred
 
@@ -1010,11 +1013,13 @@ public:
   uint8_t bytes;
   Address offset;
   Address align;
-  bool isAtomic;
   Expression* ptr;
   Expression* value;
   Type valueType;
   Name memory;
+  MemoryOrder order;
+
+  bool isAtomic() const { return order != MemoryOrder::Unordered; }
 
   void finalize();
 };
@@ -1030,6 +1035,7 @@ public:
   Expression* ptr;
   Expression* value;
   Name memory;
+  MemoryOrder order = MemoryOrder::SeqCst;
 
   void finalize();
 };
@@ -1045,6 +1051,7 @@ public:
   Expression* expected;
   Expression* replacement;
   Name memory;
+  MemoryOrder order = MemoryOrder::SeqCst;
 
   void finalize();
 };
@@ -1376,7 +1383,7 @@ public:
   Name func;
 
   void finalize();
-  void finalize(HeapType heapType);
+  void finalize(Module& wasm);
 };
 
 class RefEq : public SpecificExpression<Expression::RefEqId> {
@@ -1639,7 +1646,7 @@ public:
 
   Expression* ref;
 
-  // Used only for ref.cast_desc.
+  // Used only for ref.cast_desc_eq.
   Expression* desc;
 
   void finalize();
@@ -1666,7 +1673,7 @@ public:
   Name name;
   Expression* ref;
 
-  // Only used for br_on_cast_desc{,_fail}
+  // Only used for br_on_cast_desc_eq{,_fail}
   Expression* desc;
 
   // Only used for br_on_cast{,_desc}{,_fail}
@@ -2114,6 +2121,9 @@ public:
     : handlerTags(allocator), handlerBlocks(allocator), operands(allocator),
       sentTypes(allocator) {}
 
+  // If tag is set to a non-null Name, this is a resume_throw and |operands|
+  // contains the values to be set in an exception of that tag. If tag is null,
+  // this is resume_throw_ref and |operands| contains a single item, the exnref.
   Name tag;
   // See the comment on `Resume` above.
   ArenaVector<Name> handlerTags;
@@ -2169,6 +2179,7 @@ struct Importable : Named {
   Name module, base;
 
   bool imported() const { return module.is(); }
+  ImportNames importNames() const { return ImportNames{module, base}; };
 };
 
 class Function;
@@ -2222,9 +2233,43 @@ struct BinaryLocations {
 // Forward declaration for FuncEffectsMap.
 class EffectAnalyzer;
 
+// Annotation for a particular piece of code. This includes std::optionals for
+// all possible annotations, with the ones present being filled in (or just a
+// bool for an annotation with one possible value).
+struct CodeAnnotation {
+  // Branch Hinting proposal: Whether the branch is likely, or unlikely.
+  std::optional<bool> branchLikely;
+
+  // Compilation Hints proposal.
+  static const uint8_t NeverInline = 0;
+  static const uint8_t AlwaysInline = 127;
+  std::optional<uint8_t> inline_;
+
+  // Toolchain hints, see
+  // https://github.com/WebAssembly/binaryen/wiki/Optimizer-Cookbook#intrinsics
+
+  // If this expression's result is unused, then the entire thing can be
+  // considered dead and removable.
+  bool removableIfUnused = false;
+
+  // This should be assumed to be called from JS, even in closed world. Being
+  // called from JS means that the call happens in a non-typed way, with only
+  // the signature mattering ("signature-called"). In particular, rec group type
+  // identity does not matter for such functions.
+  bool jsCalled = false;
+
+  bool operator==(const CodeAnnotation& other) const {
+    return branchLikely == other.branchLikely && inline_ == other.inline_ &&
+           removableIfUnused == other.removableIfUnused &&
+           jsCalled == other.jsCalled;
+  }
+};
+
 class Function : public Importable {
 public:
-  HeapType type = HeapType(Signature()); // parameters and return value
+  // A non-nullable reference to a function type. Exact for defined functions.
+  // TODO: Inexact for imported functions.
+  Type type = Type(Signature(), NonNullable, Exact);
   IRProfile profile = IRProfile::Normal;
   std::vector<Type> vars; // non-param locals
 
@@ -2255,7 +2300,7 @@ public:
                ? columnNumber < other.columnNumber
                : symbolNameIndex < other.symbolNameIndex;
     }
-    void dump() {
+    void dump() const {
       std::cerr << (symbolNameIndex ? symbolNameIndex.value() : -1) << " @ "
                 << fileIndex << ":" << lineNumber << ":" << columnNumber
                 << "\n";
@@ -2273,25 +2318,10 @@ public:
     delimiterLocations;
   BinaryLocations::FunctionLocations funcLocation;
 
-  // Code annotations for VMs. As with debug info, we do not store these on
+  // Function-level annotations are implemented with a key of nullptr, matching
+  // the 0 byte offset in the spec. As with debug info, we do not store these on
   // Expressions as we assume most instances are unannotated, and do not want to
   // add constant memory overhead.
-  struct CodeAnnotation {
-    // Branch Hinting proposal: Whether the branch is likely, or unlikely.
-    std::optional<bool> branchLikely;
-
-    // Compilation Hints proposal.
-    static const uint8_t NeverInline = 0;
-    static const uint8_t AlwaysInline = 127;
-    std::optional<uint8_t> inline_;
-
-    bool operator==(const CodeAnnotation& other) const {
-      return branchLikely == other.branchLikely && inline_ == other.inline_;
-    }
-  };
-
-  // Function-level annotations are implemented with a key of nullptr, matching
-  // the 0 byte offset in the spec.
   std::unordered_map<Expression*, CodeAnnotation> codeAnnotations;
 
   // The effects for this function, if they have been computed. We use a shared
@@ -2307,11 +2337,15 @@ public:
   bool noPartialInline = false;
 
   // Methods
-  Signature getSig() { return type.getSignature(); }
+  Signature getSig() { return type.getHeapType().getSignature(); }
   Type getParams() { return getSig().params; }
   Type getResults() { return getSig().results; }
-  void setParams(Type params) { type = Signature(params, getResults()); }
-  void setResults(Type results) { type = Signature(getParams(), results); }
+  void setParams(Type params) {
+    type = type.with(Signature(params, getResults()));
+  }
+  void setResults(Type results) {
+    type = type.with(Signature(getParams(), results));
+  }
 
   size_t getNumParams();
   size_t getNumVars();
@@ -2336,15 +2370,20 @@ public:
   void clearDebugInfo();
 };
 
-// The kind of an import or export.
-enum class ExternalKind {
+// The kind of an import or export. Use a namespace to avoid polluting the wasm
+// namespace while maintaining implicit conversion to int, which an enum class
+// would not have.
+namespace ExternalKindImpl {
+enum Kind : uint32_t {
   Function = 0,
   Table = 1,
   Memory = 2,
   Global = 3,
   Tag = 4,
-  Invalid = -1
+  Invalid = uint32_t(-1)
 };
+} // namespace ExternalKindImpl
+using ExternalKind = ExternalKindImpl::Kind;
 
 // The kind of a top-level module item. (This overlaps with ExternalKind, but
 // C++ has no good way to extend an enum.) All such items are referred to by
@@ -2472,8 +2511,8 @@ class Tag : public Importable {
 public:
   HeapType type;
 
-  Type params() { return type.getSignature().params; }
-  Type results() { return type.getSignature().results; }
+  Type params() const { return type.getSignature().params; }
+  Type results() const { return type.getSignature().results; }
 };
 
 // "Opaque" data, not part of the core wasm spec, that is held in binaries.
@@ -2623,8 +2662,9 @@ public:
 // Utility for printing an expression with named types.
 using ModuleExpression = std::pair<Module&, Expression*>;
 
-// Utility for printing an type with a name, if the module defines a name.
+// Utilities for printing an type with a name, if the module defines a name.
 using ModuleType = std::pair<Module&, Type>;
+using ModuleHeapType = std::pair<Module&, HeapType>;
 
 // Utility for printing only the top level of an expression. Named types will be
 // used if `module` is non-null.
@@ -2632,6 +2672,17 @@ struct ShallowExpression {
   Expression* expr;
   Module* module = nullptr;
 };
+
+std::ostream& operator<<(std::ostream& o, wasm::Module& module);
+std::ostream& operator<<(std::ostream& o, wasm::Function& func);
+std::ostream& operator<<(std::ostream& o, wasm::Expression& expression);
+std::ostream& operator<<(std::ostream& o, wasm::ModuleExpression pair);
+std::ostream& operator<<(std::ostream& o, wasm::ShallowExpression expression);
+std::ostream& operator<<(std::ostream& o, wasm::ModuleType pair);
+std::ostream& operator<<(std::ostream& o, wasm::ModuleHeapType pair);
+std::ostream& operator<<(std::ostream& os, wasm::MemoryOrder mo);
+std::ostream& operator<<(std::ostream& o, const wasm::ImportNames& importNames);
+std::ostream& operator<<(std::ostream& o, const Table& table);
 
 } // namespace wasm
 
@@ -2641,13 +2692,6 @@ template<> struct hash<wasm::Address> {
     return std::hash<wasm::Address::address64_t>()(a.addr);
   }
 };
-
-std::ostream& operator<<(std::ostream& o, wasm::Module& module);
-std::ostream& operator<<(std::ostream& o, wasm::Function& func);
-std::ostream& operator<<(std::ostream& o, wasm::Expression& expression);
-std::ostream& operator<<(std::ostream& o, wasm::ModuleExpression pair);
-std::ostream& operator<<(std::ostream& o, wasm::ShallowExpression expression);
-std::ostream& operator<<(std::ostream& o, wasm::ModuleType pair);
 
 } // namespace std
 

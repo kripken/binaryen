@@ -191,18 +191,18 @@
 
 ;; As above, but with an exported tag. Also test a tag with multiple params.
 (module
-  ;; CHECK:      (type $0 (func (result i32 f64)))
+  ;; CHECK:      (type $0 (func (param i32 f64)))
 
-  ;; CHECK:      (type $1 (func (param i32 f64)))
+  ;; CHECK:      (type $1 (func (param i32)))
 
-  ;; CHECK:      (type $2 (func (param i32)))
+  ;; CHECK:      (type $2 (func))
 
-  ;; CHECK:      (type $3 (func))
+  ;; CHECK:      (type $3 (func (result i32 f64)))
 
-  ;; CHECK:      (import "fuzzing-support" "throw" (func $throw (type $2) (param i32)))
+  ;; CHECK:      (import "fuzzing-support" "throw" (func $throw (type $1) (param i32)))
   (import "fuzzing-support" "throw" (func $throw (param i32)))
 
-  ;; CHECK:      (tag $tag (type $1) (param i32 f64))
+  ;; CHECK:      (tag $tag (type $0) (param i32 f64))
   (tag $tag (param i32 f64))
 
   ;; CHECK:      (export "func" (func $func))
@@ -210,9 +210,9 @@
   ;; CHECK:      (export "tag" (tag $tag))
   (export "tag" (tag $tag))
 
-  ;; CHECK:      (func $func (type $3)
+  ;; CHECK:      (func $func (type $2)
   ;; CHECK-NEXT:  (tuple.drop 2
-  ;; CHECK-NEXT:   (block $block (type $0) (result i32 f64)
+  ;; CHECK-NEXT:   (block $block (type $3) (result i32 f64)
   ;; CHECK-NEXT:    (try_table (catch $tag $block)
   ;; CHECK-NEXT:     (call $throw
   ;; CHECK-NEXT:      (i32.const 1)
@@ -349,6 +349,44 @@
           (ref.null nofunc)
         )
         (unreachable)
+      )
+    )
+  )
+)
+
+;; Do not refine uncastable types.
+(module
+  (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $cont (cont $none))
+    (type $cont (cont $none))
+    ;; CHECK:       (type $none (func))
+    (type $none (func))
+  )
+
+  ;; CHECK:      (type $2 (func (result contref)))
+
+  ;; CHECK:      (elem declare func $suspend)
+
+  ;; CHECK:      (func $suspend (type $none)
+  ;; CHECK-NEXT:  (nop)
+  ;; CHECK-NEXT: )
+  (func $suspend (type $none)
+    (nop)
+  )
+
+  ;; CHECK:      (func $unrefine (type $2) (result contref)
+  ;; CHECK-NEXT:  (block $label (result contref)
+  ;; CHECK-NEXT:   (cont.new $cont
+  ;; CHECK-NEXT:    (ref.func $suspend)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $unrefine (result contref)
+    ;; No cast should be added here.
+    (block $label (result contref)
+      (cont.new $cont
+        (ref.func $suspend)
       )
     )
   )

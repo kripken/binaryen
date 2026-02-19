@@ -116,6 +116,18 @@
   (func (export "non-linear-4")
     (call $nl4 (cont.new $k1 (ref.func $r1)))
   )
+
+  (func (export "null-resume")
+    (resume $k1
+      (ref.null $k1)
+    )
+  )
+
+  (func (export "null-new") (result (ref null $k1))
+    (cont.new $k1
+      (ref.null $f1)
+    )
+  )
 )
 
 (assert_suspension (invoke "unhandled-1") "unhandled")
@@ -124,13 +136,16 @@
 (assert_return (invoke "handled"))
 
 (assert_exception (invoke "uncaught-1"))
-;; TODO: resume_throw (assert_exception (invoke "uncaught-2"))
-;; TODO: resume_throw (assert_exception (invoke "uncaught-3"))
+(assert_exception (invoke "uncaught-2"))
+(assert_exception (invoke "uncaught-3"))
 
 (assert_trap (invoke "non-linear-1") "continuation already consumed")
 (assert_trap (invoke "non-linear-2") "continuation already consumed")
 (assert_trap (invoke "non-linear-3") "continuation already consumed")
 (assert_trap (invoke "non-linear-4") "continuation already consumed")
+
+(assert_trap (invoke "null-resume") "null continuation reference")
+(assert_trap (invoke "null-new") "null function reference")
 
 (assert_invalid
   (module
@@ -226,6 +241,26 @@
   (type $c1 (cont $f1))
   (type $c2 (cont $f2))
 )
+
+(assert_invalid
+  (module
+    (rec
+      (type $fA (func))
+      (type $fB (func))
+      (type $cont (cont $fA))
+    )
+    (elem declare func $b)
+    (func $a
+      (drop
+        (cont.new $cont ;; expects a ref of $fA, not $fB
+          (ref.func $b)
+        )
+      )
+    )
+    (func $b (type $fB)
+    )
+  )
+  "type mismatch")
 
 ;; Simple state example
 
@@ -641,3 +676,228 @@
     (unreachable))
 )
 
+(module $co2
+  (type $task (func (result i32))) ;; type alias task = [] -> []
+  (type $ct   (cont $task)) ;; type alias   ct = $task
+  (tag $pause (export "pause"))   ;; pause : [] -> []
+  (tag $cancel (export "cancel"))   ;; cancel : [] -> []
+  ;; run : [(ref $task) (ref $task)] -> []
+  ;; implements a 'seesaw' (c.f. Ganz et al. (ICFP@99))
+  (func $run (export "seesaw") (param $up (ref $ct)) (param $down (ref $ct)) (result i32)
+    (local $result i32)
+    ;; run $up
+    (loop $run_next (result i32)
+      (block $on_pause (result (ref $ct))
+        (resume $ct (on $pause $on_pause)
+                    (local.get $up))
+        ;; $up finished, store its result
+        (local.set $result)
+        ;; next cancel $down
+        (block $on_cancel
+          (try_table (catch $cancel $on_cancel)
+            ;; inject the cancel exception into $down
+            (resume_throw $ct $cancel (local.get $down))
+            (drop) ;; drop the return value if it handled $cancel
+                   ;; itself and returned normally...
+          )
+        ) ;; ... otherwise catch $cancel and return $up's result.
+        (return (local.get $result))
+      ) ;; on_pause clause, stack type: [(cont $ct)]
+      (local.set $up)
+      ;; swap $up and $down
+      (local.get $down)
+      (local.set $down (local.get $up))
+      (local.set $up)
+      (br $run_next)
+    )
+  )
+)
+(register "co2")
+
+(module $client
+  (type $task-0 (func (param i32) (result i32)))
+  (type $ct-0 (cont $task-0))
+  (type $task (func (result i32)))
+  (type $ct (cont $task))
+
+  (func $seesaw (import "co2" "seesaw") (param (ref $ct)) (param (ref $ct)) (result i32))
+  (func $print-i32 (import "spectest" "print_i32") (param i32))
+  (tag $pause (import "co2" "pause"))
+
+  (func $even (param $niter i32) (result i32)
+     (local $next i32) ;; zero initialised.
+     (local $i i32)
+     (loop $print-next
+       (call $print-i32 (local.get $next))
+       (suspend $pause)
+       (local.set $next (i32.add (local.get $next) (i32.const 2)))
+       (local.set $i (i32.add (local.get $i) (i32.const 1)))
+       (br_if $print-next (i32.lt_u (local.get $i) (local.get $niter)))
+     )
+     (local.get $next)
+  )
+  (func $odd (param $niter i32) (result i32)
+     (local $next i32) ;; zero initialised.
+     (local $i i32)
+     (local.set $next (i32.const 1))
+     (loop $print-next
+       (call $print-i32 (local.get $next))
+       (suspend $pause)
+       (local.set $next (i32.add (local.get $next) (i32.const 2)))
+       (local.set $i (i32.add (local.get $i) (i32.const 1)))
+       (br_if $print-next (i32.lt_u (local.get $i) (local.get $niter)))
+     )
+     (local.get $next)
+  )
+
+  (func (export "main") (result i32)
+    (call $seesaw
+       (cont.bind $ct-0 $ct
+         (i32.const 5) (cont.new $ct-0 (ref.func $even)))
+       (cont.bind $ct-0 $ct
+         (i32.const 5) (cont.new $ct-0 (ref.func $odd)))))
+
+  (elem declare func $even $odd)
+)
+(assert_return (invoke "main") (i32.const 10))
+
+;; Syntax: check unfolded forms
+(module
+  (type $ft (func))
+  (type $ct (cont $ft))
+  (rec
+    (type $ft2 (func (param (ref null $ct2))))
+    (type $ct2 (cont $ft2)))
+
+  (tag $yield (param i32))
+  (tag $swap)
+
+  ;; Check cont.new
+  (func (result (ref $ct))
+    ref.null $ft
+    block (param (ref null $ft)) (result (ref $ct))
+      cont.new $ct
+    end
+  )
+  ;; Check cont.bind
+  (func (param (ref $ct)) (result (ref $ct))
+    local.get 0
+    block (param (ref $ct)) (result (ref $ct))
+      cont.bind $ct $ct
+    end
+  )
+  ;; Check suspend
+  (func
+    block
+      suspend $swap
+    end
+  )
+  ;; Check resume
+  (func (param $k (ref $ct)) (result i32)
+    (local.get $k)
+    block $on_yield (param (ref $ct)) (result i32 (ref $ct))
+      resume $ct (on $yield $on_yield)
+      i32.const 42
+      return
+    end
+    local.set $k
+  )
+  ;; Check resume_throw
+  (func (param $k (ref $ct)) (result i32)
+    block $on_yield (result i32 (ref $ct))
+      i32.const 42
+      local.get $k
+      resume_throw $ct $yield
+      i32.const 42
+      return
+    end
+    local.set $k
+  )
+  ;; Check switch
+  (func (param $k (ref $ct2))
+    local.get $k
+    block (param (ref $ct2)) (result (ref null $ct2))
+      switch $ct2 $swap
+    end
+    drop
+  )
+)
+
+;; Syntax: check instructions in tail position in unfolded form
+(module
+  (type $ft (func))
+  (type $ct (cont $ft))
+  (rec
+    (type $ft2 (func (param (ref null $ct2))))
+    (type $ct2 (cont $ft2)))
+
+  (tag $yield (param i32))
+  (tag $swap)
+
+  ;; Check cont.new
+  (func (result (ref $ct))
+    ref.null $ft
+    cont.new $ct
+  )
+  ;; Check cont.bind
+  (func (param (ref $ct)) (result (ref $ct))
+    local.get 0
+    cont.bind $ct $ct
+  )
+
+  ;; Check resume
+  (func (;2;) (param $k (ref $ct))
+    local.get $k
+    resume $ct
+  )
+  ;; Check resume_throw
+  (func (param $k (ref $ct))
+    i32.const 42
+    local.get $k
+    resume_throw $ct $yield
+  )
+  ;; Check switch
+  (func (param $k (ref $ct2)) (result (ref null $ct2))
+    local.get $k
+    switch $ct2 $swap
+  )
+  ;; Check suspend
+  (func
+    suspend $swap
+  )
+)
+
+(module
+  (type $ft0 (func))
+  (type $ct0 (cont $ft0))
+
+  (type $ft1 (func (param (ref $ct0))))
+  (type $ct1 (cont $ft1))
+
+  (tag $t)
+
+  (func $f
+    (cont.new $ct1 (ref.func $g))
+    (switch $ct1 $t)
+  )
+  (elem declare func $f)
+
+  (func $g (param (ref $ct0)))
+  (elem declare func $g)
+
+  (func $entry
+    (cont.new $ct0 (ref.func $f))
+    (resume $ct0 (on $t switch))
+  )
+)
+
+(assert_invalid
+  (module
+    (rec
+      (type $ft (func (param (ref $ct))))
+      (type $ct (cont $ft)))
+    (tag $t (param i32))
+
+    (func (param $k (ref $ct))
+      (switch $ct $t)))
+  "type mismatch in switch tag")

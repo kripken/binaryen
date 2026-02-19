@@ -15,8 +15,7 @@
 import os
 import subprocess
 
-from . import shared
-from . import support
+from . import shared, support
 
 basic_tests = shared.get_tests(os.path.join(shared.options.binaryen_test, 'lit', 'basic'))
 # memory64 is not supported in wasm2js yet (but may be with BigInt eventually).
@@ -40,9 +39,8 @@ def check_for_stale_files():
         return
 
     # TODO(sbc): Generalize and apply other test suites
-    all_tests = []
-    for t in basic_tests + spec_tests + wasm2js_tests:
-        all_tests.append(os.path.basename(os.path.splitext(t)[0]))
+    all_tests = basic_tests + spec_tests + wasm2js_tests
+    all_tests = [os.path.basename(os.path.splitext(t)[0]) for t in all_tests]
 
     all_files = os.listdir(shared.get_test_dir('wasm2js'))
     for f in all_files:
@@ -50,7 +48,7 @@ def check_for_stale_files():
         if prefix in [t.split('.')[0] for t in assert_tests]:
             continue
         if prefix not in all_tests:
-            shared.fail_with_error('orphan test output: %s' % f)
+            shared.fail_with_error(f'orphan test output: {f}')
 
 
 def test_wasm2js_output():
@@ -106,7 +104,8 @@ def test_wasm2js_output():
                 cmd += ['--allow-asserts']
                 js = support.run_command(cmd)
                 # also verify it passes pass-debug verifications
-                shared.with_pass_debug(lambda: support.run_command(cmd, stderr=subprocess.PIPE))
+                with shared.with_pass_debug():
+                    support.run_command(cmd, stderr=subprocess.PIPE)
 
                 open('a.2asm.asserts.mjs', 'w').write(js)
 

@@ -598,12 +598,12 @@ private:
     }
     void visitLoad(Load* curr) {
       parent.readsMemory = true;
-      parent.isAtomic |= curr->isAtomic;
+      parent.isAtomic |= curr->isAtomic();
       parent.implicitTrap = true;
     }
     void visitStore(Store* curr) {
       parent.writesMemory = true;
-      parent.isAtomic |= curr->isAtomic;
+      parent.isAtomic |= curr->isAtomic();
       parent.implicitTrap = true;
     }
     void visitAtomicRMW(AtomicRMW* curr) {
@@ -1027,9 +1027,8 @@ private:
       }
       parent.readsArray = true;
       parent.writesArray = true;
-      if (curr->ref->type.isNullable()) {
-        parent.implicitTrap = true;
-      }
+      // traps when the arg is null or the index out of bounds
+      parent.implicitTrap = true;
       assert(curr->order != MemoryOrder::Unordered);
       parent.isAtomic = true;
     }
@@ -1040,9 +1039,8 @@ private:
       }
       parent.readsArray = true;
       parent.writesArray = true;
-      if (curr->ref->type.isNullable()) {
-        parent.implicitTrap = true;
-      }
+      // traps when the arg is null or the index out of bounds
+      parent.implicitTrap = true;
       assert(curr->order != MemoryOrder::Unordered);
       parent.isAtomic = true;
     }
@@ -1107,6 +1105,12 @@ private:
     void visitContBind(ContBind* curr) {
       // traps when curr->cont is null ref.
       parent.implicitTrap = true;
+
+      // The input continuation is modified, as it will trap if resumed. This is
+      // a globally-noticeable effect, which we model as a call for now, but we
+      // could in theory use something more refined here (|modifiesContinuation|
+      // perhaps, to parallel |writesMemory| etc.).
+      parent.calls = true;
     }
     void visitSuspend(Suspend* curr) {
       // Similar to resume/call: Suspending means that we execute arbitrary

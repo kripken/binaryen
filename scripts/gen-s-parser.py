@@ -16,6 +16,8 @@
 
 import sys
 
+assert sys.version_info >= (3, 10), 'requires Python 3.10'
+
 instructions = [
     ("unreachable",    "makeUnreachable()"),
     ("nop",            "makeNop()"),
@@ -604,6 +606,7 @@ instructions = [
     ("suspend",              "makeSuspend()"),
     ("resume",               "makeResume()"),
     ("resume_throw",         "makeResumeThrow()"),
+    ("resume_throw_ref",     "makeResumeThrowRef()"),
     ("switch",               "makeStackSwitch()"),
     # GC
     ("ref.i31",              "makeRefI31(Unshared)"),
@@ -612,16 +615,21 @@ instructions = [
     ("i31.get_u",            "makeI31Get(false)"),
     ("ref.test",             "makeRefTest()"),
     ("ref.cast",             "makeRefCast(false)"),
-    ("ref.cast_desc",        "makeRefCast(true)"),
+    ("ref.cast_desc",        "makeRefCast(true)"),  # Deprecated
+    ("ref.cast_desc_eq",     "makeRefCast(true)"),
     ("ref.get_desc",         "makeRefGetDesc()"),
     ("br_on_null",           "makeBrOnNull()"),
     ("br_on_non_null",       "makeBrOnNull(true)"),
     ("br_on_cast",           "makeBrOnCast(BrOnCast)"),
     ("br_on_cast_fail",      "makeBrOnCast(BrOnCastFail)"),
-    ("br_on_cast_desc",      "makeBrOnCast(BrOnCastDesc)"),
-    ("br_on_cast_desc_fail", "makeBrOnCast(BrOnCastDescFail)"),
-    ("struct.new",           "makeStructNew(false)"),
-    ("struct.new_default",   "makeStructNew(true)"),
+    ("br_on_cast_desc",      "makeBrOnCast(BrOnCastDescEq)"),  # Deprecated
+    ("br_on_cast_desc_fail", "makeBrOnCast(BrOnCastDescEqFail)"),  # Deprecated
+    ("br_on_cast_desc_eq",      "makeBrOnCast(BrOnCastDescEq)"),
+    ("br_on_cast_desc_eq_fail", "makeBrOnCast(BrOnCastDescEqFail)"),
+    ("struct.new",           "makeStructNew(false, false)"),
+    ("struct.new_default",   "makeStructNew(true, false)"),
+    ("struct.new_desc",      "makeStructNew(false, true)"),
+    ("struct.new_default_desc", "makeStructNew(true, true)"),
     ("struct.get",           "makeStructGet()"),
     ("struct.get_s",         "makeStructGet(true)"),
     ("struct.get_u",         "makeStructGet(false)"),
@@ -755,7 +763,6 @@ class Node:
 
 def instruction_parser():
     """Build a trie out of all the instructions, then emit it as C++ code."""
-    global instructions
     trie = Node()
     inst_length = 0
     for inst, expr in instructions:
@@ -770,7 +777,7 @@ def instruction_parser():
     printer = CodePrinter()
 
     printer.print_line("auto op = *keyword;")
-    printer.print_line("char buf[{}] = {{}};".format(inst_length + 1))
+    printer.print_line(f"char buf[{inst_length + 1}] = {{}};")
     printer.print_line("// Ensure we do not copy more than the buffer can hold")
     printer.print_line("if (op.size() >= sizeof(buf)) {")
     printer.print_line("  goto parse_error;")
@@ -782,16 +789,16 @@ def instruction_parser():
             expr = expr.replace("()", "(ctx, pos, annotations)")
         else:
             expr = expr.replace("(", "(ctx, pos, annotations, ")
-        printer.print_line("if (op == \"{inst}\"sv) {{".format(inst=inst))
+        printer.print_line(f"if (op == \"{inst}\"sv) {{")
         with printer.indent():
-            printer.print_line("CHECK_ERR({expr});".format(expr=expr))
+            printer.print_line(f"CHECK_ERR({expr});")
             printer.print_line("return Ok{};")
         printer.print_line("}")
         printer.print_line("goto parse_error;")
 
     def emit(node, idx=0):
         assert node.children
-        printer.print_line("switch (buf[{}]) {{".format(idx))
+        printer.print_line(f"switch (buf[{idx}]) {{")
         with printer.indent():
             if node.expr:
                 printer.print_line("case '\\0':")
@@ -800,13 +807,13 @@ def instruction_parser():
             children = sorted(node.children.items(), key=lambda pair: pair[0])
             for prefix, child in children:
                 if child.children:
-                    printer.print_line("case '{}': {{".format(prefix[0]))
+                    printer.print_line(f"case '{prefix[0]}': {{")
                     with printer.indent():
                         emit(child, idx + len(prefix))
                     printer.print_line("}")
                 else:
                     assert child.expr
-                    printer.print_line("case '{}':".format(prefix[0]))
+                    printer.print_line(f"case '{prefix[0]}':")
                     with printer.indent():
                         print_leaf(child.expr, child.inst)
             printer.print_line("default: goto parse_error;")
@@ -830,10 +837,6 @@ def print_footer():
 
 
 def main():
-    if sys.version_info.major != 3:
-        import datetime
-        print("It's " + str(datetime.datetime.now().year) + "! Use Python 3!")
-        sys.exit(1)
     print_header()
     instruction_parser()
     print_footer()

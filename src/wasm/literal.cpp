@@ -71,15 +71,19 @@ Literal::Literal(const uint8_t init[16]) : type(Type::v128) {
   memcpy(&v128, init, 16);
 }
 
-Literal::Literal(std::shared_ptr<FuncData> funcData, HeapType type)
-  : funcData(funcData), type(type, NonNullable, Exact) {
+Literal::Literal(std::shared_ptr<FuncData> funcData, Type type)
+  : funcData(funcData), type(type) {
   assert(funcData);
   assert(type.isSignature());
 }
 
-Literal Literal::makeFunc(Name func, HeapType type) {
+Literal Literal::makeFunc(Name func, Type type) {
   // Provide only the name of the function, without execution info.
   return Literal(std::make_shared<FuncData>(func), type);
+}
+
+Literal Literal::makeFunc(Name func, Module& wasm) {
+  return makeFunc(func, wasm.getFunction(func)->type);
 }
 
 Literal::Literal(std::shared_ptr<GCData> gcData, HeapType type)
@@ -489,12 +493,16 @@ bool Literal::operator==(const Literal& other) const {
     if (type.isData()) {
       return gcData == other.gcData;
     }
-    assert(type.getHeapType().isBasic());
-    if (type.getHeapType().isMaybeShared(HeapType::i31)) {
+    auto heapType = type.getHeapType();
+    assert(heapType.isBasic());
+    if (heapType.isMaybeShared(HeapType::i31)) {
       return i32 == other.i32;
     }
-    if (type.getHeapType().isMaybeShared(HeapType::ext)) {
+    if (heapType.isMaybeShared(HeapType::ext)) {
       return internalize() == other.internalize();
+    }
+    if (heapType.isMaybeShared(HeapType::any)) {
+      return externalize() == other.externalize();
     }
     WASM_UNREACHABLE("unexpected type");
   }
@@ -918,9 +926,15 @@ Literal Literal::convertF32ToF16() const {
   return Literal(fp16_ieee_from_fp32_value(getf32()));
 }
 
-template<typename F> struct AsInt { using type = void; };
-template<> struct AsInt<float> { using type = int32_t; };
-template<> struct AsInt<double> { using type = int64_t; };
+template<typename F> struct AsInt {
+  using type = void;
+};
+template<> struct AsInt<float> {
+  using type = int32_t;
+};
+template<> struct AsInt<double> {
+  using type = int64_t;
+};
 
 template<typename F, typename I, bool (*RangeCheck)(typename AsInt<F>::type)>
 static Literal saturating_trunc(typename AsInt<F>::type val) {
@@ -1147,9 +1161,9 @@ Literal Literal::demote() const {
 Literal Literal::add(const Literal& other) const {
   switch (type.getBasic()) {
     case Type::i32:
-      return Literal(uint32_t(i32) + uint32_t(other.i32));
+      return Literal(bit_cast<uint32_t>(i32) + bit_cast<uint32_t>(other.i32));
     case Type::i64:
-      return Literal(uint64_t(i64) + uint64_t(other.i64));
+      return Literal(bit_cast<uint64_t>(i64) + bit_cast<uint64_t>(other.i64));
     case Type::f32:
       return standardizeNaN(Literal(getf32() + other.getf32()));
     case Type::f64:
@@ -1394,6 +1408,8 @@ Literal Literal::maxUInt(const Literal& other) const {
 }
 
 Literal Literal::avgrUInt(const Literal& other) const {
+  // This looks like it could overflow, but these are promoted from uint8 in the
+  // caller (`binary`).
   return Literal((geti32() + other.geti32() + 1) / 2);
 }
 
@@ -2060,7 +2076,7 @@ Literal Literal::nearestF64x2() const {
 
 template<int Lanes, typename LaneFrom, typename LaneTo>
 static Literal extAddPairwise(const Literal& vec) {
-  LaneArray<Lanes* 2> lanes = getLanes<LaneFrom, Lanes * 2>(vec);
+  LaneArray<Lanes * 2> lanes = getLanes<LaneFrom, Lanes * 2>(vec);
   LaneArray<Lanes> result;
   for (size_t i = 0; i < Lanes; i++) {
     result[i] = Literal((LaneTo)(LaneFrom)lanes[i * 2 + 0].geti32() +
@@ -2632,14 +2648,13 @@ template<size_t Lanes,
          size_t Factor,
          LaneArray<Lanes * Factor> (Literal::*IntoLanes)() const>
 static Literal dot(const Literal& left, const Literal& right) {
-  LaneArray<Lanes* Factor> lhs = (left.*IntoLanes)();
-  LaneArray<Lanes* Factor> rhs = (right.*IntoLanes)();
+  LaneArray<Lanes * Factor> lhs = (left.*IntoLanes)();
+  LaneArray<Lanes * Factor> rhs = (right.*IntoLanes)();
   LaneArray<Lanes> result;
   for (size_t i = 0; i < Lanes; ++i) {
     result[i] = Literal(int32_t(0));
     for (size_t j = 0; j < Factor; ++j) {
-      result[i] = Literal(result[i].geti32() + lhs[i * Factor + j].geti32() *
-                                                 rhs[i * Factor + j].geti32());
+      result[i] = result[i].add(lhs[i * Factor + j].mul(rhs[i * Factor + j]));
     }
   }
   return Literal(result);
@@ -2676,8 +2691,12 @@ Literal Literal::bitselectV128(const Literal& left,
 }
 
 template<typename T> struct TwiceWidth {};
-template<> struct TwiceWidth<int8_t> { using type = int16_t; };
-template<> struct TwiceWidth<int16_t> { using type = int32_t; };
+template<> struct TwiceWidth<int8_t> {
+  using type = int16_t;
+};
+template<> struct TwiceWidth<int16_t> {
+  using type = int32_t;
+};
 
 template<typename T>
 Literal saturating_narrow(
@@ -2722,7 +2741,7 @@ enum class LaneOrder { Low, High };
 
 template<size_t Lanes, typename LaneFrom, typename LaneTo, LaneOrder Side>
 Literal extend(const Literal& vec) {
-  LaneArray<Lanes* 2> lanes = getLanes<LaneFrom, Lanes * 2>(vec);
+  LaneArray<Lanes * 2> lanes = getLanes<LaneFrom, Lanes * 2>(vec);
   LaneArray<Lanes> result;
   for (size_t i = 0; i < Lanes; ++i) {
     size_t idx = (Side == LaneOrder::Low) ? i : i + Lanes;
@@ -2780,8 +2799,8 @@ Literal Literal::extendHighUToI64x2() const {
 
 template<size_t Lanes, typename LaneFrom, typename LaneTo, LaneOrder Side>
 Literal extMul(const Literal& a, const Literal& b) {
-  LaneArray<Lanes* 2> lhs = getLanes<LaneFrom, Lanes * 2>(a);
-  LaneArray<Lanes* 2> rhs = getLanes<LaneFrom, Lanes * 2>(b);
+  LaneArray<Lanes * 2> lhs = getLanes<LaneFrom, Lanes * 2>(a);
+  LaneArray<Lanes * 2> rhs = getLanes<LaneFrom, Lanes * 2>(b);
   LaneArray<Lanes> result;
   for (size_t i = 0; i < Lanes; ++i) {
     size_t idx = (Side == LaneOrder::Low) ? i : i + Lanes;

@@ -22,7 +22,9 @@
 
 namespace wasm::WATParser {
 
-Result<> parseDecls(ParseDeclsCtx& decls);
+Result<> parseModule(ParseDeclsCtx& decls);
+
+Result<> parseModuleBody(ParseDeclsCtx& decls);
 
 Result<> parseTypeDefs(
   ParseDeclsCtx& decls,
@@ -78,6 +80,7 @@ Result<> parseDefs(Ctx& ctx,
   for (auto& def : defs) {
     ctx.index = def.index;
     WithPosition with(ctx, def.pos);
+    ctx.in.setAnnotations(def.annotations);
     if (auto parsed = parser(ctx)) {
       CHECK_ERR(parsed);
     } else {

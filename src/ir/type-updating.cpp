@@ -21,62 +21,60 @@
 #include "ir/names.h"
 #include "ir/utils.h"
 #include "support/topological_sort.h"
-#include "wasm-type-ordering.h"
 #include "wasm-type.h"
 #include "wasm.h"
 
 namespace wasm {
 
-GlobalTypeRewriter::GlobalTypeRewriter(Module& wasm) : wasm(wasm) {}
-
-void GlobalTypeRewriter::update(
-  const std::vector<HeapType>& additionalPrivateTypes) {
-  mapTypes(rebuildTypes(additionalPrivateTypes));
-}
-
-GlobalTypeRewriter::TypeMap GlobalTypeRewriter::rebuildTypes(
-  const std::vector<HeapType>& additionalPrivateTypes) {
+GlobalTypeRewriter::GlobalTypeRewriter(Module& wasm)
+  : wasm(wasm), publicGroups(wasm.features) {
   // Find the heap types that are not publicly observable. Even in a closed
   // world scenario, don't modify public types because we assume that they may
   // be reflected on or used for linking. Figure out where each private type
   // will be located in the builder.
-  auto typeInfo = ModuleUtils::collectHeapTypeInfo(
+  typeInfo = ModuleUtils::collectHeapTypeInfo(
     wasm,
     ModuleUtils::TypeInclusion::UsedIRTypes,
     ModuleUtils::VisibilityHandling::FindVisibility);
 
-  std::unordered_set<HeapType> additionalSet(additionalPrivateTypes.begin(),
-                                             additionalPrivateTypes.end());
+  std::unordered_set<RecGroup> seenGroups;
+  for (auto& [type, info] : typeInfo) {
+    if (info.visibility == ModuleUtils::Visibility::Public) {
+      auto group = type.getRecGroup();
+      if (seenGroups.insert(group).second) {
+        [[maybe_unused]] RecGroup unique = publicGroups.insert(group);
+        assert(unique == group);
+      }
+    }
+  }
+}
 
-  // Check if a type is private, given the info for it.
-  auto isPublicGivenInfo = [&](HeapType type, auto& info) {
-    return info.visibility != ModuleUtils::Visibility::Private &&
-           !additionalSet.count(type);
-  };
+void GlobalTypeRewriter::update() {
+  mapTypes(rebuildTypes(getSortedTypes(getPrivatePredecessors())));
+}
 
-  // Check if a type is private, looking for its info (if there is none, it is
-  // not private).
+GlobalTypeRewriter::PredecessorGraph
+GlobalTypeRewriter::getPrivatePredecessors() {
+  // Check if a type is private based on its collected info.
   auto isPublic = [&](HeapType type) {
     auto it = typeInfo.find(type);
-    if (it == typeInfo.end()) {
-      return false;
-    }
-    return isPublicGivenInfo(type, it->second);
+    assert(it != typeInfo.end());
+    return it->second.visibility == ModuleUtils::Visibility::Public;
   };
 
   // For each type, note all the predecessors it must have, i.e., that must
   // appear before it. That includes supertypes and described types.
-  std::vector<std::pair<HeapType, SmallVector<HeapType, 1>>> privatePreds;
-  privatePreds.reserve(typeInfo.size());
+  std::vector<std::pair<HeapType, SmallVector<HeapType, 1>>> preds;
+  preds.reserve(typeInfo.size());
   for (auto& [type, info] : typeInfo) {
-    if (isPublicGivenInfo(type, info)) {
+    if (info.visibility == ModuleUtils::Visibility::Public) {
       continue;
     }
-    privatePreds.push_back({type, {}});
+    preds.push_back({type, {}});
 
     // Check for a (private) supertype.
     if (auto super = getDeclaredSuperType(type); super && !isPublic(*super)) {
-      privatePreds.back().second.push_back(*super);
+      preds.back().second.push_back(*super);
     }
 
     // Check for a (private) described type.
@@ -84,18 +82,23 @@ GlobalTypeRewriter::TypeMap GlobalTypeRewriter::rebuildTypes(
       // It is not possible for a a described type to be public while its
       // descriptor is private, or vice versa.
       assert(!isPublic(*desc));
-      privatePreds.back().second.push_back(*desc);
+      preds.back().second.push_back(*desc);
     }
   }
 
+  return preds;
+}
+
+std::vector<HeapType>
+GlobalTypeRewriter::getSortedTypes(PredecessorGraph preds) {
   std::vector<HeapType> sorted;
   if (wasm.typeIndices.empty()) {
-    sorted = TopologicalSort::sortOf(privatePreds.begin(), privatePreds.end());
+    sorted = TopologicalSort::sortOf(preds.begin(), preds.end());
   } else {
     sorted = TopologicalSort::minSortOf(
-      privatePreds.begin(), privatePreds.end(), [&](Index a, Index b) {
-        auto typeA = privatePreds[a].first;
-        auto typeB = privatePreds[b].first;
+      preds.begin(), preds.end(), [&](Index a, Index b) {
+        auto typeA = preds[a].first;
+        auto typeB = preds[b].first;
         // Preserve type order.
         auto itA = wasm.typeIndices.find(typeA);
         auto itB = wasm.typeIndices.find(typeB);
@@ -117,33 +120,37 @@ GlobalTypeRewriter::TypeMap GlobalTypeRewriter::rebuildTypes(
       });
   }
   std::reverse(sorted.begin(), sorted.end());
-  Index i = 0;
-  for (auto type : sorted) {
-    typeIndices[type] = i++;
+  return sorted;
+}
+
+GlobalTypeRewriter::TypeMap
+GlobalTypeRewriter::rebuildTypes(std::vector<HeapType> types) {
+  for (Index i = 0; i < types.size(); ++i) {
+    typeIndices[types[i]] = i;
   }
 
   if (typeIndices.size() == 0) {
     return {};
   }
 
-  typeBuilder.grow(typeIndices.size());
+  typeBuilder.grow(types.size());
 
-  // All the input types are distinct, so we need to make sure the output types
-  // are distinct as well. Further, the new types may have more recursions than
-  // the original types, so the old recursion groups may not be sufficient any
-  // more. Both of these problems are solved by putting all the new types into a
-  // single large recursion group.
+  // All the input types are distinct, so we need to make sure the output
+  // types are distinct as well. Further, the new types may have more
+  // recursions than the original types, so the old recursion groups may not
+  // be sufficient any more. Both of these problems are solved by putting all
+  // the new types into a single large recursion group.
   typeBuilder.createRecGroup(0, typeBuilder.size());
 
   // Create the temporary heap types.
-  i = 0;
   auto map = [&](HeapType type) -> HeapType {
     if (auto it = typeIndices.find(type); it != typeIndices.end()) {
       return typeBuilder[it->second];
     }
     return type;
   };
-  for (auto [type, _] : typeIndices) {
+  for (Index i = 0; i < types.size(); ++i) {
+    auto type = types[i];
     typeBuilder[i].copy(type, map);
     switch (type.getKind()) {
       case HeapTypeKind::Func: {
@@ -181,7 +188,6 @@ GlobalTypeRewriter::TypeMap GlobalTypeRewriter::rebuildTypes(
     }
 
     modifyTypeBuilderEntry(typeBuilder, i, type);
-    ++i;
   }
 
   auto buildResults = typeBuilder.build();
@@ -191,16 +197,13 @@ GlobalTypeRewriter::TypeMap GlobalTypeRewriter::rebuildTypes(
             << " at index " << err->index;
   }
 #endif
-  auto& newTypes = *buildResults;
-
-  // TODO: It is possible that the newly built rec group matches some public rec
-  // group. If that is the case, we need to try a different permutation of the
-  // types or add a brand type to distinguish the private types.
+  // Ensure the new types are different from any public rec group.
+  RecGroup newGroup = publicGroups.insert((*buildResults)[0].getRecGroup());
 
   // Map the old types to the new ones.
   TypeMap oldToNewTypes;
   for (auto [type, index] : typeIndices) {
-    oldToNewTypes[type] = newTypes[index];
+    oldToNewTypes[type] = newGroup[index];
   }
   mapTypeNamesAndIndices(oldToNewTypes);
   return oldToNewTypes;
@@ -359,9 +362,10 @@ Type GlobalTypeRewriter::getTempType(Type type) {
   }
   if (type.isRef()) {
     auto heapType = type.getHeapType();
-    if (auto it = typeIndices.find(heapType); it != typeIndices.end()) {
+    auto tempHeapType = getTempHeapType(heapType);
+    if (tempHeapType != heapType) {
       return typeBuilder.getTempRefType(
-        typeBuilder[it->second], type.getNullability(), type.getExactness());
+        tempHeapType, type.getNullability(), type.getExactness());
     }
     // This type is not one that is eligible for optimizing. That is fine; just
     // use it unmodified.
@@ -375,6 +379,13 @@ Type GlobalTypeRewriter::getTempType(Type type) {
     return typeBuilder.getTempTupleType(newTuple);
   }
   WASM_UNREACHABLE("bad type");
+}
+
+HeapType GlobalTypeRewriter::getTempHeapType(HeapType type) {
+  if (auto it = typeIndices.find(type); it != typeIndices.end()) {
+    return typeBuilder[it->second];
+  }
+  return type;
 }
 
 Type GlobalTypeRewriter::getTempTupleType(Tuple tuple) {

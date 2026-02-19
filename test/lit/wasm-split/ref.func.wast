@@ -10,9 +10,9 @@
 (module
  ;; PRIMARY:      (type $0 (func))
 
- ;; PRIMARY:      (import "placeholder" "0" (func $placeholder_0 (type $0)))
+ ;; PRIMARY:      (import "placeholder.deferred" "0" (func $placeholder_0 (type $0)))
 
- ;; PRIMARY:      (import "placeholder" "1" (func $placeholder_1 (type $0)))
+ ;; PRIMARY:      (import "placeholder.deferred" "1" (func $placeholder_1 (type $0)))
 
  ;; PRIMARY:      (global $glob1 (ref func) (ref.func $prime))
 
@@ -36,13 +36,7 @@
 
  ;; PRIMARY:      (export "prime" (func $prime))
 
- ;; PRIMARY:      (export "table" (table $table))
-
- ;; PRIMARY:      (export "table_2" (table $1))
-
- ;; PRIMARY:      (export "global" (global $glob1))
-
- ;; PRIMARY:      (export "global_4" (global $glob2))
+ ;; PRIMARY:      (export "table" (table $1))
 
  ;; PRIMARY:      (func $prime (type $0)
  ;; PRIMARY-NEXT:  (drop
@@ -63,9 +57,9 @@
 
  ;; SECONDARY:      (type $0 (func))
 
- ;; SECONDARY:      (import "primary" "table_2" (table $timport$0 2 funcref))
+ ;; SECONDARY:      (import "primary" "table" (table $timport$0 2 funcref))
 
- ;; SECONDARY:      (import "primary" "prime" (func $prime (type $0)))
+ ;; SECONDARY:      (import "primary" "prime" (func $prime (exact (type $0))))
 
  ;; SECONDARY:      (elem $0 (i32.const 0) $second $second-in-table)
 

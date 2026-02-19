@@ -61,6 +61,7 @@ const char* FP16Feature = "fp16";
 const char* BulkMemoryOptFeature = "bulk-memory-opt";
 const char* CallIndirectOverlongFeature = "call-indirect-overlong";
 const char* CustomDescriptorsFeature = "custom-descriptors";
+const char* RelaxedAtomicsFeature = "relaxed-atomics";
 
 } // namespace BinaryConsts::CustomSections
 
@@ -68,6 +69,8 @@ namespace Annotations {
 
 const Name BranchHint = "metadata.code.branch_hint";
 const Name InlineHint = "metadata.code.inline";
+const Name RemovableIfUnusedHint = "binaryen.removable.if.unused";
+const Name JSCalledHint = "binaryen.js.called";
 
 } // namespace Annotations
 
@@ -827,9 +830,7 @@ void RefFunc::finalize() {
   assert(type.isSignature());
 }
 
-void RefFunc::finalize(HeapType heapType) {
-  type = Type(heapType, NonNullable, Exact);
-}
+void RefFunc::finalize(Module& wasm) { type = wasm.getFunction(func)->type; }
 
 void RefEq::finalize() {
   if (left->type == Type::unreachable || right->type == Type::unreachable) {
@@ -1075,7 +1076,7 @@ void RefCast::finalize() {
       return;
     }
     // The cast heap type and exactness is determined by the descriptor's type.
-    // Its nullability can be improved if the input valus is non-nullable.
+    // Its nullability can be improved if the input value is non-nullable.
     auto heapType = desc->type.getHeapType().getDescribedType();
     assert(heapType);
     auto exactness = desc->type.getExactness();
@@ -1129,7 +1130,7 @@ void BrOn::finalize() {
     // Descriptors that the cast type is a subtype of the input type.
     castType = Type::getGreatestLowerBound(castType, ref->type);
     assert(castType.isRef());
-  } else if (op == BrOnCastDesc || op == BrOnCastDescFail) {
+  } else if (op == BrOnCastDescEq || op == BrOnCastDescEqFail) {
     if (desc->type.isNull()) {
       // Cast will never be executed and the instruction will not be emitted.
       // Model this with an uninhabitable cast type.
@@ -1158,7 +1159,7 @@ void BrOn::finalize() {
       type = Type::none;
       return;
     case BrOnCast:
-    case BrOnCastDesc:
+    case BrOnCastDescEq:
       if (castType.isNullable()) {
         // Nulls take the branch, so the result is non-nullable.
         type = ref->type.with(NonNullable);
@@ -1169,7 +1170,7 @@ void BrOn::finalize() {
       }
       return;
     case BrOnCastFail:
-    case BrOnCastDescFail:
+    case BrOnCastDescEqFail:
       if (castType.isNullable()) {
         // Nulls do not take the branch, so the result is non-nullable only if
         // the input is.
@@ -1197,7 +1198,7 @@ Type BrOn::getSentType() {
       // BrOnNonNull sends the non-nullable type on the branch.
       return ref->type.with(NonNullable);
     case BrOnCast:
-    case BrOnCastDesc:
+    case BrOnCastDescEq:
       // The same as the result type of br_on_cast_fail.
       if (castType.isNullable()) {
         return castType.with(ref->type.getNullability());
@@ -1205,7 +1206,7 @@ Type BrOn::getSentType() {
         return castType;
       }
     case BrOnCastFail:
-    case BrOnCastDescFail:
+    case BrOnCastDescEqFail:
       // The same as the result type of br_on_cast (if reachable).
       if (ref->type == Type::unreachable) {
         return Type::unreachable;

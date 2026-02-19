@@ -23,8 +23,9 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include "windows.h"
-#include "shellapi.h"
+#include <windows.h>
+
+#include <shellapi.h>
 #endif
 
 using namespace wasm;
@@ -230,10 +231,12 @@ void Options::parse(int argc, const char* argv[]) {
 
     // Non-positional.
     std::string argument;
+    bool explicitArg = false;
     auto equal = currentOption.find_first_of('=');
     if (equal != std::string::npos) {
       argument = currentOption.substr(equal + 1);
       currentOption = currentOption.substr(0, equal);
+      explicitArg = true;
     }
     Option* option = nullptr;
     for (auto& o : options) {
@@ -261,7 +264,7 @@ void Options::parse(int argc, const char* argv[]) {
         }
         [[fallthrough]];
       case Arguments::N:
-        if (!argument.size()) {
+        if (!argument.size() && !explicitArg) {
           if (i + 1 == e) {
             std::cerr << "Couldn't find expected argument for '"
                       << currentOption << "'\n";

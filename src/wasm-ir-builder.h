@@ -129,20 +129,19 @@ public:
   Result<> makeNop();
   Result<> makeBlock(Name label, Signature sig);
   Result<>
-  makeIf(Name label, Signature sig, std::optional<bool> likely = std::nullopt);
+  makeIf(Name label, Signature sig, const CodeAnnotation& annotations = {});
   Result<> makeLoop(Name label, Signature sig);
   Result<> makeBreak(Index label,
                      bool isConditional,
-                     std::optional<bool> likely = std::nullopt);
+                     const CodeAnnotation& annotations = {});
   Result<> makeSwitch(const std::vector<Index>& labels, Index defaultLabel);
   // Unlike Builder::makeCall, this assumes the function already exists.
-  Result<> makeCall(Name func,
-                    bool isReturn,
-                    std::optional<std::uint8_t> inline_ = std::nullopt);
+  Result<>
+  makeCall(Name func, bool isReturn, const CodeAnnotation& annotations = {});
   Result<> makeCallIndirect(Name table,
                             HeapType type,
                             bool isReturn,
-                            std::optional<std::uint8_t> inline_ = std::nullopt);
+                            const CodeAnnotation& annotations = {});
   Result<> makeLocalGet(Index local);
   Result<> makeLocalSet(Index local);
   Result<> makeLocalTee(Index local);
@@ -156,12 +155,18 @@ public:
                     Name mem);
   Result<> makeStore(
     unsigned bytes, Address offset, unsigned align, Type type, Name mem);
-  Result<> makeAtomicLoad(unsigned bytes, Address offset, Type type, Name mem);
-  Result<> makeAtomicStore(unsigned bytes, Address offset, Type type, Name mem);
-  Result<> makeAtomicRMW(
-    AtomicRMWOp op, unsigned bytes, Address offset, Type type, Name mem);
-  Result<>
-  makeAtomicCmpxchg(unsigned bytes, Address offset, Type type, Name mem);
+  Result<> makeAtomicLoad(
+    unsigned bytes, Address offset, Type type, Name mem, MemoryOrder order);
+  Result<> makeAtomicStore(
+    unsigned bytes, Address offset, Type type, Name mem, MemoryOrder order);
+  Result<> makeAtomicRMW(AtomicRMWOp op,
+                         unsigned bytes,
+                         Address offset,
+                         Type type,
+                         Name mem,
+                         MemoryOrder order);
+  Result<> makeAtomicCmpxchg(
+    unsigned bytes, Address offset, Type type, Name mem, MemoryOrder order);
   Result<> makeAtomicWait(Type type, Address offset, Name mem);
   Result<> makeAtomicNotify(Address offset, Name mem);
   Result<> makeAtomicFence();
@@ -220,7 +225,7 @@ public:
   Result<> makeI31Get(bool signed_);
   Result<> makeCallRef(HeapType type,
                        bool isReturn,
-                       std::optional<std::uint8_t> inline_ = std::nullopt);
+                       const CodeAnnotation& annotations = {});
   Result<> makeRefTest(Type type);
   Result<> makeRefCast(Type type, bool isDesc);
   Result<> makeRefGetDesc(HeapType type);
@@ -228,9 +233,9 @@ public:
                     BrOnOp op,
                     Type in = Type::none,
                     Type out = Type::none,
-                    std::optional<bool> likely = std::nullopt);
-  Result<> makeStructNew(HeapType type);
-  Result<> makeStructNewDefault(HeapType type);
+                    const CodeAnnotation& annotations = {});
+  Result<> makeStructNew(HeapType type, bool isDesc);
+  Result<> makeStructNewDefault(HeapType type, bool isDesc);
   Result<>
   makeStructGet(HeapType type, Index field, bool signed_, MemoryOrder order);
   Result<> makeStructSet(HeapType type, Index field, MemoryOrder order);
@@ -273,6 +278,12 @@ public:
                            Name tag,
                            const std::vector<Name>& tags,
                            const std::vector<std::optional<Index>>& labels);
+  Result<> makeResumeThrowRef(HeapType ct,
+                              const std::vector<Name>& tags,
+                              const std::vector<std::optional<Index>>& labels) {
+    // resume_throw_ref has an empty tag.
+    return makeResumeThrow(ct, Name(), tags, labels);
+  }
   Result<> makeStackSwitch(HeapType ct, Name tag);
 
   // Private functions that must be public for technical reasons.
@@ -537,7 +548,7 @@ private:
     }
     Type getResultType() {
       if (auto* func = getFunction()) {
-        return func->type.getSignature().results;
+        return func->getResults();
       }
       if (auto* block = getBlock()) {
         return block->type;
@@ -723,11 +734,7 @@ private:
   Expression* fixExtraOutput(ScopeCtx& scope, Name label, Expression* expr);
   void fixLoopWithInput(Loop* loop, Type inputType, Index scratch);
 
-  // Add a branch hint, if |likely| is present.
-  void addBranchHint(Expression* expr, std::optional<bool> likely);
-
-  // Add an inlining hint, if |inline_| is present.
-  void addInlineHint(Expression* expr, std::optional<std::uint8_t> inline_);
+  void applyAnnotations(Expression* expr, const CodeAnnotation& annotation);
 
   void dump();
 };

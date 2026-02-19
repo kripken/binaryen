@@ -142,6 +142,9 @@
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --gsi                                         globally optimize struct values
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --gsi-desc-cast                               globally optimize struct values,
+;; CHECK-NEXT:                                                 also emitting ref.cast_desc_eq
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --gto                                         globally optimize GC types
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --gufa                                        Grand Unified Flow Analysis:
@@ -184,9 +187,6 @@
 ;; CHECK-NEXT:                                                 stores
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --intrinsic-lowering                          lower away binaryen intrinsics
-;; CHECK-NEXT:
-;; CHECK-NEXT:   --jspi                                        wrap imports and exports for
-;; CHECK-NEXT:                                                 JavaScript promise integration
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --legalize-and-prune-js-interface             legalizes the import/export
 ;; CHECK-NEXT:                                                 boundary and prunes when needed
@@ -255,13 +255,6 @@
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --minimize-rec-groups                         Split types into minimal
 ;; CHECK-NEXT:                                                 recursion groups
-;; CHECK-NEXT:
-;; CHECK-NEXT:   --mod-asyncify-always-and-only-unwind         apply the assumption that
-;; CHECK-NEXT:                                                 asyncify imports always unwind,
-;; CHECK-NEXT:                                                 and we never rewind
-;; CHECK-NEXT:
-;; CHECK-NEXT:   --mod-asyncify-never-unwind                   apply the assumption that
-;; CHECK-NEXT:                                                 asyncify never unwinds
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --monomorphize                                creates specialized versions of
 ;; CHECK-NEXT:                                                 functions
@@ -362,6 +355,9 @@
 ;; CHECK-NEXT:   --remove-non-js-ops                           removes operations incompatible
 ;; CHECK-NEXT:                                                 with js
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --remove-relaxed-simd                         replaces relaxed SIMD
+;; CHECK-NEXT:                                                 instructions with unreachable
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --remove-unused-brs                           removes breaks from locations
 ;; CHECK-NEXT:                                                 that are not needed
 ;; CHECK-NEXT:
@@ -385,6 +381,9 @@
 ;; CHECK-NEXT:                                                 frequency
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --reorder-locals                              sorts locals by access frequency
+;; CHECK-NEXT:
+;; CHECK-NEXT:   --reorder-types                               sorts private types by access
+;; CHECK-NEXT:                                                 frequency
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --rereloop                                    re-optimize control flow using
 ;; CHECK-NEXT:                                                 the relooper algorithm
@@ -487,6 +486,9 @@
 ;; CHECK-NEXT:   --strip-target-features                       strip the wasm target features
 ;; CHECK-NEXT:                                                 section
 ;; CHECK-NEXT:
+;; CHECK-NEXT:   --strip-toolchain-annotations                 strip all toolchain-specific
+;; CHECK-NEXT:                                                 code annotations
+;; CHECK-NEXT:
 ;; CHECK-NEXT:   --stub-unsupported-js                         stub out unsupported JS
 ;; CHECK-NEXT:                                                 operations
 ;; CHECK-NEXT:
@@ -525,8 +527,8 @@
 ;; CHECK-NEXT:                                                 type fields where possible
 ;; CHECK-NEXT:                                                 (using GUFA)
 ;; CHECK-NEXT:
-;; CHECK-NEXT:   --type-ssa                                    create new nominal types to help
-;; CHECK-NEXT:                                                 other optimizations
+;; CHECK-NEXT:   --type-ssa                                    create new types to help other
+;; CHECK-NEXT:                                                 optimizations
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --type-unfinalizing                           mark all types as non-final
 ;; CHECK-NEXT:                                                 (open)
@@ -597,6 +599,9 @@
 ;; CHECK-NEXT:                                                 inlined when there is only one
 ;; CHECK-NEXT:                                                 caller (default -1, which means
 ;; CHECK-NEXT:                                                 all such functions are inlined)
+;; CHECK-NEXT:
+;; CHECK-NEXT:   --inline-max-combined-binary-size,-imcbs      Max size of combined functions
+;; CHECK-NEXT:                                                 after inlining. Default: 409600
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --inline-functions-with-loops,-ifwl           Allow inlining functions with
 ;; CHECK-NEXT:                                                 loops
@@ -753,6 +758,12 @@
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --disable-custom-descriptors                  Disable custom descriptors
 ;; CHECK-NEXT:                                                 (RTTs) and exact references
+;; CHECK-NEXT:
+;; CHECK-NEXT:   --enable-relaxed-atomics                      Enable acquire/release atomic
+;; CHECK-NEXT:                                                 memory operations
+;; CHECK-NEXT:
+;; CHECK-NEXT:   --disable-relaxed-atomics                     Disable acquire/release atomic
+;; CHECK-NEXT:                                                 memory operations
 ;; CHECK-NEXT:
 ;; CHECK-NEXT:   --enable-typed-function-references            Deprecated compatibility flag
 ;; CHECK-NEXT:

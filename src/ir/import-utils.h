@@ -17,6 +17,8 @@
 #ifndef wasm_ir_import_h
 #define wasm_ir_import_h
 
+#include "ir/import-names.h"
+#include "ir/runtime-table.h"
 #include "literal.h"
 #include "wasm.h"
 
@@ -121,6 +123,65 @@ struct ImportInfo {
   }
 
   Index getNumDefinedTags() { return wasm.tags.size() - getNumImportedTags(); }
+};
+
+class ImportResolver {
+public:
+  virtual ~ImportResolver() = default;
+
+  // Returns null if the `name` wasn't found. The returned Literals* lives as
+  // long as the ImportResolver instance.
+  virtual Literals* getGlobalOrNull(ImportNames name, Type type) const = 0;
+
+  // Returns null if the `name` wasn't found. The returned RuntimeTable* lives
+  // as long as the ImportResolver instance.
+  virtual RuntimeTable* getTableOrNull(ImportNames name,
+                                       const Table& type) const = 0;
+
+  virtual Tag* getTagOrNull(ImportNames name, const Signature& type) const = 0;
+};
+
+// Looks up imports from the given `linkedInstances`.
+template<typename ModuleRunnerType>
+class LinkedInstancesImportResolver : public ImportResolver {
+public:
+  LinkedInstancesImportResolver(
+    std::map<Name, std::shared_ptr<ModuleRunnerType>> linkedInstances)
+    : linkedInstances(std::move(linkedInstances)) {}
+
+  Literals* getGlobalOrNull(ImportNames name, Type type) const override {
+    auto it = linkedInstances.find(name.module);
+    if (it == linkedInstances.end()) {
+      return nullptr;
+    }
+
+    ModuleRunnerType* instance = it->second.get();
+    return instance->getExportedGlobalOrNull(name.name);
+  }
+
+  RuntimeTable* getTableOrNull(ImportNames name,
+                               const Table& type) const override {
+    auto it = linkedInstances.find(name.module);
+    if (it == linkedInstances.end()) {
+      return nullptr;
+    }
+
+    ModuleRunnerType* instance = it->second.get();
+    return instance->getExportedTableOrNull(name.name);
+  }
+
+  Tag* getTagOrNull(ImportNames name, const Signature& type) const override {
+    auto it = linkedInstances.find(name.module);
+    if (it == linkedInstances.end()) {
+      return nullptr;
+    }
+
+    ModuleRunnerType* instance = it->second.get();
+    return instance->getExportedTagOrNull(name.name);
+  }
+
+private:
+  const std::map<Name, std::shared_ptr<ModuleRunnerType>> linkedInstances;
 };
 
 } // namespace wasm

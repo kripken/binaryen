@@ -21,7 +21,8 @@
 #include "wasm-traversal.h"
 
 //
-// See the README.md for background on intrinsic functions.
+// Intrinsics include Binaryen intrinsics, and Wasm spec builtins. See the
+// README.md for more.
 //
 // Intrinsics can be recognized by Intrinsics::isFoo() methods, that check if a
 // function is a particular intrinsic, or if a call to a function is so. The
@@ -37,8 +38,7 @@ class Intrinsics {
 public:
   Intrinsics(Module& module) : module(module) {}
 
-  //
-  // Check if an instruction is the call.without.effects intrinsic.
+  // Check if an instruction is the Binaryen call.without.effects intrinsic.
   //
   //   (import "binaryen-intrinsics" "call.without.effects"
   //     (func (..params..) (param $target funcref) (..results..)))
@@ -85,9 +85,80 @@ public:
   //
   // Later passes will then turn that into a direct call and further optimize
   // things.
-  //
   bool isCallWithoutEffects(Function* func);
   Call* isCallWithoutEffects(Expression* curr);
+
+  // Check if an instruction is the wasm/JS interop configureAll builtin. Such
+  // calls have a second parameter which is an array of function references,
+  // which must be assumed to be "signature-called": Called from outside the
+  // module, using that signature. "Signature-called" is less powerful than the
+  // reference to the function generally escaping, as we do not care about the
+  // heap type of the function (no call_refs or casts will happen), all we know
+  // is that a JS-style call of the methods can occur (and only the signature
+  // matters then).
+  bool isConfigureAll(Function* func);
+  Call* isConfigureAll(Expression* curr);
+  // Given a configureAll, return all the functions it refers to. We error if it
+  // is not in the canonical form
+  //
+  //  (call $configureAll
+  //    ..arg0..
+  //    (array.new_elem $seg (0) (N)
+  //    ..
+  //  )
+  //
+  // where the segment $seg is of size N.
+  std::vector<Name> getConfigureAllFunctions(Call* call);
+
+  // Returns the names of all functions that are JS-called. That includes ones
+  // in configureAll (which we look through the module for), and also those
+  // annotated with @binaryen.js.called.
+  std::vector<Name> getJSCalledFunctions();
+
+  // Get the code annotations for an expression in a function.
+  CodeAnnotation getAnnotations(Expression* curr, Function* func) {
+    auto& annotations = func->codeAnnotations;
+    auto iter = annotations.find(curr);
+    if (iter != annotations.end()) {
+      return iter->second;
+    }
+    return {};
+  }
+
+  // Get the code annotations for a function itself.
+  CodeAnnotation getAnnotations(Function* func) {
+    return getAnnotations(nullptr, func);
+  }
+
+  // Given a call in a function, return all the annotations for it. The call may
+  // be annotated itself (which takes precedence), or the function it calls be
+  // annotated.
+  CodeAnnotation getCallAnnotations(Call* call, Function* func) {
+    // Combine annotations from the call itself and from the called function.
+    auto ret = getAnnotations(call, func);
+
+    // Check on the called function, if it exists (it may not if the IR is still
+    // being built up).
+    if (auto* target = module.getFunctionOrNull(call->target)) {
+      auto funcAnnotations = getAnnotations(target);
+
+      // Merge them, giving precedence for the call annotation.
+      if (!ret.branchLikely) {
+        ret.branchLikely = funcAnnotations.branchLikely;
+      }
+      if (!ret.inline_) {
+        ret.inline_ = funcAnnotations.inline_;
+      }
+      if (!ret.removableIfUnused) {
+        ret.removableIfUnused = funcAnnotations.removableIfUnused;
+      }
+      if (!ret.jsCalled) {
+        ret.jsCalled = funcAnnotations.jsCalled;
+      }
+    }
+
+    return ret;
+  }
 };
 
 } // namespace wasm

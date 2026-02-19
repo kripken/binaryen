@@ -203,6 +203,19 @@ BINARYEN_API BinaryenExternalKind BinaryenExternalMemory(void);
 BINARYEN_API BinaryenExternalKind BinaryenExternalGlobal(void);
 BINARYEN_API BinaryenExternalKind BinaryenExternalTag(void);
 
+// MemoryOrder for atomic operations
+
+typedef uint8_t BinaryenMemoryOrder;
+
+BINARYEN_API BinaryenMemoryOrder BinaryenMemoryOrderUnordered(void);
+
+// Acquire/Release atomic memory operation; acquire for loads, release for
+// stores.
+BINARYEN_API BinaryenMemoryOrder BinaryenMemoryOrderAcqRel(void);
+
+// Sequentially consistent atomic memory operation.
+BINARYEN_API BinaryenMemoryOrder BinaryenMemoryOrderSeqCst(void);
+
 // Features. Call to get the value of each; you can cache them. Use bitwise
 // operators to combine and test particular features.
 
@@ -230,6 +243,7 @@ BINARYEN_API BinaryenFeatures BinaryenFeatureSharedEverything(void);
 BINARYEN_API BinaryenFeatures BinaryenFeatureFP16(void);
 BINARYEN_API BinaryenFeatures BinaryenFeatureBulkMemoryOpt(void);
 BINARYEN_API BinaryenFeatures BinaryenFeatureCallIndirectOverlong(void);
+BINARYEN_API BinaryenFeatures BinaryenFeatureRelaxedAtomics(void);
 BINARYEN_API BinaryenFeatures BinaryenFeatureAll(void);
 
 // Modules
@@ -843,12 +857,14 @@ BinaryenMemoryGrow(BinaryenModuleRef module,
 BINARYEN_API BinaryenExpressionRef BinaryenNop(BinaryenModuleRef module);
 BINARYEN_API BinaryenExpressionRef
 BinaryenUnreachable(BinaryenModuleRef module);
-BINARYEN_API BinaryenExpressionRef BinaryenAtomicLoad(BinaryenModuleRef module,
-                                                      uint32_t bytes,
-                                                      uint32_t offset,
-                                                      BinaryenType type,
-                                                      BinaryenExpressionRef ptr,
-                                                      const char* memoryName);
+BINARYEN_API BinaryenExpressionRef
+BinaryenAtomicLoad(BinaryenModuleRef module,
+                   uint32_t bytes,
+                   uint32_t offset,
+                   BinaryenType type,
+                   BinaryenExpressionRef ptr,
+                   const char* memoryName,
+                   BinaryenMemoryOrder order);
 BINARYEN_API BinaryenExpressionRef
 BinaryenAtomicStore(BinaryenModuleRef module,
                     uint32_t bytes,
@@ -856,7 +872,8 @@ BinaryenAtomicStore(BinaryenModuleRef module,
                     BinaryenExpressionRef ptr,
                     BinaryenExpressionRef value,
                     BinaryenType type,
-                    const char* memoryName);
+                    const char* memoryName,
+                    BinaryenMemoryOrder order);
 BINARYEN_API BinaryenExpressionRef
 BinaryenAtomicRMW(BinaryenModuleRef module,
                   BinaryenOp op,
@@ -865,7 +882,8 @@ BinaryenAtomicRMW(BinaryenModuleRef module,
                   BinaryenExpressionRef ptr,
                   BinaryenExpressionRef value,
                   BinaryenType type,
-                  const char* memoryName);
+                  const char* memoryName,
+                  BinaryenMemoryOrder order);
 BINARYEN_API BinaryenExpressionRef
 BinaryenAtomicCmpxchg(BinaryenModuleRef module,
                       BinaryenIndex bytes,
@@ -874,7 +892,8 @@ BinaryenAtomicCmpxchg(BinaryenModuleRef module,
                       BinaryenExpressionRef expected,
                       BinaryenExpressionRef replacement,
                       BinaryenType type,
-                      const char* memoryName);
+                      const char* memoryName,
+                      BinaryenMemoryOrder order);
 BINARYEN_API BinaryenExpressionRef
 BinaryenAtomicWait(BinaryenModuleRef module,
                    BinaryenExpressionRef ptr,
@@ -1016,8 +1035,13 @@ BinaryenCallRef(BinaryenModuleRef module,
                 BinaryenExpressionRef target,
                 BinaryenExpressionRef* operands,
                 BinaryenIndex numOperands,
-                BinaryenType type,
-                bool isReturn);
+                BinaryenType type);
+BINARYEN_API BinaryenExpressionRef
+BinaryenReturnCallRef(BinaryenModuleRef module,
+                      BinaryenExpressionRef target,
+                      BinaryenExpressionRef* operands,
+                      BinaryenIndex numOperands,
+                      BinaryenType type);
 BINARYEN_API BinaryenExpressionRef BinaryenRefTest(BinaryenModuleRef module,
                                                    BinaryenExpressionRef ref,
                                                    BinaryenType castType);
@@ -1530,11 +1554,17 @@ BINARYEN_API void BinaryenMemoryGrowSetDelta(BinaryenExpressionRef expr,
 
 // Load
 
-// Gets whether a `load` expression is atomic (is an `atomic.load`).
+// Gets whether a `load` expression is atomic (is an `atomic.load`), i.e. has a
+// memory order other than Unordered. See also `BinaryenLoadGetMemoryOrder`.
 BINARYEN_API bool BinaryenLoadIsAtomic(BinaryenExpressionRef expr);
-// Sets whether a `load` expression is atomic (is an `atomic.load`).
-BINARYEN_API void BinaryenLoadSetAtomic(BinaryenExpressionRef expr,
-                                        bool isAtomic);
+// Get the (atomic / non-atomic) memory order of a Load. See
+// `BinaryenMemoryOrder`.
+BINARYEN_API BinaryenMemoryOrder
+BinaryenLoadGetMemoryOrder(BinaryenExpressionRef expr);
+// Set the (atomic / non-atomic) memory order of a Load. See
+// `BinaryenMemoryOrder`.
+BINARYEN_API void BinaryenLoadSetMemoryOrder(BinaryenExpressionRef expr,
+                                             BinaryenMemoryOrder order);
 // Gets whether a `load` expression operates on a signed value (`_s`).
 BINARYEN_API bool BinaryenLoadIsSigned(BinaryenExpressionRef expr);
 // Sets whether a `load` expression operates on a signed value (`_s`).
@@ -1564,11 +1594,17 @@ BINARYEN_API void BinaryenLoadSetPtr(BinaryenExpressionRef expr,
 
 // Store
 
-// Gets whether a `store` expression is atomic (is an `atomic.store`).
+// Gets whether a `store` expression is atomic (is an `atomic.store`), i.e. as a
+// memory order other than Unordered. See also `BinaryenStoreGetMemoryOrder`.
 BINARYEN_API bool BinaryenStoreIsAtomic(BinaryenExpressionRef expr);
-// Sets whether a `store` expression is atomic (is an `atomic.store`).
-BINARYEN_API void BinaryenStoreSetAtomic(BinaryenExpressionRef expr,
-                                         bool isAtomic);
+// Get the (atomic / non-atomic) memory order of a Store. See
+// `BinaryenMemoryOrder`.
+BINARYEN_API BinaryenMemoryOrder
+BinaryenStoreGetMemoryOrder(BinaryenExpressionRef expr);
+// Set the (atomic / non-atomic) memory order of a Store. See
+// `BinaryenMemoryOrder`.
+BINARYEN_API void BinaryenStoreSetMemoryOrder(BinaryenExpressionRef expr,
+                                              BinaryenMemoryOrder order);
 // Gets the number of bytes stored by a `store` expression.
 BINARYEN_API uint32_t BinaryenStoreGetBytes(BinaryenExpressionRef expr);
 // Sets the number of bytes stored by a `store` expression.
@@ -1614,20 +1650,6 @@ BINARYEN_API int64_t BinaryenConstGetValueI64(BinaryenExpressionRef expr);
 // Sets the 64-bit integer value of an `i64.const` expression.
 BINARYEN_API void BinaryenConstSetValueI64(BinaryenExpressionRef expr,
                                            int64_t value);
-// Gets the low 32-bits of the 64-bit integer value of an `i64.const`
-// expression.
-BINARYEN_API int32_t BinaryenConstGetValueI64Low(BinaryenExpressionRef expr);
-// Sets the low 32-bits of the 64-bit integer value of an `i64.const`
-// expression.
-BINARYEN_API void BinaryenConstSetValueI64Low(BinaryenExpressionRef expr,
-                                              int32_t valueLow);
-// Gets the high 32-bits of the 64-bit integer value of an `i64.const`
-// expression.
-BINARYEN_API int32_t BinaryenConstGetValueI64High(BinaryenExpressionRef expr);
-// Sets the high 32-bits of the 64-bit integer value of an `i64.const`
-// expression.
-BINARYEN_API void BinaryenConstSetValueI64High(BinaryenExpressionRef expr,
-                                               int32_t valueHigh);
 // Gets the 32-bit float value of a `f32.const` expression.
 BINARYEN_API float BinaryenConstGetValueF32(BinaryenExpressionRef expr);
 // Sets the 32-bit float value of a `f32.const` expression.
@@ -1750,6 +1772,13 @@ BinaryenAtomicRMWGetValue(BinaryenExpressionRef expr);
 // Sets the value expression of an atomic read-modify-write expression.
 BINARYEN_API void BinaryenAtomicRMWSetValue(BinaryenExpressionRef expr,
                                             BinaryenExpressionRef valueExpr);
+// Gets the memory order of an atomic read-modify-write expression. See
+// `BinaryenMemoryOrder`.
+BINARYEN_API BinaryenMemoryOrder
+BinaryenAtomicRMWGetMemoryOrder(BinaryenExpressionRef expr);
+// Sets the atomic memory order of a Store. See `BinaryenMemoryOrder`.
+BINARYEN_API void BinaryenAtomicRMWSetMemoryOrder(BinaryenExpressionRef expr,
+                                                  BinaryenMemoryOrder order);
 
 // AtomicCmpxchg
 
@@ -1788,6 +1817,15 @@ BinaryenAtomicCmpxchgGetReplacement(BinaryenExpressionRef expr);
 BINARYEN_API void
 BinaryenAtomicCmpxchgSetReplacement(BinaryenExpressionRef expr,
                                     BinaryenExpressionRef replacementExpr);
+// Gets the memory order of an atomic compare and exchange expression. See
+// `BinaryenMemoryOrder`.
+BINARYEN_API BinaryenMemoryOrder
+BinaryenAtomicCmpxchgGetMemoryOrder(BinaryenExpressionRef expr);
+// Sets the memory order of an atomic compare and exchange expression. See
+// `BinaryenMemoryOrder`.
+BINARYEN_API void
+BinaryenAtomicCmpxchgSetMemoryOrder(BinaryenExpressionRef expr,
+                                    BinaryenMemoryOrder order);
 
 // AtomicWait
 
@@ -3147,6 +3185,14 @@ BINARYEN_API BinaryenIndex BinaryenGetFlexibleInlineMaxSize(void);
 // Sets the function size which we inline when functions are lightweight.
 // Applies to all modules, globally.
 BINARYEN_API void BinaryenSetFlexibleInlineMaxSize(BinaryenIndex size);
+
+// Gets the limit for the combined size of the code after inlining.
+// Applies to all modules, globally.
+BINARYEN_API BinaryenIndex BinaryenGetMaxCombinedBinarySize(void);
+
+// Sets the limit for the combined size of the code after inlining.
+// Applies to all modules, globally.
+BINARYEN_API void BinaryenSetMaxCombinedBinarySize(BinaryenIndex size);
 
 // Gets the function size which we inline when there is only one caller.
 // Applies to all modules, globally.

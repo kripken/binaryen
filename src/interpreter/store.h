@@ -18,6 +18,7 @@
 #define interpreter_store_h
 
 #include <cassert>
+#include <deque>
 #include <vector>
 
 #include "expression-iterator.h"
@@ -31,7 +32,7 @@ struct Instance {
   std::shared_ptr<Module> wasm;
   std::unordered_map<Name, Literal> globalValues;
 
-  Instance(std::shared_ptr<Module> wasm) : wasm(std::move(wasm)){};
+  Instance(std::shared_ptr<Module> wasm) : wasm(std::move(wasm)) {};
 };
 
 // A frame of execution for a function call.
@@ -42,7 +43,7 @@ struct Frame {
   ExpressionIterator exprs;
 
   Frame(Instance& instance, ExpressionIterator&& exprs)
-    : instance(instance), exprs(std::move(exprs)){};
+    : instance(instance), exprs(std::move(exprs)) {};
 
   // TODO: Map loops to ExpressionIterators so we can branch backwards.
 
@@ -65,7 +66,10 @@ struct WasmStore {
   // TODO: Storage for memories, tables, globals, heap objects, etc.
   // TODO: Map instances and import names to other instances to find imports.
   std::vector<Frame> callStack;
-  std::vector<Instance> instances;
+  // Use std::deque so that references to existing Instance objects are not
+  // invalidated when new instances are added.  Frame holds Instance& and would
+  // become dangling if a std::vector reallocated its storage.
+  std::deque<Instance> instances;
 
   Frame& getFrame() {
     assert(!callStack.empty());

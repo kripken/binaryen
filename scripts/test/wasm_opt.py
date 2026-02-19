@@ -16,8 +16,7 @@ import os
 import shutil
 import subprocess
 
-from . import shared
-from . import support
+from . import shared, support
 
 
 def test_wasm_opt():
@@ -73,11 +72,10 @@ def test_wasm_opt():
             shared.fail_if_not_contained(actual, debugged)
 
             # also check pass-debug mode
-            def check():
+            with shared.with_pass_debug():
                 # ignore stderr, as the pass-debug output is very verbose in CI
                 pass_debug = support.run_command(cmd, stderr=subprocess.PIPE)
                 shared.fail_if_not_identical(curr, pass_debug)
-            shared.with_pass_debug(check)
 
         expected_file = os.path.join(shared.get_test_dir('passes'), base + ('.bin' if binary else '') + '.txt')
         shared.fail_if_not_identical_to_file(actual, expected_file)
@@ -96,13 +94,13 @@ def test_wasm_opt():
         wasm = os.path.basename(t).replace('.wast', '')
         cmd = shared.WASM_OPT + [t, '--print', '-all']
         print('    ', ' '.join(cmd))
-        actual, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True).communicate()
+        proc = subprocess.run(cmd, capture_output=True, text=True)
         expected_file = os.path.join(shared.get_test_dir('print'), wasm + '.txt')
-        shared.fail_if_not_identical_to_file(actual, expected_file)
+        shared.fail_if_not_identical_to_file(proc.stdout, expected_file)
         cmd = shared.WASM_OPT + [os.path.join(shared.get_test_dir('print'), t), '--print-minified', '-all']
         print('    ', ' '.join(cmd))
-        actual, err = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True).communicate()
-        shared.fail_if_not_identical(actual.strip(), open(os.path.join(shared.get_test_dir('print'), wasm + '.minified.txt')).read().strip())
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        shared.fail_if_not_identical(proc.stdout.strip(), open(os.path.join(shared.get_test_dir('print'), wasm + '.minified.txt')).read().strip())
 
 
 def update_wasm_opt_tests():

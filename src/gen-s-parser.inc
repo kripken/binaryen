@@ -276,16 +276,38 @@ switch (buf[0]) {
                         switch (buf[15]) {
                           case '\0':
                             if (op == "br_on_cast_desc"sv) {
-                              CHECK_ERR(makeBrOnCast(ctx, pos, annotations, BrOnCastDesc));
+                              CHECK_ERR(makeBrOnCast(ctx, pos, annotations, BrOnCastDescEq));
                               return Ok{};
                             }
                             goto parse_error;
-                          case '_':
-                            if (op == "br_on_cast_desc_fail"sv) {
-                              CHECK_ERR(makeBrOnCast(ctx, pos, annotations, BrOnCastDescFail));
-                              return Ok{};
+                          case '_': {
+                            switch (buf[16]) {
+                              case 'e': {
+                                switch (buf[18]) {
+                                  case '\0':
+                                    if (op == "br_on_cast_desc_eq"sv) {
+                                      CHECK_ERR(makeBrOnCast(ctx, pos, annotations, BrOnCastDescEq));
+                                      return Ok{};
+                                    }
+                                    goto parse_error;
+                                  case '_':
+                                    if (op == "br_on_cast_desc_eq_fail"sv) {
+                                      CHECK_ERR(makeBrOnCast(ctx, pos, annotations, BrOnCastDescEqFail));
+                                      return Ok{};
+                                    }
+                                    goto parse_error;
+                                  default: goto parse_error;
+                                }
+                              }
+                              case 'f':
+                                if (op == "br_on_cast_desc_fail"sv) {
+                                  CHECK_ERR(makeBrOnCast(ctx, pos, annotations, BrOnCastDescEqFail));
+                                  return Ok{};
+                                }
+                                goto parse_error;
+                              default: goto parse_error;
                             }
-                            goto parse_error;
+                          }
                           default: goto parse_error;
                         }
                       }
@@ -4894,12 +4916,23 @@ switch (buf[0]) {
                   return Ok{};
                 }
                 goto parse_error;
-              case '_':
-                if (op == "ref.cast_desc"sv) {
-                  CHECK_ERR(makeRefCast(ctx, pos, annotations, true));
-                  return Ok{};
+              case '_': {
+                switch (buf[13]) {
+                  case '\0':
+                    if (op == "ref.cast_desc"sv) {
+                      CHECK_ERR(makeRefCast(ctx, pos, annotations, true));
+                      return Ok{};
+                    }
+                    goto parse_error;
+                  case '_':
+                    if (op == "ref.cast_desc_eq"sv) {
+                      CHECK_ERR(makeRefCast(ctx, pos, annotations, true));
+                      return Ok{};
+                    }
+                    goto parse_error;
+                  default: goto parse_error;
                 }
-                goto parse_error;
+              }
               default: goto parse_error;
             }
           }
@@ -4972,12 +5005,23 @@ switch (buf[0]) {
               return Ok{};
             }
             goto parse_error;
-          case '_':
-            if (op == "resume_throw"sv) {
-              CHECK_ERR(makeResumeThrow(ctx, pos, annotations));
-              return Ok{};
+          case '_': {
+            switch (buf[12]) {
+              case '\0':
+                if (op == "resume_throw"sv) {
+                  CHECK_ERR(makeResumeThrow(ctx, pos, annotations));
+                  return Ok{};
+                }
+                goto parse_error;
+              case '_':
+                if (op == "resume_throw_ref"sv) {
+                  CHECK_ERR(makeResumeThrowRef(ctx, pos, annotations));
+                  return Ok{};
+                }
+                goto parse_error;
+              default: goto parse_error;
             }
-            goto parse_error;
+          }
           default: goto parse_error;
         }
       }
@@ -5315,16 +5359,38 @@ switch (buf[0]) {
                 switch (buf[10]) {
                   case '\0':
                     if (op == "struct.new"sv) {
-                      CHECK_ERR(makeStructNew(ctx, pos, annotations, false));
+                      CHECK_ERR(makeStructNew(ctx, pos, annotations, false, false));
                       return Ok{};
                     }
                     goto parse_error;
-                  case '_':
-                    if (op == "struct.new_default"sv) {
-                      CHECK_ERR(makeStructNew(ctx, pos, annotations, true));
-                      return Ok{};
+                  case '_': {
+                    switch (buf[13]) {
+                      case 'f': {
+                        switch (buf[18]) {
+                          case '\0':
+                            if (op == "struct.new_default"sv) {
+                              CHECK_ERR(makeStructNew(ctx, pos, annotations, true, false));
+                              return Ok{};
+                            }
+                            goto parse_error;
+                          case '_':
+                            if (op == "struct.new_default_desc"sv) {
+                              CHECK_ERR(makeStructNew(ctx, pos, annotations, true, true));
+                              return Ok{};
+                            }
+                            goto parse_error;
+                          default: goto parse_error;
+                        }
+                      }
+                      case 's':
+                        if (op == "struct.new_desc"sv) {
+                          CHECK_ERR(makeStructNew(ctx, pos, annotations, false, true));
+                          return Ok{};
+                        }
+                        goto parse_error;
+                      default: goto parse_error;
                     }
-                    goto parse_error;
+                  }
                   default: goto parse_error;
                 }
               }

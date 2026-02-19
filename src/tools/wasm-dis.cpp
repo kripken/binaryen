@@ -18,6 +18,7 @@
 // wasm2asm console tool
 //
 
+#include "parsing.h"
 #include "source-map.h"
 #include "support/colors.h"
 #include "support/file.h"
@@ -67,10 +68,12 @@ int main(int argc, const char* argv[]) {
   }
   Module wasm;
   options.applyOptionsBeforeParse(wasm);
+  auto enabledFeatures = wasm.features;
   wasm.features = FeatureSet::All;
 
+  auto moduleReader = ModuleReader();
   try {
-    ModuleReader().readBinary(options.extra["infile"], wasm, sourceMapFilename);
+    moduleReader.readBinary(options.extra["infile"], wasm, sourceMapFilename);
   } catch (ParseException& p) {
     p.dump(std::cerr);
     std::cerr << '\n';
@@ -87,14 +90,24 @@ int main(int argc, const char* argv[]) {
   }
 
   options.applyOptionsAfterParse(wasm);
-
+  // If the features section is present, restore it. If not, restore the command
+  // line + default features.
+  wasm.features = wasm.hasFeaturesSection
+                    ? moduleReader.getFeaturesSectionFeatures()
+                    : enabledFeatures;
   if (options.debug) {
     std::cerr << "Printing..." << std::endl;
   }
-  Output output(options.extra["output"], Flags::Text);
-  output.getStream() << wasm << '\n';
+
+  // Ensure the destructor of Output runs before quick_exit.
+  {
+    Output output(options.extra["output"], Flags::Text);
+    output.getStream() << wasm << '\n';
+  }
 
   if (options.debug) {
     std::cerr << "Done." << std::endl;
   }
+
+  flush_and_quick_exit(0);
 }

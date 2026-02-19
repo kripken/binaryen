@@ -149,6 +149,7 @@ struct NullTypeParserCtx {
 
   StorageT makeI8() { return Ok{}; }
   StorageT makeI16() { return Ok{}; }
+  StorageT makeWaitQueue() { return Ok{}; }
   StorageT makeStorageType(TypeT) { return Ok{}; }
 
   FieldT makeFieldType(StorageT, Mutability) { return Ok{}; }
@@ -308,10 +309,11 @@ template<typename Ctx> struct TypeParserCtx {
 
   StorageT makeI8() { return Field(Field::i8, Immutable); }
   StorageT makeI16() { return Field(Field::i16, Immutable); }
+  StorageT makeWaitQueue() { return Field(Field::WaitQueue, Immutable); }
   StorageT makeStorageType(TypeT type) { return Field(type, Immutable); }
 
   FieldT makeFieldType(FieldT field, Mutability mutability) {
-    if (field.packedType == Field::not_packed) {
+    if (field.packedType == Field::NotPacked) {
       return Field(field.type, mutability);
     }
     return Field(field.packedType, mutability);
@@ -555,7 +557,8 @@ struct NullInstrParserCtx {
                     int,
                     bool,
                     MemoryIdxT*,
-                    MemargT) {
+                    MemargT,
+                    MemoryOrder) {
     return Ok{};
   }
   Result<> makeStore(Index,
@@ -564,7 +567,8 @@ struct NullInstrParserCtx {
                      int,
                      bool,
                      MemoryIdxT*,
-                     MemargT) {
+                     MemargT,
+                     MemoryOrder) {
     return Ok{};
   }
   Result<> makeAtomicRMW(Index,
@@ -573,11 +577,17 @@ struct NullInstrParserCtx {
                          Type,
                          int,
                          MemoryIdxT*,
-                         MemargT) {
+                         MemargT,
+                         MemoryOrder) {
     return Ok{};
   }
-  Result<> makeAtomicCmpxchg(
-    Index, const std::vector<Annotation>&, Type, int, MemoryIdxT*, MemargT) {
+  Result<> makeAtomicCmpxchg(Index,
+                             const std::vector<Annotation>&,
+                             Type,
+                             int,
+                             MemoryIdxT*,
+                             MemargT,
+                             MemoryOrder) {
     return Ok{};
   }
   Result<> makeAtomicWait(
@@ -756,12 +766,13 @@ struct NullInstrParserCtx {
   }
 
   template<typename HeapTypeT>
-  Result<> makeStructNew(Index, const std::vector<Annotation>&, HeapTypeT) {
+  Result<>
+  makeStructNew(Index, const std::vector<Annotation>&, HeapTypeT, bool) {
     return Ok{};
   }
   template<typename HeapTypeT>
   Result<>
-  makeStructNewDefault(Index, const std::vector<Annotation>&, HeapTypeT) {
+  makeStructNewDefault(Index, const std::vector<Annotation>&, HeapTypeT, bool) {
     return Ok{};
   }
   template<typename HeapTypeT>
@@ -934,6 +945,13 @@ struct NullInstrParserCtx {
     return Ok{};
   }
   template<typename HeapTypeT>
+  Result<> makeResumeThrowRef(Index,
+                              const std::vector<Annotation>&,
+                              HeapTypeT,
+                              const TagLabelListT&) {
+    return Ok{};
+  }
+  template<typename HeapTypeT>
   Result<>
   makeStackSwitch(Index, const std::vector<Annotation>&, HeapTypeT, TagIdxT) {
     return Ok{};
@@ -1078,6 +1096,7 @@ struct ParseDeclsCtx : NullTypeParserCtx, NullInstrParserCtx {
                    const std::vector<Name>& exports,
                    ImportNames* import,
                    TypeUseT type,
+                   Exactness exact,
                    std::optional<LocalsT>,
                    std::vector<Annotation>&&,
                    Index pos);
@@ -1285,39 +1304,67 @@ struct ParseImplicitTypeDefsCtx : TypeParserCtx<ParseImplicitTypeDefsCtx> {
 };
 
 struct AnnotationParserCtx {
-  // Return the inline hint for a call instruction, if there is one.
-  std::optional<std::uint8_t>
-  getInlineHint(const std::vector<Annotation>& annotations) {
-    // Find and apply (the last) inline hint.
-    const Annotation* hint = nullptr;
+  // Parse annotations into IR.
+  CodeAnnotation parseAnnotations(const std::vector<Annotation>& annotations) {
+    CodeAnnotation ret;
+
+    // Find the hints. For hints with content we must find the last one, which
+    // overrides the others.
+    const Annotation* branchHint = nullptr;
+    const Annotation* inlineHint = nullptr;
     for (auto& a : annotations) {
-      if (a.kind == Annotations::InlineHint) {
-        hint = &a;
+      if (a.kind == Annotations::BranchHint) {
+        branchHint = &a;
+      } else if (a.kind == Annotations::InlineHint) {
+        inlineHint = &a;
+      } else if (a.kind == Annotations::RemovableIfUnusedHint) {
+        ret.removableIfUnused = true;
+      } else if (a.kind == Annotations::JSCalledHint) {
+        ret.jsCalled = true;
       }
     }
-    if (!hint) {
-      return std::nullopt;
+
+    // Apply the last branch hint, if valid.
+    if (branchHint) {
+      Lexer lexer(branchHint->contents);
+      if (lexer.empty()) {
+        std::cerr << "warning: empty BranchHint\n";
+      } else {
+        auto str = lexer.takeString();
+        if (!str || str->size() != 1) {
+          std::cerr << "warning: invalid BranchHint string\n";
+        } else {
+          auto value = (*str)[0];
+          if (value != 0 && value != 1) {
+            std::cerr << "warning: invalid BranchHint value\n";
+          } else {
+            ret.branchLikely = bool(value);
+          }
+        }
+      }
     }
 
-    Lexer lexer(hint->contents);
-    if (lexer.empty()) {
-      std::cerr << "warning: empty InlineHint\n";
-      return std::nullopt;
+    // Apply the last inline hint, if valid.
+    if (inlineHint) {
+      Lexer lexer(inlineHint->contents);
+      if (lexer.empty()) {
+        std::cerr << "warning: empty InlineHint\n";
+      } else {
+        auto str = lexer.takeString();
+        if (!str || str->size() != 1) {
+          std::cerr << "warning: invalid InlineHint string\n";
+        } else {
+          uint8_t value = (*str)[0];
+          if (value > 127) {
+            std::cerr << "warning: invalid InlineHint value\n";
+          } else {
+            ret.inline_ = value;
+          }
+        }
+      }
     }
 
-    auto str = lexer.takeString();
-    if (!str || str->size() != 1) {
-      std::cerr << "warning: invalid InlineHint string\n";
-      return std::nullopt;
-    }
-
-    uint8_t value = (*str)[0];
-    if (value > 127) {
-      std::cerr << "warning: invalid InlineHint value\n";
-      return std::nullopt;
-    }
-
-    return value;
+    return ret;
   }
 };
 
@@ -1411,14 +1458,15 @@ struct ParseModuleTypesCtx : TypeParserCtx<ParseModuleTypesCtx>,
                    const std::vector<Name>&,
                    ImportNames*,
                    TypeUse type,
+                   Exactness exact,
                    std::optional<LocalsT> locals,
-                   std::vector<Annotation>&&,
+                   std::vector<Annotation>&& annotations,
                    Index pos) {
     auto& f = wasm.functions[index];
     if (!type.type.isSignature()) {
       return in.err(pos, "expected signature type");
     }
-    f->type = type.type;
+    f->type = Type(type.type, NonNullable, exact);
     // If we are provided with too many names (more than the function has), we
     // will error on that later when we check the signature matches the type.
     // For now, avoid asserting in setLocalName.
@@ -1432,13 +1480,11 @@ struct ParseModuleTypesCtx : TypeParserCtx<ParseModuleTypesCtx>,
         Builder::addVar(f.get(), l.name, l.type);
       }
     }
-    // TODO: Add function-level annotations (stored using the nullptr key, as
-    // they are tied to no instruction in particular), but this should wait on
-    // figuring out
-    // https://github.com/WebAssembly/tool-conventions/issues/251
-    // if (auto inline_ = getInlineHint(annotations)) {
-    //   f->codeAnnotations[nullptr].inline_ = inline_;
-    // }
+    // Function-level annotations are stored using the nullptr key, as they are
+    // not tied to a particular instruction.
+    if (!annotations.empty()) {
+      f->codeAnnotations[nullptr] = parseAnnotations(annotations);
+    }
     return Ok{};
   }
 
@@ -1800,6 +1846,7 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                    const std::vector<Name>&,
                    ImportNames*,
                    TypeUseT,
+                   Exactness,
                    std::optional<LocalsT>,
                    std::vector<Annotation>&&,
                    Index) {
@@ -1986,10 +2033,10 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
     if (!type.isSignature()) {
       return in.err(pos, "expected function type");
     }
-    auto likely = getBranchHint(annotations);
-    return withLoc(
-      pos,
-      irBuilder.makeIf(label ? *label : Name{}, type.getSignature(), likely));
+    return withLoc(pos,
+                   irBuilder.makeIf(label ? *label : Name{},
+                                    type.getSignature(),
+                                    parseAnnotations(annotations)));
   }
 
   Result<> visitElse() { return withLoc(irBuilder.visitElse()); }
@@ -2224,12 +2271,13 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                     int bytes,
                     bool isAtomic,
                     Name* mem,
-                    Memarg memarg) {
+                    Memarg memarg,
+                    MemoryOrder order) {
     auto m = getMemory(pos, mem);
     CHECK_ERR(m);
     if (isAtomic) {
-      return withLoc(pos,
-                     irBuilder.makeAtomicLoad(bytes, memarg.offset, type, *m));
+      return withLoc(
+        pos, irBuilder.makeAtomicLoad(bytes, memarg.offset, type, *m, order));
     }
     return withLoc(pos,
                    irBuilder.makeLoad(
@@ -2242,12 +2290,13 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                      int bytes,
                      bool isAtomic,
                      Name* mem,
-                     Memarg memarg) {
+                     Memarg memarg,
+                     MemoryOrder order) {
     auto m = getMemory(pos, mem);
     CHECK_ERR(m);
     if (isAtomic) {
-      return withLoc(pos,
-                     irBuilder.makeAtomicStore(bytes, memarg.offset, type, *m));
+      return withLoc(
+        pos, irBuilder.makeAtomicStore(bytes, memarg.offset, type, *m, order));
     }
     return withLoc(
       pos, irBuilder.makeStore(bytes, memarg.offset, memarg.align, type, *m));
@@ -2259,11 +2308,12 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                          Type type,
                          int bytes,
                          Name* mem,
-                         Memarg memarg) {
+                         Memarg memarg,
+                         MemoryOrder order) {
     auto m = getMemory(pos, mem);
     CHECK_ERR(m);
-    return withLoc(pos,
-                   irBuilder.makeAtomicRMW(op, bytes, memarg.offset, type, *m));
+    return withLoc(
+      pos, irBuilder.makeAtomicRMW(op, bytes, memarg.offset, type, *m, order));
   }
 
   Result<> makeAtomicCmpxchg(Index pos,
@@ -2271,11 +2321,12 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                              Type type,
                              int bytes,
                              Name* mem,
-                             Memarg memarg) {
+                             Memarg memarg,
+                             MemoryOrder order) {
     auto m = getMemory(pos, mem);
     CHECK_ERR(m);
-    return withLoc(pos,
-                   irBuilder.makeAtomicCmpxchg(bytes, memarg.offset, type, *m));
+    return withLoc(
+      pos, irBuilder.makeAtomicCmpxchg(bytes, memarg.offset, type, *m, order));
   }
 
   Result<> makeAtomicWait(Index pos,
@@ -2405,8 +2456,8 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                     const std::vector<Annotation>& annotations,
                     Name func,
                     bool isReturn) {
-    auto inline_ = getInlineHint(annotations);
-    return withLoc(pos, irBuilder.makeCall(func, isReturn, inline_));
+    return withLoc(
+      pos, irBuilder.makeCall(func, isReturn, parseAnnotations(annotations)));
   }
 
   Result<> makeCallIndirect(Index pos,
@@ -2416,52 +2467,18 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                             bool isReturn) {
     auto t = getTable(pos, table);
     CHECK_ERR(t);
-    auto inline_ = getInlineHint(annotations);
     return withLoc(pos,
-                   irBuilder.makeCallIndirect(*t, type, isReturn, inline_));
-  }
-
-  // Return the branch hint for a branching instruction, if there is one.
-  std::optional<bool>
-  getBranchHint(const std::vector<Annotation>& annotations) {
-    // Find and apply (the last) branch hint.
-    const Annotation* hint = nullptr;
-    for (auto& a : annotations) {
-      if (a.kind == Annotations::BranchHint) {
-        hint = &a;
-      }
-    }
-    if (!hint) {
-      return std::nullopt;
-    }
-
-    Lexer lexer(hint->contents);
-    if (lexer.empty()) {
-      std::cerr << "warning: empty BranchHint\n";
-      return std::nullopt;
-    }
-
-    auto str = lexer.takeString();
-    if (!str || str->size() != 1) {
-      std::cerr << "warning: invalid BranchHint string\n";
-      return std::nullopt;
-    }
-
-    auto value = (*str)[0];
-    if (value != 0 && value != 1) {
-      std::cerr << "warning: invalid BranchHint value\n";
-      return std::nullopt;
-    }
-
-    return bool(value);
+                   irBuilder.makeCallIndirect(
+                     *t, type, isReturn, parseAnnotations(annotations)));
   }
 
   Result<> makeBreak(Index pos,
                      const std::vector<Annotation>& annotations,
                      Index label,
                      bool isConditional) {
-    auto likely = getBranchHint(annotations);
-    return withLoc(pos, irBuilder.makeBreak(label, isConditional, likely));
+    return withLoc(
+      pos,
+      irBuilder.makeBreak(label, isConditional, parseAnnotations(annotations)));
   }
 
   Result<> makeSwitch(Index pos,
@@ -2600,8 +2617,9 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                        const std::vector<Annotation>& annotations,
                        HeapType type,
                        bool isReturn) {
-    auto inline_ = getInlineHint(annotations);
-    return withLoc(pos, irBuilder.makeCallRef(type, isReturn, inline_));
+    return withLoc(
+      pos,
+      irBuilder.makeCallRef(type, isReturn, parseAnnotations(annotations)));
   }
 
   Result<> makeRefI31(Index pos,
@@ -2641,20 +2659,23 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
                     BrOnOp op,
                     Type in = Type::none,
                     Type out = Type::none) {
-    auto likely = getBranchHint(annotations);
-    return withLoc(pos, irBuilder.makeBrOn(label, op, in, out, likely));
+    return withLoc(
+      pos,
+      irBuilder.makeBrOn(label, op, in, out, parseAnnotations(annotations)));
   }
 
   Result<> makeStructNew(Index pos,
                          const std::vector<Annotation>& annotations,
-                         HeapType type) {
-    return withLoc(pos, irBuilder.makeStructNew(type));
+                         HeapType type,
+                         bool isDesc) {
+    return withLoc(pos, irBuilder.makeStructNew(type, isDesc));
   }
 
   Result<> makeStructNewDefault(Index pos,
                                 const std::vector<Annotation>& annotations,
-                                HeapType type) {
-    return withLoc(pos, irBuilder.makeStructNewDefault(type));
+                                HeapType type,
+                                bool isDesc) {
+    return withLoc(pos, irBuilder.makeStructNewDefault(type, isDesc));
   }
 
   Result<> makeStructGet(Index pos,
@@ -2883,24 +2904,41 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
     return withLoc(pos, irBuilder.makeResume(type, tags, labels));
   }
 
+  struct ResumeThrowData {
+    std::vector<Name> tags;
+    std::vector<std::optional<Index>> labels;
+
+    ResumeThrowData(const std::vector<OnClauseInfo>& resumetable) {
+      tags.reserve(resumetable.size());
+      labels.reserve(resumetable.size());
+      for (const OnClauseInfo& info : resumetable) {
+        tags.push_back(info.tag);
+        if (info.isOnSwitch) {
+          labels.push_back(std::nullopt);
+        } else {
+          labels.push_back(std::optional<Index>(info.label));
+        }
+      }
+    }
+  };
+
   Result<> makeResumeThrow(Index pos,
                            const std::vector<Annotation>& annotations,
                            HeapType type,
                            Name tag,
                            const std::vector<OnClauseInfo>& resumetable) {
-    std::vector<Name> tags;
-    std::vector<std::optional<Index>> labels;
-    tags.reserve(resumetable.size());
-    labels.reserve(resumetable.size());
-    for (const OnClauseInfo& info : resumetable) {
-      tags.push_back(info.tag);
-      if (info.isOnSwitch) {
-        labels.push_back(std::nullopt);
-      } else {
-        labels.push_back(std::optional<Index>(info.label));
-      }
-    }
-    return withLoc(pos, irBuilder.makeResumeThrow(type, tag, tags, labels));
+    ResumeThrowData data(resumetable);
+    return withLoc(
+      pos, irBuilder.makeResumeThrow(type, tag, data.tags, data.labels));
+  }
+
+  Result<> makeResumeThrowRef(Index pos,
+                              const std::vector<Annotation>& annotations,
+                              HeapType type,
+                              const std::vector<OnClauseInfo>& resumetable) {
+    ResumeThrowData data(resumetable);
+    return withLoc(pos,
+                   irBuilder.makeResumeThrowRef(type, data.tags, data.labels));
   }
 
   Result<> makeStackSwitch(Index pos,

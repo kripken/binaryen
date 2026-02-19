@@ -93,9 +93,9 @@ copyFunctionWithoutAdd(Function* func,
             (*symbolNameIndexMap)[*(iter.second->symbolNameIndex)];
         }
       }
-      updateSymbol(ret->prologLocation, *symbolNameIndexMap);
-      updateSymbol(ret->epilogLocation, *symbolNameIndexMap);
     }
+    updateSymbol(ret->prologLocation, *symbolNameIndexMap);
+    updateSymbol(ret->epilogLocation, *symbolNameIndexMap);
   }
   ret->module = func->module;
   ret->base = func->base;
@@ -391,79 +391,75 @@ struct TypeInfos {
   bool contains(HeapType type) { return info.count(type); }
 };
 
-struct CodeScanner
-  : PostWalker<CodeScanner, UnifiedExpressionVisitor<CodeScanner>> {
+struct CodeScanner : PostWalker<CodeScanner> {
   TypeInfos& info;
-  TypeInclusion inclusion;
 
-  CodeScanner(Module& wasm, TypeInfos& info, TypeInclusion inclusion)
-    : info(info), inclusion(inclusion) {
-    setModule(&wasm);
-  }
+  CodeScanner(Module& wasm, TypeInfos& info) : info(info) { setModule(&wasm); }
 
-  void visitExpression(Expression* curr) {
-    if (auto* call = curr->dynCast<CallIndirect>()) {
-      info.note(call->heapType);
-    } else if (auto* call = curr->dynCast<CallRef>()) {
-      info.note(call->target->type);
-    } else if (curr->is<RefNull>()) {
-      info.note(curr->type);
-    } else if (curr->is<Select>() && curr->type.isRef()) {
+  void visitCallIndirect(CallIndirect* curr) { info.note(curr->heapType); }
+  void visitCallRef(CallRef* curr) { info.note(curr->target->type); }
+  void visitRefNull(RefNull* curr) { info.note(curr->type); }
+  void visitSelect(Select* curr) {
+    if (curr->type.isRef()) {
       // This select will be annotated in the binary, so note it.
       info.note(curr->type);
-    } else if (curr->is<StructNew>()) {
-      info.note(curr->type);
-    } else if (curr->is<ArrayNew>()) {
-      info.note(curr->type);
-    } else if (curr->is<ArrayNewData>()) {
-      info.note(curr->type);
-    } else if (curr->is<ArrayNewElem>()) {
-      info.note(curr->type);
-    } else if (curr->is<ArrayNewFixed>()) {
-      info.note(curr->type);
-    } else if (auto* copy = curr->dynCast<ArrayCopy>()) {
-      info.note(copy->destRef->type);
-      info.note(copy->srcRef->type);
-    } else if (auto* fill = curr->dynCast<ArrayFill>()) {
-      info.note(fill->ref->type);
-    } else if (auto* init = curr->dynCast<ArrayInitData>()) {
-      info.note(init->ref->type);
-    } else if (auto* init = curr->dynCast<ArrayInitElem>()) {
-      info.note(init->ref->type);
-    } else if (auto* cast = curr->dynCast<RefCast>()) {
-      info.note(cast->type);
-    } else if (auto* cast = curr->dynCast<RefTest>()) {
-      info.note(cast->castType);
-    } else if (auto* cast = curr->dynCast<BrOn>()) {
-      if (cast->op == BrOnCast || cast->op == BrOnCastFail) {
-        info.note(cast->ref->type);
-        info.note(cast->castType);
-      }
-    } else if (auto* get = curr->dynCast<StructGet>()) {
-      info.note(get->ref->type);
-    } else if (auto* set = curr->dynCast<StructSet>()) {
-      info.note(set->ref->type);
-    } else if (auto* get = curr->dynCast<ArrayGet>()) {
-      info.note(get->ref->type);
-    } else if (auto* set = curr->dynCast<ArraySet>()) {
-      info.note(set->ref->type);
-    } else if (auto* contBind = curr->dynCast<ContBind>()) {
-      info.note(contBind->cont->type);
-      info.note(contBind->type);
-    } else if (auto* contNew = curr->dynCast<ContNew>()) {
-      info.note(contNew->type);
-    } else if (auto* resume = curr->dynCast<Resume>()) {
-      info.note(resume->cont->type);
-      info.note(resume->type);
-    } else if (auto* resumeThrow = curr->dynCast<ResumeThrow>()) {
-      info.note(resumeThrow->cont->type);
-      info.note(resumeThrow->type);
-    } else if (auto* switch_ = curr->dynCast<StackSwitch>()) {
-      info.note(switch_->cont->type);
-      info.note(switch_->type);
-    } else if (Properties::isControlFlowStructure(curr)) {
-      info.noteControlFlow(Signature(Type::none, curr->type));
     }
+  }
+  void visitStructNew(StructNew* curr) { info.note(curr->type); }
+  void visitArrayNew(ArrayNew* curr) { info.note(curr->type); }
+  void visitArrayNewData(ArrayNewData* curr) { info.note(curr->type); }
+  void visitArrayNewElem(ArrayNewElem* curr) { info.note(curr->type); }
+  void visitArrayNewFixed(ArrayNewFixed* curr) { info.note(curr->type); }
+  void visitArrayCopy(ArrayCopy* curr) {
+    info.note(curr->destRef->type);
+    info.note(curr->srcRef->type);
+  }
+  void visitArrayFill(ArrayFill* curr) { info.note(curr->ref->type); }
+  void visitArrayInitData(ArrayInitData* curr) { info.note(curr->ref->type); }
+  void visitArrayInitElem(ArrayInitElem* curr) { info.note(curr->ref->type); }
+  void visitRefCast(RefCast* curr) { info.note(curr->type); }
+  void visitRefTest(RefTest* curr) { info.note(curr->castType); }
+  void visitBrOn(BrOn* curr) {
+    if (curr->op == BrOnCast || curr->op == BrOnCastFail) {
+      info.note(curr->ref->type);
+      info.note(curr->castType);
+    }
+  }
+  void visitStructGet(StructGet* curr) { info.note(curr->ref->type); }
+  void visitStructSet(StructSet* curr) { info.note(curr->ref->type); }
+  void visitArrayGet(ArrayGet* curr) { info.note(curr->ref->type); }
+  void visitArraySet(ArraySet* curr) { info.note(curr->ref->type); }
+  void visitContBind(ContBind* curr) {
+    info.note(curr->cont->type);
+    info.note(curr->type);
+  }
+  void visitContNew(ContNew* curr) { info.note(curr->type); }
+  void visitResume(Resume* curr) {
+    info.note(curr->cont->type);
+    info.note(curr->type);
+  }
+  void visitResumeThrow(ResumeThrow* curr) {
+    info.note(curr->cont->type);
+    info.note(curr->type);
+  }
+  void visitStackSwitch(StackSwitch* curr) {
+    info.note(curr->cont->type);
+    info.note(curr->type);
+  }
+  void visitBlock(Block* curr) {
+    info.noteControlFlow(Signature(Type::none, curr->type));
+  }
+  void visitIf(If* curr) {
+    info.noteControlFlow(Signature(Type::none, curr->type));
+  }
+  void visitLoop(Loop* curr) {
+    info.noteControlFlow(Signature(Type::none, curr->type));
+  }
+  void visitTry(Try* curr) {
+    info.noteControlFlow(Signature(Type::none, curr->type));
+  }
+  void visitTryTable(TryTable* curr) {
+    info.noteControlFlow(Signature(Type::none, curr->type));
   }
 };
 
@@ -476,7 +472,7 @@ InsertOrderedMap<HeapType, HeapTypeInfo> collectHeapTypeInfo(
   Module& wasm, TypeInclusion inclusion, VisibilityHandling visibility) {
   // Collect module-level info.
   TypeInfos info;
-  CodeScanner(wasm, info, inclusion).walkModuleCode(&wasm);
+  CodeScanner(wasm, info).walkModuleCode(&wasm);
   for (auto& curr : wasm.globals) {
     info.note(curr->type);
   }
@@ -501,7 +497,7 @@ InsertOrderedMap<HeapType, HeapTypeInfo> collectHeapTypeInfo(
       // printing an error message on a partially parsed module whose declared
       // function bodies have not all been parsed yet.
       if (func->body) {
-        CodeScanner(wasm, info, inclusion).walk(func->body);
+        CodeScanner(wasm, info).walk(func->body);
       }
     });
 
@@ -565,8 +561,8 @@ InsertOrderedMap<HeapType, HeapTypeInfo> collectHeapTypeInfo(
 
     // We've found all the types there are to find without considering more
     // control flow types. Consider one more control flow type and repeat.
-    for (; controlFlowIt != info.controlFlowSignatures.end(); ++controlFlowIt) {
-      auto& [sig, count] = *controlFlowIt;
+    while (controlFlowIt != info.controlFlowSignatures.end()) {
+      auto& [sig, count] = *controlFlowIt++;
       if (auto it = seenSigs.find(sig); it != seenSigs.end()) {
         info.info[it->second].useCount += count;
       } else {
@@ -657,14 +653,14 @@ std::vector<HeapType> getPublicHeapTypes(Module& wasm) {
     // We can ignore call.without.effects, which is implemented as an import but
     // functionally is a call within the module.
     if (!Intrinsics(wasm).isCallWithoutEffects(func)) {
-      notePublic(func->type);
+      notePublic(func->type.getHeapType());
     }
   });
   for (auto& ex : wasm.exports) {
     switch (ex->kind) {
       case ExternalKind::Function: {
         auto* func = wasm.getFunction(*ex->getInternalName());
-        notePublic(func->type);
+        notePublic(func->type.getHeapType());
         continue;
       }
       case ExternalKind::Table: {
