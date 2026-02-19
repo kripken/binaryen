@@ -2701,9 +2701,10 @@ public:
     if (str.breaking()) {
       return str;
     }
-    Flow array = visit(curr->array);
-    if (array.breaking()) {
-      return array;
+    // TODO: "WTF-16 position treatment", as in stringview_wtf16.slice?
+    Flow ptr = visit(curr->ptr);
+    if (ptr.breaking()) {
+      return ptr;
     }
     Flow start = visit(curr->start);
     if (start.breaking()) {
@@ -2845,8 +2846,10 @@ public:
     auto& refValues = refData->values;
     auto startVal = start.getSingleValue().getUnsigned();
     auto endVal = end.getSingleValue().getUnsigned();
-    endVal = std::min<size_t>(endVal, refValues.size());
-
+    endVal = std::min(endVal, refValues.size());
+    if (hasNonAsciiUpTo(refValues, endVal)) {
+      return Flow(NONCONSTANT_FLOW);
+    }
     Literals contents;
     if (endVal > startVal) {
       contents.reserve(endVal - startVal);
