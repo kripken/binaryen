@@ -71,7 +71,6 @@ DISALLOWED_FEATURES_IN_V8 = [
     'shared-everything',
     'fp16',
     'strings',
-    'stack-switching',
     'relaxed-atomics',
     'multibyte',
 ]
