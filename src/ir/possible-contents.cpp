@@ -872,7 +872,7 @@ struct InfoCollector
     //       even reuse ConeReadLocation if we generalized it to function types.
     for (Index i = 0; i < sig.results.size(); i++) {
       if (isRelevant(sig.results[i])) {
-        for (auto [subType, depth] : shared.subTypes.iter(targetType)) {
+        for (auto [subType, _] : shared.subTypes.iter(targetType)) {
           info.links.push_back(
             {SignatureResultLocation{subType, i}, ExpressionLocation{curr, i}});
           if (curr->isReturn) {
@@ -3276,7 +3276,7 @@ void Flower::readFromData(Type declaredType,
   if (!hasIndex(coneReadLocation)) {
     // This is the first time we use this location, so create the links for it
     // in the graph.
-    for (auto [type, depth] :
+    for (auto [type, _] :
          subTypes->iter(cone.type.getHeapType(), normalizedDepth)) {
       connectDuringFlow(DataLocation{type, fieldIndex}, coneReadLocation);
     }
@@ -3344,7 +3344,7 @@ void Flower::writeToData(Expression* ref,
   auto cone = refContents.getCone();
   auto normalizedDepth = getNormalizedConeDepth(cone.type, cone.depth);
 
-  for (auto [type, depth] :
+  for (auto [type, _] :
        subTypes->iter(cone.type.getHeapType(), normalizedDepth)) {
     auto heapLoc = DataLocation{type, fieldIndex};
     updateContents(heapLoc, valueContents);
