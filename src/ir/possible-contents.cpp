@@ -873,8 +873,8 @@ struct InfoCollector
     for (Index i = 0; i < sig.results.size(); i++) {
       if (isRelevant(sig.results[i])) {
         for (auto [subType, depth] : shared.subTypes.iter(targetType)) {
-          info.links.push_back({SignatureResultLocation{subType, i},
-                                ExpressionLocation{curr, i}});
+          info.links.push_back(
+            {SignatureResultLocation{subType, i}, ExpressionLocation{curr, i}});
           if (curr->isReturn) {
             // Send the result to the function's results as well.
             info.links.push_back({SignatureResultLocation{subType, i},

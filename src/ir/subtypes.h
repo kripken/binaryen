@@ -126,7 +126,7 @@ struct SubTypes {
 
   TypeDepthRange
   iter(HeapType type,
-           Index maxDepth = std::numeric_limits<Index>::max()) const {
+       Index maxDepth = std::numeric_limits<Index>::max()) const {
     return {this, type, maxDepth};
   }
 
