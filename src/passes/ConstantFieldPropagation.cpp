@@ -328,8 +328,8 @@ struct FunctionOptimizer : public WalkerPass<PostWalker<FunctionOptimizer>> {
     } values[2];
 
     // Handle one of the subtypes of the relevant type. We check what value it
-    // has for the field, and update |values|. If we hit a problem, we stop
-    // early.
+    // has for the field, and update |values|. Returns true if we succeeded,
+    // false if we failed and must stop.
     auto handleType = [&](HeapType type, Index depth) {
       auto iter = refTestInfos.find({type, Exact});
       if (iter == refTestInfos.end()) {
@@ -374,16 +374,10 @@ struct FunctionOptimizer : public WalkerPass<PostWalker<FunctionOptimizer>> {
       return true;
     };
 
-    // If we stopped early, we hit a problem and failed.
-    bool success = true;
     for (auto [type, depth] : subTypes.iter(refHeapType)) {
       if (!handleType(type, depth)) {
-        success = false;
-        break;
+        return;
       }
-    }
-    if (!success) {
-      return;
     }
 
     // We either filled slot 0, or we did not, and if we did not then cannot
@@ -668,7 +662,7 @@ struct ConstantFieldPropagation : public Pass {
       if (dst.exact == Inexact) {
         // Propagate down to subtypes.
         written[{dst.type, Exact}][dst.index].combine(val);
-        for (auto [sub, depth] : subTypes.iter(dst.type)) {
+        for (auto [sub, _] : subTypes.iter(dst.type)) {
           written[{sub, Inexact}][dst.index].combine(val);
           written[{sub, Exact}][dst.index].combine(val);
           if (readable[{sub, Inexact}][dst.index].combine(val)) {

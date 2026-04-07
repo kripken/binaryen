@@ -483,7 +483,7 @@ struct Analyzer {
       if (!subTypes) {
         subTypes = SubTypes(*module);
       }
-      for (auto [subType, depth] : subTypes->iter(type)) {
+      for (auto [subType, _] : subTypes->iter(type)) {
         auto subStructField = StructField{subType, index};
         readStructFields.insert(subStructField);
 

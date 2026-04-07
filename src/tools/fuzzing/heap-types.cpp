@@ -1000,7 +1000,7 @@ void Inhabitator::markNullable(FieldPos field) {
       // this extra `index` variable once we have C++20. It's a workaround for
       // lambdas being unable to capture structured bindings.
       const size_t index = idx;
-      for (auto [type, depth] : subtypes.iter(curr)) {
+      for (auto [type, _] : subtypes.iter(curr)) {
         nullables.insert({type, index});
       }
       break;
