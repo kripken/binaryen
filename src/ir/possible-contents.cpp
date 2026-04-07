@@ -872,17 +872,15 @@ struct InfoCollector
     //       even reuse ConeReadLocation if we generalized it to function types.
     for (Index i = 0; i < sig.results.size(); i++) {
       if (isRelevant(sig.results[i])) {
-        shared.subTypes.iterSubTypes(
-          targetType, [&](HeapType subType, Index depth) {
+        for (auto [subType, depth] : shared.subTypes.iter(targetType)) {
+          info.links.push_back({SignatureResultLocation{subType, i},
+                                ExpressionLocation{curr, i}});
+          if (curr->isReturn) {
+            // Send the result to the function's results as well.
             info.links.push_back({SignatureResultLocation{subType, i},
-                                  ExpressionLocation{curr, i}});
-            if (curr->isReturn) {
-              // Send the result to the function's results as well.
-              info.links.push_back({SignatureResultLocation{subType, i},
-                                    ResultLocation{getFunction(), i}});
-            }
-            return true;
-          });
+                                  ResultLocation{getFunction(), i}});
+          }
+        }
       }
     }
   }
@@ -3278,13 +3276,10 @@ void Flower::readFromData(Type declaredType,
   if (!hasIndex(coneReadLocation)) {
     // This is the first time we use this location, so create the links for it
     // in the graph.
-    subTypes->iterSubTypes(cone.type.getHeapType(),
-                           normalizedDepth,
-                           [&](HeapType type, Index depth) {
-                             connectDuringFlow(DataLocation{type, fieldIndex},
-                                               coneReadLocation);
-                             return true;
-                           });
+    for (auto [type, depth] :
+         subTypes->iter(cone.type.getHeapType(), normalizedDepth)) {
+      connectDuringFlow(DataLocation{type, fieldIndex}, coneReadLocation);
+    }
 
     // TODO: we can end up with redundant links here if we see one cone first
     //       and then a larger one later. But removing links is not efficient,
@@ -3349,12 +3344,11 @@ void Flower::writeToData(Expression* ref,
   auto cone = refContents.getCone();
   auto normalizedDepth = getNormalizedConeDepth(cone.type, cone.depth);
 
-  subTypes->iterSubTypes(
-    cone.type.getHeapType(), normalizedDepth, [&](HeapType type, Index depth) {
-      auto heapLoc = DataLocation{type, fieldIndex};
-      updateContents(heapLoc, valueContents);
-      return true;
-    });
+  for (auto [type, depth] :
+       subTypes->iter(cone.type.getHeapType(), normalizedDepth)) {
+    auto heapLoc = DataLocation{type, fieldIndex};
+    updateContents(heapLoc, valueContents);
+  }
 }
 
 #if defined(POSSIBLE_CONTENTS_DEBUG) && POSSIBLE_CONTENTS_DEBUG >= 2

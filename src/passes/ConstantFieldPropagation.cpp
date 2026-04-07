@@ -375,7 +375,14 @@ struct FunctionOptimizer : public WalkerPass<PostWalker<FunctionOptimizer>> {
     };
 
     // If we stopped early, we hit a problem and failed.
-    if (!subTypes.iterSubTypes(refHeapType, handleType)) {
+    bool success = true;
+    for (auto [type, depth] : subTypes.iter(refHeapType)) {
+      if (!handleType(type, depth)) {
+        success = false;
+        break;
+      }
+    }
+    if (!success) {
       return;
     }
 
@@ -661,7 +668,7 @@ struct ConstantFieldPropagation : public Pass {
       if (dst.exact == Inexact) {
         // Propagate down to subtypes.
         written[{dst.type, Exact}][dst.index].combine(val);
-        subTypes.iterSubTypes(dst.type, [&](HeapType sub, Index depth) {
+        for (auto [sub, depth] : subTypes.iter(dst.type)) {
           written[{sub, Inexact}][dst.index].combine(val);
           written[{sub, Exact}][dst.index].combine(val);
           if (readable[{sub, Inexact}][dst.index].combine(val)) {
@@ -670,8 +677,7 @@ struct ConstantFieldPropagation : public Pass {
           if (readable[{sub, Exact}][dst.index].combine(val)) {
             applyCopiesFrom(sub, Exact, dst.index, val);
           }
-          return true;
-        });
+        }
       } else {
         // The copy destination is exact, so there are no subtypes to
         // propagate to, but we do need to propagate up to the inexact type.

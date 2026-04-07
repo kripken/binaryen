@@ -483,7 +483,7 @@ struct Analyzer {
       if (!subTypes) {
         subTypes = SubTypes(*module);
       }
-      subTypes->iterSubTypes(type, [&](HeapType subType, Index depth) {
+      for (auto [subType, depth] : subTypes->iter(type)) {
         auto subStructField = StructField{subType, index};
         readStructFields.insert(subStructField);
 
@@ -496,8 +496,7 @@ struct Analyzer {
           }
         }
         unreadStructFieldExprMap.erase(subStructField);
-        return true;
-      });
+      }
     }
   }
 

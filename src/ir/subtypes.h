@@ -17,7 +17,10 @@
 #ifndef wasm_ir_subtypes_h
 #define wasm_ir_subtypes_h
 
+#include <iterator>
+
 #include "ir/module-utils.h"
+#include "support/small_vector.h"
 #include "support/topological_sort.h"
 #include "wasm.h"
 
@@ -35,6 +38,97 @@ struct SubTypes {
   }
 
   SubTypes(Module& wasm) : SubTypes(ModuleUtils::collectHeapTypes(wasm)) {}
+
+  // The items on which we iterate, pairs of types and depths.
+  struct TypeDepth {
+    HeapType type;
+    Index depth;
+    bool operator==(const TypeDepth& other) const {
+      return type == other.type && depth == other.depth;
+    }
+    bool operator!=(const TypeDepth& other) const { return !(*this == other); }
+  };
+
+  struct TypeDepthIterator {
+    using value_type = TypeDepth;
+    using difference_type = std::ptrdiff_t;
+    using reference = const TypeDepth&;
+    using pointer = const TypeDepth*;
+    using iterator_category = std::input_iterator_tag;
+
+    const SubTypes* parent = nullptr;
+    Index maxDepth = 0;
+
+    struct State {
+      const std::vector<HeapType>* vec;
+      Index depth;
+      Index index;
+      bool operator==(const State& other) const {
+        return vec == other.vec && depth == other.depth && index == other.index;
+      }
+    };
+    // Use a small vector to avoid allocations for shallow hierarchies.
+    SmallVector<State, 10> stack;
+    TypeDepth current;
+
+    TypeDepthIterator() = default;
+    TypeDepthIterator(const SubTypes* parent, HeapType root, Index maxDepth)
+      : parent(parent), maxDepth(maxDepth), current{root, 0} {}
+
+    bool operator==(const TypeDepthIterator& other) const {
+      return parent == other.parent && current == other.current &&
+             stack == other.stack;
+    }
+    bool operator!=(const TypeDepthIterator& other) const {
+      return !(*this == other);
+    }
+
+    const TypeDepth& operator*() const { return current; }
+    const TypeDepth* operator->() const { return &current; }
+
+    TypeDepthIterator& operator++() {
+      if (current.depth < maxDepth) {
+        const auto& children = parent->getImmediateSubTypes(current.type);
+        if (!children.empty()) {
+          stack.push_back({&children, current.depth + 1, 0});
+        }
+      }
+
+      while (!stack.empty()) {
+        auto& top = stack.back();
+        if (top.index < top.vec->size()) {
+          current = {(*top.vec)[top.index], top.depth};
+          top.index++;
+          return *this;
+        }
+        stack.pop_back();
+      }
+
+      current = {HeapType(), 0};
+      parent = nullptr;
+      return *this;
+    }
+
+    TypeDepthIterator operator++(int) {
+      auto it = *this;
+      ++(*this);
+      return it;
+    }
+  };
+
+  struct TypeDepthRange {
+    const SubTypes* parent;
+    HeapType root;
+    Index maxDepth;
+    TypeDepthIterator begin() const { return {parent, root, maxDepth}; }
+    TypeDepthIterator end() const { return {}; }
+  };
+
+  TypeDepthRange
+  iter(HeapType type,
+           Index maxDepth = std::numeric_limits<Index>::max()) const {
+    return {this, type, maxDepth};
+  }
 
   const std::vector<HeapType>& getImmediateSubTypes(HeapType type) const {
     // When we return an empty result, use a canonical constant empty vec to
@@ -164,63 +258,6 @@ struct SubTypes {
     }
 
     return depths;
-  }
-
-  // Efficiently iterate on subtypes of a type, up to a particular depth (depth
-  // 0 means not to traverse subtypes, etc.). The callback function receives
-  // (type, depth) and returns whether to continue the scan, i.e. if it returns
-  // false, we stop. Returns the last value returned to it, that is, returns
-  // true if we did not stop early, and false if we did.
-  template<typename F>
-  bool iterSubTypes(HeapType type, Index depth, F func) const {
-    // Start by traversing the type itself.
-    if (!func(type, 0)) {
-      return false;
-    }
-
-    if (depth == 0) {
-      // Nothing else to scan.
-      return true;
-    }
-
-    // getImmediateSubTypes() returns vectors of subtypes, so for efficiency
-    // store pointers to those in our work queue to avoid allocations. See the
-    // note below on typeSubTypes for why this is safe.
-    struct Item {
-      const std::vector<HeapType>* vec;
-      Index depth;
-    };
-
-    // Real-world type hierarchies tend to have a limited depth, so try to avoid
-    // allocations in our work queue with a SmallVector.
-    SmallVector<Item, 10> work;
-
-    // Start with the subtypes of the base type. Those have depth 1.
-    work.push_back({&getImmediateSubTypes(type), 1});
-
-    while (!work.empty()) {
-      auto& item = work.back();
-      work.pop_back();
-      auto currDepth = item.depth;
-      auto& currVec = *item.vec;
-      assert(currDepth <= depth);
-      for (auto type : currVec) {
-        if (!func(type, currDepth)) {
-          return false;
-        }
-        auto* subVec = &getImmediateSubTypes(type);
-        if (currDepth + 1 <= depth && !subVec->empty()) {
-          work.push_back({subVec, currDepth + 1});
-        }
-      }
-    }
-
-    return true;
-  }
-
-  // As above, but iterate to the maximum depth.
-  template<typename F> bool iterSubTypes(HeapType type, F func) const {
-    return iterSubTypes(type, std::numeric_limits<Index>::max(), func);
   }
 
   // All the types in the program. This is computed here anyhow, and can be
