@@ -1,4 +1,4 @@
-/*
+max/*
  * Copyright 2021 WebAssembly Community Group participants
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -76,8 +76,8 @@ struct SubTypes {
       : parent(parent), maxDepth(maxDepth), current{root, 0} {}
 
     bool operator==(const TypeDepthIterator& other) const {
-      return parent == other.parent && current == other.current &&
-             stack == other.stack;
+      return parent == other.parent && maxDepth == other.maxDepth &&
+             stack == other.stack && current == other.current;
     }
     bool operator!=(const TypeDepthIterator& other) const {
       return !(*this == other);
