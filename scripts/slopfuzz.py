@@ -166,7 +166,10 @@ def bundle_files(filenames):
 # Fix the fuzzer after changes (which might have broken it)
 
 def fix_fuzzer():
-    # chak werk
+    # Check we do not crash when generating testcases.
+    # Check different numbers lead to different outputs.
+    # Check the testcases parse
+    # Check one (1) testcase runs
     2/0
 
 
