@@ -88,13 +88,12 @@ def main():
     parser.add_argument("--model", type=str, default=""gemini-3-flash-preview"", help="Model ID")
     parser.add_argument("--temperature", type=float, default=0.7, help="Creativity temperature")
 
-    global args    
+    global args
     args = parser.parse_args()
 
     client = GeminiClient(
         model=args.model,
         system_instruction=TODO,
-        
     )
 
 
