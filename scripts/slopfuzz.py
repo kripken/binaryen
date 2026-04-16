@@ -84,17 +84,13 @@ class GeminiClient:
 args = None
 
 def main():
-    parser = argparse.ArgumentParser(description="Gemini GenAI SDK Starter")
-    parser.add_argument("--model", type=str, default=""gemini-3-flash-preview"", help="Model ID")
+    parser = argparse.ArgumentParser(description="SlopFuzz")
+    parser.add_argument("--model", type=str, default="gemini-3-flash-preview", help="Model ID")
     parser.add_argument("--temperature", type=float, default=0.7, help="Creativity temperature")
+    parser.add_argument("--fuzzer-dir", type=str, help="Directory to write the fuzzer in (must be a git repo, as each successful update is committed)")
 
     global args
     args = parser.parse_args()
-
-    client = GeminiClient(
-        model=args.model,
-        system_instruction=TODO,
-    )
 
 
 if __name__ == "__main__":
