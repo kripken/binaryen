@@ -1,15 +1,14 @@
 #!/usr/bin/python3
 
-import os
 import argparse
-import time
 import logging
-
-from test import shared
+import os
+import time
 
 from google import genai
 from google.genai import types
 
+from test import shared
 
 # Binaryen paths
 
@@ -100,12 +99,12 @@ class GeminiClient:
         )
 
         log_prompt(prompt)
-        
+
         response = self._execute_with_retry(
             self.client.models.generate_content,
             model=self.model,
             contents=prompt,
-            config=config
+            config=config,
         )
 
         log_response(response.text)
@@ -122,14 +121,14 @@ class GeminiClient:
             )
             self.chat_session = self.client.chats.create(
                 model=self.model,
-                config=config
+                config=config,
             )
 
         log_prompt(message)
 
         response = self._execute_with_retry(
             self.chat_session.send_message,
-            message=message
+            message=message,
         )
 
         log_response(response.text)
@@ -232,7 +231,7 @@ Example testcases:
 
 
 def generate_initial_fuzzer():
-    print(f"💼 Generating initial fuzzer")
+    print("💼 Generating initial fuzzer")
 
     # Use all our js_wasm testcases as initial examples.
     js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
@@ -252,7 +251,7 @@ def generate_initial_fuzzer():
 # Improve the fuzzer in a single iteration
 
 def improve_fuzzer():
-    print(f"💼 Improving fuzzer")
+    print("💼 Improving fuzzer")
 
     client = GeminiClient()
     client.generate_single(prompt)
