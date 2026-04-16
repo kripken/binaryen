@@ -163,7 +163,7 @@ def work():
 
     # Iterately improve the fuzzer.
     try:
-        while True:
+        for i in range(args.max_iters):
             improve_fuzzer()
     except KeyboardInterrupt:
         print("🛑 Stopping by user request.")
@@ -175,6 +175,7 @@ def main():
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview", help="Model ID")
     parser.add_argument("--temperature", type=float, default=0.7, help="Creativity temperature")
     parser.add_argument("--fuzzer-file", type=str, help="File to write the fuzzer in (must be inside a git repo, as each successful update is committed)")
+    parser.add_argument("--max-iters", type=int, default=1000, help="Maximum number of iterations to run")
 
     global args
     args = parser.parse_args()
