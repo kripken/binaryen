@@ -13,7 +13,7 @@ from google.genai import types
 # Binaryen paths
 
 my_dir = os.path.dirname(os.path.abspath(__file__))
-binaryen_root = os.path.dirname(os.path.dirname(my_dir))
+binaryen_root = os.path.dirname(my_dir)
 
 
 def in_binaryen(*args):
