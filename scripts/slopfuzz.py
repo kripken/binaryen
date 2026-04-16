@@ -17,13 +17,33 @@ args = None
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+prompt_index = 0
+
+def log_prompt_or_response(contents, what):
+    if not args.prompt_history_dir:
+        return
+
+    global prompt_index
+    # New prompts bump the index (responses do not).
+    if what == 'prompt':
+        prompt_index += 1
+    filename = os.path.join(args.prompt_history_dir, f'{what}-{prompt_index}.txt')
+    open(filename, 'w').write(contents)
+
+
+def log_prompt(contents):
+    return log_prompt_or_response(contents, 'prompt')
+
+
+def log_response(contents):
+    return log_response_or_response(contents, 'response')
+
 
 # LLM client handling
 
 SYSTEM_INSTRUCTION = '''
-You are a software engineer that knows Python, with experience in writing
-fuzzers, i.e., programs that generate random but structured data that is then
-fed to a program and tested for errors.
+You are a software engineer that knows Python, with experience with fuzzers as
+a way to find bugs by generating random testcases.
 '''
 
 
@@ -65,6 +85,8 @@ class GeminiClient:
             system_instruction=self.system_instruction,
             temperature=self.temperature,
         )
+
+        log_prompt(prompt)
         
         response = self._execute_with_retry(
             self.client.models.generate_content,
@@ -72,6 +94,9 @@ class GeminiClient:
             contents=prompt,
             config=config
         )
+
+        log_response(response.text)
+
         return response.text
 
     def send_chat(self, message):
@@ -87,11 +112,19 @@ class GeminiClient:
                 config=config
             )
 
+        log_prompt(message)
+
         response = self._execute_with_retry(
             self.chat_session.send_message,
             message=message
         )
+
+        log_response(response.text)
+
         return response.text
+
+    def end_chat(self):
+        self.chat_session = None
 
 
 # Bundle text files into a prompt, with a header for each
@@ -197,6 +230,7 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.7, help="Creativity temperature")
     parser.add_argument("--fuzzer-file", type=str, help="File to write the fuzzer in (must be inside a git repo, as each successful update is committed)")
     parser.add_argument("--max-iters", type=int, default=1000, help="Maximum number of iterations to run")
+    parser.add_argument("--prompt-history-dir", type=str, help="Directory to store the full history of prompts and responses (for debugging)")
 
     global args
     args = parser.parse_args()
