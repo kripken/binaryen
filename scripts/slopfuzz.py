@@ -90,6 +90,26 @@ class GeminiClient:
         return response.text
 
 
+# Bundle text files into a prompt, with a header for each
+def bundle_files(filenames):
+    chunks = []
+    for filename in filenames:
+        # Header
+        chunk = f">>>> {os.path.basename(filename)}\n"
+
+        # Content
+        content = open(filename, encoding='utf-8').read()
+        chunk += content
+        # Ensure there's a newline at the end of the content
+        if not content.endswith('\n'):
+            chunk += '\n'
+        # Add an extra newline for clear separation between files
+        chunk += '\n'
+        chunks.append(chunk)
+
+    return '\n'.join(chunks)
+
+
 # Global arguments from the user
 args = None
 
