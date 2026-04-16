@@ -9,16 +9,19 @@ import time
 from google import genai
 from google.genai import types
 
-from test import shared
 
 # Binaryen paths
 
+my_dir = os.path.dirname(os.path.abspath(__file__))
+binaryen_root = os.path.dirname(os.path.dirname(my_dir))
+
+
 def in_binaryen(*args):
-    return os.path.join(shared.options.binaryen_root, *args)
+    return os.path.join(binaryen_root, *args)
 
 
 def in_bin(tool):
-    return os.path.join(shared.options.binaryen_bin, tool)
+    return os.path.join(args.binaryen_bin or in_binaryen('bin'), tool)
 
 
 # Global arguments from the user
@@ -279,9 +282,10 @@ def main():
     parser = argparse.ArgumentParser(description="SlopFuzz")
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview", help="Model ID")
     parser.add_argument("--temperature", type=float, default=0.7, help="Creativity temperature")
-    parser.add_argument("--fuzzer-file", type=str, help="File to write the fuzzer in (must be inside a git repo, as each successful update is committed)")
+    parser.add_argument("--fuzzer-file", type=str, required=True, help="File to write the fuzzer in (must be inside a git repo, as each successful update is committed)")
     parser.add_argument("--max-iters", type=int, default=1000, help="Maximum number of iterations to run")
     parser.add_argument("--prompt-history-dir", type=str, help="Directory to store the full history of prompts and responses (for debugging)")
+    parser.add_argument("--binaryen-bin", type=str, help="Directory with Binaryen binaries (wasm-opt)")
 
     global args
     args = parser.parse_args()
