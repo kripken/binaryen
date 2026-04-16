@@ -81,16 +81,41 @@ class GeminiClient:
         )
         return response.text
 
+
+# Global arguments from the user
 args = None
+
+
+# Generate the initial fuzzer using a few examples.
+def generate_initial_fuzzer():
+    print(f"💼 Generating Fuzzer not found: {args.path}", file=sys.stderr)
+
+
+# Main workflow
+def work():
+    # Create the initial fuzzer, if there is none.
+    if not os.path.exists(args.fuzzer_file):
+        generate_initial_fuzzer()
+
+    # Iterately improve the fuzzer.
+    try:
+        while True:
+            improve_fuzzer()
+    except KeyboardInterrupt:
+        print('🛑 Stopping by user request.')
+        break
+
 
 def main():
     parser = argparse.ArgumentParser(description="SlopFuzz")
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview", help="Model ID")
     parser.add_argument("--temperature", type=float, default=0.7, help="Creativity temperature")
-    parser.add_argument("--fuzzer-dir", type=str, help="Directory to write the fuzzer in (must be a git repo, as each successful update is committed)")
+    parser.add_argument("--fuzzer-file", type=str, help="File to write the fuzzer in (must be inside a git repo, as each successful update is committed)")
 
     global args
     args = parser.parse_args()
+
+    work()
 
 
 if __name__ == "__main__":
