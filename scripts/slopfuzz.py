@@ -147,6 +147,8 @@ def bundle_files(filenames):
     return '\n'.join(chunks)
 
 
+# Fix the fuzzer on a particular testcase..
+
 # Generate the initial fuzzer
 
 FUZZER_GOALS = '''
@@ -207,7 +209,20 @@ that is, combining interesting elements from different examples here.
 def generate_initial_fuzzer():
     print(f"💼 Generating initial fuzzer")
 
-    client = GeminiClient(model, temperature):
+    client = GeminiClient()
+    client.generate_single(prompt)
+
+    fix_fuzzer()
+
+
+def improvre_fuzzer():
+    print(f"💼 Improving fuzzer")
+
+    client = GeminiClient()
+    client.generate_single(prompt)
+
+    fix_fuzzer()
+
 
 # Main workflow.
 def work():
