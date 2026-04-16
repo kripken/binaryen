@@ -187,6 +187,9 @@ The specific testcases the fuzzer generates are WebAssembly and JavaScript
 combination programs. Each testcase contains a JavaScript file that loads a
 corresponding WebAssembly file, then runs and interacts with it.
 
+For simplicity, the fuzzer should emit the wasm files in the wat text format, as
+you will see in the examples below.
+
 Our specific focus is on security and correctness. We are not interested in
 simple parsing bugs, that is, if the WebAssembly or the JavaScript does not even
 parse, that is not useful. We want the programs to run and do useful, realistic
