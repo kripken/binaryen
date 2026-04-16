@@ -5,15 +5,28 @@ import argparse
 import time
 import logging
 
+from test import shared
+
 from google import genai
 from google.genai import types
+
+
+# Binaryen paths
+
+def in_binaryen(*args):
+    return os.path.join(shared.options.binaryen_root, *args)
+
+
+def in_bin(tool):
+    return os.path.join(shared.options.binaryen_bin, tool)
 
 
 # Global arguments from the user
 args = None
 
 
-# --- Setup Logging ---
+# Logging
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -147,7 +160,12 @@ def bundle_files(filenames):
     return '\n'.join(chunks)
 
 
-# Fix the fuzzer on a particular testcase..
+# Fix the fuzzer after changes (which might have broken it)
+
+def fix_fuzzer():
+    # chak werk
+    2/0
+
 
 # Generate the initial fuzzer
 
@@ -200,14 +218,30 @@ and you can do anything you want, but try to do well on the goals below.
 The following pairs of wasm+js are examples of useful, working programs in the
 style we would like the fuzzer to generate. That is, the fuzzer should be
 capable of generating programs generally similar to them, but of course
-individual testcases may be very different. The fuzzer should be able to
-generate testcases that are generally similar to combinations of them as well,
-that is, combining interesting elements from different examples here.
+individual testcases may be very different. The fuzzer should also be able
+generate testcases that are generally similar to combinations of them, that is,
+combining interesting elements from different examples here.
+
+Emit the Python fuzzer in your output, with no other text. Explanations for
+the fuzzer's approach or parts of the fuzzer can be in code comments inside the
+Python.
+
+Example testcases:
+
 '''
 
 
 def generate_initial_fuzzer():
     print(f"💼 Generating initial fuzzer")
+
+    # Use all our js_wasm testcases as initial examples.
+    js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
+    examples = []
+    for js_file in js_files:
+        examples.append(str(js_file))
+        examples.append(str(pathlib.Path(js_file).with_suffix('.wat')))
+
+    prompt = INITIAL_GENERATION_PROMPT + bundle_files(examples)
 
     client = GeminiClient()
     client.generate_single(prompt)
@@ -215,7 +249,9 @@ def generate_initial_fuzzer():
     fix_fuzzer()
 
 
-def improvre_fuzzer():
+# Improve the fuzzer in a single iteration
+
+def improve_fuzzer():
     print(f"💼 Improving fuzzer")
 
     client = GeminiClient()
