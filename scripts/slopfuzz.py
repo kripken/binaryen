@@ -3,6 +3,7 @@
 import argparse
 import logging
 import os
+import pathlib
 import time
 
 from google import genai
@@ -48,7 +49,7 @@ def log_prompt(contents):
 
 
 def log_response(contents):
-    return log_response_or_response(contents, 'response')
+    return log_prompt_or_response(contents, 'response')
 
 
 # LLM client handling
@@ -253,8 +254,8 @@ def generate_initial_fuzzer():
 def improve_fuzzer():
     print("💼 Improving fuzzer")
 
-    client = GeminiClient()
-    client.generate_single(prompt)
+    # client = GeminiClient()
+    # client.generate_single(prompt)
 
     fix_fuzzer()
 
@@ -268,10 +269,10 @@ def work():
     # Iterately improve the fuzzer.
     try:
         for i in range(args.max_iters):
+            print(f"⏱️ Improving fuzzer, iteration {i}")
             improve_fuzzer()
     except KeyboardInterrupt:
         print("🛑 Stopping by user request.")
-        break
 
 
 def main():
