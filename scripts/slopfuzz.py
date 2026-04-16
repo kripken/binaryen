@@ -9,12 +9,16 @@ from google import genai
 from google.genai import types
 
 
+# Global arguments from the user
+args = None
+
+
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
-# Generic LLM client handling
+# LLM client handling
 
 SYSTEM_INSTRUCTION = '''
 You are a software engineer that knows Python, with experience in writing
@@ -24,11 +28,11 @@ fed to a program and tested for errors.
 
 
 class GeminiClient:
-    def __init__(self, model, temperature):
+    def __init__(self):
         # Looks for GEMINI_API_KEY env var automatically.
         self.client = genai.Client()
-        self.model = model
-        self.temperature = temperature
+        self.model = args.model
+        self.temperature = args.temperature
         self.system_instruction = SYSTEM_INSTRUCTION
         self.chat_session = None
 
@@ -110,10 +114,6 @@ def bundle_files(filenames):
     return '\n'.join(chunks)
 
 
-# Global arguments from the user
-args = None
-
-
 # Generate the initial fuzzer
 
 FUZZER_GOALS = '''
@@ -174,6 +174,7 @@ that is, combining interesting elements from different examples here.
 def generate_initial_fuzzer():
     print(f"💼 Generating initial fuzzer")
 
+    client = GeminiClient(model, temperature):
 
 # Main workflow.
 def work():
