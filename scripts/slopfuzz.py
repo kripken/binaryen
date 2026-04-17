@@ -54,7 +54,7 @@ def save_history(what, contents):
 
     global history_index
     history_index += 1
-    filename = os.path.join(args.prompt_history_dir, f'{args.fuzzer_file}-{history_index}-{what}.txt')
+    filename = f'{args.fuzzer_file}-{history_index}-{what}.txt'
     open(filename, 'w').write(contents)
 
 
@@ -391,7 +391,7 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.7, help="Creativity temperature")
     parser.add_argument("--fuzzer-file", type=str, required=True, help="File to write the fuzzer in (must be inside a git repo, as each successful update is committed)")
     parser.add_argument("--max-iters", type=int, default=1000, help="Maximum number of iterations to run")
-    parser.add_argument("--save-history", type=bool, default=False, action="store_true", help="Save history of prompts and fuzzers as we go, for debugging (uses the fuzzer-file with different suffixes)")
+    parser.add_argument("--save-history", default=False, action="store_true", help="Save history of prompts and fuzzers as we go, for debugging (uses the fuzzer-file with different suffixes)")
     parser.add_argument("--binaryen-bin", type=str, help="Directory with Binaryen binaries (wasm-opt)")
 
     global args
