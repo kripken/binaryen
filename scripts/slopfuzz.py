@@ -31,8 +31,7 @@ def in_bin(tool):
 # Execution
 
 def run_wasm_opt(*args):
-    return subprocess.check_output([in_bin('wasm-opt')] + args, text=True)
-
+    return subprocess.check_output([in_bin('wasm-opt')] + list(args), text=True)
 
 
 # Global arguments from the user
@@ -200,16 +199,20 @@ wat_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.wat')
 wasm_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.wasm')
 
 
-# Run the fuzzer on a seed. Writes data to the three temp files above.
+#    open(js_temp.name, 'w').write(js)
+#    open(wat_temp.name, 'w').write(wat)
+
+def wat_to_wasm():
+    run_wasm_opt('-all', wat_temp.name, '-o', wasm_temp.name)
+
+
+# Run the fuzzer on a seed. Returns the raw js and wat output.
 def run_fuzzer(seed):
     cmd = [sys.executable, args.fuzzer_file, str(seed)]
     output = subprocess.check_output(cmd, text=True)
     assert output.count(JS_WAT_SEP) == 1
     js, wat = output.split(JS_WAT_SEP)
-
-    open(js_temp.name, 'w').write(js)
-    open(wat_temp.name, 'w').write(wat)
-    run_wasm_opt('-all', wat_temp.name, '-o', wasm_temp.name)
+    return js, wat
 
 
 # Fix the fuzzer after changes (which might have broken it)
@@ -218,35 +221,53 @@ NUM_VALIDATIONS = 100
 
 
 def fix_fuzzer():
-    seed_wat_map = {}
+    # A map of seeds to the fuzzer's outputs (pairs of js, wat).
+    outputs = {}
 
-    for _ in range(NUM_VALIDATIONS):
+    while len(outputs) < NUM_VALIDATIONS:
         seed = random_seed()
+
+        # In rare cases seeds might overlap. Skip them.
+        if seed in outputs:
+            continue
+
         # Check we do not crash when generating testcases.
         try:
-            run_fuzzer(seed)
+            output = run_fuzzer(seed)
         except subprocess.CalledProcessError:
             print("❌ Fuzzer crashes, fixing...")
-            # LLM fix
+            # TODO LLM fix
             3/0
 
-        # In rare cases seeds might overlap, so store a vector of wats for each.
-        seed_wat_map.setdefault(seed, []).append(open(wat_temp.name).read())
+        outputs[seed] = output
 
-    for seed, wats in seed_wat_map.iteritems():
         # The same number should lead to the same output.
-        if len(wats) > 1:
-            # TODO: if not all identical, LLM fix
-            assert len(set(wats)) == 1
+        try:
+            output2 = run_fuzzer(seed)
+        except subprocess.CalledProcessError:
+            print("❌ Fuzzer is nondeterministic, now crashes, fixing...")
+            # TODO LLM fix
+            3/0
 
-        # Different numbers should lead to different outputs.
-        # TODO: Verify wasms, to ignore names?
-        # TODO: Verify JSes too
-        for seed2, wats2 in seed_wat_map.iteritems():
-            if seed2 != seed:
-                assert wats2[0] != wats[0]
+        if output2 != output:
+            print("❌ Fuzzer is nondeterministic, fixing...")
+            # TODO LLM fix
+            3/0
+
+    # Different numbers should lead to different outputs.
+    for seed, output in outputs.iteritems():
+        for seed2, output2 in outputs.iteritems():
+            # TODO: Check more carefully, ignoring names/comments/etc?
+            if seed2 != seed and output2 == output:
+                print("❌ Fuzzer has collision, fixing...")
+                # TODO LLM fix
+                3/0
 
     # Check the testcases parse.
+    for seed, wats in outputs.iteritems():
+        for wat in wats:
+            run_wasm_opt('-all', wat_temp.name, '-o', wasm_temp.name)
+
     # Check at least some testcases run without error.
     2/0
 
