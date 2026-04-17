@@ -6,6 +6,7 @@ import os
 import pathlib
 import random
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -201,7 +202,7 @@ wasm_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.wasm')
 
 # Run the fuzzer on a seed. Writes data to the three temp files above.
 def run_fuzzer(seed):
-    cmd = [args.fuzzer_file, str(seed)]
+    cmd = [sys.executable, args.fuzzer_file, str(seed)]
     output = subprocess.check_output(cmd, text=True)
     assert output.count(JS_WAT_SEP) == 1
     js, wat = output.split(JS_WAT_SEP)
