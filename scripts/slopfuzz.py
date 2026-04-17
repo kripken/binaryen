@@ -25,22 +25,26 @@ def in_binaryen(*args):
 
 
 def in_bin(tool):
-    return os.path.join(args.binaryen_bin or in_binaryen('bin'), tool)
+    return os.path.join(params.binaryen_bin or in_binaryen('bin'), tool)
+
+
+# Global parameters from the user
+params = None
 
 
 # Execution
 
 
 def run_wasm_opt(*args):
+    if params.verbose:
+        print("  ", in_bin('wasm-opt'), *args)
     return subprocess.check_output([in_bin('wasm-opt')] + list(args), text=True)
 
 
 def run_vm(*args):
-    return subprocess.check_output([args.vm] + list(args), text=True)
-
-
-# Global arguments from the user
-args = None
+    if params.verbose:
+        print("  ", params.vm, *args)
+    return subprocess.check_output([params.vm] + list(args), text=True)
 
 
 # Logging
@@ -54,12 +58,12 @@ logger = logging.getLogger(__name__)
 history_index = 0
 
 def save_history(what, contents):
-    if not args.save_history:
+    if not params.save_history:
         return
 
     global history_index
     history_index += 1
-    filename = f'{args.fuzzer_file}-{history_index}-{what}.txt'
+    filename = f'{params.fuzzer_file}-{history_index}-{what}.txt'
     open(filename, 'w').write(contents)
 
 
@@ -75,8 +79,8 @@ class GeminiClient:
     def __init__(self):
         # Looks for GEMINI_API_KEY env var automatically.
         self.client = genai.Client()
-        self.model = args.model
-        self.temperature = args.temperature
+        self.model = params.model
+        self.temperature = params.temperature
         self.system_instruction = SYSTEM_INSTRUCTION
         self.chat_session = None
 
@@ -184,7 +188,7 @@ def write_fuzzer(response):
         response = response[len(prefix):]
     if response.endswith(postfix):
         response = response[:-len(postfix)]
-    open(args.fuzzer_file, 'w').write(response)
+    open(params.fuzzer_file, 'w').write(response)
     save_history('fuzzer', response)
 
 
@@ -213,7 +217,7 @@ def wat_to_wasm():
 
 # Run the fuzzer on a seed. Returns the raw js and wat output.
 def run_fuzzer(seed):
-    cmd = [sys.executable, args.fuzzer_file, str(seed)]
+    cmd = [sys.executable, params.fuzzer_file, str(seed)]
     output = subprocess.check_output(cmd, text=True)
     assert output.count(JS_WAT_SEP) == 1
     js, wat = output.split(JS_WAT_SEP)
@@ -413,14 +417,14 @@ def improve_fuzzer():
 # Main workflow.
 def work():
     # Create the initial fuzzer, if there is none.
-    if not os.path.exists(args.fuzzer_file):
+    if not os.path.exists(params.fuzzer_file):
         generate_initial_fuzzer()
     else:
         print("💼 Improving existing fuzzer")
 
     # Iterately improve the fuzzer.
     try:
-        for i in range(args.max_iters):
+        for i in range(params.max_iters):
             print(f"⏱️  Improving fuzzer, iteration {i}")
             improve_fuzzer()
     except KeyboardInterrupt:
@@ -436,9 +440,10 @@ def main():
     parser.add_argument("--save-history", default=False, action="store_true", help="Save history of prompts and fuzzers as we go, for debugging (uses the fuzzer-file with different suffixes)")
     parser.add_argument("--binaryen-bin", type=str, help="Directory with Binaryen binaries (wasm-opt)")
     parser.add_argument("--vm", type=str, required=True, help="VM to run the testcases in")
+    parser.add_argument("--verbose", default=False, action="store_true", help="Log very verbosely")
 
-    global args
-    args = parser.parse_args()
+    global params
+    params = parser.parse_args()
 
     work()
 
