@@ -207,9 +207,9 @@ def run_fuzzer(seed):
     assert output.count(JS_WAT_SEP) == 1
     js, wat = output.split(JS_WAT_SEP)
 
-    open(js_temp, 'w').write(js)
-    open(wat_temp, 'w').write(wat)
-    run_wasm_opt('-all', wat_temp, '-o', wasm_temp)
+    open(js_temp.name, 'w').write(js)
+    open(wat_temp.name, 'w').write(wat)
+    run_wasm_opt('-all', wat_temp.name, '-o', wasm_temp.name)
 
 
 # Fix the fuzzer after changes (which might have broken it)
@@ -231,7 +231,7 @@ def fix_fuzzer():
             3/0
 
         # In rare cases seeds might overlap, so store a vector of wats for each.
-        seed_wat_map.setdefault(seed, []).append(open(wat_temp).read())
+        seed_wat_map.setdefault(seed, []).append(open(wat_temp.name).read())
 
     for seed, wats in seed_wat_map.iteritems():
         # The same number should lead to the same output.
@@ -363,8 +363,6 @@ def generate_initial_fuzzer():
 # Improve the fuzzer in a single iteration
 
 def improve_fuzzer():
-    print("💼 Improving fuzzer")
-
     # client = GeminiClient()
     # client.generate_single(prompt)
 
@@ -376,11 +374,13 @@ def work():
     # Create the initial fuzzer, if there is none.
     if not os.path.exists(args.fuzzer_file):
         generate_initial_fuzzer()
+    else:
+        print("💼 Improving existing fuzzer")
 
     # Iterately improve the fuzzer.
     try:
         for i in range(args.max_iters):
-            print(f"⏱️ Improving fuzzer, iteration {i}")
+            print(f"⏱️  Improving fuzzer, iteration {i}")
             improve_fuzzer()
     except KeyboardInterrupt:
         print("🛑 Stopping by user request.")
