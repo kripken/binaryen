@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import pathlib
+import random
 import time
 
 from google import genai
@@ -179,10 +180,21 @@ def write_fuzzer(response):
     open(args.fuzzer_file, 'w').write(response)
 
 
+# Generate a random seed for the fuzzer
+def random_seed():
+    return random.randint(0, 1 << 64)
+
+
 # Fix the fuzzer after changes (which might have broken it)
+
+NUM_VALIDATIONS = 100
+
 
 def fix_fuzzer():
     # Check we do not crash when generating testcases.
+    for _ in range(NUM_VALIDATIONS):
+        seed = random_seed()
+        
     # Check different numbers lead to different outputs.
     # Check the testcases parse
     # Check one (1) testcase runs
@@ -270,7 +282,6 @@ def generate_initial_fuzzer():
 
     client = GeminiClient()
     response = client.generate_single(prompt)
-
     write_fuzzer(response)
 
     fix_fuzzer()
