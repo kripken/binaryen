@@ -35,26 +35,19 @@ args = None
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-prompt_index = 0
 
-def log_prompt_or_response(contents, what):
+# History: If asked to, we keep a history of prompts and fuzzers. A single index
+# is used to track them all over time.
+history_index = 0
+
+def save_history(what, contents):
     if not args.prompt_history_dir:
         return
 
-    global prompt_index
-    # New prompts bump the index (responses do not).
-    if what == 'prompt':
-        prompt_index += 1
-    filename = os.path.join(args.prompt_history_dir, f'{what}-{prompt_index}.txt')
+    global history_index
+    history_index += 1
+    filename = os.path.join(args.prompt_history_dir, f'{what}-{history_index}.txt')
     open(filename, 'w').write(contents)
-
-
-def log_prompt(contents):
-    return log_prompt_or_response(contents, 'prompt')
-
-
-def log_response(contents):
-    return log_prompt_or_response(contents, 'response')
 
 
 # LLM client handling
@@ -104,7 +97,7 @@ class GeminiClient:
             temperature=self.temperature,
         )
 
-        log_prompt(prompt)
+        save_history('prompt', prompt)
 
         response = self._execute_with_retry(
             self.client.models.generate_content,
@@ -113,7 +106,7 @@ class GeminiClient:
             config=config,
         )
 
-        log_response(response.text)
+        save_history('response', response.text)
 
         return response.text
 
@@ -130,14 +123,14 @@ class GeminiClient:
                 config=config,
             )
 
-        log_prompt(message)
+        save_history('chat-prompt', prompt)
 
         response = self._execute_with_retry(
             self.chat_session.send_message,
             message=message,
         )
 
-        log_response(response.text)
+        save_history('chat-response', response.text)
 
         return response.text
 
@@ -179,6 +172,7 @@ def write_fuzzer(response):
     if response.endswith(postfix):
         response = response[:-len(postfix)]
     open(args.fuzzer_file, 'w').write(response)
+    save_history('fuzzer', response)
 
 
 # Generate a random seed for the fuzzer
