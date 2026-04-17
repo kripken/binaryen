@@ -30,8 +30,13 @@ def in_bin(tool):
 
 # Execution
 
+
 def run_wasm_opt(*args):
     return subprocess.check_output([in_bin('wasm-opt')] + list(args), text=True)
+
+
+def run_vm(*args):
+    return subprocess.check_output([args.vm] + list(args), text=True)
 
 
 # Global arguments from the user
@@ -264,9 +269,24 @@ def fix_fuzzer():
                 3/0
 
     # Check the testcases parse.
-    for seed, wats in outputs.iteritems():
-        for wat in wats:
-            run_wasm_opt('-all', wat_temp.name, '-o', wasm_temp.name)
+    for seed, output in outputs.iteritems():
+        js, wat = output
+
+        open(js_temp.name, 'w').write(js)
+        try:
+            run_vm('--parse-only', js_temp.name)
+        except subprocess.CalledProcessError:
+            print("❌ Fuzzer js does not parse, fixing...")
+            # TODO LLM fix
+            3/0
+
+        open(wat_temp.name, 'w').write(wat)
+        try:
+            run_wasm_opt('-all', wat_temp.name)
+        except subprocess.CalledProcessError:
+            print("❌ Fuzzer wat does not parse, fixing...")
+            # TODO LLM fix
+            3/0
 
     # Check at least some testcases run without error.
     2/0
@@ -415,6 +435,7 @@ def main():
     parser.add_argument("--max-iters", type=int, default=1000, help="Maximum number of iterations to run")
     parser.add_argument("--save-history", default=False, action="store_true", help="Save history of prompts and fuzzers as we go, for debugging (uses the fuzzer-file with different suffixes)")
     parser.add_argument("--binaryen-bin", type=str, help="Directory with Binaryen binaries (wasm-opt)")
+    parser.add_argument("--vm", type=str, required=True, help="VM to run the testcases in")
 
     global args
     args = parser.parse_args()
