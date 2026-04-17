@@ -163,6 +163,22 @@ def bundle_files(filenames):
     return '\n'.join(chunks)
 
 
+# Write the fuzzer after receiving a response containing it
+def write_fuzzer(response):
+    # The LLM may wrap the fuzzer with
+    #
+    # ```python
+    # ..code..
+    # ```
+    prefix = "```python"
+    postfix = "```"
+    if response.startswith(prefix):
+        response = response[len(prefix):]
+    if response.endswith(postfix):
+        response = response[:-len(postfix)]
+    open(args.fuzzer_file, 'w').write(response)
+
+
 # Fix the fuzzer after changes (which might have broken it)
 
 def fix_fuzzer():
@@ -253,7 +269,9 @@ def generate_initial_fuzzer():
     prompt = INITIAL_GENERATION_PROMPT + bundle_files(examples)
 
     client = GeminiClient()
-    client.generate_single(prompt)
+    response = client.generate_single(prompt)
+
+    write_fuzzer(response)
 
     fix_fuzzer()
 
