@@ -237,6 +237,13 @@ The specific testcases the fuzzer generates are WebAssembly and JavaScript
 combination programs. Each testcase contains a JavaScript file that loads a
 corresponding WebAssembly file, then runs and interacts with it.
 
+We are fuzzing the WebAssembly JavaScript Interop proposal, so the interaction
+between wasm and JS is especially important to cover. This proposal allows
+creating objects that are usable from JS but are implement by wasm (as you will
+see in the examples below). Using such objects in JS, and passing them back and
+forth to and from wasm, are areas that we suspeect might have bugs the fuzzer
+can find.
+
 For simplicity, the fuzzer should emit the wasm files in the wat text format, as
 you will see in the examples below.
 
