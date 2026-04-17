@@ -5,6 +5,7 @@ import logging
 import os
 import pathlib
 import random
+import subprocess
 import time
 
 from google import genai
@@ -185,6 +186,18 @@ def random_seed():
     return random.randint(0, 1 << 64)
 
 
+# The fuzzer's output has both JS and wasm, JS first, then this separator before
+# the wasm:
+JS_WAT_SEP = '>>>> wat'
+
+
+# Run the fuzzer on a seed. Returns XXX splits
+def run_fuzzer(seed):
+    cmd = [args.fuzzer_file, str(seed)]
+    output = subprocess.check_output(cmd, text=True)
+    XXX
+
+
 # Fix the fuzzer after changes (which might have broken it)
 
 NUM_VALIDATIONS = 100
@@ -194,7 +207,11 @@ def fix_fuzzer():
     # Check we do not crash when generating testcases.
     for _ in range(NUM_VALIDATIONS):
         seed = random_seed()
-        
+        try:
+            run_fuzzer(seed)
+        except subprocess.CalledProcessError:
+            
+            raise
     # Check different numbers lead to different outputs.
     # Check the testcases parse
     # Check one (1) testcase runs
@@ -203,7 +220,7 @@ def fix_fuzzer():
 
 # Generate the initial fuzzer
 
-FUZZER_GOALS = '''
+FUZZER_GOALS = f'''
 
 The fuzzer's overall goals are:
 
@@ -239,6 +256,22 @@ Some tips for achieving these goals:
   can pick a rate of things like calls, and use it in that scope. Different
   programs and functions will therefore vary when you pick a different rate of
   calls in them.
+
+The output of the fuzzer is a pair of js and wasm files, in a single response.
+The JS should begin immediately at the start of the fuzzer's output, without any
+prefix or annotation. To separate the wat from it, use this separator line:
+
+{JS_WAT_SEP}
+
+That is, the output should like like this (without ```` in the actual output):
+
+```
+JavaScript code
+
+{JS_WAT_SEP}
+
+WebAssembly text format
+```
 
 '''
 
