@@ -210,8 +210,10 @@ def fix_fuzzer():
         try:
             run_fuzzer(seed)
         except subprocess.CalledProcessError:
-            
-            raise
+            print("❌ Fuzzer crashes, fixing...")
+            # LLM fix
+            3/0
+
     # Check different numbers lead to different outputs.
     # Check the testcases parse
     # Check one (1) testcase runs
