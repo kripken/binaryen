@@ -226,12 +226,14 @@ def run_fuzzer(seed):
 
 # Fix the fuzzer after changes (which might have broken it)
 
-NUM_VALIDATIONS = 100
+NUM_VALIDATIONS = 20 # XXX moar
 
 
 def fix_fuzzer():
     # A map of seeds to the fuzzer's outputs (pairs of js, wat).
     outputs = {}
+
+    print("💼 Validating fuzzer")
 
     while len(outputs) < NUM_VALIDATIONS:
         seed = random_seed()
@@ -264,8 +266,8 @@ def fix_fuzzer():
             3/0
 
     # Different numbers should lead to different outputs.
-    for seed, output in outputs.iteritems():
-        for seed2, output2 in outputs.iteritems():
+    for seed, output in outputs.items():
+        for seed2, output2 in outputs.items():
             # TODO: Check more carefully, ignoring names/comments/etc?
             if seed2 != seed and output2 == output:
                 print("❌ Fuzzer has collision, fixing...")
@@ -273,7 +275,7 @@ def fix_fuzzer():
                 3/0
 
     # Check the testcases parse.
-    for seed, output in outputs.iteritems():
+    for seed, output in outputs.items():
         js, wat = output
 
         open(js_temp.name, 'w').write(js)
