@@ -6,6 +6,7 @@ import os
 import pathlib
 import random
 import subprocess
+import tempfile
 import time
 
 from google import genai
@@ -24,6 +25,13 @@ def in_binaryen(*args):
 
 def in_bin(tool):
     return os.path.join(args.binaryen_bin or in_binaryen('bin'), tool)
+
+
+# Execution
+
+def run_wasm_opt(*args):
+    return subprocess.check_output([in_bin('wasm-opt')] + args, text=True)
+
 
 
 # Global arguments from the user
@@ -185,11 +193,22 @@ def random_seed():
 JS_WAT_SEP = '>>>> wat'
 
 
-# Run the fuzzer on a seed. Returns XXX splits
+# Temporary files for testcases
+js_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.mjs')
+wat_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.wat')
+wasm_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.wasm')
+
+
+# Run the fuzzer on a seed. Writes data to the three temp files above.
 def run_fuzzer(seed):
     cmd = [args.fuzzer_file, str(seed)]
     output = subprocess.check_output(cmd, text=True)
-    XXX
+    assert output.count(JS_WAT_SEP) == 1
+    js, wat = output.split(JS_WAT_SEP)
+
+    open(js_temp, 'w').write(js)
+    open(wat_temp, 'w').write(wat)
+    run_wasm_opt('-all', wat_temp, '-o', wasm_temp)
 
 
 # Fix the fuzzer after changes (which might have broken it)
@@ -198,9 +217,11 @@ NUM_VALIDATIONS = 100
 
 
 def fix_fuzzer():
-    # Check we do not crash when generating testcases.
+    seed_wat_map = {}
+
     for _ in range(NUM_VALIDATIONS):
         seed = random_seed()
+        # Check we do not crash when generating testcases.
         try:
             run_fuzzer(seed)
         except subprocess.CalledProcessError:
@@ -208,9 +229,24 @@ def fix_fuzzer():
             # LLM fix
             3/0
 
-    # Check different numbers lead to different outputs.
-    # Check the testcases parse
-    # Check one (1) testcase runs
+        # In rare cases seeds might overlap, so store a vector of wats for each.
+        seed_wat_map.setdefault(seed, []).append(open(wat_temp).read())
+
+    for seed, wats in seed_wat_map.iteritems():
+        # The same number should lead to the same output.
+        if len(wats) > 1:
+            # TODO: if not all identical, LLM fix
+            assert len(set(wats)) == 1
+
+        # Different numbers should lead to different outputs.
+        # TODO: Verify wasms, to ignore names?
+        # TODO: Verify JSes too
+        for seed2, wats2 in seed_wat_map.iteritems():
+            if seed2 != seed:
+                assert wats2[0] != wats[0]
+
+    # Check the testcases parse.
+    # Check at least some testcases run without error.
     2/0
 
 
