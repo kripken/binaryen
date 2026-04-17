@@ -41,12 +41,12 @@ logger = logging.getLogger(__name__)
 history_index = 0
 
 def save_history(what, contents):
-    if not args.prompt_history_dir:
+    if not args.save_history:
         return
 
     global history_index
     history_index += 1
-    filename = os.path.join(args.prompt_history_dir, f'{what}-{history_index}.txt')
+    filename = os.path.join(args.prompt_history_dir, f'{args.fuzzer_file}-{history_index}-{what}.txt')
     open(filename, 'w').write(contents)
 
 
@@ -355,7 +355,7 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.7, help="Creativity temperature")
     parser.add_argument("--fuzzer-file", type=str, required=True, help="File to write the fuzzer in (must be inside a git repo, as each successful update is committed)")
     parser.add_argument("--max-iters", type=int, default=1000, help="Maximum number of iterations to run")
-    parser.add_argument("--prompt-history-dir", type=str, help="Directory to store the full history of prompts and responses (for debugging)")
+    parser.add_argument("--save-history", type=bool, default=False, help="Save history of prompts and fuzzers as we go, for debugging (uses the fuzzer-file with different suffixes)")
     parser.add_argument("--binaryen-bin", type=str, help="Directory with Binaryen binaries (wasm-opt)")
 
     global args
