@@ -107,7 +107,7 @@ class GeminiClient:
                     raise e
         raise Exception("Maximum retries reached. Operation failed.")
 
-    def generate_single(self, prompt):
+    def one_off(self, prompt):
         """Standard one-off prompt/response."""
         config = types.GenerateContentConfig(
             system_instruction=self.system_instruction,
@@ -127,7 +127,7 @@ class GeminiClient:
 
         return response.text
 
-    def send_chat(self, message):
+    def chat(self, message):
         """Handles stateful conversation."""
         if self.chat_session is None:
             # Initialize the chat session if it doesn't exist
@@ -320,28 +320,42 @@ followed by explanation of the problems you hit.
 '''
 
 def ensure_js_parsing(seed, js)
-    client = None
+    open(js_temp.name, 'w').write(js)
+    proc = run_vm('--parse-only', js_temp.name)
+    if not proc.returncode:
+        return
 
+    print("❌ JS does not parse")
+
+    open(error_temp.name, 'w').write(proc.stdout)
+
+    prompt = FIX_EXISTING_FUZZER_INTRO
+    prompt += f'Problem: the JavaScript for seed {seed} does not parse. '
+    prompt += 'The error follows the JavaScript contents.\n\n'
+    prompt += bundle_files([js_temp.name, error_temp.name, params.fuzzer_file])
+
+    client = GeminiClient()
+    response = client.chat(prompt)
+
+    # Loop on LLM responses.
     for i in range(MAX_FIX_ITERS):
-        open(js_temp.name, 'w').write(js)
+        if response.startswith(FAILURE):
+            print("❌ LLM gave up")
+            sys.exit(1)
+
+        # Apply the diff and try the testcase again.
+        write_fuzzer(response)
+
+        print("    (fix attempt {i})")
         proc = run_vm('--parse-only', js_temp.name)
         if not proc.returncode:
             if i > 0:
-                print("✅ JS parsing fixed after {i} iterations")
+                print("✅ JS parsing fixed")
             return
 
-        print("❌ JS does not parse, fixing (attempt {i})...")
 
         open(error_temp.name, 'w').write(proc.stdout)
 
-        prompt = FIX_EXISTING_FUZZER_INTRO
-        prompt += f'Problem: the JavaScript for seed {seed} does not parse. '
-        prompt += 'The error follows the JavaScript contents.\n\n'
-        prompt += bundle_files([js_temp.name, error_temp.name, params.fuzzer_file])
-
-        if not client:
-            client = GeminiClient()
-        client.generate_single(prompt)
         # TODO LLM fix
         3/0
 
@@ -466,7 +480,7 @@ def generate_initial_fuzzer():
     prompt = INITIAL_GENERATION_PROMPT + bundle_files(examples)
 
     client = GeminiClient()
-    response = client.generate_single(prompt)
+    response = client.one_off(prompt)
     write_fuzzer(response)
 
     fix_fuzzer()
