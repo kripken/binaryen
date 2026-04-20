@@ -44,7 +44,7 @@ def run_wasm_opt(*args):
 def run_vm(*args):
     if params.verbose:
         print("  ", params.vm, *args)
-    return subprocess.check_output([params.vm] + list(args), text=True)
+    return subprocess.run([params.vm] + list(args), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
 
 # Logging
@@ -229,7 +229,10 @@ def run_fuzzer(seed):
 NUM_VALIDATIONS = 20 # XXX moar
 
 
-def fix_fuzzer():
+# Tests various things and fixes the fuzzer. This does one forward iteration,
+# i.e., it does not backtrack to previous checks after fixing something. Returns
+# True if we fixed something.
+def fix_fuzzer_iter():
     # A map of seeds to the fuzzer's outputs (pairs of js, wat).
     outputs = {}
 
@@ -279,9 +282,8 @@ def fix_fuzzer():
         js, wat = output
 
         open(js_temp.name, 'w').write(js)
-        try:
-            run_vm('--parse-only', js_temp.name)
-        except subprocess.CalledProcessError:
+        proc = run_vm('--parse-only', js_temp.name)
+        if proc.returncode:
             print("❌ Fuzzer js does not parse, fixing...")
             # TODO LLM fix
             3/0
@@ -296,6 +298,22 @@ def fix_fuzzer():
 
     # Check at least some testcases run without error.
     2/0
+
+
+# After fixing the fuzzer once, we re-run all checks again. This is the maximum
+# number of iterations before we give up entirely - if we hit this, then even
+# fixing one issue has only led to more.
+MAX_FIX_ITERS = 3
+
+
+def fix_fuzzer():
+    fixed = False
+    for _ in range(MAX_FIX_ITERS):
+        if not fix_fuzzer_iter():
+            if fixed:
+                print("✅ Fuzzer was successfully fixed")
+            return
+        fixed = True
 
 
 # Generate the initial fuzzer
