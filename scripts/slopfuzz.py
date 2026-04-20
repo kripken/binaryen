@@ -140,7 +140,7 @@ class GeminiClient:
                 config=config,
             )
 
-        save_history('chat-prompt', prompt)
+        save_history('chat-prompt', message)
 
         response = self._execute_with_retry(
             self.chat_session.send_message,
@@ -321,7 +321,7 @@ def update_fuzzer(diff):
     if not diff.startswith(DIFF_PREFIX):
         return f'Did not find the right prefix ({DIFF_PREFIX})'
     if diff.count(DIFF_MIDDLE) != 1:
-        return f'The diff separator ({DIFF_MIDDLE}) must appear exactly once')
+        return f'The diff separator ({DIFF_MIDDLE}) must appear exactly once'
     if not diff.endswith(DIFF_POSTFIX):
         return f'Did not find the right post ({DIFF_POSTFIX})'
 
@@ -335,7 +335,7 @@ def update_fuzzer(diff):
 
 # Functions that check for things, and fix them as needed
 
-FAILURE = 'FAILURE
+FAILURE = 'FAILURE'
 
 FIX_EXISTING_FUZZER_INTRO = '''
 We are writing a fuzzer in Python.
@@ -359,7 +359,7 @@ followed by explanation of the problems you hit.
 
 '''
 
-def ensure_js_parsing(seed, js)
+def ensure_js_parsing(seed, js):
     open(js_temp.name, 'w').write(js)
     proc = run_vm('--parse-only', js_temp.name)
     if not proc.returncode:
