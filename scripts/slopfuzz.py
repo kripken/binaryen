@@ -224,8 +224,23 @@ def run_fuzzer(seed):
     return js, wat
 
 
-# Fix the fuzzer after changes (which might have broken it)
+# Functions that check for things, and fix them as needed
 
+
+def ensure_js_parsing(js)
+    open(js_temp.name, 'w').write(js)
+
+    proc = run_vm('--parse-only', js_temp.name)
+
+    if not proc.returncode:
+        return
+
+    print("❌ Fuzzer js does not parse, fixing...")
+    # TODO LLM fix
+    3/0
+
+
+# How many random samples to validate with
 NUM_VALIDATIONS = 20 # XXX moar
 
 
@@ -281,12 +296,7 @@ def fix_fuzzer_iter():
     for seed, output in outputs.items():
         js, wat = output
 
-        open(js_temp.name, 'w').write(js)
-        proc = run_vm('--parse-only', js_temp.name)
-        if proc.returncode:
-            print("❌ Fuzzer js does not parse, fixing...")
-            # TODO LLM fix
-            3/0
+        ensure_js_parsing(js)
 
         open(wat_temp.name, 'w').write(wat)
         try:
