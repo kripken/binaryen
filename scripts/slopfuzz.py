@@ -35,22 +35,22 @@ params = None
 # Execution
 
 
-def run_wasm_opt(*args):
+def run(*args):
     if params.verbose:
-        print("  ", in_bin('wasm-opt'), *args)
-    return subprocess.check_output([in_bin('wasm-opt')] + list(args), text=True)
+        print("  ", *args)
+    return subprocess.check_output(list(args), text=True)
+
+
+def run_wasm_opt(*args):
+    return run(in_bin('wasm-opt'), *args)
 
 
 def run_vm(*args):
-    if params.verbose:
-        print("  ", params.vm, *args)
-    return subprocess.run([params.vm] + list(args), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    return run(params.vm, *args)
 
 
 def run_node(*args):
-    if params.verbose:
-        print("  ", 'node', *args)
-    return subprocess.check_output(['node'] + list(args), text=True)
+    return run('node', *args)
 
 
 # Execution utilities
@@ -58,11 +58,7 @@ def run_node(*args):
 
 # Verify if a JS file parses correctly.
 def check_js_parsing(filename):
-    try:
-        run_node('--check', filename)
-        return True
-    except subprocess.CalledProcessError:
-        return False
+    return run_node('--check', filename)
 
 
 # Logging
