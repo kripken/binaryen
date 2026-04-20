@@ -228,6 +228,11 @@ def run_fuzzer(seed):
 
 FUZZER_GOALS = f'''
 
+The fuzzer takes a single commandline parameter, and uses that number to
+deterministically generate a testcase (this determinism makes it easy to debug
+the fuzzer itself). How it generates the testcase given a number is arbitrary,
+but we want to do well on the goals below.
+
 The fuzzer's overall goals are:
 
 * The outputs should be diverse, that is, many different testcases can be
@@ -290,6 +295,23 @@ WebAssembly text format
 
 # Functions that check for things, and fix them as needed
 
+FIX_EXISTING_FUZZER_INTRO = '''
+We are writing a fuzzer in Python.
+
+''' + FUZZER_GOALS + '''
+
+The fuzzer has a problem that I want you to fix. The fuzzer itself is attached
+below, as well the seed that reproduces the bug, and the relevant part of the
+output that shows the problem.
+
+Write a diff for the fuzzer that fixes the problem, with no other text. I will
+apply that diff and run the fuzzer with the seed, then verify that the output
+is correct.
+
+If you cannot find a fix, emit instead the word "FAILURE" and an explanation of
+the problems you hit.
+
+'''
 
 def ensure_js_parsing(js)
     open(js_temp.name, 'w').write(js)
@@ -392,11 +414,6 @@ def fix_fuzzer():
 
 INITIAL_GENERATION_PROMPT = '''
 Write a fuzzer in Python that generates things similar to the examples below.
-
-The fuzzer should take a single commandline parameter, and use that number to
-deterministically generate a testcase (this determinism makes it easy to debug
-the fuzzer itself). How it generates the testcase given a number is arbitrary
-and you can do anything you want, but try to do well on the goals below.
 
 ''' + FUZZER_GOALS + '''
 
