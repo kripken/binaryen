@@ -207,9 +207,7 @@ js_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.mjs')
 wat_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.wat')
 wasm_temp = tempfile.NamedTemporaryFile(prefix='testcase', suffix='.wasm')
 
-
-#    open(js_temp.name, 'w').write(js)
-#    open(wat_temp.name, 'w').write(wat)
+error_temp = tempfile.NamedTemporaryFile(prefix='error', suffix='.txt')
 
 def wat_to_wasm():
     run_wasm_opt('-all', wat_temp.name, '-o', wasm_temp.name)
@@ -293,7 +291,15 @@ WebAssembly text format
 
 '''
 
+# After fixing the fuzzer once, we re-run all checks again. This is the maximum
+# number of iterations before we give up entirely - if we hit this, then we seem
+# to not be making progress.
+MAX_FIX_ITERS = 10
+
+
 # Functions that check for things, and fix them as needed
+
+FAILURE = 'FAILURE
 
 FIX_EXISTING_FUZZER_INTRO = '''
 We are writing a fuzzer in Python.
@@ -308,20 +314,36 @@ Write a diff for the fuzzer that fixes the problem, with no other text. I will
 apply that diff and run the fuzzer with the seed, then verify that the output
 is correct.
 
-If you cannot find a fix, emit instead the word "FAILURE" and an explanation of
-the problems you hit.
+If you cannot find a fix, emit instead the word "FAILURE" in capital letters,
+followed by explanation of the problems you hit.
 
 '''
 
-def ensure_js_parsing(js)
-    open(js_temp.name, 'w').write(js)
-    proc = run_vm('--parse-only', js_temp.name)
-    if not proc.returncode:
-        return
+def ensure_js_parsing(seed, js)
+    client = None
 
-    print("❌ Fuzzer js does not parse, fixing...")
-    # TODO LLM fix
-    3/0
+    for i in range(MAX_FIX_ITERS):
+        open(js_temp.name, 'w').write(js)
+        proc = run_vm('--parse-only', js_temp.name)
+        if not proc.returncode:
+            if i > 0:
+                print("✅ JS parsing fixed after {i} iterations")
+            return
+
+        print("❌ JS does not parse, fixing (attempt {i})...")
+
+        open(error_temp.name, 'w').write(proc.stdout)
+
+        prompt = FIX_EXISTING_FUZZER_INTRO
+        prompt += f'Problem: the JavaScript for seed {seed} does not parse. '
+        prompt += 'The error follows the JavaScript contents.\n\n'
+        prompt += bundle_files([js_temp.name, error_temp.name, params.fuzzer_file])
+
+        if not client:
+            client = GeminiClient()
+        client.generate_single(prompt)
+        # TODO LLM fix
+        3/0
 
 
 # How many random samples to validate with
@@ -332,6 +354,8 @@ NUM_VALIDATIONS = 20 # XXX moar
 # i.e., it does not backtrack to previous checks after fixing something. Returns
 # True if we fixed something.
 def fix_fuzzer_iter():
+    fixed = False
+
     # A map of seeds to the fuzzer's outputs (pairs of js, wat).
     outputs = {}
 
@@ -380,7 +404,7 @@ def fix_fuzzer_iter():
     for seed, output in outputs.items():
         js, wat = output
 
-        ensure_js_parsing(js)
+        fixed = ensure_js_parsing(seed, js) or fixed
 
         open(wat_temp.name, 'w').write(wat)
         try:
@@ -393,11 +417,7 @@ def fix_fuzzer_iter():
     # Check at least some testcases run without error.
     2/0
 
-
-# After fixing the fuzzer once, we re-run all checks again. This is the maximum
-# number of iterations before we give up entirely - if we hit this, then even
-# fixing one issue has only led to more.
-MAX_FIX_ITERS = 3
+    return fixed
 
 
 def fix_fuzzer():
@@ -452,14 +472,13 @@ def generate_initial_fuzzer():
     fix_fuzzer()
 
 
-# Improve the fuzzer in a single iteration
+# Improve the fuzzer in a single iteration of the main loop
 
 def improve_fuzzer():
-    # client = GeminiClient()
-    # client.generate_single(prompt)
-
     fix_fuzzer()
 
+    print("💼 Improving fuzzer by doing ..?")
+    0/4
 
 # Main workflow.
 def work():
