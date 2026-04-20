@@ -576,6 +576,8 @@ def main():
 
     global params
     params = parser.parse_args()
+    
+    print(f"📖 Using model {params.model}")
 
     work()
 
