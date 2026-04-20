@@ -38,7 +38,10 @@ params = None
 def run(*args):
     if params.verbose:
         print("  ", *args)
-    return subprocess.check_output(list(args), text=True)
+    return subprocess.run(list(args),
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT,
+                          text=True)
 
 
 def run_wasm_opt(*args):
