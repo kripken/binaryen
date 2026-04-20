@@ -229,9 +229,7 @@ def run_fuzzer(seed):
 
 def ensure_js_parsing(js)
     open(js_temp.name, 'w').write(js)
-
     proc = run_vm('--parse-only', js_temp.name)
-
     if not proc.returncode:
         return
 
