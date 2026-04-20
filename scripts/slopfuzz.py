@@ -297,6 +297,22 @@ WebAssembly text format
 MAX_FIX_ITERS = 10
 
 
+# The fuzzer is updated using diffs. We use a simple format to avoid the LLM
+# getting line numbers/counts wrong.
+DIFF_FORMAT = '''
+<<<<<<< SEARCH
+[Existing code that needs to change]
+=======
+[Improved code]
+>>>>>>> REPLACE
+'''
+
+
+def update_fuzzer(diff):
+
+    save_history('fuzzer', response)
+
+
 # Functions that check for things, and fix them as needed
 
 FAILURE = 'FAILURE
@@ -313,6 +329,10 @@ output that shows the problem.
 Write a diff for the fuzzer that fixes the problem, with no other text. I will
 apply that diff and run the fuzzer with the seed, then verify that the output
 is correct.
+
+Emit the diff in the following form:
+
+{DIFF_FORMAT}
 
 If you cannot find a fix, emit instead the word "FAILURE" in capital letters,
 followed by explanation of the problems you hit.
@@ -344,7 +364,7 @@ def ensure_js_parsing(seed, js)
             sys.exit(1)
 
         # Apply the diff and try the testcase again.
-        write_fuzzer(response)
+        update_fuzzer(response)
 
         print("    (fix attempt {i})")
         proc = run_vm('--parse-only', js_temp.name)
