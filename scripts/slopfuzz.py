@@ -175,6 +175,10 @@ def bundle_files(filenames):
     return '\n'.join(chunks)
 
 
+def read_fuzzer():
+    return open(params.fuzzer_file).read()
+
+
 # Write the fuzzer after receiving a response containing it
 def write_fuzzer(response):
     # The LLM may wrap the fuzzer with
@@ -299,18 +303,34 @@ MAX_FIX_ITERS = 10
 
 # The fuzzer is updated using diffs. We use a simple format to avoid the LLM
 # getting line numbers/counts wrong.
-DIFF_FORMAT = '''
-<<<<<<< SEARCH
+DIFF_PREFIX = '<<<<<<< SEARCH'
+DIFF_MIDDLE = '======='
+DIFF_POSTFIX = '>>>>>>> REPLACE'
+DIFF_FORMAT = f'''\
+{DIFF_PREFIX}
 [Existing code that needs to change]
-=======
+{DIFF_MIDDLE}
 [Improved code]
->>>>>>> REPLACE
+{DIFF_POSTFIX}
 '''
 
 
+# Returns an error if we failed to update.
 def update_fuzzer(diff):
+    diff = diff.strip()
+    if not diff.startswith(DIFF_PREFIX):
+        return f'Did not find the right prefix ({DIFF_PREFIX})'
+    if diff.count(DIFF_MIDDLE) != 1:
+        return f'The diff separator ({DIFF_MIDDLE}) must appear exactly once')
+    if not diff.endswith(DIFF_POSTFIX):
+        return f'Did not find the right post ({DIFF_POSTFIX})'
 
-    save_history('fuzzer', response)
+    diff = diff[len(DIFF_PREFIX):-len(DIFF_POSTFIX)]
+    existing, improved = diff.split(f'\n{DIFF_MIDDLE}\n')
+
+    fuzzer = read_fuzzer()
+    fuzzer = fuzzer.replace(existing, improved)
+    write_fuzzer(fuzzer)
 
 
 # Functions that check for things, and fix them as needed
@@ -359,25 +379,37 @@ def ensure_js_parsing(seed, js)
 
     # Loop on LLM responses.
     for i in range(MAX_FIX_ITERS):
+        print("    (fix attempt {i})")
+
         if response.startswith(FAILURE):
             print("❌ LLM gave up")
             sys.exit(1)
 
         # Apply the diff and try the testcase again.
-        update_fuzzer(response)
+        error = update_fuzzer(response)
+        if error:
+            client.chat('Your diff is not in the proper format:\n{DIFF_FORMAT}\n\n(error: {error})\n')
+            continue
 
-        print("    (fix attempt {i})")
+        try:
+            js, _ = run_fuzzer(seed)
+        except subprocess.CalledProcessError:
+            print("❌ Fuzzer crashes, fixing...")
+            client.chat('After your diff, the fuzzer crashes')
+            continue
+
+        open(js_temp.name, 'w').write(js)
         proc = run_vm('--parse-only', js_temp.name)
         if not proc.returncode:
-            if i > 0:
-                print("✅ JS parsing fixed")
+            print("✅ JS parsing fixed")
             return
-
 
         open(error_temp.name, 'w').write(proc.stdout)
 
-        # TODO LLM fix
-        3/0
+        prompt = 'The JavaScript still does not parse. '
+        prompt += 'Here is the JS and error:\n\n'
+        prompt += bundle_files([js_temp.name, error_temp.name])
+        client.chat(prompt)
 
 
 # How many random samples to validate with
