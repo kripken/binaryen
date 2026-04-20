@@ -376,20 +376,24 @@ followed by explanation of the problems you hit.
 
 '''
 
-def ensure_js_parsing(seed, js):
-    open(js_temp.name, 'w').write(js)
-    proc = check_js_parsing(js_temp.name)
+
+# Generic loop to fix a problem.
+#
+#  @param what - a description, for logging (e.g. "JavaScript parsing")
+#  @param initial - the initial data. sent to test()
+#  @param test - checks for a problem, returning a subprocess execution result
+#  @param get_files - returns a list of the files to bundle for the repro
+def fix_in_loop(what, initial, test, get_files):
+    proc = test(initial)
     if not proc.returncode:
         return
 
-    print("❌ JS does not parse")
-
-    open(error_temp.name, 'w').write(proc.stdout)
+    problem = f"{what} is failing"
+    print(f"❌ {problem}")
 
     prompt = FIX_EXISTING_FUZZER_INTRO
-    prompt += f'Problem: the JavaScript for seed {seed} does not parse. '
-    prompt += 'The error follows the JavaScript contents.\n\n'
-    prompt += bundle_files([js_temp.name, error_temp.name, params.fuzzer_file])
+    prompt += f'{problem}. The error follows the contents.\n\n"
+    prompt += bundle_files(get_files()+ [error_temp.name, params.fuzzer_file])
 
     client = GeminiClient()
     response = client.chat(prompt)
@@ -409,14 +413,14 @@ def ensure_js_parsing(seed, js):
             continue
 
         try:
-            js, _ = run_fuzzer(seed)
+            js, wat = run_fuzzer(seed)
         except subprocess.CalledProcessError:
             print("❌ Fuzzer crashes, fixing...")
             client.chat('After your diff, the fuzzer crashes')
             continue
 
         open(js_temp.name, 'w').write(js)
-        proc = check_js_parsing(js_temp.name)
+        proc = test()
         if not proc.returncode:
             print("✅ JS parsing fixed")
             return
@@ -428,6 +432,16 @@ def ensure_js_parsing(seed, js):
         prompt += bundle_files([js_temp.name, error_temp.name])
         client.chat(prompt)
 
+
+def ensure_js_parsing(seed, js):
+    open(js_temp.name, 'w').write(js)
+
+    def test():
+        return check_js_parsing(js_temp.name)
+
+    def get_files():
+        return [js_temp.name]
+...
 
 # How many random samples to validate with
 NUM_VALIDATIONS = 20 # XXX moar
@@ -488,14 +502,7 @@ def fix_fuzzer_iter():
         js, wat = output
 
         fixed = ensure_js_parsing(seed, js) or fixed
-
-        open(wat_temp.name, 'w').write(wat)
-        try:
-            run_wasm_opt('-all', wat_temp.name)
-        except subprocess.CalledProcessError:
-            print("❌ Fuzzer wat does not parse, fixing...")
-            # TODO LLM fix
-            3/0
+        fixed = ensure_wat_parsing(seed, js) or fixed
 
     # Check at least some testcases run without error.
     2/0
