@@ -47,6 +47,24 @@ def run_vm(*args):
     return subprocess.run([params.vm] + list(args), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
 
+def run_node(*args):
+    if params.verbose:
+        print("  ", 'node', *args)
+    return subprocess.check_output(['node'] + list(args), text=True)
+
+
+# Execution utilities
+
+
+# Verify if a JS file parses correctly.
+def check_js_parsing(filename):
+    try:
+        run_node('--check', filename)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 # Logging
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -361,7 +379,7 @@ followed by explanation of the problems you hit.
 
 def ensure_js_parsing(seed, js):
     open(js_temp.name, 'w').write(js)
-    proc = run_vm('--parse-only', js_temp.name)
+    proc = check_js_parsing(js_temp.name)
     if not proc.returncode:
         return
 
@@ -399,7 +417,7 @@ def ensure_js_parsing(seed, js):
             continue
 
         open(js_temp.name, 'w').write(js)
-        proc = run_vm('--parse-only', js_temp.name)
+        proc = check_js_parsing(js_temp.name)
         if not proc.returncode:
             print("✅ JS parsing fixed")
             return
