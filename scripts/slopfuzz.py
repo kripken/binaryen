@@ -412,6 +412,8 @@ def fix_in_loop(what, initial, test, get_files):
             client.chat('Your diff is not in the proper format:\n{DIFF_FORMAT}\n\n(error: {error})\n')
             continue
 
+        retest():
+            
         try:
             js, wat = run_fuzzer(seed)
         except subprocess.CalledProcessError:
