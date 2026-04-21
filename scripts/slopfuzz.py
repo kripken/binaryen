@@ -315,8 +315,8 @@ Some tips for achieving these goals:
 Some specific things to focus on:
 
 * Avoid unbounded loops on the JS side, as we do not want the testcase
-  to hang. Loops on the wasm side are ok, as we have special code to handle
-  infinite loops and recursion at runtime.
+  to hang. Loops on the wasm side are ok, as we have special wasm
+  instrumentation that avoids infinite loops and recursion.
 * Sending objects over the wasm/JS boundary is important, as this is a common
   source of bugs in VMs. For example, you can send an object from JS to wasm and
   use it there, and vice versa.
@@ -464,7 +464,8 @@ class Fixer:
         print(f"❌ {problem}")
 
         prompt = FIX_EXISTING_FUZZER_INTRO
-        prompt += f"{self.what} is broken. The error follows the contents.\n\n"
+        prompt += f"The problem to fix: {self.what} is broken.\n"
+        prompt += "The error follows the contents.\n\n"
         if self.extra_explanation:
             prompt += f"\n{self.extra_explanation}\n\n"
         open(error_temp.name, 'w').write(proc.stdout)
