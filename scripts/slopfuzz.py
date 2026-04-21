@@ -488,11 +488,13 @@ class Fixer:
             client.chat(prompt)
 
 
-class ParsingFixer(Fixer):
-    what = "JavaScript parsing"
-
+class SeededFixer(Fixer):
     def __init__(self, seed):
         self.seed = seed
+
+
+class ParsingFixer(SeededFixer):
+    what = "JavaScript parsing"
 
     def test(self):
         proc = run_fuzzer_proc(self.seed)
@@ -533,11 +535,11 @@ class WatParsingFixer(ParsingFixer):
 
 # We can't expect all testcases to execute without error - and we do want to
 # test some error handling - but a significant amount should avoid erroring.
-def ExecutionFixer(Fixer):
+def ExecutionFixer(SeededFixer):
     what = "JS+wasm testcase error when executed"
 
     def test(self):
-        proc = run_fuzzer_proc(self.seed) # XXX seed here or out?
+        proc = run_fuzzer_proc(self.seed)
         if proc.returncode:  # XXX get_files should be different here!
             4/0
             return proc
