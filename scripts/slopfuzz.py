@@ -165,12 +165,22 @@ class GeminiClient:
         self.chat_session = None
 
 
-# Bundle text files into a prompt, with a header for each
-def bundle_files(filenames):
+# Bundle text files into a prompt, with a header for each. Each item can be a
+# tuple of a filename and a comment, or just a filename
+def bundle_files(files):
     chunks = []
-    for filename in filenames:
+    for item in files:
+        if item is tuple:
+            filename, comment = item
+        else:
+            filename = item
+            comment = None
+
         # Header
-        chunk = f">>>> {os.path.basename(filename)}\n"
+        chunk = f">>>> {os.path.basename(filename)}"
+        if comment:
+            chunk += f" ({comment})"
+        chunk += "\n"
 
         # Content
         content = open(filename, encoding='utf-8').read()
@@ -408,7 +418,10 @@ class Fixer:
         prompt = FIX_EXISTING_FUZZER_INTRO
         prompt += f"{problem} is broken. The error follows the contents.\n\n"
         open(error_temp.name, 'w').write(proc.stdout)
-        prompt += bundle_files(self.get_files() + [error_temp.name, params.fuzzer_file])
+        prompt += bundle_files(self.get_files() + [
+            (error_temp.name, 'error output'),
+            (params.fuzzer_file, 'fuzzer program'),
+        ])
 
         client = GeminiClient()
         response = client.chat(prompt)
@@ -435,7 +448,9 @@ class Fixer:
             open(error_temp.name, 'w').write(proc.stdout)
 
             prompt = f'{self.what} is still not fixed. Here are the details:\n\n'
-            prompt += bundle_files(self.get_files() + [error_temp.name])
+            prompt += bundle_files(self.get_files() + [
+                (error_temp.name, 'error output'),
+            ])
             client.chat(prompt)
 
 
@@ -466,7 +481,7 @@ class JSParsingFixer(ParsingFixer):
         return run_node('--check', js_temp.name)
 
     def get_files(self):
-        return [js_temp.name]
+        return [(js_temp.name, "emitted JavaScript that does not parse")]
 
 
 class WatParsingFixer(ParsingFixer):
@@ -477,7 +492,7 @@ class WatParsingFixer(ParsingFixer):
         return run_wasm_opt(wat_temp.name, '-all')
 
     def get_files(self):
-        return [wat_temp.name]
+        return [(wat_temp.name, "emitted wat that does not parse")]
 
 
 # How many random samples to validate with
