@@ -342,11 +342,17 @@ DIFF_FORMAT = f'''\
 (Multiple diff chunks like this can appear. Make sure to format them all properly.)
 '''
 
+BAD_DIFF_PROMPT = f"""
+Your diff is not in the proper format:
 
-# Returns an error if we failed to update.
+{DIFF_FORMAT}
+
+"""
+
+# Returns a prompt with the error if we failed to update.
 def update_fuzzer(diff):
     if DIFF_START not in diff:
-        return f"Did not find a diff to apply (should start with `{DIFF_START}`)"
+        return BAD_DIFF_PROMPT + "Diff should start with `{DIFF_START}`"
 
     fuzzer = read_fuzzer()
     start = 0
@@ -356,18 +362,22 @@ def update_fuzzer(diff):
             break
         middle = diff.find(DIFF_MIDDLE, start)
         if middle < 0:
-            return f"`{DIFF_MIDDLE}` not found after `{DIFF_START}`"
+            return BAD_DIFF_PROMPT + "Diff should have {DIFF_MIDDLE}"
         end = diff.find(DIFF_END, middle)
         if end < 0:
-            return f"`{DIFF_END}` not found after `{DIFF_MIDDLE}`"
+            return BAD_DIFF_PROMPT + "Diff should end with `{DIFF_END}`"
         
         existing = diff[start + len(DIFF_START) + 1:middle]
         improved = diff[middle + len(DIFF_MIDDLE) + 1:end]
 
-        print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX debuggingg
+        # print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX debuggingg
 
         if existing not in fuzzer:
-            return f"`Diff asks us to replace:\n```\n{existing}\n```\nBut this does not exist."
+             prompt = "Your diff asks us to replace something that does not exist:\n"
+             prompt += "\n```\n{existing}\n```\n"
+             prompt += "\nThe fuzzer we are trying to update is currently this:\n"
+             prompt += bundle_files([params.fuzzer_file])
+             return prompt
 
         fuzzer = fuzzer.replace(existing, improved)
         
@@ -452,9 +462,9 @@ class Fixer:
                 sys.exit(1)
 
             # Apply the diff and try the testcase again.
-            error = update_fuzzer(response)
-            if error:
-                client.chat(f"Your diff is not in the proper format:\n{DIFF_FORMAT}\n\n(error: {error})\n")
+            prompt = update_fuzzer(response)
+            if prompt:
+                client.chat(prompt)
                 continue
 
             proc = self.test()
