@@ -2121,7 +2121,10 @@ class PreserveImportsExportsJS(TestCaseHandler):
                 # reduce, so this is the first time we hit an error. Save the
                 # pre wasm file, the one we began with, as `before_wasm`, so
                 # that the reducer will make us proceed exactly from there.
-                shutil.copyfile(self.pre_wasm, before_wasm)
+                if hasattr(self, 'pre_wasm'):
+                    shutil.copyfile(self.pre_wasm, before_wasm)
+                else:
+                    print('(errored before generating self.pre_wasm)')
             raise e
 
     def do_handle_pair(self, input, before_wasm, after_wasm, opts):
@@ -2233,13 +2236,15 @@ class PreserveImportsExportsJS(TestCaseHandler):
             cleaned.append(line)
         return '\n'.join(cleaned)
 
+    # Pick a js+wasm pair. If we have SlopFuzz, we generate a fresh testcase
+    # each time. If not, we use one from the test suite.
     def pick_js_wasm(self):
         # TODO: in scripts/ ?
         slopfuzz_fuzzer = in_binaryen('slop.py')
         if os.path.exists(slopfuzz_fuzzer):
             seed = random.randint(0, 1 << 64)
             print(f'Using slop.py {seed}')
-            output = run([sys.executable, seed])
+            output = run([sys.executable, slopfuzz_fuzzer, str(seed)])
             JS_WAT_SEP = '>>>> wat'
             js, wat = output.split(JS_WAT_SEP)
 
