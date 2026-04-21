@@ -425,8 +425,10 @@ Emit the diff in the following form:
 
 {DIFF_FORMAT}
 
-If you cannot find a fix, emit instead the word "FAILURE" in capital letters,
-followed by explanation of the problems you hit.
+If you cannot find a fix (because my instructions are not clear enough, or you
+think something is going wrong in the tools we am using, or some other problem
+that you can't get around), emit instead the word "FAILURE" in capital letters,
+followed by explanation.
 
 '''
 # TODO: Add the examples again, as a reminder?
