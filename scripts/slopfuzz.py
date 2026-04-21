@@ -489,7 +489,8 @@ class ParsingFixer(Fixer):
 
     def test(self):
         proc = run_fuzzer_proc(self.seed)
-        if proc.returncode:
+        if proc.returncode:  # XXX get_files should be different here!
+            4/0
             return proc
 
         output = proc.stdout
@@ -521,10 +522,30 @@ class WatParsingFixer(ParsingFixer):
     def get_files(self):
         return [(wat_temp.name, "emitted wat that does not parse")]
 
+
 # We can't expect all testcases to execute without error - and we do want to
 # test some error handling - but a significant amount should avoid erroring.
-
 def ExecutionFixer(Fixer):
+    what = "JS+wasm testcase error when executed"
+
+    def test(self):
+        proc = run_fuzzer_proc(self.seed)
+        if proc.returncode:  # XXX get_files should be different here!
+            4/0
+            return proc
+
+        output = proc.stdout
+        if output.count(JS_WAT_SEP) != 1:
+            return ProcError("Separator between JS and wasm ({JS_WAT_SEP}) not found")
+        js, wat = output.split(JS_WAT_SEP)
+
+        return self.parse(js, wat)
+
+    def get_files(self):
+        return [
+            (js_temp.name, "JavaScript part of the erroring testcase"),
+            (wat_temp.name, "Wasm part of the erroring testcase"),
+        ]
 
 
 # How many random samples to validate with
