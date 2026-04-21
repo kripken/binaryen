@@ -403,11 +403,11 @@ class Fixer:
     def get_files(self):
         raise "unimplemented"
 
-    # Generic loop to fix a problem.
-    def fix_in_loop(self):
+    # Generic loop to fix a problem. Returns true if we fixed something.
+    def fix(self):
         proc = self.test()
         if not proc.returncode:
-            return
+            return False
 
         problem = f"{what} is failing"
         print(f"❌ {problem}")
@@ -437,11 +437,7 @@ class Fixer:
             proc = self.test()
             if not proc.returncode:
                 print(f"✅ {what} fixed")
-                return
-
-            proc = test()
-            if not proc.returncode:
-                return
+                return True
 
             open(error_temp.name, 'w').write(proc.stdout)
 
@@ -450,8 +446,11 @@ class Fixer:
             client.chat(prompt)
 
 
-class JSParsingFixer(Fixer):
+class ParsingFixer(Fixer):
     what = "JavaScript parsing"
+
+    def __init__(self, seed):
+        self.seed = seed
 
     def test(self):
         proc = run_fuzzer(seed)
@@ -546,8 +545,8 @@ def fix_fuzzer_iter():
     for seed, output in outputs.items():
         js, wat = output
 
-        fixed = ensure_js_parsing(seed) or fixed
-        fixed = ensure_wat_parsing(seed) or fixed
+        fixed = JSParsingFixer(seed).fix() or fixed
+        fixed = WatParsingFixer(seed).fix() or fixed
 
     # Check at least some testcases run without error.
     2/0
