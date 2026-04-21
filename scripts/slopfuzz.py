@@ -56,13 +56,6 @@ def run_node(*args):
     return run('node', *args)
 
 
-# Execution utilities
-
-
-# Verify if a JS file parses correctly.
-def check_js_parsing(filename):
-    return run_node('--check', filename)
-
 
 # Logging
 
@@ -470,7 +463,7 @@ class JSParsingFixer(ParsingFixer):
 
     def parse(self, js, wat):
         open(js_temp.name, 'w').write(js)
-        return check_js_parsing(js_temp.name)
+        return run_node('--check', js_temp.name)
 
     def get_files(self):
         return [js_temp.name]
@@ -481,7 +474,7 @@ class WatParsingFixer(ParsingFixer):
 
     def parse(self, js, wat):
         open(wat_temp.name, 'w').write(wat)
-        return check_wat_parsing(wat_temp.name)
+        return run_wasm_opt(wat_temp.name, '-all')
 
     def get_files(self):
         return [wat_temp.name]
