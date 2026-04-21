@@ -2234,38 +2234,31 @@ class PreserveImportsExportsJS(TestCaseHandler):
         return '\n'.join(cleaned)
 
     def pick_js_wasm(self):
-        js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
-        js_file = str(random.choice(js_files))
-        wat_file = str(pathlib.Path(js_file).with_suffix('.wat'))
+        # TODO: in scripts/ ?
+        slopfuzz_fuzzer = in_binaryen('slop.py')
+        if os.path.exists(slopfuzz_fuzzer):
+            seed = random.randint(0, 1 << 64)
+            print(f'Using slop.py {seed}')
+            output = run([sys.executable, seed])
+            JS_WAT_SEP = '>>>> wat'
+            js, wat = output.split(JS_WAT_SEP)
+
+            js_file = 'slopcase.mjs'
+            wat_file = 'slopcase.wat'
+            with open(js_file, 'w') as f:
+                f.write(js)
+            with open(wat_file, 'w') as f:
+                f.write(wat)
+        else:
+            print('Using fixed testcase (no slop.py)')
+            js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
+            js_file = str(random.choice(js_files))
+            wat_file = str(pathlib.Path(js_file).with_suffix('.wat'))
+
         return js_file, wat_file
 
     def can_run_on_wasm(self, wasm):
         return all_disallowed(DISALLOWED_FEATURES_IN_V8)
-
-
-# As PreserveImportsExportsJS, but generates js+wasm pairs using SlopFuzz.
-class SlopFuzz(PreserveImportsExportsJS):
-    JS_WAT_SEP = '>>>> wat'
-
-    def pick_js_wasm(self):
-        # TODO: in scripts/ ?
-        slopfuzz_fuzzer = in_binaryen('slopfuzz.py')
-
-        seed = random.randint(0, 1 << 64)
-
-        output = run([sys.executable, seed])
-
-        js, wat = output.split(JS_WAT_SEP)
-
-        js_file = 'slopcase.mjs'
-        wat_file = 'slopcase.wat'
-
-        with open(js_file, 'w') as f:
-            f.write(js)
-        with open(wat_file, 'w') as f:
-            f.write(wat)
-
-        return js_file, wat_file
 
 
 # Test that we preserve branch hints properly. The invariant that we test here
@@ -2497,7 +2490,6 @@ testcase_handlers = [
     Two(),
     PreserveImportsExportsRandom(),
     PreserveImportsExportsJS(),
-    SlopFuzz(),
     BranchHintPreservation(),
 ]
 
