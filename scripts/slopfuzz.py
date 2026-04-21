@@ -388,7 +388,7 @@ def update_fuzzer(diff):
         existing = diff[start + len(DIFF_START) + 1:middle]
         improved = diff[middle + len(DIFF_MIDDLE) + 1:end]
 
-        print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX debuggingg
+        # print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX debuggingg
 
         if existing not in fuzzer:
              prompt = "Your diff asks us to replace something that does not exist:\n"
