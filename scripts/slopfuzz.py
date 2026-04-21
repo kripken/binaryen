@@ -543,7 +543,7 @@ class WatParsingFixer(ParsingFixer):
 class ExecutionFixer(SeededFixer):
     what = "JS+wasm testcase execution"
 
-    extra_explanation = "The JS+wasm testcase should execute without error.\n" +
+    extra_explanation = "The JS+wasm testcase should execute without error.\n" + \
         "Attached is an example of a working testcase, which might help.\n"
 
     def test(self):
