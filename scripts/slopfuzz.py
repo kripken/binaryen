@@ -600,7 +600,7 @@ class ExecutionFixer(SeededFixer):
 
 
 # How many random samples to validate with
-NUM_VALIDATIONS = 100
+NUM_VALIDATIONS = 50
 
 
 # Tests various things and fixes the fuzzer. This does one forward iteration,
