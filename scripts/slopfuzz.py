@@ -329,15 +329,17 @@ MAX_FIX_ITERS = 10
 
 # The fuzzer is updated using diffs. We use a simple format to avoid the LLM
 # getting line numbers/counts wrong.
-DIFF_START = '<<<<<<< SEARCH'
+DIFF_START = '<< SEARCH'
 DIFF_MIDDLE = '======='
-DIFF_END = '>>>>>>> REPLACE'
+DIFF_END = '>> REPLACE'
 DIFF_FORMAT = f'''\
 {DIFF_START}
 [Existing code that needs to change]
 {DIFF_MIDDLE}
 [Improved code]
 {DIFF_END}
+
+(Multiple diff chunks like this can appear. Make sure to format them all properly.)
 '''
 
 
