@@ -2135,10 +2135,9 @@ class PreserveImportsExportsJS(TestCaseHandler):
             make_random_input(size, input)
 
         # Pick a js+wasm pair.
-        js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
-        js_file = str(random.choice(js_files))
+        js_file, wat_file = self.pick_js_wasm()
         print(f'js file: {js_file}')
-        wat_file = str(pathlib.Path(js_file).with_suffix('.wat'))
+        print(f'wat file: {wat_file}')
 
         # Verify the wat works with our features
         try:
@@ -2234,8 +2233,39 @@ class PreserveImportsExportsJS(TestCaseHandler):
             cleaned.append(line)
         return '\n'.join(cleaned)
 
+    def pick_js_wasm(self):
+        js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
+        js_file = str(random.choice(js_files))
+        wat_file = str(pathlib.Path(js_file).with_suffix('.wat'))
+        return js_file, wat_file
+
     def can_run_on_wasm(self, wasm):
         return all_disallowed(DISALLOWED_FEATURES_IN_V8)
+
+
+# As PreserveImportsExportsJS, but generates js+wasm pairs using SlopFuzz.
+class SlopFuzz(PreserveImportsExportsJS):
+    JS_WAT_SEP = '>>>> wat'
+
+    def pick_js_wasm(self):
+        # TODO: in scripts/ ?
+        slopfuzz_fuzzer = in_binaryen('slopfuzz.py')
+
+        seed = random.randint(0, 1 << 64)
+
+        output = run([sys.executable, seed])
+
+        js, wat = output.split(JS_WAT_SEP)
+
+        js_file = 'slopcase.mjs'
+        wat_file = 'slopcase.wat'
+
+        with open(js_file, 'w') as f:
+            f.write(js)
+        with open(wat_file, 'w') as f:
+            f.write(wat)
+
+        return js_file, wat_file
 
 
 # Test that we preserve branch hints properly. The invariant that we test here
@@ -2467,6 +2497,7 @@ testcase_handlers = [
     Two(),
     PreserveImportsExportsRandom(),
     PreserveImportsExportsJS(),
+    SlopFuzz(),
     BranchHintPreservation(),
 ]
 
