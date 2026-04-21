@@ -322,7 +322,7 @@ Some specific things to focus on:
   use it there, and vice versa.
 * The examples are fairly small. It is good to emit testcases of that size some
   of the time, but we also want to emit significantly larger ones, even 10x
-  larger, some of the time as well.
+  larger or more.
 
 The output of the fuzzer is a pair of js and wasm files, in a single response.
 The JS should begin immediately at the start of the fuzzer's output, without any
