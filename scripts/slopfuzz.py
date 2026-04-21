@@ -356,7 +356,7 @@ FAILURE = 'FAILURE'
 FIX_EXISTING_FUZZER_INTRO = '''
 We are writing a fuzzer in Python.
 
-''' + FUZZER_GOALS + '''
+''' + FUZZER_GOALS + f'''
 
 The fuzzer has a problem that I want you to fix. The fuzzer itself is attached
 below, as well the seed that reproduces the bug, and the relevant part of the
@@ -415,7 +415,7 @@ class Fixer:
 
         # Loop on LLM responses.
         for i in range(MAX_FIX_ITERS):
-            print("    (fix attempt {i})")
+            print(f"    (fix attempt {i})")
 
             if response.startswith(FAILURE):
                 print("❌ LLM gave up")
@@ -424,7 +424,7 @@ class Fixer:
             # Apply the diff and try the testcase again.
             error = update_fuzzer(response)
             if error:
-                client.chat('Your diff is not in the proper format:\n{DIFF_FORMAT}\n\n(error: {error})\n')
+                client.chat(f"Your diff is not in the proper format:\n{DIFF_FORMAT}\n\n(error: {error})\n")
                 continue
 
             proc = self.test()
