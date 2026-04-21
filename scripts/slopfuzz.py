@@ -388,7 +388,7 @@ def update_fuzzer(diff):
         existing = diff[start + len(DIFF_START) + 1:middle]
         improved = diff[middle + len(DIFF_MIDDLE) + 1:end]
 
-        # print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX debuggingg
+        print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX debuggingg
 
         if existing not in fuzzer:
              prompt = "Your diff asks us to replace something that does not exist:\n"
@@ -490,7 +490,7 @@ class Fixer:
             # Apply the diff and try the testcase again.
             prompt = update_fuzzer(response)
             if prompt:
-                client.chat(prompt)
+                response = client.chat(prompt)
                 continue
 
             proc = self.test()
@@ -504,7 +504,7 @@ class Fixer:
             prompt += bundle_files(self.get_files() + [
                 (error_temp.name, 'error output'),
             ])
-            client.chat(prompt)
+            response = client.chat(prompt)
 
 
 class SeededFixer(Fixer):
