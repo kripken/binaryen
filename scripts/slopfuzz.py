@@ -312,6 +312,15 @@ Some tips for achieving these goals:
   programs and functions will therefore vary when you pick a different rate of
   calls in them.
 
+Some specific things to focus on:
+
+* Avoid unbounded loops on the JS side, as we do not want the testcase
+  to hang. Loops on the wasm side are ok, as we have special code to handle
+  infinite loops and recursion at runtime.
+* Sending objects over the wasm/JS boundary is important, as this is a common
+  source of bugs in VMs. For example, you can send an object from JS to wasm and
+  use it there, and vice versa.
+
 The output of the fuzzer is a pair of js and wasm files, in a single response.
 The JS should begin immediately at the start of the fuzzer's output, without any
 prefix or annotation. To separate the wat from it, use this separator line:
