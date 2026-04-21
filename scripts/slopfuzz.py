@@ -49,7 +49,14 @@ def run_wasm_opt(*args, quiet=False):
 
 
 def run_vm(*args, quiet=False):
-    return run(params.vm, *args, quiet=quiet)
+    return run(params.vm + [
+        '--wasm-staging',
+        '--experimental-wasm-compilation-hints',
+        '--experimental-wasm-stringref',
+        '--experimental-wasm-fp16',
+        '--experimental-wasm-custom-descriptors',
+        '--experimental-wasm-js-interop',
+    ] + *args, quiet=quiet)
 
 
 def run_node(*args, quiet=False):
@@ -530,7 +537,7 @@ def ExecutionFixer(Fixer):
     what = "JS+wasm testcase error when executed"
 
     def test(self):
-        proc = run_fuzzer_proc(self.seed)
+        proc = run_fuzzer_proc(self.seed) # XXX seed here or out?
         if proc.returncode:  # XXX get_files should be different here!
             4/0
             return proc
@@ -545,7 +552,7 @@ def ExecutionFixer(Fixer):
         open(wat_temp.name, 'w').write(wat)
         wat_to_wasm()
 
-        return self.parse(js, wat)
+        return self.run_vm(js, '--', wasm_temp.name)
 
     def get_files(self):
         return [
