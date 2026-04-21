@@ -392,7 +392,7 @@ def update_fuzzer(diff):
 
         if existing not in fuzzer:
              prompt = "Your diff asks us to replace something that does not exist:\n"
-             prompt += "\n```\n{existing}\n```\n"
+             prompt += f"\n```\n{existing}\n```\n"
              prompt += "\nThe fuzzer we are trying to update is currently this:\n"
              prompt += bundle_files([params.fuzzer_file])
              return prompt
