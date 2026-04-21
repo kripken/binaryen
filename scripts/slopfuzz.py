@@ -455,9 +455,9 @@ class Fixer:
         print(f"❌ {problem}")
 
         prompt = FIX_EXISTING_FUZZER_INTRO
-        prompt += f"{problem} is broken. The error follows the contents.\n\n"
+        prompt += f"{self.what} is broken. The error follows the contents.\n\n"
         if self.extra_explanation:
-            prompt += f"\n{self.extra_explanation}\n"
+            prompt += f"\n{self.extra_explanation}\n\n"
         open(error_temp.name, 'w').write(proc.stdout)
         prompt += bundle_files(self.get_files() + [
             (error_temp.name, 'error output'),
@@ -543,7 +543,8 @@ class WatParsingFixer(ParsingFixer):
 class ExecutionFixer(SeededFixer):
     what = "JS+wasm testcase execution"
 
-    extra_explanation = "The JS+wasm testcase should execute without error. Attached below is an example of a known-working testcase, which might help you."
+    extra_explanation = "The JS+wasm testcase should execute without error.\n" +
+        "Attached is an example of a working testcase, which might help.\n"
 
     def test(self):
         proc = run_fuzzer_proc(self.seed)
@@ -569,8 +570,8 @@ class ExecutionFixer(SeededFixer):
         return [
             (js_temp.name, "JavaScript part of the erroring testcase"),
             (wat_temp.name, "Wasm part of the erroring testcase"),
-            (working_pair[0], "An example of a known-working testcase, JavaScript part"),
-            (working_pair[1], "The Wasm part of the known-working example"),
+            (working_pair[0], "An example of a working testcase, JavaScript part"),
+            (working_pair[1], "The Wasm part of the working example"),
         ]
 
 
