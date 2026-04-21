@@ -717,7 +717,7 @@ def improve_fuzzer():
 
 
 # Main workflow.
-def work():
+def build_fuzzer():
     # Create the initial fuzzer, if there is none.
     if not os.path.exists(params.fuzzer_file):
         print("💼 Generating initial fuzzer")
@@ -736,6 +736,19 @@ def work():
         print("🛑 Stopping by user request.")
 
 
+def do_fuzzing():
+    print("💼 Fuzzing with the current fuzzer")
+    total = 0
+    errored = 0
+    while 1:
+        seed = random_seed()
+        print(f"💼   seed: {seed}  erroring: {int(100 * errored / max(total, 1))}%")
+        if ExecutionFixer(seed).test().returncode:
+            errored += 1
+        total += 1
+
+
+
 def main():
     parser = argparse.ArgumentParser(description="SlopFuzz")
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview", help="Model ID")
@@ -745,6 +758,7 @@ def main():
     parser.add_argument("--save-history", default=False, action="store_true", help="Save history of prompts and fuzzers as we go, for debugging (uses the fuzzer-file with different suffixes)")
     parser.add_argument("--binaryen-bin", type=str, help="Directory with Binaryen binaries (wasm-opt)")
     parser.add_argument("--vm", type=str, required=True, help="VM to run the testcases in")
+    parser.add_argument("--fuzz", default=False, action="store_true", help="Fuzz using the existing fuzzer, instead of building and improving a fuzzer")
     parser.add_argument("--verbose", default=False, action="store_true", help="Log very verbosely")
 
     global params
@@ -752,7 +766,10 @@ def main():
     
     print(f"📖 Using model {params.model}")
 
-    work()
+    if not params.fuzz:
+        build_fuzzer()
+    else:
+        do_fuzzing()
 
 
 if __name__ == "__main__":
