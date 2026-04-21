@@ -714,16 +714,16 @@ def generate_initial_fuzzer():
 # Improve the fuzzer in a single iteration of the main loop
 
 def improve_fuzzer():
-    fix_fuzzer()
-
     print("💼 Improving fuzzer by doing ..?")
     0/4
+
 
 # Main workflow.
 def work():
     # Create the initial fuzzer, if there is none.
     if not os.path.exists(params.fuzzer_file):
         generate_initial_fuzzer()
+        fix_fuzzer()
     else:
         print("💼 Improving existing fuzzer")
 
@@ -732,6 +732,7 @@ def work():
         for i in range(params.max_iters):
             print(f"⏱️  Improving fuzzer, iteration {i}")
             improve_fuzzer()
+            fix_fuzzer()
     except KeyboardInterrupt:
         print("🛑 Stopping by user request.")
 
