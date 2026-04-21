@@ -320,6 +320,9 @@ Some specific things to focus on:
 * Sending objects over the wasm/JS boundary is important, as this is a common
   source of bugs in VMs. For example, you can send an object from JS to wasm and
   use it there, and vice versa.
+* The examples are fairly small. It is good to emit testcases of that size some
+  of the time, but we also want to emit significantly larger ones, even 10x
+  larger, some of the time as well.
 
 The output of the fuzzer is a pair of js and wasm files, in a single response.
 The JS should begin immediately at the start of the fuzzer's output, without any
