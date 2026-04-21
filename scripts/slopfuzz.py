@@ -49,14 +49,15 @@ def run_wasm_opt(*args, quiet=False):
 
 
 def run_vm(*args, quiet=False):
-    return run(params.vm + [
+    args = params.vm + [
         '--wasm-staging',
         '--experimental-wasm-compilation-hints',
         '--experimental-wasm-stringref',
         '--experimental-wasm-fp16',
         '--experimental-wasm-custom-descriptors',
         '--experimental-wasm-js-interop',
-    ] + *args, quiet=quiet)
+    ] + args
+    return run(*args, quiet=quiet)
 
 
 def run_node(*args, quiet=False):
