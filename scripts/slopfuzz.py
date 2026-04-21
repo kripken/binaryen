@@ -557,9 +557,13 @@ class ExecutionFixer(SeededFixer):
         return run_vm(js_temp.name, '--', wasm_temp.name)
 
     def get_files(self):
+        # Provide a working example after the failing testcase, to be helpful.
+        working_pair = get_examples()[:2]
         return [
             (js_temp.name, "JavaScript part of the erroring testcase"),
             (wat_temp.name, "Wasm part of the erroring testcase"),
+            (working_pair[0], "An example of a known-working testcase, which might help you. This is is the JavaScript part."),
+            (working_pair[1], "The Wasm part of the known-working example"),
         ]
 
 
