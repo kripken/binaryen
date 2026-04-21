@@ -495,6 +495,7 @@ class ParsingFixer(Fixer):
 
         output = proc.stdout
         if output.count(JS_WAT_SEP) != 1:
+            4/0
             return ProcError("Separator between JS and wasm ({JS_WAT_SEP}) not found")
         js, wat = output.split(JS_WAT_SEP)
 
@@ -536,8 +537,13 @@ def ExecutionFixer(Fixer):
 
         output = proc.stdout
         if output.count(JS_WAT_SEP) != 1:
+            4/0
             return ProcError("Separator between JS and wasm ({JS_WAT_SEP}) not found")
         js, wat = output.split(JS_WAT_SEP)
+
+        open(js_temp.name, 'w').write(js)
+        open(wat_temp.name, 'w').write(wat)
+        wat_to_wasm()
 
         return self.parse(js, wat)
 
