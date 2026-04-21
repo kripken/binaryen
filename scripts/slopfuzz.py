@@ -105,12 +105,12 @@ class GeminiClient:
                 # The new SDK raises various exceptions; we check for common retryable ones
                 err_msg = str(e).lower()
                 if "429" in err_msg or "rate limit" in err_msg:
-                    wait = (2 ** attempt) + 1
+                    wait = (2 ** attempt) + 10
                     logger.warning(f"Rate limit hit. Retrying in {wait}s...")
                     time.sleep(wait)
                 elif "500" in err_msg or "503" in err_msg or "deadline" in err_msg:
                     wait = (2 ** attempt)
-                    logger.warning(f"Server error/Timeout. Retrying in {wait}s...")
+                    logger.warning(f"Server error/Timeout ({err_msg}). Retrying in {wait}s...")
                     time.sleep(wait)
                 else:
                     logger.error(f"Non-retryable error: {e}")
