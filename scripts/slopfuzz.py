@@ -49,7 +49,8 @@ def run_wasm_opt(*args, quiet=False):
 
 
 def run_vm(*args, quiet=False):
-    args = params.vm + [
+    args = [
+        params.vm,
         '--wasm-staging',
         '--experimental-wasm-compilation-hints',
         '--experimental-wasm-stringref',
@@ -553,7 +554,7 @@ class ExecutionFixer(SeededFixer):
         open(wat_temp.name, 'w').write(wat)
         wat_to_wasm()
 
-        return self.run_vm(js, '--', wasm_temp.name)
+        return run_vm(js, '--', wasm_temp.name)
 
     def get_files(self):
         return [
