@@ -2151,6 +2151,16 @@ class PreserveImportsExportsJS(TestCaseHandler):
             note_ignored_vm_run('PreserveImportsExportsJS: features not compatible with js+wasm')
             return
 
+        # See if the testcase runs by itself, as some SlopFuzz cases error.
+        # This is not a fatal error, as we can still run part of it, sometimes,
+        # but note it.
+        initial_wasm = 'initial.wasm'
+        run([in_bin('wasm-opt'), wat_file, '-o', initial_wasm] + FEATURE_OPTS)
+        try:
+            D8().run_js(js_file, initial_wasm)
+        except Exception:
+            note_ignored_vm_run('PreserveImportsExportsJS: testcase errors')
+
         # Modify the initial wat to get the pre-optimizations wasm.
         pre_wasm = abspath('pre.wasm')
         run([in_bin('wasm-opt'), input] + FEATURE_OPTS + [
