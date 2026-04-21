@@ -2163,13 +2163,19 @@ class PreserveImportsExportsJS(TestCaseHandler):
 
         # Modify the initial wat to get the pre-optimizations wasm.
         pre_wasm = abspath('pre.wasm')
-        run([in_bin('wasm-opt'), input] + FEATURE_OPTS + [
+        gen_args = [
+            input,
             '-ttf',
             '--fuzz-preserve-imports-exports',
             '--initial-fuzz=' + wat_file,
             '-o', pre_wasm,
             '-g',
-        ])
+        ]
+        # We do not copy all of GEN_ARGS, as we don't need e.g. legalization.
+        if not NANS:
+            # TODO: do we also need this in each reduction step?
+            gen_args += ['--denan']
+        run([in_bin('wasm-opt')] + gen_args + FEATURE_OPTS)
 
         # We successfully generated pre_wasm; stash it for possible reduction
         # purposes later.
@@ -2212,8 +2218,9 @@ class PreserveImportsExportsJS(TestCaseHandler):
         post_vm = random.choice(vms)
         post = self.do_run(post_vm, js_file, post_wasm)
 
-        # Compare
-        compare(pre, post, 'PreserveImportsExportsJS')
+        # Compare, if we can.
+        if pre_vm.can_compare_to_other(post_vm):
+            compare(pre, post, 'PreserveImportsExportsJS')
 
     def do_run(self, vm, js, wasm):
         out = vm.run_js(js, wasm, checked=False)
@@ -2229,13 +2236,14 @@ class PreserveImportsExportsJS(TestCaseHandler):
                 # must also remove the specific trap, as Binaryen can change
                 # that.
                 line = 'TRAP'
-            elif 'wasm://' in line or '(<anonymous>)' in line:
+            elif line.startswith('    at '):
                 # This is part of a stack trace like
                 #
                 #     at wasm://wasm/12345678:wasm-function[42]:0x123
                 #     at (<anonymous>)
+                #     at file.js
                 #
-                # Ignore it, as traces differ based on optimizations.
+                # Ignore it, as details of traces differ based on optimizations.
                 continue
             cleaned.append(line)
         return '\n'.join(cleaned)
@@ -2312,7 +2320,7 @@ class BranchHintPreservation(TestCaseHandler):
         for line in out.splitlines():
             if line.startswith(LOG_BRANCH_PREFIX):
                 # (1:-1 strips away the '[', ']' at the edges)
-                _, _, id_, hint, actual = line[1:-1].split(' ')
+                _, _, actual, hint, id_ = line[1:-1].split(' ')
                 all_ids.add(id_)
                 if hint != actual:
                     # This hint was misleading.
@@ -2474,7 +2482,7 @@ class BranchHintPreservation(TestCaseHandler):
                 continue
             for line in group:
                 if line.startswith(LOG_BRANCH_PREFIX):
-                    _, _, id_, hint, actual = line[1:-1].split(' ')
+                    _, _, actual, hint, id_ = line[1:-1].split(' ')
                     hint = int(hint)
                     actual = int(actual)
                     assert hint in (0, 1)
