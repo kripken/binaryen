@@ -453,7 +453,7 @@ class ParsingFixer(Fixer):
         self.seed = seed
 
     def test(self):
-        proc = run_fuzzer(self.seed)
+        proc = run_fuzzer_proc(self.seed)
         if proc.returncode:
             return proc
 
