@@ -533,8 +533,6 @@ class WatParsingFixer(ParsingFixer):
         return [(wat_temp.name, "emitted wat that does not parse")]
 
 
-# We can't expect all testcases to execute without error - and we do want to
-# test some error handling - but a significant amount should avoid erroring.
 def ExecutionFixer(SeededFixer):
     what = "JS+wasm testcase error when executed"
 
@@ -623,8 +621,19 @@ def fix_fuzzer_iter():
         fixed = JSParsingFixer(seed).fix() or fixed
         fixed = WatParsingFixer(seed).fix() or fixed
 
-    # Check at least some testcases run without error.
-    fixed = ExecutionFixer().fix() or fixed
+    # We can't expect all testcases to execute without error - and we do want to
+    # test some error handling - but a significant amount should avoid erroring.
+    errored = 0
+    erroring_seed = None
+    for _ in range(NUM_VALIDATIONS):
+        seed = random_seed()
+        if ExecutionFixer(seed).test().returncode:
+            errored += 1
+            erroring_seed = seed
+
+    if errored / NUM_VALIDATIONS > 0.25:
+        # Too many errored. Fix up one of them.
+        fixed = ExecutionFixer(erroring_seed).fix() or fixed
 
     return fixed
 
