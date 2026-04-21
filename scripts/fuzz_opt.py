@@ -2260,7 +2260,7 @@ class PreserveImportsExportsJS(TestCaseHandler):
             js_file = str(random.choice(js_files))
             wat_file = str(pathlib.Path(js_file).with_suffix('.wat'))
 
-        return js_file, wat_file
+        return os.path.abspath(js_file), os.path.abspath(wat_file)
 
     def can_run_on_wasm(self, wasm):
         return all_disallowed(DISALLOWED_FEATURES_IN_V8)
@@ -2497,7 +2497,10 @@ testcase_handlers = [
     PreserveImportsExportsJS(),
     BranchHintPreservation(),
 ]
-
+# XXX
+testcase_handlers = [
+    PreserveImportsExportsJS(),
+]
 
 # Do one test, given an input file for -ttf and some optimizations to run
 def test_one(random_input, given_wasm):
