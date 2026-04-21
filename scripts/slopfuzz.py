@@ -521,6 +521,11 @@ class WatParsingFixer(ParsingFixer):
     def get_files(self):
         return [(wat_temp.name, "emitted wat that does not parse")]
 
+# We can't expect all testcases to execute without error - and we do want to
+# test some error handling - but a significant amount should avoid erroring.
+
+def ExecutionFixer(Fixer):
+
 
 # How many random samples to validate with
 NUM_VALIDATIONS = 20 # XXX moar
@@ -582,9 +587,8 @@ def fix_fuzzer_iter():
         fixed = JSParsingFixer(seed).fix() or fixed
         fixed = WatParsingFixer(seed).fix() or fixed
 
-    # Check at least some testcases run without error. We can't expect them all
-    # to, but the majority should.
-    2/0
+    # Check at least some testcases run without error.
+    fixed = ExecutionFixer().fix() or fixed
 
     return fixed
 
@@ -598,7 +602,10 @@ def fix_fuzzer():
             return
         fixed = True
 
+    print("❌ Failed to fix fizzer")
+    sys.exit(1)
 
+    
 # Generate the initial fuzzer
 
 INITIAL_GENERATION_PROMPT = '''
