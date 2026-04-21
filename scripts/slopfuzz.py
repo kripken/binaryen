@@ -632,6 +632,7 @@ def fix_fuzzer_iter():
             erroring_seed = seed
 
     if errored / NUM_VALIDATIONS > 0.25:
+        print(f"❌ Too many execution errors: {int(100 * errored / NUM_VALIDATIONS)}%")
         # Too many errored. Fix up one of them.
         fixed = ExecutionFixer(erroring_seed).fix() or fixed
 
