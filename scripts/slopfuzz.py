@@ -677,17 +677,20 @@ Example testcases:
 '''
 
 
-def generate_initial_fuzzer():
-    print("💼 Generating initial fuzzer")
-
+def get_examples():
     # Use all our js_wasm testcases as initial examples.
     js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
     examples = []
     for js_file in js_files:
         examples.append(str(js_file))
         examples.append(str(pathlib.Path(js_file).with_suffix('.wat')))
+    return examples
 
-    prompt = INITIAL_GENERATION_PROMPT + bundle_files(examples)
+
+def generate_initial_fuzzer():
+    print("💼 Generating initial fuzzer")
+
+    prompt = INITIAL_GENERATION_PROMPT + bundle_files(get_examples())
 
     client = GeminiClient()
     response = client.one_off(prompt)
