@@ -576,14 +576,14 @@ def fix_fuzzer_iter():
                 # TODO LLM fix
                 3/0
 
-    # Check the testcases parse.
-    for seed, output in outputs.items():
-        js, wat = output
-
+    # Check testcases parse.
+    for _ in range(NUM_VALIDATIONS):
+        seed = random_seed()
         fixed = JSParsingFixer(seed).fix() or fixed
         fixed = WatParsingFixer(seed).fix() or fixed
 
-    # Check at least some testcases run without error.
+    # Check at least some testcases run without error. We can't expect them all
+    # to, but the majority should.
     2/0
 
     return fixed
