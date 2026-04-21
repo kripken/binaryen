@@ -343,19 +343,32 @@ DIFF_FORMAT = f'''\
 
 # Returns an error if we failed to update.
 def update_fuzzer(diff):
-    diff = diff.strip()
-    if not diff.startswith(DIFF_PREFIX):
-        return f'Did not find the right prefix ({DIFF_PREFIX})'
-    if diff.count(DIFF_MIDDLE) != 1:
-        return f'The diff separator ({DIFF_MIDDLE}) must appear exactly once'
-    if not diff.endswith(DIFF_POSTFIX):
-        return f'Did not find the right post ({DIFF_POSTFIX})'
-
-    diff = diff[len(DIFF_PREFIX):-len(DIFF_POSTFIX)]
-    existing, improved = diff.split(f'\n{DIFF_MIDDLE}\n')
+    if DIFF_PREFIX not in diff:
+        return f"Did not find a diff to apply (should start with `{DIFF_PREFIX}`)"
 
     fuzzer = read_fuzzer()
-    fuzzer = fuzzer.replace(existing, improved)
+    start = 0
+    while True:
+        start = diff.find(DIFF_PREFIX, start)
+        if start < 0:
+            break
+        mid = diff.find(DIFF_MIDDLE, start)
+        if mid < 0:
+            return f"`{DIFF_MIDDLE}` not found after `{DIFF_PREFIX}`"
+        end = diff.find(DIFF_POSTFIX, mid)
+        if end < 0:
+            return f"`{DIFF_POSTFIX}` not found after `{DIFF_MIDDLE}`"
+        
+        existing = diff[start + len(DIFF_PREFIX) + 1:mid]
+        improved = diff[mid + len(DIFF_MIDDLE) + 1:end]
+
+        print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX
+
+        if existing not in fuzzer:
+            return f"`Diff asks us to replace:\n```\n{existing}\n```\nBut this does not exist."
+
+        fuzzer = fuzzer.replace(existing, improved)
+
     write_fuzzer(fuzzer)
 
 
