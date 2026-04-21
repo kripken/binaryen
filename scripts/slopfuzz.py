@@ -35,8 +35,8 @@ params = None
 # Execution
 
 
-def run(*args):
-    if params.verbose:
+def run(*args, quiet=False):
+    if params.verbose and not quiet:
         print("  ", *args)
     return subprocess.run(list(args),
                           stdout=subprocess.PIPE,
@@ -236,7 +236,7 @@ def wat_to_wasm():
 
 # Run the fuzzer on a seed, returning the process.
 def run_fuzzer_proc(seed):
-    return run(sys.executable, params.fuzzer_file, str(seed))
+    return run(sys.executable, params.fuzzer_file, str(seed), quiet=True)
 
 
 # Run the fuzzer on a seed. Returns the raw js and wat output.
@@ -453,7 +453,7 @@ class ParsingFixer(Fixer):
         self.seed = seed
 
     def test(self):
-        proc = run_fuzzer(seed)
+        proc = run_fuzzer(self.seed)
         if proc.returncode:
             return proc
 
