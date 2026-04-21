@@ -170,7 +170,7 @@ class GeminiClient:
 def bundle_files(files):
     chunks = []
     for item in files:
-        if item is tuple:
+        if type(item) is tuple:
             filename, comment = item
         else:
             filename = item
