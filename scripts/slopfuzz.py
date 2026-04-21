@@ -35,8 +35,8 @@ params = None
 # Execution
 
 
-def run(*args, quiet=False):
-    if params.verbose and not quiet:
+def run(*args):
+    if params.verbose:
         print("  ", *args)
     return subprocess.run(list(args),
                           stdout=subprocess.PIPE,
@@ -44,11 +44,11 @@ def run(*args, quiet=False):
                           text=True)
 
 
-def run_wasm_opt(*args, quiet=False):
-    return run(in_bin('wasm-opt'), *args, quiet=quiet)
+def run_wasm_opt(*args):
+    return run(in_bin('wasm-opt'), *args)
 
 
-def run_vm(*args, quiet=False):
+def run_vm(*args):
     args = [
         params.vm,
         '--wasm-staging',
@@ -57,12 +57,12 @@ def run_vm(*args, quiet=False):
         '--experimental-wasm-fp16',
         '--experimental-wasm-custom-descriptors',
         '--experimental-wasm-js-interop',
-    ] + args
-    return run(*args, quiet=quiet)
+    ] + list(args)
+    return run(*args)
 
 
-def run_node(*args, quiet=False):
-    return run('node', *args, quiet=quiet)
+def run_node(*args):
+    return run('node', *args)
 
 
 
@@ -248,7 +248,7 @@ def wat_to_wasm():
 
 # Run the fuzzer on a seed, returning the process.
 def run_fuzzer_proc(seed):
-    return run(sys.executable, params.fuzzer_file, str(seed), quiet=True)
+    return run(sys.executable, params.fuzzer_file, str(seed))
 
 
 # Run the fuzzer on a seed. Returns the raw js and wat output.
@@ -518,7 +518,7 @@ class JSParsingFixer(ParsingFixer):
 
     def parse(self, js, wat):
         open(js_temp.name, 'w').write(js)
-        return run_node('--check', js_temp.name, quiet=True)
+        return run_node('--check', js_temp.name)
 
     def get_files(self):
         return [(js_temp.name, "emitted JavaScript that does not parse")]
@@ -529,7 +529,7 @@ class WatParsingFixer(ParsingFixer):
 
     def parse(self, js, wat):
         open(wat_temp.name, 'w').write(wat)
-        return run_wasm_opt(wat_temp.name, '-all', quiet=True)
+        return run_wasm_opt(wat_temp.name, '-all')
 
     def get_files(self):
         return [(wat_temp.name, "emitted wat that does not parse")]
@@ -554,7 +554,7 @@ class ExecutionFixer(SeededFixer):
         open(wat_temp.name, 'w').write(wat)
         wat_to_wasm()
 
-        return run_vm(js, '--', wasm_temp.name)
+        return run_vm(js_temp.name, '--', wasm_temp.name)
 
     def get_files(self):
         return [
