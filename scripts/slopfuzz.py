@@ -44,16 +44,16 @@ def run(*args, quiet=False):
                           text=True)
 
 
-def run_wasm_opt(*args):
-    return run(in_bin('wasm-opt'), *args)
+def run_wasm_opt(*args, quiet=False):
+    return run(in_bin('wasm-opt'), *args, quiet=quiet)
 
 
-def run_vm(*args):
-    return run(params.vm, *args)
+def run_vm(*args, quiet=False):
+    return run(params.vm, *args, quiet=quiet)
 
 
-def run_node(*args):
-    return run('node', *args)
+def run_node(*args, quiet=False):
+    return run('node', *args, quiet=quiet)
 
 
 
@@ -505,7 +505,7 @@ class JSParsingFixer(ParsingFixer):
 
     def parse(self, js, wat):
         open(js_temp.name, 'w').write(js)
-        return run_node('--check', js_temp.name)
+        return run_node('--check', js_temp.name, quiet=True)
 
     def get_files(self):
         return [(js_temp.name, "emitted JavaScript that does not parse")]
@@ -516,7 +516,7 @@ class WatParsingFixer(ParsingFixer):
 
     def parse(self, js, wat):
         open(wat_temp.name, 'w').write(wat)
-        return run_wasm_opt(wat_temp.name, '-all')
+        return run_wasm_opt(wat_temp.name, '-all', quiet=True)
 
     def get_files(self):
         return [(wat_temp.name, "emitted wat that does not parse")]
