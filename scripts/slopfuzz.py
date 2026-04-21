@@ -402,7 +402,7 @@ class Fixer:
         if not proc.returncode:
             return False
 
-        problem = f"{what} is failing"
+        problem = f"{self.what} is failing"
         print(f"❌ {problem}")
 
         prompt = FIX_EXISTING_FUZZER_INTRO
@@ -429,12 +429,12 @@ class Fixer:
 
             proc = self.test()
             if not proc.returncode:
-                print(f"✅ {what} fixed")
+                print(f"✅ {self.what} fixed")
                 return True
 
             open(error_temp.name, 'w').write(proc.stdout)
 
-            prompt = f'{what} is still not fixed. Here are the details:\n\n'
+            prompt = f'{self.what} is still not fixed. Here are the details:\n\n'
             prompt += bundle_files(self.get_files() + [error_temp.name])
             client.chat(prompt)
 
