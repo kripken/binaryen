@@ -448,11 +448,11 @@ class Fixer:
 
     # Checks for a problem, returning a subprocess execution result.
     def test(self):
-        raise "unimplemented"
+        raise Exception("unimplemented")
 
     # Returns a list of the files to bundle for the repro.
     def get_files(self):
-        raise "unimplemented"
+        raise Exception("unimplemented")
 
     # Generic loop to fix a problem. Returns true if we fixed something.
     def fix(self):
