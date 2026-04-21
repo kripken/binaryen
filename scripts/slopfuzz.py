@@ -534,7 +534,7 @@ class WatParsingFixer(ParsingFixer):
         return [(wat_temp.name, "emitted wat that does not parse")]
 
 
-def ExecutionFixer(SeededFixer):
+class ExecutionFixer(SeededFixer):
     what = "JS+wasm testcase error when executed"
 
     def test(self):
