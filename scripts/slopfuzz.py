@@ -234,10 +234,16 @@ def wat_to_wasm():
     run_wasm_opt('-all', wat_temp.name, '-o', wasm_temp.name)
 
 
+# Run the fuzzer on a seed, returning the process.
+def run_fuzzer_proc(seed):
+    return run(sys.executable, params.fuzzer_file, str(seed))
+
+
 # Run the fuzzer on a seed. Returns the raw js and wat output.
 def run_fuzzer(seed):
-    cmd = [sys.executable, params.fuzzer_file, str(seed)]
-    output = subprocess.check_output(cmd, text=True)
+    proc = run_fuzzer_proc(seed)
+    assert proc.returncode == 0
+    output = proc.stdout
     assert output.count(JS_WAT_SEP) == 1
     js, wat = output.split(JS_WAT_SEP)
     return js, wat
@@ -375,75 +381,112 @@ If you cannot find a fix, emit instead the word "FAILURE" in capital letters,
 followed by explanation of the problems you hit.
 
 '''
+# TODO: Add the examples again, as a reminder?
 
 
-# Generic loop to fix a problem.
-#
-#  @param what - a description, for logging (e.g. "JavaScript parsing")
-#  @param initial - the initial data. sent to test()
-#  @param test - checks for a problem, returning a subprocess execution result
-#  @param get_files - returns a list of the files to bundle for the repro
-def fix_in_loop(what, initial, test, get_files):
-    proc = test(initial)
-    if not proc.returncode:
-        return
+# A process-like object with a returncode and an error (in stdout; we assume
+# stdout and stderr were merged).
+class ProcError:
+    def __init__(self, error):
+        self.returncode = 1
+        self.stdout = error
 
-    problem = f"{what} is failing"
-    print(f"❌ {problem}")
 
-    prompt = FIX_EXISTING_FUZZER_INTRO
-    prompt += f'{problem}. The error follows the contents.\n\n"
-    prompt += bundle_files(get_files()+ [error_temp.name, params.fuzzer_file])
+class Fixer:
+    what = 'Problem name'
 
-    client = GeminiClient()
-    response = client.chat(prompt)
+    # Checks for a problem, returning a subprocess execution result.
+    def test(self):
+        raise "unimplemented"
 
-    # Loop on LLM responses.
-    for i in range(MAX_FIX_ITERS):
-        print("    (fix attempt {i})")
+    # Returns a list of the files to bundle for the repro.
+    def get_files(self):
+        raise "unimplemented"
 
-        if response.startswith(FAILURE):
-            print("❌ LLM gave up")
-            sys.exit(1)
-
-        # Apply the diff and try the testcase again.
-        error = update_fuzzer(response)
-        if error:
-            client.chat('Your diff is not in the proper format:\n{DIFF_FORMAT}\n\n(error: {error})\n')
-            continue
-
-        retest():
-            
-        try:
-            js, wat = run_fuzzer(seed)
-        except subprocess.CalledProcessError:
-            print("❌ Fuzzer crashes, fixing...")
-            client.chat('After your diff, the fuzzer crashes')
-            continue
-
-        open(js_temp.name, 'w').write(js)
-        proc = test()
+    # Generic loop to fix a problem.
+    def fix_in_loop(self):
+        proc = self.test()
         if not proc.returncode:
-            print("✅ JS parsing fixed")
             return
 
+        problem = f"{what} is failing"
+        print(f"❌ {problem}")
+
+        prompt = FIX_EXISTING_FUZZER_INTRO
+        prompt += f'{problem}. The error follows the contents.\n\n"
         open(error_temp.name, 'w').write(proc.stdout)
+        prompt += bundle_files(self.get_files() + [error_temp.name, params.fuzzer_file])
 
-        prompt = 'The JavaScript still does not parse. '
-        prompt += 'Here is the JS and error:\n\n'
-        prompt += bundle_files([js_temp.name, error_temp.name])
-        client.chat(prompt)
+        client = GeminiClient()
+        response = client.chat(prompt)
+
+        # Loop on LLM responses.
+        for i in range(MAX_FIX_ITERS):
+            print("    (fix attempt {i})")
+
+            if response.startswith(FAILURE):
+                print("❌ LLM gave up")
+                sys.exit(1)
+
+            # Apply the diff and try the testcase again.
+            error = update_fuzzer(response)
+            if error:
+                client.chat('Your diff is not in the proper format:\n{DIFF_FORMAT}\n\n(error: {error})\n')
+                continue
+
+            proc = self.test()
+            if not proc.returncode:
+                print(f"✅ {what} fixed")
+                return
+
+            proc = test()
+            if not proc.returncode:
+                return
+
+            open(error_temp.name, 'w').write(proc.stdout)
+
+            prompt = f'{what} is still not fixed. Here are the details:\n\n'
+            prompt += bundle_files(self.get_files() + [error_temp.name])
+            client.chat(prompt)
 
 
-def ensure_js_parsing(seed, js):
-    open(js_temp.name, 'w').write(js)
+class JSParsingFixer(Fixer):
+    what = "JavaScript parsing"
 
-    def test():
+    def test(self):
+        proc = run_fuzzer(seed)
+        if proc.returncode:
+            return proc
+
+        output = proc.stdout
+        if output.count(JS_WAT_SEP) != 1:
+            return ProcError("Separator between JS and wasm ({JS_WAT_SEP}) not found")
+        js, wat = output.split(JS_WAT_SEP)
+
+        return self.parse(js, wat)
+
+
+class JSParsingFixer(ParsingFixer):
+    what = "JavaScript parsing"
+
+    def parse(self, js, wat):
+        open(js_temp.name, 'w').write(js)
         return check_js_parsing(js_temp.name)
 
-    def get_files():
+    def get_files(self):
         return [js_temp.name]
-...
+
+
+class WatParsingFixer(ParsingFixer):
+    what = "WebAssembly text parsing"
+
+    def parse(self, js, wat):
+        open(wat_temp.name, 'w').write(wat)
+        return check_wat_parsing(wat_temp.name)
+
+    def get_files(self):
+        return [wat_temp.name]
+
 
 # How many random samples to validate with
 NUM_VALIDATIONS = 20 # XXX moar
@@ -503,8 +546,8 @@ def fix_fuzzer_iter():
     for seed, output in outputs.items():
         js, wat = output
 
-        fixed = ensure_js_parsing(seed, js) or fixed
-        fixed = ensure_wat_parsing(seed, js) or fixed
+        fixed = ensure_js_parsing(seed) or fixed
+        fixed = ensure_wat_parsing(seed) or fixed
 
     # Check at least some testcases run without error.
     2/0
