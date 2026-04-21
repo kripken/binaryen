@@ -413,7 +413,7 @@ class Fixer:
         print(f"❌ {problem}")
 
         prompt = FIX_EXISTING_FUZZER_INTRO
-        prompt += f'{problem}. The error follows the contents.\n\n"
+        prompt += f"{problem} is broken. The error follows the contents.\n\n"
         open(error_temp.name, 'w').write(proc.stdout)
         prompt += bundle_files(self.get_files() + [error_temp.name, params.fuzzer_file])
 
