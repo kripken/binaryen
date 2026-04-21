@@ -582,7 +582,7 @@ NUM_VALIDATIONS = 20 # XXX moar
 # Tests various things and fixes the fuzzer. This does one forward iteration,
 # i.e., it does not backtrack to previous checks after fixing something. Returns
 # True if we fixed something.
-def fix_fuzzer_iter():
+def validate_fuzzer_iter():
     fixed = False
 
     # A map of seeds to the fuzzer's outputs (pairs of js, wat).
@@ -653,10 +653,10 @@ def fix_fuzzer_iter():
     return fixed
 
 
-def fix_fuzzer():
+def validate_fuzzer():
     fixed = False
     for _ in range(MAX_FIX_ITERS):
-        if not fix_fuzzer_iter():
+        if not validate_fuzzer_iter():
             if fixed:
                 print("✅ Fuzzer was successfully fixed")
             return
@@ -700,30 +700,29 @@ def get_examples():
 
 
 def generate_initial_fuzzer():
-    print("💼 Generating initial fuzzer")
-
     prompt = INITIAL_GENERATION_PROMPT + bundle_files(get_examples())
 
     client = GeminiClient()
     response = client.one_off(prompt)
     write_fuzzer(response)
 
-    fix_fuzzer()
+    validate_fuzzer()
 
 
 # Improve the fuzzer in a single iteration of the main loop
 
 def improve_fuzzer():
     print("💼 Improving fuzzer by doing ..?")
-    0/4
+    4/0
 
 
 # Main workflow.
 def work():
     # Create the initial fuzzer, if there is none.
     if not os.path.exists(params.fuzzer_file):
+        print("💼 Generating initial fuzzer")
         generate_initial_fuzzer()
-        fix_fuzzer()
+        validate_fuzzer()
     else:
         print("💼 Improving existing fuzzer")
 
@@ -732,7 +731,7 @@ def work():
         for i in range(params.max_iters):
             print(f"⏱️  Improving fuzzer, iteration {i}")
             improve_fuzzer()
-            fix_fuzzer()
+            validate_fuzzer()
     except KeyboardInterrupt:
         print("🛑 Stopping by user request.")
 
