@@ -500,6 +500,18 @@ class SeededFixer(Fixer):
         self.seed = seed
 
 
+class CrashFixer(SeededFixer):
+    what = "fuzzer execution"
+
+    extra_explanation = "The fuzzer itself is crashing\n"
+
+    def test(self):
+        return run_fuzzer_proc(self.seed)
+
+    def get_files(self):
+        return []  # No addiitonal files needed
+
+
 class ParsingFixer(SeededFixer):
     what = "JavaScript parsing"
 
@@ -598,12 +610,14 @@ def validate_fuzzer_iter():
             continue
 
         # Check we do not crash when generating testcases.
+        fixed = CrashFixer(seed).fix() or fixed
+
+        # Get the output after we no longer crash.
         try:
             output = run_fuzzer(seed)
         except subprocess.CalledProcessError:
-            print("❌ Fuzzer crashes, fixing...")
-            # TODO LLM fix
-            3/0
+            print("❌ Fuzzer crashes after fix")
+            sys.exit(1)
 
         outputs[seed] = output
 
