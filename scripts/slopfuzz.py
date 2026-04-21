@@ -509,6 +509,9 @@ class Fixer:
             ])
             response = client.chat(prompt)
 
+        print("❌ Failed to fix the issue in a reasonable number of iterations")
+        sys.exit(1)
+
 
 class SeededFixer(Fixer):
     def __init__(self, seed):
