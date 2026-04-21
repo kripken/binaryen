@@ -329,45 +329,47 @@ MAX_FIX_ITERS = 10
 
 # The fuzzer is updated using diffs. We use a simple format to avoid the LLM
 # getting line numbers/counts wrong.
-DIFF_PREFIX = '<<<<<<< SEARCH'
+DIFF_START = '<<<<<<< SEARCH'
 DIFF_MIDDLE = '======='
-DIFF_POSTFIX = '>>>>>>> REPLACE'
+DIFF_END = '>>>>>>> REPLACE'
 DIFF_FORMAT = f'''\
-{DIFF_PREFIX}
+{DIFF_START}
 [Existing code that needs to change]
 {DIFF_MIDDLE}
 [Improved code]
-{DIFF_POSTFIX}
+{DIFF_END}
 '''
 
 
 # Returns an error if we failed to update.
 def update_fuzzer(diff):
-    if DIFF_PREFIX not in diff:
-        return f"Did not find a diff to apply (should start with `{DIFF_PREFIX}`)"
+    if DIFF_START not in diff:
+        return f"Did not find a diff to apply (should start with `{DIFF_START}`)"
 
     fuzzer = read_fuzzer()
     start = 0
     while True:
-        start = diff.find(DIFF_PREFIX, start)
+        start = diff.find(DIFF_START, start)
         if start < 0:
             break
-        mid = diff.find(DIFF_MIDDLE, start)
-        if mid < 0:
-            return f"`{DIFF_MIDDLE}` not found after `{DIFF_PREFIX}`"
-        end = diff.find(DIFF_POSTFIX, mid)
+        middle = diff.find(DIFF_MIDDLE, start)
+        if middle < 0:
+            return f"`{DIFF_MIDDLE}` not found after `{DIFF_START}`"
+        end = diff.find(DIFF_END, middle)
         if end < 0:
-            return f"`{DIFF_POSTFIX}` not found after `{DIFF_MIDDLE}`"
+            return f"`{DIFF_END}` not found after `{DIFF_MIDDLE}`"
         
-        existing = diff[start + len(DIFF_PREFIX) + 1:mid]
-        improved = diff[mid + len(DIFF_MIDDLE) + 1:end]
+        existing = diff[start + len(DIFF_START) + 1:middle]
+        improved = diff[middle + len(DIFF_MIDDLE) + 1:end]
 
-        print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX
+        print(f"replacing\n{existing}\nwith\n{improved}\n") # XXX debuggingg
 
         if existing not in fuzzer:
             return f"`Diff asks us to replace:\n```\n{existing}\n```\nBut this does not exist."
 
         fuzzer = fuzzer.replace(existing, improved)
+        
+        start = end + len(DIFF_END)
 
     write_fuzzer(fuzzer)
 
