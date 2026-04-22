@@ -494,8 +494,9 @@ class Fixer:
         if self.extra_explanation:
             prompt += f"\n{self.extra_explanation}\n\n"
         open(error_temp.name, 'w').write(proc.stdout)
-        prompt += bundle_files(self.get_files() + [
+        prompt += bundle_files([
             (error_temp.name, 'error output'),
+        ] + self.get_files() + [
             (params.fuzzer_file, 'fuzzer program'),
         ])
 
@@ -520,9 +521,9 @@ class Fixer:
             open(error_temp.name, 'w').write(proc.stdout)
 
             prompt = f'{self.what} is still not fixed. Here are the details:\n\n'
-            prompt += bundle_files(self.get_files() + [
+            prompt += bundle_files([
                 (error_temp.name, 'error output'),
-            ])
+            ] + self.get_files())
             response = self.get_response(client, prompt)
 
         print("❌ Failed to fix the issue in a reasonable number of iterations")
@@ -610,7 +611,7 @@ class WatParsingFixer(ParsingFixer):
 
         return [
             (wat_temp.name, "emitted wat that does not parse")
-        ]
+        ] + wat_examples
 
 
 class ExecutionFixer(SeededFixer):
