@@ -363,7 +363,9 @@ DIFF_FORMAT = f'''\
 Multiple diff chunks like this can appear. Make sure to format them all
 properly. Try to use several small diff chunks where possible, to keep the size
 of the unchanged text in the diff small (the more unchanged text is in a diff
-chunk, the greater the chance of an error).
+chunk, the greater the chance of an error). Double-check that you are quoting
+correctly the code you want to change in the first part of each diff chunk, as
+even a single character difference will mean we cannot apply the diff.
 '''
 
 BAD_DIFF_PROMPT = f"""
