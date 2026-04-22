@@ -403,8 +403,7 @@ def update_fuzzer(diff):
              prompt += f"\n```\n{existing}\n```\n"
              prompt += "\nCheck very carefully that your diff is valid. As a\n"
              prompt += "reminder, the fuzzer we are updating is currently this,\n"
-             prompt += "and your diff should exactly mention things there:\n"
-             prompt += "
+             prompt += "and your diff should exactly mention things there:\n\n"
              prompt += bundle_files([params.fuzzer_file])
              return prompt
 
