@@ -416,6 +416,7 @@ def update_fuzzer(diff):
 
 # Functions that check for things, and fix them as needed
 
+STATUS = 'STATUS'
 FAILURE = 'FAILURE'
 
 FIX_EXISTING_FUZZER_INTRO = '''
@@ -427,18 +428,29 @@ The fuzzer has a problem that I want you to fix. The fuzzer itself is attached
 below, as well the seed that reproduces the bug, and the relevant part of the
 output that shows the problem.
 
-Write a diff for the fuzzer that fixes the problem, with no other text. I will
-apply that diff and run the fuzzer with the seed, then verify that the output
-is correct.
+Write a diff for the fuzzer that fixes the problem. I will apply that diff and
+run the fuzzer with the seed, then verify that the output is correct.
 
-Emit the diff in the following form:
+Before the diff, emit a status line beginning with `STATUS: ` followed by a
+short, one line explanation of what you were just asked to do and what you are
+doing. Here is an example of the status line:
+
+STATUS: The fuzzer crashes. I found the problem in the function `foo` and am providing a diff to fix it.
+
+Another example:
+
+STATUS: The fuzzer's output JS does not validate even after my last fix. I found another problem in type emitting and am providing a diff to fix it.
+
+Respond with such a status line every time you respond during our chat.
+
+After the status, emit two empty lines and then the diff, in the following form:
 
 {DIFF_FORMAT}
 
 If you cannot find a fix (because my instructions are not clear enough, or you
 think something is going wrong in the tools we am using, or some other problem
-that you can't get around), emit instead the word "FAILURE" in capital letters,
-followed by explanation.
+that you can't get around), emit instead the word `FAILURE: ` and then a
+detailed explanation.
 
 '''
 # TODO: Add the examples again, as a reminder?
@@ -487,20 +499,16 @@ class Fixer:
         ])
 
         client = GeminiClient()
-        response = client.chat(prompt)
+        response = self.get_response(client, prompt)
 
         # Loop on LLM responses.
         for i in range(MAX_FIX_ITERS):
             print(f"    (fix attempt {i})")
 
-            if response.startswith(FAILURE):
-                print("❌ LLM gave up")
-                sys.exit(1)
-
             # Apply the diff and try the testcase again.
             prompt = update_fuzzer(response)
             if prompt:
-                response = client.chat(prompt)
+                response = self.get_response(client, prompt)
                 continue
 
             proc = self.test()
@@ -514,10 +522,28 @@ class Fixer:
             prompt += bundle_files(self.get_files() + [
                 (error_temp.name, 'error output'),
             ])
-            response = client.chat(prompt)
+            response = self.get_response(client, prompt)
 
         print("❌ Failed to fix the issue in a reasonable number of iterations")
         sys.exit(1)
+
+    # Parse the status line out and log that, then return the rest.
+    def get_response(self, client, prompt):
+        response = client.chat(prompt)
+
+        if response.startswith(FAILURE):
+            print("❌ LLM gave up")
+            sys.exit(1)
+
+        if not response.startswith(STATUS):
+            print("❌ LLM mentioned no status")
+            sys.exit(1)
+
+        lines = response.splitlines()
+        status = lines[0]
+        response = '\n'.join(lines[1:])
+        print(f"💼 {status}")
+        return response
 
 
 class SeededFixer(Fixer):
