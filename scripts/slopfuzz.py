@@ -437,9 +437,11 @@ doing. Here is an example of the status line:
 
 STATUS: The fuzzer crashes. I found the problem in the function `foo` and am providing a diff to fix it.
 
-Another example:
+More examples:
 
 STATUS: The fuzzer's output JS does not validate even after my last fix. I found another problem in type emitting and am providing a diff to fix it.
+
+STATUS: There was an error in my last diff. I found a typo and am providing a fixed diff.
 
 Respond with such a status line every time you respond during our chat.
 
