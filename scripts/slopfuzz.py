@@ -654,7 +654,7 @@ NUM_VALIDATIONS = 50
 
 # How many runtime-erroring testcases we allow. Some amount of errors is ok to
 # tolerate as it is needed to cover error paths.
-MAX_ERRORS = 0.25
+MAX_ERRORS = 0.1
 
 # Tests various things and fixes the fuzzer. This does one forward iteration,
 # i.e., it does not backtrack to previous checks after fixing something. Returns
