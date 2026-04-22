@@ -797,8 +797,8 @@ def build_fuzzer():
     try:
         for i in range(params.max_iters):
             print(f"⏱️  Improving fuzzer, iteration {i}")
-            improve_fuzzer()
             validate_fuzzer()
+            improve_fuzzer()
     except KeyboardInterrupt:
         print("🛑 Stopping by user request.")
 
