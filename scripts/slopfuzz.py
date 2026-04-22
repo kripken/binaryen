@@ -68,7 +68,7 @@ def run_node(*args):
 
 # Logging
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -652,6 +652,9 @@ class ExecutionFixer(SeededFixer):
 # How many random samples to validate with
 NUM_VALIDATIONS = 50
 
+# How many runtime-erroring testcases we allow. Some amount of errors is ok to
+# tolerate as it is needed to cover error paths.
+MAX_ERRORS = 0.25
 
 # Tests various things and fixes the fuzzer. This does one forward iteration,
 # i.e., it does not backtrack to previous checks after fixing something. Returns
@@ -721,7 +724,7 @@ def validate_fuzzer_iter():
             errored += 1
             erroring_seed = seed
 
-    if errored / NUM_VALIDATIONS > 0.25:
+    if errored / NUM_VALIDATIONS > MAX_ERRORS:
         print(f"❌ Too many execution errors: {int(100 * errored / NUM_VALIDATIONS)}%")
         # Too many errored. Fix up one of them.
         fixed = ExecutionFixer(erroring_seed).fix() or fixed
