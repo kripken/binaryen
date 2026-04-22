@@ -360,7 +360,10 @@ DIFF_FORMAT = f'''\
 [Improved code]
 {DIFF_END}
 
-(Multiple diff chunks like this can appear. Make sure to format them all properly.)
+Multiple diff chunks like this can appear. Make sure to format them all
+properly. Try to use several small diff chunks where possible, to keep the size
+of the unchanged text in the diff small (the more unchanged text is in a diff
+chunk, the greater the chance of an error).
 '''
 
 BAD_DIFF_PROMPT = f"""
