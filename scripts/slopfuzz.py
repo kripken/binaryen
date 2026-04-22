@@ -455,7 +455,6 @@ that you can't get around), emit instead the word `FAILURE: ` and then a
 detailed explanation.
 
 '''
-# TODO: Add the examples again, as a reminder?
 
 
 # A process-like object with a returncode and an error (in stdout; we assume
@@ -591,18 +590,27 @@ class JSParsingFixer(ParsingFixer):
         return run_node('--check', js_temp.name)
 
     def get_files(self):
-        return [(js_temp.name, "emitted JavaScript that does not parse")]
+        return [
+            (js_temp.name, "emitted JavaScript that does not parse")
+        ]
 
 
 class WatParsingFixer(ParsingFixer):
-    what = "WebAssembly text parsing"
+    what = "WebAssembly text (wat) parsing"
+
+    extra_explanation = "Attached below are examples of valid wat files, which might help.\n"
 
     def parse(self, js, wat):
         open(wat_temp.name, 'w').write(wat)
         return run_wasm_opt(wat_temp.name, '-all')
 
     def get_files(self):
-        return [(wat_temp.name, "emitted wat that does not parse")]
+        wat_examples = [(e, "example valid wat") for e in get_examples() if e.endswith('.wat')]
+        assert wat_examples
+
+        return [
+            (wat_temp.name, "emitted wat that does not parse")
+        ]
 
 
 class ExecutionFixer(SeededFixer):
