@@ -1,5 +1,3 @@
-// https://github.com/WebAssembly/custom-descriptors/blob/main/proposals/custom-descriptors/Overview.md
-
 // Support
 
 function logValue(x) {
@@ -40,14 +38,13 @@ let imports = {
         "log-f64": logValue,
         "log-anyref": logRef,
         "log-funcref": logRef,
-        "log-contref": logRef,
         "log-externref": logRef,
     },
 };
 
 let compileOptions = { builtins: ["js-prototypes"] };
 
-let buffer = readbuffer(arguments[0]); // XXX modified to read the wasm filename
+let buffer = readbuffer(arguments[0]);
 
 let { module, instance } =
     await WebAssembly.instantiate(buffer, imports, compileOptions);
