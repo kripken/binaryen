@@ -919,7 +919,8 @@ def improve_with_globals():
     global examples_shown
     examples_shown += new_examples
 
-    if '" (global' in read_fuzzer():
+    export_lines = [l for l in read_fuzzer().splitlines() if '(export ' in l]
+    if '" (global' in '\n'.join(export_lines):
         print("💼 Fuzzer already uses globals")
         return
 
