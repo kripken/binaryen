@@ -173,6 +173,26 @@ class GeminiClient:
         self.chat_session = None
 
 
+# Chat with a client, adding status handling on top. This parses the first line,
+# and logs the status, then returns the rest.
+def get_response(self, client, prompt):
+    response = client.chat(prompt)
+
+    if response.startswith(FAILURE):
+        print("❌ LLM gave up")
+        sys.exit(1)
+
+    if not response.startswith(STATUS):
+        print("❌ LLM mentioned no status")
+        sys.exit(1)
+
+    lines = response.splitlines()
+    status = lines[0]
+    response = '\n'.join(lines[1:])
+    print(f"💼 {status}")
+    return response
+
+
 # Bundle text files into a prompt, with a header for each. Each item can be a
 # tuple of a filename and a comment, or just a filename
 def bundle_files(files):
@@ -419,8 +439,8 @@ def get_initial_examples():
     for base in ['js_interop_counter',
                  'js_interop_cases',
                  'js_interop_corners']:
-        examples.append(in_binaryen('test', 'js_wasm', base + '.mjs')
-        examples.append(in_binaryen('test', 'js_wasm', base + '.wat')
+        examples.append(in_binaryen('test', 'js_wasm', base + '.mjs'))
+        examples.append(in_binaryen('test', 'js_wasm', base + '.wat'))
     return examples
 
 
@@ -514,7 +534,7 @@ class Fixer:
         ])
 
         client = GeminiClient()
-        response = self.get_response(client, prompt)
+        response = get_response(client, prompt)
 
         # Loop on LLM responses.
         for i in range(MAX_FIX_ITERS):
@@ -523,7 +543,7 @@ class Fixer:
             # Apply the diff and try the testcase again.
             prompt = update_fuzzer(response)
             if prompt:
-                response = self.get_response(client, prompt)
+                response = get_response(client, prompt)
                 continue
 
             proc = self.test()
@@ -537,28 +557,10 @@ class Fixer:
             prompt += bundle_files([
                 (error_temp.name, 'error output'),
             ] + self.get_files())
-            response = self.get_response(client, prompt)
+            response = get_response(client, prompt)
 
         print("❌ Failed to fix the issue in a reasonable number of iterations")
         sys.exit(1)
-
-    # Parse the status line out and log that, then return the rest.
-    def get_response(self, client, prompt):
-        response = client.chat(prompt)
-
-        if response.startswith(FAILURE):
-            print("❌ LLM gave up")
-            sys.exit(1)
-
-        if not response.startswith(STATUS):
-            print("❌ LLM mentioned no status")
-            sys.exit(1)
-
-        lines = response.splitlines()
-        status = lines[0]
-        response = '\n'.join(lines[1:])
-        print(f"💼 {status}")
-        return response
 
 
 class SeededFixer(Fixer):
@@ -815,11 +817,44 @@ and verify that it works.
 
 '''
 
+ADD_LOGGING_PROMPT = '''
+The feature to add to the fuzzer is logging from wasm. The wasm should import
+JS functions that log values of different types, and it should call them from
+various places and with various values. Attached is an example pair of JS and
+wasm that shows the functionality.
+'''
+
 
 def improve_with_logging():
     print("💼 Improving fuzzer by adding calls to logging")
 
-    4/0
+    prompt = IMPROVE_EXISTING_FUZZER_INTRO + ADD_LOGGING_PROMPT
+    prompt += bundle_files([
+        in_binaryen('test', 'js_wasm', 'mvp_interop.mjs')
+        in_binaryen('test', 'js_wasm', 'mvp_interop.wat')
+    ])
+
+    client = GeminiClient()
+    response = get_response(client, prompt)
+
+    # TODO generalize this code before more improvements
+    # Loop until the diff is valid.
+    for i in range(MAX_FIX_ITERS):
+        # Apply the diff and try the testcase again.
+        prompt = update_fuzzer(response)
+        if not prompt:
+            break
+
+        print(f"    (fix attempt {i})")
+        response = get_response(client, prompt)
+    else:
+        print("❌ Failed to fix the issue in a reasonable number of iterations")
+        sys.exit(1)
+
+    # The diff applied. Make sure the fuzzer works.
+    validate_fuzzer()
+
+    # TODO: validate the improvement is there!
 
 
 # Main workflow.
