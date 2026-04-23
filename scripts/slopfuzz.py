@@ -844,6 +844,33 @@ and verify that it works.
 
 '''
 
+
+# Given a prompt that asks for a specific fuzzer improvement, call the LLM and
+# iterate until it appears to be done.
+def improve_fuzzer(prompt):
+    client = GeminiClient()
+    response = get_response(client, prompt)
+
+    # TODO generalize this code before more improvements, alongside the
+    #      (renamed) get_response()
+    # Loop until the diff is valid.
+    for i in range(MAX_FIX_ITERS):
+        # Apply the diff and try the testcase again.
+        prompt = update_fuzzer(response)
+        if not prompt:
+            break
+        print(f"    (fix attempt {i})")
+        response = get_response(client, prompt)
+    else:
+        print("❌ Failed to improve in a reasonable number of iterations")
+        sys.exit(1)
+
+    # The diff applied. Make sure the fuzzer works.
+    validate_fuzzer()
+
+    # TODO: validate the improvement is there!
+
+
 ADD_LOGGING_PROMPT = '''
 The feature to add to the fuzzer is logging from wasm. The wasm should import
 JS functions that log values of different types, and it should call them from
@@ -853,7 +880,6 @@ wasm that shows the functionality.
 
 
 def improve_with_logging():
-    # If this appears to already be implemented, don't do it again.
     if 'log-i32' in read_fuzzer():
         print("💼 Fuzzer already emits calls to logging")
         return
@@ -871,27 +897,36 @@ def improve_with_logging():
     prompt = IMPROVE_EXISTING_FUZZER_INTRO + ADD_LOGGING_PROMPT
     prompt += bundle_files(new_examples)
 
-    client = GeminiClient()
-    response = get_response(client, prompt)
+    improve_fuzzer(prompt)
 
-    # TODO generalize this code before more improvements, alongside the
-    #      (renamed) get_response()
-    # Loop until the diff is valid.
-    for i in range(MAX_FIX_ITERS):
-        # Apply the diff and try the testcase again.
-        prompt = update_fuzzer(response)
-        if not prompt:
-            break
-        print(f"    (fix attempt {i})")
-        response = get_response(client, prompt)
-    else:
-        print("❌ Failed to fix the issue in a reasonable number of iterations")
-        sys.exit(1)
 
-    # The diff applied. Make sure the fuzzer works.
-    validate_fuzzer()
+ADD_GLOBALS_PROMPT = '''
+The feature to add to the fuzzer is exported globals from the wasm. The wasm
+should define some globals of various types and export some of them, which the
+JS will then receive and log out. Attached is an example pair of JS and
+wasm that shows the functionality.
+'''
 
-    # TODO: validate the improvement is there!
+
+def improve_with_globals():
+    if '" (global' in read_fuzzer():
+        print("💼 Fuzzer already uses globals")
+        return
+
+    print("💼 Improving fuzzer by adding globals")
+
+    new_examples = [
+        in_binaryen('test', 'js_wasm', 'globals.mjs'),
+        in_binaryen('test', 'js_wasm', 'globals.wat'),
+    ]
+
+    global examples_shown
+    examples_shown += new_examples
+
+    prompt = IMPROVE_EXISTING_FUZZER_INTRO + ADD_GLOBALS_PROMPT
+    prompt += bundle_files(new_examples)
+
+    improve_fuzzer(prompt)
 
 
 # Main workflow.
