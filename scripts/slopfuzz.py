@@ -579,10 +579,10 @@ class ParsingFixer(SeededFixer):
 
     def test(self):
         proc = run_fuzzer_proc(self.seed)
-        if proc.returncode:  # XXX get_files should be different here!
-            4/0
-            'foo
-            return proc
+        if proc.returncode:
+            # The parser crashed.
+            # TODO get_files should be different here, and in similar cases!
+            return ProcError(f"The fuzzer crashed:\n\n```\n{proc.stdout}\n```\n\n")
 
         output = proc.stdout
         if output.count(JS_WAT_SEP) != 1:
