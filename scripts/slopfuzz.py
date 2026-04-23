@@ -414,6 +414,16 @@ def update_fuzzer(diff):
     write_fuzzer(fuzzer)
 
 
+def get_initial_examples():
+    # Use all our js_wasm testcases as initial examples.
+    js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
+    examples = []
+    for js_file in js_files:
+        examples.append(str(js_file))
+        examples.append(str(pathlib.Path(js_file).with_suffix('.wat')))
+    return examples
+
+
 # Functions that check for things, and fix them as needed
 
 STATUS = 'STATUS'
@@ -606,7 +616,7 @@ class WatParsingFixer(ParsingFixer):
         return run_wasm_opt(wat_temp.name, '-all')
 
     def get_files(self):
-        wat_examples = [(e, "example valid wat") for e in get_examples() if e.endswith('.wat')]
+        wat_examples = [(e, "example valid wat") for e in get_initial_examples() if e.endswith('.wat')]
         assert wat_examples
 
         return [
@@ -640,7 +650,9 @@ class ExecutionFixer(SeededFixer):
 
     def get_files(self):
         # Provide a working example after the failing testcase, to be helpful.
-        working_pair = get_examples()[:2]
+        working_pair = get_initial_examples()[:2]
+        assert working_pair[0].endswith('.mjs')
+        assert working_pair[0].endswith('.wat')
         return [
             (js_temp.name, "JavaScript part of the erroring testcase"),
             (wat_temp.name, "Wasm part of the erroring testcase"),
@@ -768,18 +780,8 @@ Example testcases:
 '''
 
 
-def get_examples():
-    # Use all our js_wasm testcases as initial examples.
-    js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
-    examples = []
-    for js_file in js_files:
-        examples.append(str(js_file))
-        examples.append(str(pathlib.Path(js_file).with_suffix('.wat')))
-    return examples
-
-
 def generate_initial_fuzzer():
-    prompt = INITIAL_GENERATION_PROMPT + bundle_files(get_examples())
+    prompt = INITIAL_GENERATION_PROMPT + bundle_files(get_initial_examples())
 
     client = GeminiClient()
     response = client.one_off(prompt)
