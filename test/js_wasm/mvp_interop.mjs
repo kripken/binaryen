@@ -64,14 +64,17 @@ function callFunc(func) {
 for (var e of WebAssembly.Module.exports(module)) {
     var key = e.name;
     var value = instance.exports[key];
-    console.log(`export ${key}: ${value}`);
     if (typeof value === "function") {
+        // A function: call it.
         try {
             var result = callFunc(value);
-            console.log(`=> ${result}`);
+            console.log(`export ${key}() => ${result}`);
         } catch (e) {
-            console.log(`=> trap (${e})`);
+            console.log(`export ${key}() => trap (${e})`);
         }
+    } else {
+        // Not a function: log the value.
+        console.log(`export ${key}: ${value}`);
     }
 }
 
