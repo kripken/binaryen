@@ -652,7 +652,7 @@ class ExecutionFixer(SeededFixer):
         # Provide a working example after the failing testcase, to be helpful.
         working_pair = examples_shown[:2]
         assert working_pair[0].endswith('.mjs')
-        assert working_pair[0].endswith('.wat')
+        assert working_pair[1].endswith('.wat')
         return [
             (js_temp.name, "JavaScript part of the erroring testcase"),
             (wat_temp.name, "Wasm part of the erroring testcase"),
