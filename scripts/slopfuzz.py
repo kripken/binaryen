@@ -251,7 +251,7 @@ def random_seed():
 
 # The fuzzer's output has both JS and wasm, JS first, then this separator before
 # the wasm:
-JS_WAT_SEP = '>>>> wat'
+JS_WAT_SEP = 'JS <-> WAT'
 
 
 # Temporary files for testcases
