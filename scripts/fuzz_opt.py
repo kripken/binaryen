@@ -2257,7 +2257,7 @@ class PreserveImportsExportsJS(TestCaseHandler):
             seed = random.randint(0, 1 << 64)
             print(f'Using slop.py {seed}')
             output = run([sys.executable, slopfuzz_fuzzer, str(seed)])
-            JS_WAT_SEP = '>>>> wat'
+            JS_WAT_SEP = 'JS <-> WAT'
             js, wat = output.split(JS_WAT_SEP)
 
             js_file = 'slopcase.mjs'
