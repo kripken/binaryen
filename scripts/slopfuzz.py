@@ -880,12 +880,8 @@ wasm that shows the functionality.
 
 
 def improve_with_logging():
-    if 'log-i32' in read_fuzzer():
-        print("💼 Fuzzer already emits calls to logging")
-        return
-
-    print("💼 Improving fuzzer by adding calls to logging")
-
+    # Add the examples even if we do no new work, so later processing can see
+    # them and not break this.
     new_examples = [
         in_binaryen('test', 'js_wasm', 'logging.mjs'),
         in_binaryen('test', 'js_wasm', 'logging.wat'),
@@ -893,6 +889,12 @@ def improve_with_logging():
 
     global examples_shown
     examples_shown += new_examples
+
+    if 'log-i32' in read_fuzzer():
+        print("💼 Fuzzer already emits calls to logging")
+        return
+
+    print("💼 Improving fuzzer by adding calls to logging")
 
     prompt = IMPROVE_EXISTING_FUZZER_INTRO + ADD_LOGGING_PROMPT
     prompt += bundle_files(new_examples)
@@ -909,12 +911,6 @@ wasm that shows the functionality.
 
 
 def improve_with_globals():
-    if '" (global' in read_fuzzer():
-        print("💼 Fuzzer already uses globals")
-        return
-
-    print("💼 Improving fuzzer by adding globals")
-
     new_examples = [
         in_binaryen('test', 'js_wasm', 'globals.mjs'),
         in_binaryen('test', 'js_wasm', 'globals.wat'),
@@ -922,6 +918,12 @@ def improve_with_globals():
 
     global examples_shown
     examples_shown += new_examples
+
+    if '" (global' in read_fuzzer():
+        print("💼 Fuzzer already uses globals")
+        return
+
+    print("💼 Improving fuzzer by adding globals")
 
     prompt = IMPROVE_EXISTING_FUZZER_INTRO + ADD_GLOBALS_PROMPT
     prompt += bundle_files(new_examples)
