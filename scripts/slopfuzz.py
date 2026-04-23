@@ -938,6 +938,7 @@ def build_fuzzer():
 
     # Add improvements.
     improve_with_logging()
+    improve_with_globals()
 
 
 def do_fuzzing():
