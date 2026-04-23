@@ -662,7 +662,7 @@ class ExecutionFixer(SeededFixer):
 
 
 # How many random samples to validate with
-NUM_VALIDATIONS = 50
+NUM_VALIDATIONS = 100
 
 # How many runtime-erroring testcases we allow. Some amount of errors is ok to
 # tolerate as it is needed to cover error paths.
