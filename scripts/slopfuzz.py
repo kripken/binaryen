@@ -369,9 +369,9 @@ MAX_FIX_ITERS = 10
 
 # The fuzzer is updated using diffs. We use a simple format to avoid the LLM
 # getting line numbers/counts wrong.
-DIFF_START = '<< SEARCH'
-DIFF_MIDDLE = '======='
-DIFF_END = '>> REPLACE'
+DIFF_START = '<<<< SEARCH'
+DIFF_MIDDLE = '===='
+DIFF_END = '>>>> REPLACE'
 DIFF_FORMAT = f'''\
 {DIFF_START}
 [Existing code that needs to change]
@@ -398,6 +398,22 @@ Your diff is not in the proper format:
 def update_fuzzer(diff):
     if DIFF_START not in diff:
         return BAD_DIFF_PROMPT + "Diff should start with `{DIFF_START}`"
+
+    # Check for extra <, =, > symbols
+    if '<' + DIFF_START in diff:
+        return BAD_DIFF_PROMPT + f"Diff uses too many < symbols ({'<' + DIFF_START})"
+    if '=' + DIFF_MIDDLE in diff:
+        return BAD_DIFF_PROMPT + f"Diff uses too many = symbols ({'=' + DIFF_MIDDLE})"
+    if '>' + DIFF_END in diff:
+        return BAD_DIFF_PROMPT + f"Diff uses too many > symbols ({'>' + DIFF_END})"
+
+    # Check for missing <, =, > symbols
+    if ('\n' + DIFF_START[1:]) in diff:
+        return BAD_DIFF_PROMPT + f"Diff uses too few < symbols"
+    if ('\n' + DIFF_MIDDLE[1:] + '\n') in diff:
+        return BAD_DIFF_PROMPT + f"Diff uses too few = symbols"
+    if ('\n' + DIFF_END[1:]) in diff:
+        return BAD_DIFF_PROMPT + f"Diff uses too few > symbols"
 
     fuzzer = read_fuzzer()
     start = 0
