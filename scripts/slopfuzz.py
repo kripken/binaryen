@@ -830,8 +830,8 @@ def improve_with_logging():
 
     prompt = IMPROVE_EXISTING_FUZZER_INTRO + ADD_LOGGING_PROMPT
     prompt += bundle_files([
-        in_binaryen('test', 'js_wasm', 'mvp_interop.mjs')
-        in_binaryen('test', 'js_wasm', 'mvp_interop.wat')
+        in_binaryen('test', 'js_wasm', 'mvp_interop.mjs'),
+        in_binaryen('test', 'js_wasm', 'mvp_interop.wat'),
     ])
 
     client = GeminiClient()
@@ -844,7 +844,6 @@ def improve_with_logging():
         prompt = update_fuzzer(response)
         if not prompt:
             break
-
         print(f"    (fix attempt {i})")
         response = get_response(client, prompt)
     else:
