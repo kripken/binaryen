@@ -432,16 +432,10 @@ def update_fuzzer(diff):
 
     write_fuzzer(fuzzer)
 
-
-def get_initial_examples():
-    # Use the JS interop js_wasm testcases as initial examples.
-    examples = []
-    for base in ['js_interop_counter',
-                 'js_interop_cases',
-                 'js_interop_corners']:
-        examples.append(in_binaryen('test', 'js_wasm', base + '.mjs'))
-        examples.append(in_binaryen('test', 'js_wasm', base + '.wat'))
-    return examples
+# The examples shown during training so far. We remind the fuzzer of them when
+# it later breaks something, giving it an easy way to fix things. This is a list
+# of pairs of mjs and wat files.
+examples_shown = []
 
 
 # Functions that check for things, and fix them as needed
@@ -622,7 +616,7 @@ class WatParsingFixer(ParsingFixer):
         return run_wasm_opt(wat_temp.name, '-all')
 
     def get_files(self):
-        wat_examples = [(e, "example valid wat") for e in get_initial_examples() if e.endswith('.wat')]
+        wat_examples = [(e, "example valid wat") for e in examples_shown if e.endswith('.wat')]
         assert wat_examples
 
         return [
@@ -656,7 +650,7 @@ class ExecutionFixer(SeededFixer):
 
     def get_files(self):
         # Provide a working example after the failing testcase, to be helpful.
-        working_pair = get_initial_examples()[:2]
+        working_pair = examples_shown[:2]
         assert working_pair[0].endswith('.mjs')
         assert working_pair[0].endswith('.wat')
         return [
@@ -787,7 +781,22 @@ Example testcases:
 
 
 def generate_initial_fuzzer():
-    prompt = INITIAL_GENERATION_PROMPT + bundle_files(get_initial_examples())
+    # Use the JS interop js_wasm testcases as initial examples.
+    global examples_shown
+    for base in ['js_interop_counter',
+                 'js_interop_cases',
+                 'js_interop_corners']:
+        examples_shown.append(in_binaryen('test', 'js_wasm', base + '.mjs'))
+        examples_shown.append(in_binaryen('test', 'js_wasm', base + '.wat'))
+
+    # Create the initial fuzzer, if there is none.
+    if os.path.exists(params.fuzzer_file):
+        print("💼 Continuing from existing fuzzer")
+        # Validate it before continuing.
+        validate_fuzzer()
+
+    print("💼 Generating initial fuzzer")
+    prompt = INITIAL_GENERATION_PROMPT + bundle_files(examples_shown)
 
     client = GeminiClient()
     response = client.one_off(prompt)
@@ -829,11 +838,16 @@ wasm that shows the functionality.
 def improve_with_logging():
     print("💼 Improving fuzzer by adding calls to logging")
 
-    prompt = IMPROVE_EXISTING_FUZZER_INTRO + ADD_LOGGING_PROMPT
-    prompt += bundle_files([
+    new_examples = [
         in_binaryen('test', 'js_wasm', 'mvp_interop.mjs'),
         in_binaryen('test', 'js_wasm', 'mvp_interop.wat'),
-    ])
+    ]
+
+    global examples_shown
+    examples_shown += new_examples
+
+    prompt = IMPROVE_EXISTING_FUZZER_INTRO + ADD_LOGGING_PROMPT
+    prompt += bundle_files(new_examples)
 
     client = GeminiClient()
     response = get_response(client, prompt)
@@ -860,14 +874,8 @@ def improve_with_logging():
 
 # Main workflow.
 def build_fuzzer():
-    # Create the initial fuzzer, if there is none.
-    if not os.path.exists(params.fuzzer_file):
-        print("💼 Generating initial fuzzer")
-        generate_initial_fuzzer()
-    else:
-        print("💼 Improving existing fuzzer")
-        # Validate it before continuing.
-        validate_fuzzer()
+    # Generate it, if needed.
+    generate_initial_fuzzer()
 
     # Add improvements.
     improve_with_logging()
