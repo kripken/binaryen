@@ -1,6 +1,18 @@
 // Support
 
 function logValue(x) {
+    if (x === null) {
+        x = 'null';
+    } else if (x === undefined) {
+        x = 'undefined';
+    } else if (typeof x === 'object') {
+        // The prototype should be stable even when optimized. Do not print
+        // other details.
+        x = 'object(' + printed(Object.getPrototypeOf(x)) + ')';
+    } else if (typeof x === 'function') {
+        // Do not print function names because optimizations can change them.
+        x = 'function';
+    }
     console.log("[LoggingExternalInterface logging " + x + "]");
 }
 
