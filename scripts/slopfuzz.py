@@ -174,8 +174,8 @@ class GeminiClient:
 
 
 # Chat with a client, adding status handling on top. This parses the first line,
-# and logs the status, then returns the rest.
-def get_response(self, client, prompt):
+# and logs the status, then returns the rest. TODO rename
+def get_response(client, prompt):
     response = client.chat(prompt)
 
     if response.startswith(FAILURE):
@@ -587,6 +587,7 @@ class ParsingFixer(SeededFixer):
         proc = run_fuzzer_proc(self.seed)
         if proc.returncode:  # XXX get_files should be different here!
             4/0
+            'foo
             return proc
 
         output = proc.stdout
@@ -837,7 +838,8 @@ def improve_with_logging():
     client = GeminiClient()
     response = get_response(client, prompt)
 
-    # TODO generalize this code before more improvements
+    # TODO generalize this code before more improvements, alongside the
+    #      (renamed) get_response()
     # Loop until the diff is valid.
     for i in range(MAX_FIX_ITERS):
         # Apply the diff and try the testcase again.
