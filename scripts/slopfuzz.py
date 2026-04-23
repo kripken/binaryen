@@ -3,7 +3,6 @@
 import argparse
 import logging
 import os
-import pathlib
 import random
 import subprocess
 import sys
@@ -408,19 +407,20 @@ def update_fuzzer(diff):
              return prompt
 
         fuzzer = fuzzer.replace(existing, improved)
-        
+
         start = end + len(DIFF_END)
 
     write_fuzzer(fuzzer)
 
 
 def get_initial_examples():
-    # Use all our js_wasm testcases as initial examples.
-    js_files = list(pathlib.Path(in_binaryen('test', 'js_wasm')).glob('*.mjs'))
+    # Use the JS interop js_wasm testcases as initial examples.
     examples = []
-    for js_file in js_files:
-        examples.append(str(js_file))
-        examples.append(str(pathlib.Path(js_file).with_suffix('.wat')))
+    for base in ['js_interop_counter',
+                 'js_interop_cases',
+                 'js_interop_corners']:
+        examples.append(in_binaryen('test', 'js_wasm', base + '.mjs')
+        examples.append(in_binaryen('test', 'js_wasm', base + '.wat')
     return examples
 
 
