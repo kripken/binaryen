@@ -933,6 +933,8 @@ def main():
     else:
         do_fuzzing()
 
+    print("✅ Done")
+
 
 if __name__ == "__main__":
     main()
