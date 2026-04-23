@@ -8,7 +8,7 @@ function logValue(x) {
     } else if (typeof x === 'object') {
         // The prototype should be stable even when optimized. Do not print
         // other details.
-        x = 'object(' + printed(Object.getPrototypeOf(x)) + ')';
+        x = 'object(' + Object.getPrototypeOf(x) + ')';
     } else if (typeof x === 'function') {
         // Do not print function names because optimizations can change them.
         x = 'function';
@@ -84,9 +84,19 @@ for (var e of WebAssembly.Module.exports(module)) {
         } catch (e) {
             console.log(`export ${key}() => trap (${e})`);
         }
-    } else {
-        // Not a function: log the value.
-        console.log(`export ${key}: ${value}`);
+        continue;
     }
+
+    // Not a function: log the value.
+    if (value instanceof WebAssembly.Global) {
+        // Do some operations on the Global wrapper itself.
+        JSON.stringify(value);
+        value.foobar;
+
+        // Look the actual value.
+        value = value.value;
+    }
+
+    console.log(`export ${key}: ${value}`);
 }
 
