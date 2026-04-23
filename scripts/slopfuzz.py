@@ -794,6 +794,7 @@ def generate_initial_fuzzer():
         print("💼 Continuing from existing fuzzer")
         # Validate it before continuing.
         validate_fuzzer()
+        return
 
     print("💼 Generating initial fuzzer")
     prompt = INITIAL_GENERATION_PROMPT + bundle_files(examples_shown)
