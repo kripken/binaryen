@@ -429,6 +429,30 @@ def get_initial_examples():
 STATUS = 'STATUS'
 FAILURE = 'FAILURE'
 
+DIFF_AND_STATUS_EXPLANATION = f'''
+
+Before the diff, emit a status line beginning with `STATUS: ` followed by a
+short, one line explanation of what you were just asked to do and what you are
+doing. Here is an example of the status line:
+
+STATUS: The fuzzer crashes. I found the problem in the function `foo` and am providing a diff to fix it.
+
+Another example:
+
+STATUS: The fuzzer's output JS does not validate even after my last fix. I found another problem in type emitting and am providing a diff to fix it.
+
+Respond with such a status line every time you respond during our chat.
+
+After the status, emit two empty lines and then the diff, in the following form:
+
+{DIFF_FORMAT}
+
+If you cannot find a fix (because my instructions are not clear enough, or you
+think something is going wrong in the tools we am using, or some other problem
+that you can't get around), emit instead the word `FAILURE: ` and then a
+detailed explanation.
+'''
+
 FIX_EXISTING_FUZZER_INTRO = '''
 We are writing a fuzzer in Python.
 
@@ -441,28 +465,7 @@ output that shows the problem.
 Write a diff for the fuzzer that fixes the problem. I will apply that diff and
 run the fuzzer with the seed, then verify that the output is correct.
 
-Before the diff, emit a status line beginning with `STATUS: ` followed by a
-short, one line explanation of what you were just asked to do and what you are
-doing. Here is an example of the status line:
-
-STATUS: The fuzzer crashes. I found the problem in the function `foo` and am providing a diff to fix it.
-
-More examples:
-
-STATUS: The fuzzer's output JS does not validate even after my last fix. I found another problem in type emitting and am providing a diff to fix it.
-
-STATUS: There was an error in my last diff. I found a typo and am providing a fixed diff.
-
-Respond with such a status line every time you respond during our chat.
-
-After the status, emit two empty lines and then the diff, in the following form:
-
-{DIFF_FORMAT}
-
-If you cannot find a fix (because my instructions are not clear enough, or you
-think something is going wrong in the tools we am using, or some other problem
-that you can't get around), emit instead the word `FAILURE: ` and then a
-detailed explanation.
+{DIFF_AND_STATUS_EXPLANATION}
 
 '''
 
@@ -790,10 +793,32 @@ def generate_initial_fuzzer():
     validate_fuzzer()
 
 
-# Improve the fuzzer in a single iteration of the main loop
+# Improve the fuzzer
 
-def improve_fuzzer():
-    print("💼 Improving fuzzer by doing ..?")
+IMPROVE_EXISTING_FUZZER_INTRO = '''
+We are improving a fuzzer in Python. First I will explain the overall fuzzer's
+goals, then a specific improvement I would like you to add.
+
+''' + FUZZER_GOALS + f'''
+
+I would like you to add a feature to the fuzzer, detailed below. The addition
+should not break or remove any previous functionality. Of course, while adding
+it, you may make certain previous fuzzer outputs more or less likely to
+be emitted, and that is ok - but you should not remove it entirely or make it
+almost impossible to emit. We want the improvement to let us generate new things
+and overall increase the variety of our output.
+
+Write a diff for the fuzzer that adds the new feature. I will apply that diff
+and verify that it works.
+
+{DIFF_AND_STATUS_EXPLANATION}
+
+'''
+
+
+def improve_with_logging():
+    print("💼 Improving fuzzer by adding calls to logging")
+
     4/0
 
 
@@ -803,18 +828,13 @@ def build_fuzzer():
     if not os.path.exists(params.fuzzer_file):
         print("💼 Generating initial fuzzer")
         generate_initial_fuzzer()
-        validate_fuzzer()
     else:
         print("💼 Improving existing fuzzer")
+        # Validate it before continuing.
+        validate_fuzzer()
 
-    # Iterately improve the fuzzer.
-    try:
-        for i in range(params.max_iters):
-            print(f"⏱️  Improving fuzzer, iteration {i}")
-            validate_fuzzer()
-            improve_fuzzer()
-    except KeyboardInterrupt:
-        print("🛑 Stopping by user request.")
+    # Add improvements.
+    improve_with_logging()
 
 
 def do_fuzzing():
