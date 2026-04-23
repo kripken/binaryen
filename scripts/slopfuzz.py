@@ -853,11 +853,16 @@ wasm that shows the functionality.
 
 
 def improve_with_logging():
+    # If this appears to already be implemented, don't do it again.
+    if 'log-i32' in read_fuzzer():
+        print("💼 Fuzzer already emits calls to logging")
+        return
+
     print("💼 Improving fuzzer by adding calls to logging")
 
     new_examples = [
-        in_binaryen('test', 'js_wasm', 'mvp_interop.mjs'),
-        in_binaryen('test', 'js_wasm', 'mvp_interop.wat'),
+        in_binaryen('test', 'js_wasm', 'logging.mjs'),
+        in_binaryen('test', 'js_wasm', 'logging.wat'),
     ]
 
     global examples_shown
