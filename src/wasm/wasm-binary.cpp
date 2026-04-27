@@ -1486,6 +1486,8 @@ void WasmBinaryWriter::writeFeaturesSection() {
         return BinaryConsts::CustomSections::RelaxedAtomicsFeature;
       case FeatureSet::CustomPageSizes:
         return BinaryConsts::CustomSections::CustomPageSizesFeature;
+      case FeatureSet::WideArithmetic:
+        return BinaryConsts::CustomSections::WideArithmeticFeature;
       case FeatureSet::None:
       case FeatureSet::Default:
       case FeatureSet::All:
@@ -4474,6 +4476,10 @@ Result<> WasmBinaryReader::readInst() {
           return builder.makeUnary(ConvertSVecI16x8ToVecF16x8);
         case BinaryConsts::F16x8ConvertI16x8U:
           return builder.makeUnary(ConvertUVecI16x8ToVecF16x8);
+        case BinaryConsts::F16x8DemoteF32x4Zero:
+          return builder.makeUnary(DemoteZeroVecF32x4ToVecF16x8);
+        case BinaryConsts::F16x8DemoteF64x2Zero:
+          return builder.makeUnary(DemoteZeroVecF64x2ToVecF16x8);
         case BinaryConsts::F32x4PromoteLowF16x8:
           return builder.makeUnary(PromoteLowVecF16x8ToVecF32x4);
         case BinaryConsts::I8x16ExtractLaneS:
@@ -5446,6 +5452,8 @@ void WasmBinaryReader::readFeatures(size_t sectionPos, size_t payloadLen) {
       feature = FeatureSet::RelaxedAtomics;
     } else if (name == BinaryConsts::CustomSections::CustomPageSizesFeature) {
       feature = FeatureSet::CustomPageSizes;
+    } else if (name == BinaryConsts::CustomSections::WideArithmeticFeature) {
+      feature = FeatureSet::WideArithmetic;
     } else {
       // Silently ignore unknown features (this may be and old binaryen running
       // on a new wasm).

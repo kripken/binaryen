@@ -79,6 +79,7 @@ const char* CustomDescriptorsFeature = "custom-descriptors";
 const char* RelaxedAtomicsFeature = "relaxed-atomics";
 const char* MultibyteFeature = "multibyte";
 const char* CustomPageSizesFeature = "custom-page-sizes";
+const char* WideArithmeticFeature = "wide-arithmetic";
 
 } // namespace BinaryConsts::CustomSections
 
@@ -730,6 +731,8 @@ void Unary::finalize() {
     case ConvertSVecI16x8ToVecF16x8:
     case ConvertUVecI16x8ToVecF16x8:
     case PromoteLowVecF16x8ToVecF32x4:
+    case DemoteZeroVecF32x4ToVecF16x8:
+    case DemoteZeroVecF64x2ToVecF16x8:
       type = Type::v128;
       break;
     case AnyTrueVec128:

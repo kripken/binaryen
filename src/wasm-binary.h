@@ -474,6 +474,7 @@ extern const char* CustomDescriptorsFeature;
 extern const char* RelaxedAtomicsFeature;
 extern const char* MultibyteFeature;
 extern const char* CustomPageSizesFeature;
+extern const char* WideArithmeticFeature;
 
 enum Subsection {
   NameModule = 0,
@@ -1126,6 +1127,8 @@ enum ASTNodes {
   I16x8TruncSatF16x8U = 0x146,
   F16x8ConvertI16x8S = 0x147,
   F16x8ConvertI16x8U = 0x148,
+  F16x8DemoteF32x4Zero = 0x149,
+  F16x8DemoteF64x2Zero = 0x14a,
   F32x4PromoteLowF16x8 = 0x14b,
 
   // bulk memory opcodes
