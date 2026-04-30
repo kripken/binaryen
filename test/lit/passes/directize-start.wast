@@ -304,3 +304,47 @@
  (func $target
  )
 )
+
+;; We do not optimize non-function values, but also do not error.
+(module
+ ;; CHECK:      (type $0 (func))
+
+ ;; CHECK:      (type $struct (struct))
+ (type $struct (struct))
+
+ ;; CHECK:      (table $table 5 anyref)
+ (table $table 5 anyref)
+
+ ;; CHECK:      (export "getter" (func $getter))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $0)
+ ;; CHECK-NEXT:  (table.set $table
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (struct.new_default $struct)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  (table.set $table
+   (i32.const 1)
+   (struct.new $struct)
+  )
+ )
+
+ ;; CHECK:      (func $getter (type $0)
+ ;; CHECK-NEXT:  (drop
+ ;; CHECK-NEXT:   (table.get $table
+ ;; CHECK-NEXT:    (i32.const 1)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $getter (export "getter")
+  (drop
+   (table.get $table
+    (i32.const 1)
+   )
+  )
+ )
+)
