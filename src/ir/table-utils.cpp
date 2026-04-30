@@ -126,18 +126,12 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
 
     Finder(TablesWithSet& tablesWithSet) : tablesWithSet(tablesWithSet) {}
 
-    void visitTableSet(TableSet* curr) {
-      tablesWithSet.insert(curr->table);
-    }
-    void visitTableFill(TableFill* curr) {
-      tablesWithSet.insert(curr->table);
-    }
+    void visitTableSet(TableSet* curr) { tablesWithSet.insert(curr->table); }
+    void visitTableFill(TableFill* curr) { tablesWithSet.insert(curr->table); }
     void visitTableCopy(TableCopy* curr) {
       tablesWithSet.insert(curr->destTable);
     }
-    void visitTableInit(TableInit* curr) {
-      tablesWithSet.insert(curr->table);
-    }
+    void visitTableInit(TableInit* curr) { tablesWithSet.insert(curr->table); }
   };
 
   // Scan the start function separately: we can handle fixed offsets in the
@@ -173,7 +167,10 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
     // Handle a possibly-constant table write. If the size is not given, it is
     // assumed to be 1 (which is the case for a set). Returns true if we
     // handled this successfuly, i.e., is is constant.
-    auto handle = [&](Name table, Expression* index, Expression* value, Expression* size=nullptr) {
+    auto handle = [&](Name table,
+                      Expression* index,
+                      Expression* value,
+                      Expression* size = nullptr) {
       if (!Properties::isConstantExpression(index) ||
           !Properties::isConstantExpression(value) ||
           (size && !Properties::isConstantExpression(size))) {
@@ -187,10 +184,12 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
         return false;
       }
       auto constantFunc = constantValue.getFunc();
-      auto constantSize = size ? Properties::getLiteral(index).getUnsigned() : 1ULL;
+      auto constantSize =
+        size ? Properties::getLiteral(index).getUnsigned() : 1ULL;
 
       auto& flatTable = tables[table].flatTable;
-      if (!flatTable->ensureSpace(wasm.getTable(table), constantIndex, constantSize)) {
+      if (!flatTable->ensureSpace(
+            wasm.getTable(table), constantIndex, constantSize)) {
         // Sizes overflowed.
         return false;
       }
@@ -203,7 +202,7 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
     };
 
     // Whether we've given up on analysis, because we saw something we can't
-    // handle. In that case we process everything else pessimistically.    
+    // handle. In that case we process everything else pessimistically.
     auto giveUp = false;
 
     // Process the body as a block for simplicity, which handles most cases.
@@ -213,7 +212,8 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
     for (; i < block->list.size(); i++) {
       auto* curr = block->list[i];
       Effects effects(options, wasm, curr);
-      if (effects.calls || effects.transfersControlFlow || curr->type == Type::unreachable) {
+      if (effects.calls || effects.transfersControlFlow ||
+          curr->type == Type::unreachable) {
         // Either arbitrary code can run here, or we may skip code after us,
         // both of which break our ability to apply changes to flatTable.
         giveUp = true;
