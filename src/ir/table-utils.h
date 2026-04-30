@@ -55,7 +55,7 @@ struct FlatTable {
   // certain size. Grows |names| accordingly. Returns false if we hit an
   // overflow.
   bool ensureSpace(Table& table, uint64_t start, uint64_t size) {
-    Index end;
+    uint64_t end;
     if (std::ckd_add(&end, start, size) || end > table.initial) {
       return false;
     }
