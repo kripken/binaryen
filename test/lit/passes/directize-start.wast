@@ -743,7 +743,7 @@
  )
 )
 
-;; Two sets with a return in the middle.
+;; Two sets with an unreachable in the middle.
 (module
  ;; CHECK:      (type $func (func))
  (type $func (func))
@@ -766,7 +766,7 @@
  ;; CHECK-NEXT:   (i32.const 1)
  ;; CHECK-NEXT:   (ref.func $target)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (return)
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT:  (table.set $b
  ;; CHECK-NEXT:   (i32.const 3)
  ;; CHECK-NEXT:   (ref.func $target-b)
@@ -777,7 +777,7 @@
    (i32.const 1)
    (ref.func $target)
   )
-  (return) ;; this stops us from optimizing anything further
+  (unreachable) ;; this stops us from optimizing anything further
   (table.set $b
    (i32.const 3)
    (ref.func $target-b)
@@ -810,4 +810,84 @@
  (func $target-b
  )
 )
+
+;; Two sets with a conditional return in the middle.
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $a 5 funcref)
+ (table $a 5 funcref)
+
+ ;; CHECK:      (table $b 5 funcref)
+ (table $b 5 funcref)
+
+ ;; CHECK:      (elem declare func $target $target-b)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.set $a
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (if
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (then
+ ;; CHECK-NEXT:    (return)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (table.set $b
+ ;; CHECK-NEXT:   (i32.const 3)
+ ;; CHECK-NEXT:   (ref.func $target-b)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  (table.set $a
+   (i32.const 1)
+   (ref.func $target)
+  )
+  ;; This stops us from optimizing anything further.
+  (if
+   (i32.const 1)
+   (then
+    (return)
+   )
+  )
+  (table.set $b
+   (i32.const 3)
+   (ref.func $target-b)
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call $target)
+ ;; CHECK-NEXT:  (call_indirect $b (type $func)
+ ;; CHECK-NEXT:   (i32.const 3)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  ;; Only the first gets optimized.
+  (call_indirect $a (type $func)
+   (i32.const 1)
+  )
+  (call_indirect $b (type $func)
+   (i32.const 3)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+
+ ;; CHECK:      (func $target-b (type $func)
+ ;; CHECK-NEXT: )
+ (func $target-b
+ )
+)
+
 
