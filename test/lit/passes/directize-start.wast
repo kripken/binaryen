@@ -348,3 +348,106 @@
   )
  )
 )
+
+;; table.set out of bounds.
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $table 5 funcref)
+ (table $table 5 funcref)
+
+ ;; CHECK:      (elem declare func $target)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.set $table
+ ;; CHECK-NEXT:   (i32.const 5)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  ;; The table is size 5, we write to index 5, which is too much. This traps at
+  ;; runtime and we don't do anything at compile time.
+  (table.set $table
+   (i32.const 5)
+   (ref.func $target)
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  (call_indirect (type $func)
+   (i32.const 1)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+)
+
+;; table.fill with an overflow is not optimized.
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $table 5 funcref)
+ (table $table 5 funcref)
+
+ ;; CHECK:      (elem declare func $target)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.fill $table
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:   (i32.const -1)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  (table.fill $table
+   (i32.const 1)
+   (ref.func $target)
+   ;; Huge unsigned value.
+   (i32.const -1)
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 2)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  ;; We do not optimize here.
+  (call_indirect (type $func)
+   (i32.const 1)
+  )
+  (call_indirect (type $func)
+   (i32.const 2)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+)
+
