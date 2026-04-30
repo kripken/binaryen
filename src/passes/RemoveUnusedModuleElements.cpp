@@ -434,7 +434,7 @@ struct Analyzer {
     // might be written into the table during runtime.
     // TODO: Add an option for immutable initial content like Directize?
     if (!tableInfoMap) {
-      tableInfoMap = TableUtils::computeTableInfo(*module);
+      tableInfoMap = TableUtils::computeTableInfo(*module, options);
     }
     if ((*tableInfoMap)[table].mayBeModified) {
       useCallRefType(type);
@@ -835,7 +835,9 @@ struct RemoveUnusedModuleElements : public Pass {
                                 Expression* offset,
                                 Importable* parent,
                                 Index parentSize) {
-      auto writesToVisible = parent->imported() && segmentSize;
+      // In closed world, the outside does not call our functions, 
+      auto writesToVisible = parent->imported() && segmentSize && !getPassOptions().closedWorld;
+
       auto mayTrap = false;
       if (!getPassOptions().trapsNeverHappen) {
         // Check if this might trap. If it is obviously in bounds then it
@@ -852,6 +854,7 @@ struct RemoveUnusedModuleElements : public Pass {
                                (AddressType)c->value.getInteger()) ||
                   maxWritten > parentSize;
       }
+
       if (writesToVisible || mayTrap) {
         roots.emplace_back(kind, segmentName);
       }
