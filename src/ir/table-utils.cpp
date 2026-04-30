@@ -200,7 +200,7 @@ TableInfoMap computeTableInfo(Module& wasm,
       // Apply the value.
       auto& flatTableNames = flatTable->names;
       for (Index i = 0; i < constantSize; i++) {
-        flatTableNames[constantSize + i] = constantFunc;
+        flatTableNames[constantIndex + i] = constantFunc;
       }
 
       return true;
