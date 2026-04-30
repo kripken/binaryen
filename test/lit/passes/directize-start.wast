@@ -473,6 +473,7 @@
  ;; CHECK-NEXT:   (i32.const 1)
  ;; CHECK-NEXT:   (ref.func $target)
  ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (nop)
  ;; CHECK-NEXT:  (table.set $table
  ;; CHECK-NEXT:   (i32.const 3)
  ;; CHECK-NEXT:   (ref.func $target-b)
@@ -483,6 +484,7 @@
    (i32.const 1)
    (ref.func $target)
   )
+  (nop) ;; this does not bother us
   (table.set $table
    (i32.const 3)
    (ref.func $target-b)
