@@ -17,6 +17,8 @@
 
  ;; CHECK:      (export "caller" (func $caller))
 
+ ;; CHECK:      (export "trapper" (func $trapper))
+
  ;; CHECK:      (start $start)
  (start $start)
 
@@ -45,9 +47,12 @@
 
  ;; CHECK:      (func $target (type $func)
  ;; CHECK-NEXT: )
- (func $target)
+ (func $target
  )
 
+ ;; CHECK:      (func $trapper (type $func)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
  (func $trapper (export "trapper")
   ;; This index has nothing and will trap.
   (call_indirect (type $func)
