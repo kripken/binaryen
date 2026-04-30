@@ -187,7 +187,7 @@ struct Directize : public Pass {
       hasArgument("directize-initial-contents-immutable");
 
     auto tables =
-      TableUtils::computeTableInfo(*module, , getPassOptions(), initialContentsImmutable);
+      TableUtils::computeTableInfo(*module, getPassOptions(), initialContentsImmutable);
 
     // Stop if we cannot optimize anything.
     auto hasOptimizableTable = false;

@@ -19,6 +19,7 @@
 #include "element-utils.h"
 #include "find_all.h"
 #include "module-utils.h"
+#include "properties.h"
 
 namespace wasm::TableUtils {
 
