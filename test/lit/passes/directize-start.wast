@@ -168,3 +168,66 @@
  (func $target
  )
 )
+
+;; table.fill instead of table.set.
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $table 5 funcref)
+ (table $table 5 funcref)
+
+ ;; CHECK:      (elem declare func $target)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (export "trapper" (func $trapper))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.fill $table
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:   (i32.const 2)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  ;; This fills in two slots.
+  (table.fill $table
+   (i32.const 1)
+   (ref.func $target)
+   (i32.const 2)
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call $target)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  ;; Both of these get optimized.
+  (call_indirect (type $func)
+   (i32.const 1)
+  )
+  (call_indirect (type $func)
+   (i32.const 2)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+
+ ;; CHECK:      (func $trapper (type $func)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ (func $trapper (export "trapper")
+  ;; This traps.
+  (call_indirect (type $func)
+   (i32.const 3)
+  )
+ )
+)
