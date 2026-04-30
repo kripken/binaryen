@@ -243,3 +243,64 @@
   )
  )
 )
+
+;; As the last, but the size is not constant.
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $table 5 funcref)
+ (table $table 5 funcref)
+
+ ;; CHECK:      (elem declare func $target)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.fill $table
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:   (i32.add
+ ;; CHECK-NEXT:    (i32.const 1)
+ ;; CHECK-NEXT:    (i32.const 1)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  (table.fill $table
+   (i32.const 1)
+   (ref.func $target)
+   ;; This add is not identified as a constant.
+   (i32.add
+    (i32.const 1)
+    (i32.const 1)
+   )
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 2)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  ;; Nothing here is optimized.
+  (call_indirect (type $func)
+   (i32.const 1)
+  )
+  (call_indirect (type $func)
+   (i32.const 2)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+)
