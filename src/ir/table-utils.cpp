@@ -81,7 +81,9 @@ bool usesExpressions(ElementSegment* curr, Module* module) {
   return !allElementsRefFunc || hasSpecializedType;
 }
 
-TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
+TableInfoMap computeTableInfo(Module& wasm,
+                              const PassOptions& options,
+                              bool initialContentsImmutable) {
   // Set up the initial info.
   TableInfoMap tables;
   if (wasm.tables.empty()) {
@@ -190,7 +192,7 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
 
       auto& flatTable = tables[table].flatTable;
       if (!flatTable->ensureSpace(
-            wasm.getTable(table), constantIndex, constantSize)) {
+            *wasm.getTable(table), constantIndex, constantSize)) {
         // Sizes overflowed.
         return false;
       }
