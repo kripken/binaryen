@@ -19,6 +19,8 @@
 
  ;; CHECK:      (export "trapper" (func $trapper))
 
+ ;; CHECK:      (export "trapper-2" (func $trapper-2))
+
  ;; CHECK:      (start $start)
  (start $start)
 
@@ -56,7 +58,17 @@
  (func $trapper (export "trapper")
   ;; This index has nothing and will trap.
   (call_indirect (type $func)
-   (i32.const 3)
+   (i32.const 0)
+  )
+ )
+
+ ;; CHECK:      (func $trapper-2 (type $func)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ (func $trapper-2 (export "trapper-2")
+  ;; Ditto.
+  (call_indirect (type $func)
+   (i32.const 2)
   )
  )
 )
