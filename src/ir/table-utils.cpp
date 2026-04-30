@@ -212,7 +212,7 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
     Index i = 0;
     for (; i < block->list.size(); i++) {
       auto* curr = block->list[i];
-      Effects effects(options, wasm, curr);
+      EffectAnalyzer effects(options, wasm, curr);
       if (effects.calls || effects.transfersControlFlow ||
           curr->type == Type::unreachable) {
         // Either arbitrary code can run here, or we may skip code after us,
