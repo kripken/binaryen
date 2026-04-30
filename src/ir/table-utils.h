@@ -40,20 +40,29 @@ struct FlatTable {
           valid = false;
           return;
         }
-        Index start = offset->cast<Const>()->value.getInteger();
+        Index start = offset->cast<Const>()->value.getUnsigned();
         Index size = segment->data.size();
-        Index end;
-        if (std::ckd_add(&end, start, size) || end > table.initial) {
-          // Overflow.
+        if (!ensureSpace(table, start, size)) {
           valid = false;
           return;
-        }
-        if (end > names.size()) {
-          names.resize(end);
         }
         ElementUtils::iterElementSegmentFunctionNames(
           segment, [&](Name entry, Index i) { names[start + i] = entry; });
       });
+  }
+
+  // Checks if we have enough space to write data from a start index of a
+  // certain size. Grows |names| accordingly. Returns false if we hit an
+  // overflow.
+  bool ensureSpace(Table& table, uint64_t start, uint64_t size) {
+    Index end;
+    if (std::ckd_add(&end, start, size) || end > table.initial) {
+      return false;
+    }
+    if (end > names.size()) {
+      names.resize(end);
+    }
+    return true;
   }
 };
 

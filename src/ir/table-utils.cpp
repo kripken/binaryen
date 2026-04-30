@@ -186,9 +186,21 @@ TableInfoMap computeTableInfo(Module& wasm, bool initialContentsImmutable) {
         // FlatTable only stores function names. TODO optimize more?
         return false;
       }
-      auto constantSize = size ? Properties::getLiteral(index).getUnsigned() : 1;
+      auto constantFunc = constantValue.getFunc();
+      auto constantSize = size ? Properties::getLiteral(index).getUnsigned() : 1ULL;
 
-    }
+      auto& flatTable = tables[table].flatTable;
+      if (!flatTable->ensureSpace(wasm.getTable(table), constantIndex, constantSize)) {
+        // Sizes overflowed.
+        return false;
+      }
+
+      // Apply the value.
+      auto& flatTableNames = flatTable->names;
+      for (Index i = 0; i < constantSize; i++) {
+        flatTableNames[constantSize + i] = constantFunc;
+      }
+    };
 
     // Whether we've given up on analysis, because we saw something we can't
     // handle. In that case we process everything else pessimistically.    
