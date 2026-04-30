@@ -216,7 +216,7 @@
 
  ;; CHECK:      (func $caller (type $func)
  ;; CHECK-NEXT:  (call $target)
- ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT:  (call $target)
  ;; CHECK-NEXT: )
  (func $caller (export "caller")
   ;; Both of these get optimized.

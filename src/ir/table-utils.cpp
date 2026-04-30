@@ -188,7 +188,7 @@ TableInfoMap computeTableInfo(Module& wasm,
       }
       auto constantFunc = constantValue.getFunc();
       auto constantSize =
-        size ? Properties::getLiteral(index).getUnsigned() : 1ULL;
+        size ? Properties::getLiteral(size).getUnsigned() : 1ULL;
 
       auto& flatTable = tables[table].flatTable;
       if (!flatTable->ensureSpace(
