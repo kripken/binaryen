@@ -835,10 +835,7 @@ struct RemoveUnusedModuleElements : public Pass {
                                 Expression* offset,
                                 Importable* parent,
                                 Index parentSize) {
-      // In closed world, the outside does not call our functions,
-      auto writesToVisible =
-        parent->imported() && segmentSize && !getPassOptions().closedWorld;
-
+      auto writesToVisible = parent->imported() && segmentSize;
       auto mayTrap = false;
       if (!getPassOptions().trapsNeverHappen) {
         // Check if this might trap. If it is obviously in bounds then it
@@ -855,7 +852,6 @@ struct RemoveUnusedModuleElements : public Pass {
                                (AddressType)c->value.getInteger()) ||
                   maxWritten > parentSize;
       }
-
       if (writesToVisible || mayTrap) {
         roots.emplace_back(kind, segmentName);
       }
