@@ -591,3 +591,71 @@
  (func $target-b
  )
 )
+
+;; Two sets for different tables, with a call in the middle
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $a 5 funcref)
+ (table $a 5 funcref)
+
+ ;; CHECK:      (table $b 5 funcref)
+ (table $b 5 funcref)
+
+ ;; CHECK:      (elem declare func $target $target-b)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.set $a
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (call $caller)
+ ;; CHECK-NEXT:  (table.set $b
+ ;; CHECK-NEXT:   (i32.const 3)
+ ;; CHECK-NEXT:   (ref.func $target-b)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  (table.set $a
+   (i32.const 1)
+   (ref.func $target)
+  )
+  (call $caller) ;; this stops us from optimizing anything further
+  (table.set $b
+   (i32.const 3)
+   (ref.func $target-b)
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call $target)
+ ;; CHECK-NEXT:  (call_indirect $b (type $func)
+ ;; CHECK-NEXT:   (i32.const 3)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  ;; Only the first gets optimized.
+  (call_indirect $a (type $func)
+   (i32.const 1)
+  )
+  (call_indirect $b (type $func)
+   (i32.const 3)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+
+ ;; CHECK:      (func $target-b (type $func)
+ ;; CHECK-NEXT: )
+ (func $target-b
+ )
+)
