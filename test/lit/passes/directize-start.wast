@@ -659,3 +659,86 @@
  (func $target-b
  )
 )
+
+;; Three sets.
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $a 5 funcref)
+ (table $a 5 funcref)
+
+ ;; CHECK:      (table $b 5 funcref)
+ (table $b 5 funcref)
+
+ ;; CHECK:      (elem declare func $target $target-b)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.set $a
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (call $caller)
+ ;; CHECK-NEXT:  (table.set $a
+ ;; CHECK-NEXT:   (i32.const 2)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (table.set $b
+ ;; CHECK-NEXT:   (i32.const 3)
+ ;; CHECK-NEXT:   (ref.func $target-b)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  (table.set $a
+   (i32.const 1)
+   (ref.func $target)
+  )
+  (call $caller)
+  ;; After the call we now access table $a. This stops us from optimizing that
+  ;; table entirely, as after the call, we assume the worst about the rest, and
+  ;; in particular we don't know what is at index 2 (this write might or might
+  ;; not happen). TODO: we could mark some indexes as "unknown" and still
+  ;; optimize others.
+  (table.set $a
+   (i32.const 2)
+   (ref.func $target)
+  )
+  (table.set $b
+   (i32.const 3)
+   (ref.func $target-b)
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call_indirect $a (type $func)
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (call_indirect $b (type $func)
+ ;; CHECK-NEXT:   (i32.const 3)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  ;; Neither gets optimized.
+  (call_indirect $a (type $func)
+   (i32.const 1)
+  )
+  (call_indirect $b (type $func)
+   (i32.const 3)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+
+ ;; CHECK:      (func $target-b (type $func)
+ ;; CHECK-NEXT: )
+ (func $target-b
+ )
+)
