@@ -451,3 +451,75 @@
  )
 )
 
+;; Two sets in the start.
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $table 5 funcref)
+ (table $table 5 funcref)
+
+ ;; CHECK:      (elem declare func $target $target-b)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (export "trapper" (func $trapper))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.set $table
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (table.set $table
+ ;; CHECK-NEXT:   (i32.const 3)
+ ;; CHECK-NEXT:   (ref.func $target-b)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  (table.set $table
+   (i32.const 1)
+   (ref.func $target)
+  )
+  (table.set $table
+   (i32.const 3)
+   (ref.func $target-b)
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call $target)
+ ;; CHECK-NEXT:  (call $target-b)
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  ;; Both of these get optimized.
+  (call_indirect (type $func)
+   (i32.const 1)
+  )
+  (call_indirect (type $func)
+   (i32.const 3)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+
+ ;; CHECK:      (func $target-b (type $func)
+ ;; CHECK-NEXT: )
+ (func $target-b
+ )
+
+ ;; CHECK:      (func $trapper (type $func)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ (func $trapper (export "trapper")
+  ;; This index in the middle remains unset, and will trap.
+  (call_indirect (type $func)
+   (i32.const 2)
+  )
+ )
+)
