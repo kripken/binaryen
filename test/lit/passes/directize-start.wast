@@ -890,4 +890,34 @@
  )
 )
 
+;; table.grow stops us from optimizing.
+(module
+ (type $func (func))
 
+ (table $table 5 funcref)
+
+ (start $start)
+
+ (func $start
+  (table.set $table
+   (i32.const 1)
+   (ref.func $target)
+  )
+  ;; This stops us from optimizing this table. TODO: handle non-fixed table
+  ;; sizes?
+  (drop
+   (table.grow $table
+    (i32.const 1)
+   )
+  )
+ )
+
+ (func $caller (export "caller")
+  (call_indirect (type $func)
+   (i32.const 1)
+  )
+ )
+
+ (func $target
+ )
+)
