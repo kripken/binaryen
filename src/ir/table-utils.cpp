@@ -202,6 +202,8 @@ TableInfoMap computeTableInfo(Module& wasm,
       for (Index i = 0; i < constantSize; i++) {
         flatTableNames[constantSize + i] = constantFunc;
       }
+
+      return true;
     };
 
     // Whether we've given up on analysis, because we saw something we can't
@@ -215,7 +217,7 @@ TableInfoMap computeTableInfo(Module& wasm,
     for (; i < block->list.size(); i++) {
       auto* curr = block->list[i];
       EffectAnalyzer effects(options, wasm, curr);
-      if (effects.calls || effects.transfersControlFlow ||
+      if (effects.calls || effects.transfersControlFlow() ||
           curr->type == Type::unreachable) {
         // Either arbitrary code can run here, or we may skip code after us,
         // both of which break our ability to apply changes to flatTable.

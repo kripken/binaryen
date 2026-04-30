@@ -835,8 +835,9 @@ struct RemoveUnusedModuleElements : public Pass {
                                 Expression* offset,
                                 Importable* parent,
                                 Index parentSize) {
-      // In closed world, the outside does not call our functions, 
-      auto writesToVisible = parent->imported() && segmentSize && !getPassOptions().closedWorld;
+      // In closed world, the outside does not call our functions,
+      auto writesToVisible =
+        parent->imported() && segmentSize && !getPassOptions().closedWorld;
 
       auto mayTrap = false;
       if (!getPassOptions().trapsNeverHappen) {
