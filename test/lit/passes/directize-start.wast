@@ -890,64 +890,6 @@
  )
 )
 
-;; table.grow.
-(module
- ;; CHECK:      (type $func (func))
- (type $func (func))
-
- ;; CHECK:      (table $table 5 funcref)
- (table $table 5 funcref)
-
- ;; CHECK:      (elem declare func $target)
-
- ;; CHECK:      (export "caller" (func $caller))
-
- ;; CHECK:      (start $start)
- (start $start)
-
- ;; CHECK:      (func $start (type $func)
- ;; CHECK-NEXT:  (table.set $table
- ;; CHECK-NEXT:   (i32.const 1)
- ;; CHECK-NEXT:   (ref.func $target)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (drop
- ;; CHECK-NEXT:   (table.grow $table
- ;; CHECK-NEXT:    (ref.null nofunc)
- ;; CHECK-NEXT:    (i32.const 1)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- (func $start
-  (table.set $table
-   (i32.const 1)
-   (ref.func $target)
-  )
-  ;; This does not stop us from optimizing this table.
-  (drop
-   (table.grow $table
-    (ref.null func)
-    (i32.const 1)
-   )
-  )
- )
-
- ;; CHECK:      (func $caller (type $func)
- ;; CHECK-NEXT:  (call_indirect $table (type $func)
- ;; CHECK-NEXT:   (i32.const 1)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- (func $caller (export "caller")
-  (call_indirect (type $func)
-   (i32.const 1)
-  )
- )
-
- ;; CHECK:      (func $target (type $func)
- ;; CHECK-NEXT: )
- (func $target
- )
-)
-
 ;; table.copy.
 (module
  ;; CHECK:      (type $func (func))
@@ -1037,8 +979,8 @@
    (i32.const 1)
    (ref.func $target)
   )
-  ;; This stops us from optimizing this table. TODO: we could handle constant
-  ;; cases like this.
+  ;; This doe snot stop us from optimizing this table, as it just appends.
+  ;; TODO: we could also handle constant cases like this, as we do table.fill.
   (drop
    (table.grow $table
     (ref.func $start)
@@ -1048,13 +990,23 @@
  )
 
  ;; CHECK:      (func $caller (type $func)
- ;; CHECK-NEXT:  (call_indirect $table (type $func)
- ;; CHECK-NEXT:   (i32.const 1)
- ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (call $target)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $caller (export "caller")
+  ;; This is in the elem segment, so we can optimize it.
   (call_indirect (type $func)
    (i32.const 1)
+  )
+  ;; This is in the range that we grow to. We could optimize this TODO
+  XXX XXX XXX
+  (call_indirect (type $func)
+   (i32.const 10)
+  )
+  ;; This is outside the grown range. We could optimize this to a trap TODO
+  (call_indirect (type $func)
+   (i32.const 100)
   )
  )
 

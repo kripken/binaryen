@@ -135,9 +135,13 @@ TableInfoMap computeTableInfo(Module& wasm,
       tablesWithSet.insert(curr->destTable);
     }
     void visitTableInit(TableInit* curr) { tablesWithSet.insert(curr->table); }
-    void visitTableGrow(TableGrow* curr) {
-      tablesWithSet.insert(curr->table);
-    }
+
+    // TableGrow is intentionally not handled here. It does write items to the
+    // table, but only by appending. That means that we don't see the items in
+    // our FlatTable data structure (which mirrors the data from elem segments),
+    // and we give up on optimizing anything past that size anyhow. That is, by
+    // not marking tables that grow as having a set, we allow optimizing their
+    // initial values at least.
   };
 
   // Scan the start function separately: we can handle fixed offsets in the
