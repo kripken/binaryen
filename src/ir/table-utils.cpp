@@ -135,6 +135,9 @@ TableInfoMap computeTableInfo(Module& wasm,
       tablesWithSet.insert(curr->destTable);
     }
     void visitTableInit(TableInit* curr) { tablesWithSet.insert(curr->table); }
+    void visitTableGrow(TableGrow* curr) {
+      tablesWithSet.insert(curr->table);
+    }
   };
 
   // Scan the start function separately: we can handle fixed offsets in the

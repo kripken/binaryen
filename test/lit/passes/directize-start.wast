@@ -932,7 +932,9 @@
  )
 
  ;; CHECK:      (func $caller (type $func)
- ;; CHECK-NEXT:  (call $target)
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $caller (export "caller")
   (call_indirect (type $func)
@@ -983,6 +985,65 @@
    (i32.const 0)
    (i32.const 0)
    (i32.const 0)
+  )
+ )
+
+ ;; CHECK:      (func $caller (type $func)
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $caller (export "caller")
+  (call_indirect (type $func)
+   (i32.const 1)
+  )
+ )
+
+ ;; CHECK:      (func $target (type $func)
+ ;; CHECK-NEXT: )
+ (func $target
+ )
+)
+
+;; table.grow.
+(module
+ ;; CHECK:      (type $func (func))
+ (type $func (func))
+
+ ;; CHECK:      (table $table 5 funcref)
+ (table $table 5 funcref)
+
+ ;; CHECK:      (elem declare func $start $target)
+
+ ;; CHECK:      (export "caller" (func $caller))
+
+ ;; CHECK:      (start $start)
+ (start $start)
+
+ ;; CHECK:      (func $start (type $func)
+ ;; CHECK-NEXT:  (table.set $table
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (drop
+ ;; CHECK-NEXT:   (table.grow $table
+ ;; CHECK-NEXT:    (ref.func $start)
+ ;; CHECK-NEXT:    (i32.const 42)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ (func $start
+  (table.set $table
+   (i32.const 1)
+   (ref.func $target)
+  )
+  ;; This stops us from optimizing this table. TODO: we could handle constant
+  ;; cases like this.
+  (drop
+   (table.grow $table
+    (ref.func $start)
+    (i32.const 42)
+   )
   )
  )
 
