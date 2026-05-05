@@ -963,29 +963,31 @@
  (start $start)
 
  ;; CHECK:      (func $start (type $func)
- ;; CHECK-NEXT:  (table.set $table
- ;; CHECK-NEXT:   (i32.const 1)
- ;; CHECK-NEXT:   (ref.func $target)
- ;; CHECK-NEXT:  )
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (table.grow $table
  ;; CHECK-NEXT:    (ref.func $start)
  ;; CHECK-NEXT:    (i32.const 42)
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (table.set $table
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:   (ref.func $target)
+ ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $start
-  (table.set $table
-   (i32.const 1)
-   (ref.func $target)
-  )
-  ;; This doe snot stop us from optimizing this table, as it just appends.
+  ;; This does not stop us from optimizing this table, as it just appends, even
+  ;; though it happens before a set.
   ;; TODO: we could also handle constant cases like this, as we do table.fill.
   (drop
    (table.grow $table
     (ref.func $start)
     (i32.const 42)
    )
+  )
+
+  (table.set $table
+   (i32.const 1)
+   (ref.func $target)
   )
  )
 
