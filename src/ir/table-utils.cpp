@@ -99,13 +99,13 @@ TableInfoMap computeTableInfo(Module& wasm,
 
   for (auto& table : wasm.tables) {
     if (table->imported()) {
-      tables[table->name].mayBeModified = true;
+      tables[table->name].hasSet = true;
     }
   }
 
   for (auto& ex : wasm.exports) {
     if (ex->kind == ExternalKind::Table) {
-      tables[*ex->getInternalName()].mayBeModified = true;
+      tables[*ex->getInternalName()].hasSet = true;
     }
   }
 
@@ -113,7 +113,7 @@ TableInfoMap computeTableInfo(Module& wasm,
   // might learn anything new.
   auto hasUnmodifiableTable = false;
   for (auto& [_, info] : tables) {
-    if (!info.mayBeModified) {
+    if (!info.hasSet) {
       hasUnmodifiableTable = true;
       break;
     }
@@ -122,26 +122,35 @@ TableInfoMap computeTableInfo(Module& wasm,
     return tables;
   }
 
-  using TablesWithSet = std::unordered_set<Name>;
+  // Miniature form of TableInfo, without things we don't need (some of which
+  // cause compilation errors on the copies below).
+  struct MiniTableInfo {
+    bool hasSet = false;
+    bool hasGrow = false;
+  };
+
+  using MiniTableInfoMap = std::unordered_map<Name, MiniTableInfo>;
 
   struct Finder : public PostWalker<Finder> {
-    TablesWithSet& tablesWithSet;
+    MiniTableInfoMap& tableInfoMap;
 
-    Finder(TablesWithSet& tablesWithSet) : tablesWithSet(tablesWithSet) {}
+    Finder(MiniTableInfoMap& tableInfoMap) : tableInfoMap(tableInfoMap) {}
 
-    void visitTableSet(TableSet* curr) { tablesWithSet.insert(curr->table); }
-    void visitTableFill(TableFill* curr) { tablesWithSet.insert(curr->table); }
-    void visitTableCopy(TableCopy* curr) {
-      tablesWithSet.insert(curr->destTable);
+    void visitTableSet(TableSet* curr) {
+      tableInfoMap[curr->table].hasSet = true;
     }
-    void visitTableInit(TableInit* curr) { tablesWithSet.insert(curr->table); }
-
-    // TableGrow is intentionally not handled here. It does write items to the
-    // table, but only by appending. That means that we don't see the items in
-    // our FlatTable data structure (which mirrors the data from elem segments),
-    // and we give up on optimizing anything past that size anyhow. That is, by
-    // not marking tables that grow as having a set, we allow optimizing their
-    // initial values at least.
+    void visitTableFill(TableFill* curr) {
+      tableInfoMap[curr->table].hasSet = true;
+    }
+    void visitTableCopy(TableCopy* curr) {
+      tableInfoMap[curr->destTable].hasSet = true;
+    }
+    void visitTableInit(TableInit* curr) {
+      tableInfoMap[curr->table].hasSet = true;
+    }
+    void visitTableGrow(TableGrow* curr) {
+      tableInfoMap[curr->table].hasGrow = true;
+    }
   };
 
   // Scan the start function separately: we can handle fixed offsets in the
@@ -151,19 +160,28 @@ TableInfoMap computeTableInfo(Module& wasm,
   // once, as it would just re-apply the same constant values.) Such constant-
   // offset operations can appear after linking modules, or can be a form of
   // compression (replace a huge segment with a table.fill).
-  ModuleUtils::ParallelFunctionAnalysis<TablesWithSet> analysis(
-    wasm, [&](Function* func, TablesWithSet& tablesWithSet) {
-      if (func->imported() || func->name == wasm.start) {
+  ModuleUtils::ParallelFunctionAnalysis<MiniTableInfoMap> analysis(
+    wasm, [&](Function* func, MiniTableInfoMap& tableInfoMap) {
+      if (func->imported()) {
         return;
       }
 
-      Finder(tablesWithSet).walk(func->body);
+      Finder(tableInfoMap).walkFunction(func);
     });
 
-  for (auto& [_, names] : analysis.map) {
-    for (auto name : names) {
-      tables[name].mayBeModified = true;
+  auto applyMap = [&](MiniTableInfoMap& map) {
+    for (auto& [tableName, info] : map) {
+      if (info.hasSet) {
+        tables[tableName].hasSet = true;
+      }
+      if (info.hasGrow) {
+        tables[tableName].hasGrow = true;
+      }
     }
+  };
+
+  for (auto& [_, map] : analysis.map) {
+    applyMap(map);
   }
 
   if (wasm.start) {
@@ -171,8 +189,7 @@ TableInfoMap computeTableInfo(Module& wasm,
     // flatTable. We go in order, and stop at the first operation that we cannot
     // reason about.
 
-    // Tables we see non-constant operations in.
-    TablesWithSet nonConstant;
+    MiniTableInfoMap startInfoMap;
 
     // Handle a possibly-constant table write. If the size is not given, it is
     // assumed to be 1 (which is the case for a set). Returns true if we
@@ -247,20 +264,18 @@ TableInfoMap computeTableInfo(Module& wasm,
       }
       // Things we did not handle are non-constant. TODO: handle constant copy
       // etc.
-      Finder(nonConstant).walk(curr);
+      Finder(startInfoMap).walk(curr);
     }
 
     if (giveUp) {
       // Handle everything else pessimistically.
       for (; i < block->list.size(); i++) {
-        Finder(nonConstant).walk(block->list[i]);
+        Finder(startInfoMap).walk(block->list[i]);
       }
     }
 
     // Apply the non-constant things.
-    for (auto name : nonConstant) {
-      tables[name].mayBeModified = true;
-    }
+    applyMap(startInfoMap);
   }
 
   return tables;
