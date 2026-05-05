@@ -991,8 +991,12 @@
 
  ;; CHECK:      (func $caller (type $func)
  ;; CHECK-NEXT:  (call $target)
- ;; CHECK-NEXT:  (unreachable)
- ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 10)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (call_indirect $table (type $func)
+ ;; CHECK-NEXT:   (i32.const 100)
+ ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $caller (export "caller")
   ;; This is in the elem segment, so we can optimize it.
@@ -1000,7 +1004,6 @@
    (i32.const 1)
   )
   ;; This is in the range that we grow to. We could optimize this TODO
-  XXX XXX XXX
   (call_indirect (type $func)
    (i32.const 10)
   )
