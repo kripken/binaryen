@@ -153,16 +153,14 @@ TableInfoMap computeTableInfo(Module& wasm,
     }
   };
 
-  // Scan the start function separately: we can handle fixed offsets in the
-  // start function, if it only writes constant offsets and known values, then
-  // we can apply those to `tables.flatTable`, i.e., those work just like
-  // constant elements. (Note: this works even if start is called more than
-  // once, as it would just re-apply the same constant values.) Such constant-
-  // offset operations can appear after linking modules, or can be a form of
-  // compression (replace a huge segment with a table.fill).
   ModuleUtils::ParallelFunctionAnalysis<MiniTableInfoMap> analysis(
     wasm, [&](Function* func, MiniTableInfoMap& tableInfoMap) {
-      if (func->imported()) {
+      // Scan the start function separately, later down. We can handle fixed
+      // offsets in the start in some cases, applying them to `tables.flatTable`
+      // as if there were from element segments. Such fixed offsets can appear
+      // after linking modules, or can be a form of compression (replace a huge
+      // segment with a table.fill).
+      if (func->imported() || func->name == wasm.start) {
         return;
       }
 
@@ -187,7 +185,8 @@ TableInfoMap computeTableInfo(Module& wasm,
   if (wasm.start) {
     // Scan the start function in detail, applying constant operations to the
     // flatTable. We go in order, and stop at the first operation that we cannot
-    // reason about.
+    // reason about. (Note: this works even if start is called more than once,
+    // once, as it would just re-apply the same constant values.)
 
     MiniTableInfoMap startInfoMap;
 
