@@ -2428,6 +2428,12 @@ void TranslateToFuzzReader::mutateJSBoundary() {
       if (getModule()->getFunction(curr->target)->imported()) {
         map[curr->target].callImports.push_back(curr);
       }
+
+      // Return calls add a dependency similar to references: we cannot refine
+      // the callee without coordination with the caller.
+      if (curr->isReturn) {
+        map[curr->target].reffed = true;
+      }
     }
 
     void visitRefFunc(RefFunc* curr) { map[curr->func].reffed = true; }
@@ -2446,10 +2452,13 @@ void TranslateToFuzzReader::mutateJSBoundary() {
   // refine, we are given the maximum refinement and pick a random type between
   // it and the old type.
   auto maybeRefine = [&](Type old, Type new_) {
-    if (!new_.isRef()) {
-      // A non-reference like i32, or unreachable (no values reach this place),
-      // so it does not matter.
+    if (!old.isRef()) {
       return old;
+    }
+
+    // If this is unreachable code, we can still refine to the bottom.
+    if (new_ == Type::unreachable) {
+      new_ = Type(old.getHeapType().getBottom(), NonNullable);
     }
 
     // Find all heap types between the old and new, starting from new.
@@ -2460,10 +2469,12 @@ void TranslateToFuzzReader::mutateJSBoundary() {
     while (1) {
       options.push_back(newHeapType);
       // We cannot look at a bottom type's supers (there can be many, and the
-      // getSuperType() API doesn't return them).
-      // TODO: handle all possible supers.
+      // getSuperType() API doesn't return them), but can use
+      // interestingHeapSubTypes on the top.
       if (newHeapType.isBottom()) {
-        options.push_back(oldHeapType);
+        for (auto type : interestingHeapSubTypes[newHeapType.getTop()]) {
+          options.push_back(type);
+        }
         break;
       }
       // Continue until we reach the old type.
@@ -2486,15 +2497,29 @@ void TranslateToFuzzReader::mutateJSBoundary() {
     // Pick the exactness.
     auto oldExactness = old.getExactness();
     auto newExactness = new_.getExactness();
-    if (newExactness != oldExactness) {
+    // We can only be exact if we are using the new heap type: that type is
+    // exactly what is sent here, and no intermediate heap type would be valid.
+    // For example, given $A :> $B :> $C, then maybeRefine($A, exact $C) can
+    // return exact $C, but cannot return exact $B.
+    //
+    // Also, basic heap types cannot be exact.
+    if (newHeapType != new_.getHeapType() || newHeapType.isBasic()) {
+      newExactness = Inexact;
+    } else if (newExactness != oldExactness) {
       // TODO: once getExactness() is fixed (see there), use that
       newExactness = oneIn(2) ? Exact : Inexact;
     }
-    if (newHeapType.isBasic()) {
-      newExactness = Inexact;
-    }
 
     return Type(newHeapType, newNullability, newExactness);
+  };
+
+  // Given a set of types (all params or all results), and an index among them,
+  // refine that index if we can. It is possible that no new types exist at all,
+  // if the code was unreachable and we noted nothing.
+  auto maybeRefineIndex = [&](Type oldTypes, LUBFinder newLUB, Index index) {
+    auto lub =
+      newLUB.noted() ? newLUB.getLUB()[index] : Type(Type::unreachable);
+    return maybeRefine(oldTypes[index], lub);
   };
 
   // First, refine params sent to imports. Gather the LUB sent to each import,
@@ -2507,9 +2532,13 @@ void TranslateToFuzzReader::mutateJSBoundary() {
       for (Index i = 0; i < call->operands.size(); i++) {
         auto type = call->operands[i]->type;
         if (type == Type::unreachable) {
-          // Nothing sent here, so use the declared type - what we refine to
-          // must still validate even though this call is unreachable.
+          // Nothing sent here. What we refine to must still validate, even
+          // though this call is unreachable. Using the non-nullable bottom type
+          // is valid, and has the fewest restrictions.
           type = declaredParams[i];
+          if (type.isRef()) {
+            type = Type(type.getHeapType().getBottom(), NonNullable);
+          }
         }
         sent.push_back(type);
       }
@@ -2521,6 +2550,8 @@ void TranslateToFuzzReader::mutateJSBoundary() {
     if (!func->imported()) {
       continue;
     }
+    // TODO: In the referenced case, we could consider using import/export
+    //       wrappers and refining just there.
     if (map[func->name].reffed) {
       continue;
     }
@@ -2531,19 +2562,20 @@ void TranslateToFuzzReader::mutateJSBoundary() {
       continue;
     }
 
-    // Find the LUB, which is the most we can refine.
-    auto lub = paramLUBs[func->name];
-    if (!lub.noted()) {
+    auto oldParams = func->getParams();
+    if (oldParams == Type::none) {
       continue;
     }
 
     // Refine.
-    auto oldParams = func->getParams();
+    auto lub = paramLUBs[func->name];
     auto lubType = lub.getLUB();
-    assert(oldParams.size() == lubType.size());
+    // Either the LUB has the right data shape, or nothing was noted (this is
+    // unreachable).
+    assert(oldParams.size() == lubType.size() || !lub.noted());
     std::vector<Type> newParams;
     for (Index i = 0; i < lubType.size(); i++) {
-      newParams.push_back(maybeRefine(oldParams[i], lubType[i]));
+      newParams.push_back(maybeRefineIndex(oldParams, lub, i));
     }
     func->setParams(Type(newParams));
   }
@@ -2558,20 +2590,19 @@ void TranslateToFuzzReader::mutateJSBoundary() {
       continue;
     }
 
-    // Find the LUB.
     auto* func = wasm.getFunction(name);
-    auto lub = LUB::getResultsLUB(func, wasm);
-    if (!lub.noted()) {
+    auto oldResults = func->getResults();
+    if (oldResults == Type::none) {
       continue;
     }
 
     // Refine.
-    auto oldResults = func->getResults();
+    auto lub = LUB::getResultsLUB(func, wasm);
     auto lubType = lub.getLUB();
-    assert(oldResults.size() == lubType.size());
+    assert(oldResults.size() == lubType.size() || !lub.noted());
     std::vector<Type> newResults;
     for (Index i = 0; i < lubType.size(); i++) {
-      newResults.push_back(maybeRefine(oldResults[i], lubType[i]));
+      newResults.push_back(maybeRefineIndex(oldResults, lub, i));
     }
     func->setResults(Type(newResults));
   }
@@ -4666,7 +4697,10 @@ Expression* TranslateToFuzzReader::makeUnary(Type type) {
         case 1:
           return buildUnary({SplatVecI64x2, make(Type::i64)});
         case 2:
-          return buildUnary({SplatVecF32x4, make(Type::f32)});
+          return buildUnary({pick(FeatureOptions<UnaryOp>()
+                                    .add(FeatureSet::SIMD, SplatVecF32x4)
+                                    .add(FeatureSet::FP16, SplatVecF16x8)),
+                             make(Type::f32)});
         case 3:
           return buildUnary({SplatVecF64x2, make(Type::f64)});
         case 4:
@@ -4739,7 +4773,9 @@ Expression* TranslateToFuzzReader::makeUnary(Type type) {
                                          TruncSatUVecF16x8ToVecI16x8,
                                          ConvertSVecI16x8ToVecF16x8,
                                          ConvertUVecI16x8ToVecF16x8,
-                                         PromoteLowVecF16x8ToVecF32x4)),
+                                         PromoteLowVecF16x8ToVecF32x4,
+                                         DemoteZeroVecF32x4ToVecF16x8,
+                                         DemoteZeroVecF64x2ToVecF16x8)),
                              make(Type::v128)});
       }
       WASM_UNREACHABLE("invalid value");
@@ -4998,6 +5034,14 @@ Expression* TranslateToFuzzReader::makeBinary(Type type) {
 
                                       // SIMD Swizzle
                                       SwizzleVecI8x16)
+                                 .add(FeatureSet::RelaxedSIMD,
+                                      RelaxedSwizzleVecI8x16,
+                                      RelaxedMinVecF32x4,
+                                      RelaxedMaxVecF32x4,
+                                      RelaxedMinVecF64x2,
+                                      RelaxedMaxVecF64x2,
+                                      RelaxedQ15MulrSVecI16x8,
+                                      RelaxedDotI8x16I7x16SToVecI16x8)
                                  .add(FeatureSet::FP16,
                                       EqVecF16x8,
                                       EqVecF16x8,
@@ -5321,13 +5365,20 @@ Expression* TranslateToFuzzReader::makeSIMDShuffle() {
 }
 
 Expression* TranslateToFuzzReader::makeSIMDTernary() {
-  // TODO: Enable qfma/qfms once it is implemented in V8 and the interpreter
-  // SIMDTernaryOp op = pick(Bitselect,
-  //                         QFMAF32x4,
-  //                         QFMSF32x4,
-  //                         QFMAF64x2,
-  //                         QFMSF64x2);
-  SIMDTernaryOp op = Bitselect;
+  SIMDTernaryOp op =
+    pick(FeatureOptions<SIMDTernaryOp>()
+           .add(FeatureSet::SIMD, Bitselect)
+           .add(FeatureSet::RelaxedSIMD,
+                RelaxedMaddVecF32x4,
+                RelaxedNmaddVecF32x4,
+                RelaxedMaddVecF64x2,
+                RelaxedNmaddVecF64x2,
+                RelaxedLaneselectI8x16,
+                RelaxedLaneselectI16x8,
+                RelaxedLaneselectI32x4,
+                RelaxedLaneselectI64x2,
+                RelaxedDotI8x16I7x16AddSToVecI32x4)
+           .add(FeatureSet::FP16, MaddVecF16x8, NmaddVecF16x8));
   Expression* a = make(Type::v128);
   Expression* b = make(Type::v128);
   Expression* c = make(Type::v128);
