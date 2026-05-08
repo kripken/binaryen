@@ -254,6 +254,7 @@ V8_OPTS = [
     '--experimental-wasm-fp16',
     '--experimental-wasm-custom-descriptors',
     '--experimental-wasm-js-interop',
+    '--experimental-wasm-acquire-release',
 ]
 
 # external tools
@@ -404,7 +405,6 @@ SPEC_TESTS_TO_SKIP = [
     'threads/atomic.wast',
 ]
 SPEC_TESTSUITE_PROPOSALS_TO_SKIP = [
-    'wide-arithmetic',
 ]
 
 # Paths are relative to the test/spec/testsuite directory
