@@ -241,8 +241,8 @@ def randomize_fuzz_settings():
     if random.random() < 0.5:
         LOWER_STRINGS = True
         # Only lower if we might actually need to.
-        #if not all_disallowed(['strings']):
-        #    GEN_ARGS += ['--string-lowering']
+        if not all_disallowed(['strings']):
+            GEN_ARGS += ['--string-lowering']
     else:
         LOWER_STRINGS = False
 
@@ -260,7 +260,7 @@ def randomize_fuzz_settings():
         # bunch of complexity. Instead, fuzz JSPI without start functions.
         GEN_ARGS += ['--remove-start']
 
-    print('randomized settings (NaNs, OOB, legalize, JSPI):', NANS, OOB, LEGALIZE, JSPI)
+    print('randomized settings (NANS, OOB, LEGALIZE, LOWER_STRINGS, JSPI):', NANS, OOB, LEGALIZE, LOWER_STRINGS, JSPI)
 
 
 def can_run_in_v8():
@@ -2265,6 +2265,8 @@ class PreserveImportsExportsJS(TestCaseHandler):
         if not NANS:
             # TODO: do we also need this in each reduction step?
             gen_args += ['--denan']
+        if not all_disallowed(['strings']):
+            gen_args += ['--string-lowering']
         run([in_bin('wasm-opt')] + gen_args + FEATURE_OPTS)
 
         # We successfully generated pre_wasm; stash it for possible reduction
