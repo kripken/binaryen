@@ -92,8 +92,9 @@ FUZZER_ARGS = [
     '-all',
     '--disable-shared-everything',
     '--disable-fp16',
-    '--disable-strings',
     '--disable-stack-switching',
+    # Lower strings at the end.
+    '--string-lowering',
 ]
 
 

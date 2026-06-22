@@ -73,7 +73,6 @@ CLOSED_WORLD_FLAG = '--closed-world'
 DISALLOWED_FEATURES_IN_V8 = [
     'shared-everything',
     'fp16',
-    'strings',
     'stack-switching',
     'multibyte',
 ]
@@ -236,6 +235,17 @@ def randomize_fuzz_settings():
         if random.random() < 0.5:
             GEN_ARGS += ['--enclose-world']
 
+    # A boolean whether we allow lower away strings. If we do, then strings can
+    # run even in v8.
+    global LOWER_STRINGS
+    if random.random() < 0.5:
+        LOWER_STRINGS = True
+        # Only lower if we might actually need to.
+        #if not all_disallowed(['strings']):
+        #    GEN_ARGS += ['--string-lowering']
+    else:
+        LOWER_STRINGS = False
+
     # Test JSPI somewhat rarely, as it may be slower, and disables some other
     # fuzzing.
     global JSPI
@@ -251,6 +261,13 @@ def randomize_fuzz_settings():
         GEN_ARGS += ['--remove-start']
 
     print('randomized settings (NaNs, OOB, legalize, JSPI):', NANS, OOB, LEGALIZE, JSPI)
+
+
+def can_run_in_v8():
+    # Disallow all disallowed features, and also strings, but allow strings if
+    # they are lowered away.
+    return all_disallowed(DISALLOWED_FEATURES_IN_V8) and \
+        (all_disallowed(['strings']) or LOWER_STRINGS)
 
 
 def init_important_initial_contents():
@@ -860,7 +877,7 @@ class D8:
 
     @override
     def can_run(self, wasm):
-        return all_disallowed(DISALLOWED_FEATURES_IN_V8)
+        return can_run_in_v8()
 
     @override
     def can_compare_to_self(self):
@@ -1754,8 +1771,7 @@ class Split(TestCaseHandler):
         if not LEGALIZE:
             return False
 
-        # see D8.can_run
-        return all_disallowed(DISALLOWED_FEATURES_IN_V8)
+        return can_run_in_v8()
 
 
 # Check that the text format round-trips without error.
@@ -2051,7 +2067,7 @@ class Two(TestCaseHandler):
         # (as optimizations can lead to different outputs), and we must
         # disallow some features.
         # TODO: relax some of these
-        if NANS or not all_disallowed(DISALLOWED_FEATURES_IN_V8):
+        if NANS or not can_run_in_v8():
             return
 
         output = run_d8_wasm(wasm, args=[second_wasm])
@@ -2344,7 +2360,7 @@ class PreserveImportsExportsJS(TestCaseHandler):
 
     @override
     def can_run_on_wasm(self, wasm):
-        return all_disallowed(DISALLOWED_FEATURES_IN_V8)
+        return can_run_in_v8()
 
 
 # Test that we preserve branch hints properly. The invariant that we test here
