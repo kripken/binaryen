@@ -238,13 +238,10 @@ def randomize_fuzz_settings():
     # A boolean whether we allow lower away strings. If we do, then strings can
     # run even in v8.
     global LOWER_STRINGS
-    if random.random() < 0.5:
+    LOWER_STRINGS = False
+    if not all_disallowed(['strings']) and random.random() < 0.5:
         LOWER_STRINGS = True
-        # Only lower if we might actually need to.
-        if not all_disallowed(['strings']):
-            GEN_ARGS += ['--string-lowering']
-    else:
-        LOWER_STRINGS = False
+        GEN_ARGS += ['--string-lowering']
 
     # Test JSPI somewhat rarely, as it may be slower, and disables some other
     # fuzzing.
@@ -2265,7 +2262,7 @@ class PreserveImportsExportsJS(TestCaseHandler):
         if not NANS:
             # TODO: do we also need this in each reduction step?
             gen_args += ['--denan']
-        if not all_disallowed(['strings']):
+        if LOWER_STRINGS:
             gen_args += ['--string-lowering']
         run([in_bin('wasm-opt')] + gen_args + FEATURE_OPTS)
 
