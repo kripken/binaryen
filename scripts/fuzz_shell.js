@@ -511,7 +511,7 @@ function makeImports(module) {
 // Compile and instantiate a wasm file. Receives the binary to build, and
 // whether it is the second one.
 function build(binary, isSecond) {
-  var module = new WebAssembly.Module(binary);
+  var module = new WebAssembly.Module(binary, { builtins: ["js-string"] });
 
   var imports = makeImports(module);
 
