@@ -332,15 +332,13 @@ struct StringLowering : public StringGathering {
       // TypeMapper, so RefFuncs with this type get updated.
       HeapType newType = Signature(params, results);
       updates[type] = newType;
-      return newType;
+      return newType; // XXX is this needed?
     };
 
-    // Update functions and tags.
-    for (auto& func : module->functions) {
-      func->type = func->type.with(fixType(func->type.getHeapType()));
-    }
-    for (auto& tag : module->tags) {
-      tag->type = fixType(tag->type);
+    for (auto type : ModuleUtils::collectHeapTypes(*module)) {
+      if (type.isSignature()) {
+        fixType(type);
+      }
     }
 
     // Strings turn into externref.
