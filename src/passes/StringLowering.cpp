@@ -288,9 +288,10 @@ struct StringLowering : public StringGathering {
   Type nullExt = Type(HeapType::ext, Nullable);
   Type nnExt = Type(HeapType::ext, NonNullable);
 
-  void updateTypes(Module* module) {
-    TypeMapper::TypeUpdates updates;
+  // The updates we will pass to the TypeMapper.
+  TypeMapper::TypeUpdates updates;
 
+  void updateTypes(Module* module) {
     // TypeMapper will not handle public types, but we do want to modify them as
     // well: we are modifying the public ABI here. We can't simply tell
     // TypeMapper to consider them private, as then they'd end up in the new big
@@ -305,39 +306,9 @@ struct StringLowering : public StringGathering {
     // things like the types of parameters (which depend on the type of the
     // function, which must be modified either in TypeMapper - but as just
     // explained we cannot do that - or before it, which is what we do here).
-    auto fixType = [&](HeapType type) {
-      if (type.getRecGroup().size() != 1 || !type.getFeatures().hasStrings()) {
-        // This is ok as it is.
-        return type;
-      }
-
-      // Fix up the stringrefs in this type that uses strings and is in a
-      // singleton rec group.
-      std::vector<Type> params, results;
-      auto fix = [](Type t) {
-        if (t.isRef() && t.getHeapType().isMaybeShared(HeapType::string)) {
-          auto share = t.getHeapType().getShared();
-          t = Type(HeapTypes::ext.getBasic(share), t.getNullability());
-        }
-        return t;
-      };
-      for (auto param : type.getSignature().params) {
-        params.push_back(fix(param));
-      }
-      for (auto result : type.getSignature().results) {
-        results.push_back(fix(result));
-      }
-
-      // In addition to doing the update, mark it in the map of updates for
-      // TypeMapper, so RefFuncs with this type get updated.
-      HeapType newType = Signature(params, results);
-      updates[type] = newType;
-      return newType; // XXX is this needed?
-    };
-
     for (auto type : ModuleUtils::collectHeapTypes(*module)) {
       if (type.isSignature()) {
-        fixType(type);
+        mapHeapType(type);
       }
     }
 
@@ -345,6 +316,71 @@ struct StringLowering : public StringGathering {
     updates[HeapType::string] = HeapType::ext;
 
     TypeMapper(*module, updates, getPassOptions().worldMode).map();
+  }
+
+  // Similar to `updates`, but contains more than we need to send to the
+  // TypeMapper: once we know the value to return for a type, even one we do not
+  // need to map, we set it here. This avoids infinite recursion, below.
+  std::unordered_map<HeapType, HeapType> calculated;
+
+  // Given a type, prepare it to be mapped to the fixed type (with strings
+  // replaced by extern). As mentioned above, this handles all size-1 rec
+  // groups. It returns the mapped type, and sets it in `updates`.
+  HeapType mapHeapType(HeapType type) {
+    if (type.isBasic()) {
+      if (type.isMaybeShared(HeapType::string)) {
+        return HeapTypes::ext.getBasic(type.getShared());
+      }
+      return type;
+    }
+
+    auto it = calculated.find(type);
+    if (it != calculated.end()) {
+      return it->second;
+    }
+
+    // Set an early value here to prevent infinite recursion. If we are called
+    // recursively, the inner call will override this if we need to. XXX
+    calculated[type] = type;
+
+    if (type.getRecGroup().size() != 1) {
+      return type;
+    }
+
+    if (type.isSignature()) {
+      auto sig = type.getSignature();
+      bool changed = false;
+      std::vector<Type> params, results;
+
+      for (auto p : sig.params) {
+        params.push_back(mapType(p));
+      }
+      for (auto r : sig.results) {
+        results.push_back(mapType(r));
+      }
+
+      if (changed) {
+        HeapType newType = Signature(params, results);
+        calculated[type] = newType;
+        updates[type] = newType;
+        return newType;
+      }
+    }
+
+    return type;
+  }
+
+  // As above, but handling a Type.
+  Type mapType(Type t) {
+    if (t.isRef()) {
+      auto ht = t.getHeapType();
+      auto newHt = mapHeapType(ht);
+      if (newHt != ht) {
+        changed = true;
+        return Type(newHt, t.getNullability()); // XXX with
+      }
+    }
+    return t;
   }
 
   // Imported string functions.

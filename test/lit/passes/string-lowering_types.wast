@@ -214,20 +214,22 @@
 ;; The export returns a type that uses a type that uses a string. We must still
 ;; lower it.
 (module
+  (type $str (func (param (ref string))))
+
+  (type $str-user (func (result (ref $str))))
+
+
   ;; CHECK:      (type $0 (array (mut i16)))
 
   ;; CHECK:      (type $1 (func (param externref externref) (result i32)))
 
   ;; CHECK:      (type $2 (func (param externref) (result i32)))
 
-  ;; CHECK:      (type $str (func (param (ref string))))
-  (type $str (func (param (ref string))))
+  ;; CHECK:      (type $3 (func (param (ref extern))))
 
-  ;; CHECK:      (type $str-user (func (result (ref $str))))
-  (type $str-user (func (result (ref $str))))
+  ;; CHECK:      (type $4 (func (result (ref $3))))
 
-
-  ;; CHECK:      (type $5 (func (result (ref $str-user))))
+  ;; CHECK:      (type $5 (func (result (ref $4))))
 
   ;; CHECK:      (type $6 (func (param (ref null $0) i32 i32) (result (ref extern))))
 
@@ -269,7 +271,7 @@
   ;; CHECK:      (export "table" (table $table))
   (export "table" (table $table))
 
-  ;; CHECK:      (func $export (type $5) (result (ref $str-user))
+  ;; CHECK:      (func $export (type $5) (result (ref $4))
   ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $export (export "export") (result (ref $str-user))
