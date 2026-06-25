@@ -359,7 +359,7 @@ struct StringLowering : public StringGathering {
           auto newHt = mapHeapType(ht);
           if (newHt != ht) {
             changed = true;
-            return Type(newHt, t.getNullability()); // XXX with
+            return t.with(newHt);
           }
         }
         return t;
