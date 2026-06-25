@@ -320,7 +320,8 @@ struct StringLowering : public StringGathering {
 
   // Similar to `updates`, but contains more than we need to send to the
   // TypeMapper: once we know the value to return for a type, even one we do not
-  // need to map, we set it here. This avoids infinite recursion, below.
+  // need to map, we set it here. This ensures we map a type with multiple uses
+  // to the right thing (and avoids repeated work).
   std::unordered_map<HeapType, HeapType> calculated;
 
   // Given a type, prepare it to be mapped to the fixed type (with strings
