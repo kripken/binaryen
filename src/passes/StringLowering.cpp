@@ -318,12 +318,6 @@ struct StringLowering : public StringGathering {
     TypeMapper(*module, updates, getPassOptions().worldMode).map();
   }
 
-  // Similar to `updates`, but contains more than we need to send to the
-  // TypeMapper: once we know the value to return for a type, even one we do not
-  // need to map, we set it here. This ensures we map a type with multiple uses
-  // to the right thing (and avoids repeated work).
-  std::unordered_map<HeapType, HeapType> calculated;
-
   // Given a type, prepare it to be mapped to the fixed type (with strings
   // replaced by extern). As mentioned above, this handles all size-1 rec
   // groups. It returns the mapped type, and sets it in `updates`.
@@ -333,11 +327,6 @@ struct StringLowering : public StringGathering {
         return HeapTypes::ext.getBasic(type.getShared());
       }
       return type;
-    }
-
-    auto it = calculated.find(type);
-    if (it != calculated.end()) {
-      return it->second;
     }
 
     if (type.getRecGroup().size() != 1) {
@@ -376,7 +365,6 @@ struct StringLowering : public StringGathering {
 
       if (changed) {
         HeapType newType = Signature(params, results);
-        calculated[type] = newType;
         updates[type] = newType;
         return newType;
       }
