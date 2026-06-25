@@ -339,10 +339,6 @@ struct StringLowering : public StringGathering {
       return it->second;
     }
 
-    // Set an early value here to prevent infinite recursion. If we are called
-    // recursively, the inner call will override this if we need to. XXX
-    calculated[type] = type;
-
     if (type.getRecGroup().size() != 1) {
       return type;
     }
@@ -352,7 +348,12 @@ struct StringLowering : public StringGathering {
       bool changed = false;
       std::vector<Type> params, results;
 
-      // As above, but handling a Type.
+      // As above, but handling a Type. This recursively calls us on the heap
+      // types there.
+      //
+      // Note that we don't need to handle infinite recursion, which could in
+      // theory happen with two types that refer to each other. That can't
+      // happen here as we only deal with size-1 recursion groups.
       auto mapType = [&](Type t) {
         if (t.isRef()) {
           auto ht = t.getHeapType();
