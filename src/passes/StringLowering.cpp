@@ -352,6 +352,19 @@ struct StringLowering : public StringGathering {
       bool changed = false;
       std::vector<Type> params, results;
 
+      // As above, but handling a Type.
+      auto mapType = [&](Type t) {
+        if (t.isRef()) {
+          auto ht = t.getHeapType();
+          auto newHt = mapHeapType(ht);
+          if (newHt != ht) {
+            changed = true;
+            return Type(newHt, t.getNullability()); // XXX with
+          }
+        }
+        return t;
+      };
+
       for (auto p : sig.params) {
         params.push_back(mapType(p));
       }
@@ -368,19 +381,6 @@ struct StringLowering : public StringGathering {
     }
 
     return type;
-  }
-
-  // As above, but handling a Type.
-  Type mapType(Type t) {
-    if (t.isRef()) {
-      auto ht = t.getHeapType();
-      auto newHt = mapHeapType(ht);
-      if (newHt != ht) {
-        changed = true;
-        return Type(newHt, t.getNullability()); // XXX with
-      }
-    }
-    return t;
   }
 
   // Imported string functions.
