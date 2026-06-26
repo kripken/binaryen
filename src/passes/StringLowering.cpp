@@ -345,10 +345,16 @@ struct StringLowering : public StringGathering {
     }
 
     TypeBuilder builder(1);
+    // Use a temp heap type to avoid infinite recursion. We only handle size-1
+    // rec groups here, so most recursion is impossible, but a type can still
+    // refer to itself. When we recurse on such a type, we will end up using
+    // this temp heap type, so it ends up rewritten properly.
     calculated[type] = builder.getTempHeapType(0);
 
+    // Copy the original type, mapping subtypes accordingly.
     builder[0].copy(type, [&](HeapType ht) { return mapHeapType(ht); });
 
+    // Build the type and apply it to the maps.
     auto newType = (*builder.build())[0];
     calculated[type] = newType;
     if (newType != type) {
