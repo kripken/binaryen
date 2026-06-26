@@ -217,48 +217,45 @@
 ;; $str-user1 and $str-user2 will be mapped to new types. Both should refer to
 ;; the same new type that uses an extern.
 (module
-  ;; CHECK:      (type $str (func (param (ref string))))
   (type $str (func (param (ref string))))
 
-  ;; CHECK:      (type $1 (func (param (ref extern))))
+  (type $str-user1 (func (result (ref $str))))
 
-  ;; CHECK:      (type $2 (func (result (ref $1))))
+  (type $str-user2 (func (param (ref $str-user1)) (param (ref $str-user2)) (result (ref $str))))
 
-  ;; CHECK:      (type $3 (array (mut i16)))
+  ;; CHECK:      (type $0 (func (param (ref extern))))
+
+  ;; CHECK:      (type $1 (func (result (ref $0))))
+
+  ;; CHECK:      (type $2 (array (mut i16)))
+
+  ;; CHECK:      (type $3 (func (param (ref $1) (ref $3)) (result (ref $0))))
 
   ;; CHECK:      (type $4 (func (param externref externref) (result i32)))
 
   ;; CHECK:      (type $5 (func (param externref) (result i32)))
 
-  ;; CHECK:      (type $str-user1 (func (result (ref $str))))
-  (type $str-user1 (func (result (ref $str))))
+  ;; CHECK:      (type $6 (func (param (ref $1)) (result (ref $3))))
 
-  ;; CHECK:      (type $str-user2 (func (param (ref $str-user1) (ref $str-user2)) (result (ref $str))))
-  (type $str-user2 (func (param (ref $str-user1)) (param (ref $str-user2)) (result (ref $str))))
+  ;; CHECK:      (type $7 (func (param (ref null $2) i32 i32) (result (ref extern))))
 
-  ;; CHECK:      (type $8 (func (param (ref $2) (ref $str-user2)) (result (ref $1))))
+  ;; CHECK:      (type $8 (func (param i32) (result (ref extern))))
 
-  ;; CHECK:      (type $9 (func (param (ref $2)) (result (ref $8))))
+  ;; CHECK:      (type $9 (func (param externref externref) (result (ref extern))))
 
-  ;; CHECK:      (type $10 (func (param (ref null $3) i32 i32) (result (ref extern))))
+  ;; CHECK:      (type $10 (func (param externref (ref null $2) i32) (result i32)))
 
-  ;; CHECK:      (type $11 (func (param i32) (result (ref extern))))
+  ;; CHECK:      (type $11 (func (param externref i32) (result i32)))
 
-  ;; CHECK:      (type $12 (func (param externref externref) (result (ref extern))))
+  ;; CHECK:      (type $12 (func (param externref i32 i32) (result (ref extern))))
 
-  ;; CHECK:      (type $13 (func (param externref (ref null $3) i32) (result i32)))
+  ;; CHECK:      (import "wasm:js-string" "fromCharCodeArray" (func $fromCharCodeArray (type $7) (param (ref null $2) i32 i32) (result (ref extern))))
 
-  ;; CHECK:      (type $14 (func (param externref i32) (result i32)))
+  ;; CHECK:      (import "wasm:js-string" "fromCodePoint" (func $fromCodePoint (type $8) (param i32) (result (ref extern))))
 
-  ;; CHECK:      (type $15 (func (param externref i32 i32) (result (ref extern))))
+  ;; CHECK:      (import "wasm:js-string" "concat" (func $concat (type $9) (param externref externref) (result (ref extern))))
 
-  ;; CHECK:      (import "wasm:js-string" "fromCharCodeArray" (func $fromCharCodeArray (type $10) (param (ref null $3) i32 i32) (result (ref extern))))
-
-  ;; CHECK:      (import "wasm:js-string" "fromCodePoint" (func $fromCodePoint (type $11) (param i32) (result (ref extern))))
-
-  ;; CHECK:      (import "wasm:js-string" "concat" (func $concat (type $12) (param externref externref) (result (ref extern))))
-
-  ;; CHECK:      (import "wasm:js-string" "intoCharCodeArray" (func $intoCharCodeArray (type $13) (param externref (ref null $3) i32) (result i32)))
+  ;; CHECK:      (import "wasm:js-string" "intoCharCodeArray" (func $intoCharCodeArray (type $10) (param externref (ref null $2) i32) (result i32)))
 
   ;; CHECK:      (import "wasm:js-string" "equals" (func $equals (type $4) (param externref externref) (result i32)))
 
@@ -268,9 +265,9 @@
 
   ;; CHECK:      (import "wasm:js-string" "length" (func $length (type $5) (param externref) (result i32)))
 
-  ;; CHECK:      (import "wasm:js-string" "charCodeAt" (func $charCodeAt (type $14) (param externref i32) (result i32)))
+  ;; CHECK:      (import "wasm:js-string" "charCodeAt" (func $charCodeAt (type $11) (param externref i32) (result i32)))
 
-  ;; CHECK:      (import "wasm:js-string" "substring" (func $substring (type $15) (param externref i32 i32) (result (ref extern))))
+  ;; CHECK:      (import "wasm:js-string" "substring" (func $substring (type $12) (param externref i32 i32) (result (ref extern))))
 
   ;; CHECK:      (table $table 1 1 funcref)
   (table $table 1 1 funcref)
@@ -280,7 +277,7 @@
   ;; CHECK:      (export "table" (table $table))
   (export "table" (table $table))
 
-  ;; CHECK:      (func $export (type $9) (param $ref (ref $2)) (result (ref $8))
+  ;; CHECK:      (func $export (type $6) (param $ref (ref $1)) (result (ref $3))
   ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $export (export "export") (param $ref (ref $str-user1)) (result (ref $str-user2))

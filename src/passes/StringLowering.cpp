@@ -339,50 +339,22 @@ struct StringLowering : public StringGathering {
       return it->second;
     }
 
-    // Set an early value here to prevent infinite recursion. XXX this is
-    // wrong: if a type refers to itself, recursively, then it will refer to the
-    // old type here, not the mapped one. That is, it will not recursively refer
-    // to itself after this transformation.
-    calculated[type] = type;
-
     if (type.getRecGroup().size() != 1) {
+      calculated[type] = type;
       return type;
     }
 
-    if (type.isSignature()) {
-      auto sig = type.getSignature();
-      bool changed = false;
-      std::vector<Type> params, results;
+    TypeBuilder builder(1);
+    calculated[type] = builder.getTempHeapType(0);
 
-      // As above, but handling a Type.
-      auto mapType = [&](Type t) {
-        if (t.isRef()) {
-          auto ht = t.getHeapType();
-          auto newHt = mapHeapType(ht);
-          if (newHt != ht) {
-            changed = true;
-            return t.with(newHt);
-          }
-        }
-        return t;
-      };
+    builder[0].copy(type, [&](HeapType ht) { return mapHeapType(ht); });
 
-      for (auto p : sig.params) {
-        params.push_back(mapType(p));
-      }
-      for (auto r : sig.results) {
-        results.push_back(mapType(r));
-      }
-
-      if (changed) {
-        HeapType newType = Signature(params, results);
-        calculated[type] = newType;
-        updates[type] = newType;
-        return newType;
-      }
+    auto newType = (*builder.build())[0];
+    calculated[type] = newType;
+    if (newType != type) {
+      updates[type] = newType;
     }
-
-    return type;
+    return newType;
   }
 
   // Imported string functions.
