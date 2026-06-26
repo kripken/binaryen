@@ -339,8 +339,10 @@ struct StringLowering : public StringGathering {
       return it->second;
     }
 
-    // Set an early value here to prevent infinite recursion. If we are called
-    // recursively, the inner call will override this if we need to. XXX
+    // Set an early value here to prevent infinite recursion. XXX this is
+    // wrong: if a type refers to itself, recursively, then it will refer to the
+    // old type here, not the mapped one. That is, it will not recursively refer
+    // to itself after this transformation.
     calculated[type] = type;
 
     if (type.getRecGroup().size() != 1) {
