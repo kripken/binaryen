@@ -318,6 +318,11 @@ struct StringLowering : public StringGathering {
     TypeMapper(*module, updates, getPassOptions().worldMode).map();
   }
 
+  // Similar to `updates`, but contains more than we need to send to the
+  // TypeMapper: once we know the value to return for a type, even one we do not
+  // need to map, we set it here. This avoids infinite recursion, below.
+  std::unordered_map<HeapType, HeapType> calculated;
+
   // Given a type, prepare it to be mapped to the fixed type (with strings
   // replaced by extern). As mentioned above, this handles all size-1 rec
   // groups. It returns the mapped type, and sets it in `updates`.
@@ -329,6 +334,15 @@ struct StringLowering : public StringGathering {
       return type;
     }
 
+    auto it = calculated.find(type);
+    if (it != calculated.end()) {
+      return it->second;
+    }
+
+    // Set an early value here to prevent infinite recursion. If we are called
+    // recursively, the inner call will override this if we need to. XXX
+    calculated[type] = type;
+
     if (type.getRecGroup().size() != 1) {
       return type;
     }
@@ -338,12 +352,7 @@ struct StringLowering : public StringGathering {
       bool changed = false;
       std::vector<Type> params, results;
 
-      // As above, but handling a Type. This recursively calls us on the heap
-      // types there.
-      //
-      // Note that we don't need to handle infinite recursion, which could in
-      // theory happen with two types that refer to each other. That can't
-      // happen here as we only deal with size-1 recursion groups.
+      // As above, but handling a Type.
       auto mapType = [&](Type t) {
         if (t.isRef()) {
           auto ht = t.getHeapType();
@@ -365,6 +374,7 @@ struct StringLowering : public StringGathering {
 
       if (changed) {
         HeapType newType = Signature(params, results);
+        calculated[type] = newType;
         updates[type] = newType;
         return newType;
       }
