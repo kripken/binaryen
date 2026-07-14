@@ -269,10 +269,10 @@ TEST_F(SourceMapTest, SourcesContentWithNull) {
      "mappings" : ""
    }
   )";
-  ExpectParseError(badSourceMap, "Source map sourcesContent contains element"
-    " that is neither string nor null");
+  ExpectParseError(badSourceMap,
+                   "Source map sourcesContent contains element"
+                   " that is neither string nor null");
 }
-
 
 // Regression test: updateSymbol calls for prologLocation/epilogLocation were
 // inside the debugLocations loop instead of outside. When debugLocations is
