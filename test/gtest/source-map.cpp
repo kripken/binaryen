@@ -247,6 +247,33 @@ TEST_F(SourceMapTest, SourcesContent) {
             "Gott, Welt!\\\"); return 0;}");
 }
 
+TEST_F(SourceMapTest, SourcesContentWithNull) {
+  std::string sourceMap = R"(
+   {
+     "version": 3,
+     "sources": ["foo.c", "bar.c"],
+     "sourcesContent": [null, "int bar() { return 42; }"],
+     "mappings" : ""
+   }
+  )";
+  parseMap(sourceMap);
+  ASSERT_EQ(wasm.debugInfoSourcesContent.size(), 2);
+  EXPECT_EQ(wasm.debugInfoSourcesContent[0], "");
+  EXPECT_EQ(wasm.debugInfoSourcesContent[1], "int bar() { return 42; }");
+
+  std::string badSourceMap = R"(
+   {
+     "version": 3,
+     "sources": ["foo.c"],
+     "sourcesContent": [123],
+     "mappings" : ""
+   }
+  )";
+  ExpectParseError(badSourceMap, "Source map sourcesContent contains element"
+    " that is neither string nor null");
+}
+
+
 // Regression test: updateSymbol calls for prologLocation/epilogLocation were
 // inside the debugLocations loop instead of outside. When debugLocations is
 // empty, the loop never executes and the locations are not updated.

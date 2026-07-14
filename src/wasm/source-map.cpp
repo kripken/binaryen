@@ -69,7 +69,16 @@ void SourceMapReader::parse(Module& wasm) {
       throw MapParseException("Source map sourcesContent is not an array");
     }
     for (size_t i = 0; i < sc->size(); i++) {
-      wasm.debugInfoSourcesContent.push_back(sc[i]->getCString());
+      json::Ref v = sc[i];
+      if (v->isNull()) {
+        wasm.debugInfoSourcesContent.push_back("");
+      } else if (v->isString()) {
+        wasm.debugInfoSourcesContent.push_back(v->getCString());
+      } else {
+        throw MapParseException(
+          "Source map sourcesContent contains element that is neither string "
+          "nor null");
+      }
     }
   }
 
