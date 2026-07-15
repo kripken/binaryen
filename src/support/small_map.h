@@ -178,7 +178,7 @@ public:
         assert(flexible.empty());
         flexible.insert(fixed.storage.begin(),
                         fixed.storage.begin() + fixed.used);
-        auto res = flexible.insert(std::make_pair(std::move(keyCopy), Value()));
+        auto res = flexible.insert(std::move(pair));
         assert(!usingFixed());
         fixed.used = 0;
         Iterator it(this);

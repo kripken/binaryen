@@ -107,7 +107,9 @@ struct UnorderedFixedStorage : public FixedStorageBase<T, N> {
         // We found the item; erase it by moving the final item to replace it
         // and truncating the size.
         this->used--;
-        this->storage[i] = std::move(this->storage[this->used]);
+        if (i < this->used) {
+          this->storage[i] = std::move(this->storage[this->used]);
+        }
         return;
       }
     }

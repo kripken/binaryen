@@ -267,8 +267,8 @@ struct BasicBlockConstraintMap {
                                   const BasicBlockConstraintMap& map);
 
 private:
-//  SmallUnorderedMap<Index, AndedConstraintSet, 3> map;
-  std::unordered_map<Index, AndedConstraintSet> map;
+  // std::unordered_map<Index, AndedConstraintSet> map;
+  SmallUnorderedMap<Index, AndedConstraintSet, 3> map;
 
   // Maps an index to the locals that have constraints referring to it. When a
   // local is modified, we need to wipe all those constraints, which become
