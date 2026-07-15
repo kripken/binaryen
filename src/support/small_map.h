@@ -227,6 +227,25 @@ public:
     }
   }
 
+  template<typename Pred> size_type erase_if(Pred pred) {
+    if (usingFixed()) {
+      size_t count = 0;
+      size_t i = 0;
+      while (i < fixed.used) {
+        if (pred(fixed.storage[i])) {
+          Key keyCopy = fixed.storage[i].first;
+          fixed.erase(keyCopy);
+          count++;
+        } else {
+          i++;
+        }
+      }
+      return count;
+    } else {
+      return std::erase_if(flexible, pred);
+    }
+  }
+
   bool contains(const Key& key) const {
     if (usingFixed()) {
       return fixed.find(key) != nullptr;
@@ -549,6 +568,41 @@ public:
                      std::unordered_map<Key, Value>>::SmallMapBase;
 };
 
+namespace detail {
+
+template<typename T> struct is_small_map_or_derived {
+private:
+  template<typename Key,
+           typename Value,
+           size_t N,
+           typename FixedStorage,
+           typename FlexibleMap>
+  static std::true_type test(
+    const SmallMapBase<Key, Value, N, FixedStorage, FlexibleMap>*);
+  static std::false_type test(...);
+
+public:
+  static constexpr bool value = decltype(test(std::declval<T*>()))::value;
+};
+
+} // namespace detail
+
+template<typename Map, typename Pred>
+  requires detail::is_small_map_or_derived<Map>::value
+size_t erase_if(Map& c, Pred pred) {
+  return c.erase_if(pred);
+}
+
 } // namespace wasm
+
+namespace std {
+
+template<typename Map, typename Pred>
+  requires wasm::detail::is_small_map_or_derived<Map>::value
+size_t erase_if(Map& c, Pred pred) {
+  return wasm::erase_if(c, pred);
+}
+
+} // namespace std
 
 #endif // wasm_support_small_map_h

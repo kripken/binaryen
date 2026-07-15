@@ -135,3 +135,39 @@ TEST_F(SmallMapTest, IterationAndMutation) {
   EXPECT_EQ(map["b"], 20);
   EXPECT_EQ(map["c"], 30);
 }
+
+TEST_F(SmallMapTest, EraseIfFixed) {
+  SmallMap<int, int, 5> map = {{1, 10}, {2, 20}, {3, 30}, {4, 40}};
+  EXPECT_TRUE(map.TEST_ONLY_NEVER_USE_usingFixed());
+
+  size_t removed = std::erase_if(map, [](const auto& pair) {
+    return pair.first % 2 == 0;
+  });
+
+  EXPECT_EQ(removed, 2u);
+  EXPECT_EQ(map.size(), 2u);
+  EXPECT_TRUE(map.contains(1));
+  EXPECT_FALSE(map.contains(2));
+  EXPECT_TRUE(map.contains(3));
+  EXPECT_FALSE(map.contains(4));
+}
+
+TEST_F(SmallMapTest, EraseIfFlexible) {
+  SmallUnorderedMap<int, int, 2> map;
+  map[1] = 10;
+  map[2] = 20;
+  map[3] = 30;
+  map[4] = 40;
+  EXPECT_FALSE(map.TEST_ONLY_NEVER_USE_usingFixed());
+
+  size_t removed = std::erase_if(map, [](const auto& pair) {
+    return pair.second > 25;
+  });
+
+  EXPECT_EQ(removed, 2u);
+  EXPECT_EQ(map.size(), 2u);
+  EXPECT_TRUE(map.contains(1));
+  EXPECT_TRUE(map.contains(2));
+  EXPECT_FALSE(map.contains(3));
+  EXPECT_FALSE(map.contains(4));
+}
