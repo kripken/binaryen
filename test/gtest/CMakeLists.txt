@@ -38,6 +38,7 @@ set(unittest_SOURCES
   wat-lexer.cpp
   validator.cpp
   source-map.cpp
+  small_map.cpp
 )
 
 if(BUILD_FUZZTEST)

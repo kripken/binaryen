@@ -34,6 +34,14 @@
 
 namespace wasm {
 
+template<typename T> const T& getKey(const T& x) {
+  return x;
+}
+
+template<typename K, typename V> const K& getKey(const std::pair<K, V>& p) {
+  return p.first;
+}
+
 template<typename T, size_t N> struct FixedStorageBase {
   size_t used = 0;
   std::array<T, N> storage;
@@ -53,11 +61,27 @@ template<typename T, size_t N>
 struct UnorderedFixedStorage : public FixedStorageBase<T, N> {
   using InsertResult = typename FixedStorageBase<T, N>::InsertResult;
 
-  InsertResult insert(const T& x) {
+  template<typename KeyType> T* find(const KeyType& key) {
     for (size_t i = 0; i < this->used; i++) {
-      if (this->storage[i] == x) {
-        return InsertResult::NoError;
+      if (getKey(this->storage[i]) == key) {
+        return &this->storage[i];
       }
+    }
+    return nullptr;
+  }
+
+  template<typename KeyType> const T* find(const KeyType& key) const {
+    for (size_t i = 0; i < this->used; i++) {
+      if (getKey(this->storage[i]) == key) {
+        return &this->storage[i];
+      }
+    }
+    return nullptr;
+  }
+
+  InsertResult insert(const T& x) {
+    if (find(getKey(x))) {
+      return InsertResult::NoError;
     }
     assert(this->used <= N);
     if (this->used == N) {
@@ -67,13 +91,25 @@ struct UnorderedFixedStorage : public FixedStorageBase<T, N> {
     return InsertResult::NoError;
   }
 
-  void erase(const T& x) {
+  InsertResult insert(T&& x) {
+    if (find(getKey(x))) {
+      return InsertResult::NoError;
+    }
+    assert(this->used <= N);
+    if (this->used == N) {
+      return InsertResult::CouldNotInsert;
+    }
+    this->storage[this->used++] = std::move(x);
+    return InsertResult::NoError;
+  }
+
+  template<typename KeyType> void erase(const KeyType& key) {
     for (size_t i = 0; i < this->used; i++) {
-      if (this->storage[i] == x) {
+      if (getKey(this->storage[i]) == key) {
         // We found the item; erase it by moving the final item to replace it
         // and truncating the size.
         this->used--;
-        this->storage[i] = this->storage[this->used];
+        this->storage[i] = std::move(this->storage[this->used]);
         return;
       }
     }
@@ -84,13 +120,32 @@ template<typename T, size_t N>
 struct OrderedFixedStorage : public FixedStorageBase<T, N> {
   using InsertResult = typename FixedStorageBase<T, N>::InsertResult;
 
+  template<typename KeyType> T* find(const KeyType& key) {
+    for (size_t i = 0; i < this->used; i++) {
+      if (getKey(this->storage[i]) == key) {
+        return &this->storage[i];
+      }
+    }
+    return nullptr;
+  }
+
+  template<typename KeyType> const T* find(const KeyType& key) const {
+    for (size_t i = 0; i < this->used; i++) {
+      if (getKey(this->storage[i]) == key) {
+        return &this->storage[i];
+      }
+    }
+    return nullptr;
+  }
+
   InsertResult insert(const T& x) {
+    const auto& key = getKey(x);
     // Find the insertion point |i| where x should be placed.
     size_t i = 0;
-    while (i < this->used && this->storage[i] < x) {
+    while (i < this->used && getKey(this->storage[i]) < key) {
       i++;
     }
-    if (i < this->used && this->storage[i] == x) {
+    if (i < this->used && getKey(this->storage[i]) == key) {
       // The item already exists.
       return InsertResult::NoError;
     }
@@ -104,7 +159,7 @@ struct OrderedFixedStorage : public FixedStorageBase<T, N> {
     if (i != this->used) {
       // Push things forward to make room for x.
       for (size_t j = this->used; j >= i + 1; j--) {
-        this->storage[j] = this->storage[j - 1];
+        this->storage[j] = std::move(this->storage[j - 1]);
       }
     }
 
@@ -113,12 +168,38 @@ struct OrderedFixedStorage : public FixedStorageBase<T, N> {
     return InsertResult::NoError;
   }
 
-  void erase(const T& x) {
+  InsertResult insert(T&& x) {
+    const auto& key = getKey(x);
+    size_t i = 0;
+    while (i < this->used && getKey(this->storage[i]) < key) {
+      i++;
+    }
+    if (i < this->used && getKey(this->storage[i]) == key) {
+      return InsertResult::NoError;
+    }
+
+    assert(this->used <= N);
+    if (this->used == N) {
+      return InsertResult::CouldNotInsert;
+    }
+
+    if (i != this->used) {
+      for (size_t j = this->used; j >= i + 1; j--) {
+        this->storage[j] = std::move(this->storage[j - 1]);
+      }
+    }
+
+    this->storage[i] = std::move(x);
+    this->used++;
+    return InsertResult::NoError;
+  }
+
+  template<typename KeyType> void erase(const KeyType& key) {
     for (size_t i = 0; i < this->used; i++) {
-      if (this->storage[i] == x) {
+      if (getKey(this->storage[i]) == key) {
         // We found the item; move things backwards and shrink.
         for (size_t j = i + 1; j < this->used; j++) {
-          this->storage[j - 1] = this->storage[j];
+          this->storage[j - 1] = std::move(this->storage[j]);
         }
         this->used--;
         return;
