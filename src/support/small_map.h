@@ -253,8 +253,7 @@ public:
   }
 
   bool operator==(
-    const SmallMapBase<Key, Value, N, FixedStorage, FlexibleMap>& other)
-    const {
+    const SmallMapBase<Key, Value, N, FixedStorage, FlexibleMap>& other) const {
     if (size() != other.size()) {
       return false;
     }
@@ -263,7 +262,8 @@ public:
                          fixed.storage.begin() + fixed.used,
                          [&other](const std::pair<Key, Value>& pair) {
                            auto it = other.find(pair.first);
-                           return it != other.end() && it->second == pair.second;
+                           return it != other.end() &&
+                                  it->second == pair.second;
                          });
     } else if (other.usingFixed()) {
       return std::all_of(other.fixed.storage.begin(),
@@ -278,8 +278,7 @@ public:
   }
 
   bool operator!=(
-    const SmallMapBase<Key, Value, N, FixedStorage, FlexibleMap>& other)
-    const {
+    const SmallMapBase<Key, Value, N, FixedStorage, FlexibleMap>& other) const {
     return !(*this == other);
   }
 
@@ -351,8 +350,7 @@ public:
 
     reference operator*() const {
       if (usingFixed) {
-        return *reinterpret_cast<pointer>(
-          &parent->fixed.storage[fixedIndex]);
+        return *reinterpret_cast<pointer>(&parent->fixed.storage[fixedIndex]);
       } else {
         return *flexibleIterator;
       }
@@ -443,8 +441,7 @@ public:
 
     reference operator*() const {
       if (usingFixed) {
-        return *reinterpret_cast<pointer>(
-          &parent->fixed.storage[fixedIndex]);
+        return *reinterpret_cast<pointer>(&parent->fixed.storage[fixedIndex]);
       } else {
         return *flexibleIterator;
       }

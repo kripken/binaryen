@@ -34,9 +34,7 @@
 
 namespace wasm {
 
-template<typename T> const T& getKey(const T& x) {
-  return x;
-}
+template<typename T> const T& getKey(const T& x) { return x; }
 
 template<typename K, typename V> const K& getKey(const std::pair<K, V>& p) {
   return p.first;

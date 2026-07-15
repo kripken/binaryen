@@ -87,8 +87,7 @@ TEST_F(SmallMapTest, FixedToFlexibleTransition) {
 }
 
 TEST_F(SmallMapTest, InitializerListAndOrderedStorage) {
-  SmallMap<int, std::string, 5> map = {
-    {3, "three"}, {1, "one"}, {2, "two"}};
+  SmallMap<int, std::string, 5> map = {{3, "three"}, {1, "one"}, {2, "two"}};
 
   EXPECT_EQ(map.size(), 3u);
   EXPECT_TRUE(map.TEST_ONLY_NEVER_USE_usingFixed());
