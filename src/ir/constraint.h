@@ -27,6 +27,7 @@
 
 #include "ir/abstract.h"
 #include "support/inplace_vector.h"
+#include "support/small_vector.h"
 #include "support/utilities.h"
 #include "wasm.h"
 
@@ -252,20 +253,21 @@ struct BasicBlockConstraintMap {
     // We should not be called in unreachable code.
     assert(!unreachable);
 
-    if (auto iter = map.find(index); iter != map.end()) {
-      auto& constraints = iter->second;
-      // If we can prove nothing, we should have removed it from the map.
-      assert(!constraints.provesNothing());
-      // If we can prove everything, we should be entirely unreachable.
-      assert(!constraints.provesEverything());
-      return constraints;
+    for (const auto& [local, constraints] : map) {
+      if (local == index) {
+        // If we can prove nothing, we should have removed it from the map.
+        assert(!constraints.provesNothing());
+        // If we can prove everything, we should be entirely unreachable.
+        assert(!constraints.provesEverything());
+        return constraints;
+      }
     }
     return AndedConstraintSet::makeProvesNothing();
   }
 
   // Perform an OR as above. When a local only appears in one map, we treat it
   // as if it contains a contradiction there, that is, as if the code is
-  // unreachable.
+  // unreachable. Returns true if this map was modified.
   void approximateOr(const BasicBlockConstraintMap& other);
 
   // Perform an AND as above, on a particular index.
@@ -285,20 +287,9 @@ struct BasicBlockConstraintMap {
                                   const BasicBlockConstraintMap& map);
 
 private:
-  std::unordered_map<Index, AndedConstraintSet> map;
+  SmallVector<std::pair<Index, AndedConstraintSet>, 2> map;
 
-  // Maps an index to the locals that have constraints referring to it. When a
-  // local is modified, we need to wipe all those constraints, which become
-  // stale.
-  //
-  // It is ok (but unoptimal in efficiency) if we have stale refs here, e.g. due
-  // to approximation removing a constraint. Whenever there is a reference,
-  // however, it must be noted here, so that when things get stale we can remove
-  // them.
-  std::unordered_map<Index, std::unordered_set<Index>> refs;
-
-  // Given a constraint on a local, note refs.
-  void noteRefs(Index index, const Constraint& c);
+  void erase(Index index);
 
   // Given an index, erase constraints referring to it.
   void eraseStaleRefs(Index index);

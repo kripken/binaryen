@@ -299,13 +299,23 @@ void LocalConstraint::flip() {
   }
 }
 
+void BasicBlockConstraintMap::erase(Index index) {
+  for (size_t i = 0; i < map.size(); ++i) {
+    if (map[i].first == index) {
+      map[i] = map.back();
+      map.pop_back();
+      return;
+    }
+  }
+}
+
 void BasicBlockConstraintMap::set(Index index, const Constraint& c) {
   // We should not set values in unreachable code.
   assert(!unreachable);
 
   // Clear the old state.
   eraseStaleRefs(index);
-  map.erase(index);
+  erase(index);
 
   // Apply the constraint.
   approximateAnd(index, c);
@@ -314,7 +324,7 @@ void BasicBlockConstraintMap::set(Index index, const Constraint& c) {
 void BasicBlockConstraintMap::setProvesNothing(Index index) {
   assert(!unreachable);
   eraseStaleRefs(index);
-  map.erase(index);
+  erase(index);
 }
 
 void BasicBlockConstraintMap::approximateOr(
@@ -328,19 +338,17 @@ void BasicBlockConstraintMap::approximateOr(
     return;
   }
 
-  // We only need to loop on our locals, as any local that is missing in us is
-  // one that would end up proving nothing (and get removed).
-  for (auto& [local, constraints] : map) {
+  size_t i = 0;
+  while (i < map.size()) {
+    auto& [local, constraints] = map[i];
     constraints.approximateOr(other.get(local));
+    if (constraints.provesNothing()) {
+      map[i] = map.back();
+      map.pop_back();
+    } else {
+      i++;
+    }
   }
-
-  // Anything that became trivial after the OR must be removed.
-  std::erase_if(map, [&](const auto& item) {
-    const auto& [local, constraints] = item;
-    // We do not store contradictions.
-    assert(!constraints.provesEverything());
-    return constraints.provesNothing();
-  });
 }
 
 void BasicBlockConstraintMap::approximateAndInternal(Index index,
@@ -366,18 +374,21 @@ void BasicBlockConstraintMap::approximateAndInternal(Index index,
     }
   }
 
-  // Refer to the constraints for this index. If this is the first access of
-  // the local, then we insert a new item into the map, which has a default of
-  // proxesEverything, which we need to flip (provesEverything cannot otherwise
-  // be found in the map, as we never store it).
-  auto [iter, _] = map.insert({index, AndedConstraintSet::makeProvesNothing()});
-  auto& indexConstraints = iter->second;
-  // As in ::set(), this makes the map temporarily invalid until the
-  // approximateAnd, as we don't store proves-nothing in the map, normally.
+  AndedConstraintSet* indexConstraints = nullptr;
+  for (auto& [local, constraints] : map) {
+    if (local == index) {
+      indexConstraints = &constraints;
+      break;
+    }
+  }
+  if (!indexConstraints) {
+    map.push_back({index, AndedConstraintSet::makeProvesNothing()});
+    indexConstraints = &map.back().second;
+  }
 
-  indexConstraints.approximateAnd(actual);
+  indexConstraints->approximateAnd(actual);
 
-  if (indexConstraints.provesEverything()) {
+  if (indexConstraints->provesEverything()) {
     // We just proved we are in unreachable code.
     unreachable = true;
     map.clear();
@@ -386,12 +397,7 @@ void BasicBlockConstraintMap::approximateAndInternal(Index index,
 
   // We just added a constraint, so we can prove something (we may lose some
   // information as this is an approximate AND, but we cannot lose it all).
-  assert(!indexConstraints.provesNothing());
-
-  // Add a ref of what we are adding. Note that the approximation above may end
-  // up not actually adding this, or adding only part of this, but it is safe to
-  // always add a ref (at the cost of minor wasted work).
-  noteRefs(index, actual);
+  assert(!indexConstraints->provesNothing());
 
   // If this is not the flipped version, and it refers to a local, add the
   // flipped one too.
@@ -419,35 +425,21 @@ void BasicBlockConstraintMap::approximateAndInternal(Index index,
   }
 }
 
-void BasicBlockConstraintMap::noteRefs(Index index, const Constraint& c) {
-  if (auto* i = std::get_if<Index>(&c.term)) {
-    refs[*i].insert(index);
-  }
-}
-
 void BasicBlockConstraintMap::eraseStaleRefs(Index index) {
-  auto iter = refs.find(index);
-  if (iter == refs.end()) {
-    return;
-  }
-
-  auto& refIndexes = iter->second;
-
-  for (auto refIndex : refIndexes) {
-    if (auto iter = map.find(refIndex); iter != map.end()) {
-      auto& refConstraints = iter->second;
-      std::erase_if(refConstraints, [&](const auto& c) {
-        if (auto* i = std::get_if<Index>(&c.term)) {
-          if (*i == index) {
-            return true;
-          }
-        }
-        return false;
-      });
-      if (refConstraints.empty()) {
-        // This became trivial.
-        map.erase(iter);
+  size_t i = 0;
+  while (i < map.size()) {
+    auto& [refIndex, refConstraints] = map[i];
+    std::erase_if(refConstraints, [&](const auto& c) {
+      if (auto* termIdx = std::get_if<Index>(&c.term)) {
+        return *termIdx == index;
       }
+      return false;
+    });
+    if (refConstraints.empty()) {
+      map[i] = map.back();
+      map.pop_back();
+    } else {
+      i++;
     }
   }
 }
