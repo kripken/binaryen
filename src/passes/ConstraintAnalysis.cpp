@@ -158,6 +158,12 @@ struct ConstraintAnalysis
         applyToConstraints(*currp, constraints);
       }
 
+      if (constraints.unreachable) {
+        // We proved that this is unreachable, so any outgoing links in the CFG
+        // will not actually be traversed, and we can stop.
+        continue;
+      }
+
       // We now know the values at the end of the block. Flow it onward, and
       // where it causes changes, queue more work.
       for (auto* out : block->out) {
