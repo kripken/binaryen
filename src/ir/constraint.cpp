@@ -452,6 +452,22 @@ void BasicBlockConstraintMap::eraseStaleRefs(Index index) {
   }
 }
 
+void BasicBlockConstraintMap::apply(LocalSet* localSet) {
+  if (Properties::isSingleConstantExpression(localSet->value)) {
+    // Apply a constraint to this value.
+    auto value = Properties::getLiteral(localSet->value);
+    set(localSet->index, Constraint{Abstract::Eq, {value}});
+    return;
+  }
+  if (auto* get = localSet->value->dynCast<LocalGet>()) {
+    // Apply a constraint to this local.
+    set(localSet->index, Constraint{Abstract::Eq, {get->index}});
+    return;
+  }
+  // We know and can prove nothing.
+  setProvesNothing(localSet->index);
+}
+
 std::ostream& operator<<(std::ostream& o, const Constraint& c) {
   o << "Constraint{" << c.op << ", ";
   if (auto* cc = std::get_if<Literal>(&c.term)) {
