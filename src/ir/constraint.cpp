@@ -328,6 +328,59 @@ void BasicBlockConstraintMap::set(Index index,
   }
 }
 
+void BasicBlockConstraintMap::set(Index index, Expression* value) {
+  // Apply a constraint to a value.
+  if (Properties::isSingleConstantExpression(value)) {
+    set(index, Constraint{Abstract::Eq, {Properties::getLiteral(value)}});
+    return;
+  }
+
+  // Apply a constraint to a local.
+  if (auto* get = value->dynCast<LocalGet>()) {
+    set(index, Constraint{Abstract::Eq, {get->index}});
+    return;
+  }
+
+  // Special handling of certain binary operations.
+  if (auto* binary = value->dynCast<Binary>()) {
+    // x = y + 1
+    // TODO: generalize to any C
+    if (auto* y = binary->left->dynCast<LocalGet>()) {
+      if (auto* c = binary->right->dynCast<Const>();
+          c && c->type.isInteger() && c->value.getInteger() == 1 &&
+          Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
+        // Convert the constraints we know about y to ones about x, removing
+        // ones we cannot reason about.
+        auto newConstraints = get(y->index);
+        std::erase_if(newConstraints, [&](Constraint& c) {
+          // x < c, x++  =>  x <= c
+          //
+          // This is simple to analyze, without needing to worry about
+          // overflowing etc, and handles the common case of loop increments.
+          // TODO Handle more cases, though maybe leaving other passes might
+          //      already handle as TODO (e.g. constant propagation can handle
+          //      equality).
+          if (c.is<Abstract::LtU, Literal>()) {
+            c.op = Abstract::LeU;
+            return false;
+          }
+          if (c.is<Abstract::LtS, Literal>()) {
+            c.op = Abstract::LeS;
+            return false;
+          }
+          // Anything else, we must delete.
+          return true;
+        });
+        set(index, newConstraints);
+        return;
+      }
+    }
+  }
+
+  // We know and can prove nothing.
+  setProvesNothing(index);
+}
+
 void BasicBlockConstraintMap::setProvesNothing(Index index) {
   assert(!unreachable);
   eraseStaleRefs(index);
@@ -467,59 +520,6 @@ void BasicBlockConstraintMap::eraseStaleRefs(Index index) {
       }
     }
   }
-}
-
-void BasicBlockConstraintMap::apply(Index index, Expression* value) {
-  // Apply a constraint to a value.
-  if (Properties::isSingleConstantExpression(value)) {
-    set(index, Constraint{Abstract::Eq, {Properties::getLiteral(value)}});
-    return;
-  }
-
-  // Apply a constraint to a local.
-  if (auto* get = value->dynCast<LocalGet>()) {
-    set(index, Constraint{Abstract::Eq, {get->index}});
-    return;
-  }
-
-  // Special handling of certain binary operations.
-  if (auto* binary = value->dynCast<Binary>()) {
-    // x = y + 1
-    // TODO: generalize to any C
-    if (auto* y = binary->left->dynCast<LocalGet>()) {
-      if (auto* c = binary->right->dynCast<Const>();
-          c && c->type.isInteger() && c->value.getInteger() == 1 &&
-          Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
-        // Convert the constraints we know about y to ones about x, removing
-        // ones we cannot reason about.
-        auto newConstraints = get(y->index);
-        std::erase_if(newConstraints, [&](Constraint& c) {
-          // x < c, x++  =>  x <= c
-          //
-          // This is simple to analyze, without needing to worry about
-          // overflowing etc, and handles the common case of loop increments.
-          // TODO Handle more cases, though maybe leaving other passes might
-          //      already handle as TODO (e.g. constant propagation can handle
-          //      equality).
-          if (c.is<Abstract::LtU, Literal>()) {
-            c.op = Abstract::LeU;
-            return false;
-          }
-          if (c.is<Abstract::LtS, Literal>()) {
-            c.op = Abstract::LeS;
-            return false;
-          }
-          // Anything else, we must delete.
-          return true;
-        });
-        set(index, newConstraints);
-        return;
-      }
-    }
-  }
-
-  // We know and can prove nothing.
-  setProvesNothing(index);
 }
 
 std::ostream& operator<<(std::ostream& o, const Constraint& c) {

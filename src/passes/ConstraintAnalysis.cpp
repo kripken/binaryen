@@ -317,7 +317,7 @@ struct ConstraintAnalysis
   void applyToConstraints(Expression* curr,
                           BasicBlockConstraintMap& constraints) {
     if (auto* set = curr->dynCast<LocalSet>()) {
-      constraints.apply(set->index, set->value);
+      constraints.set(set->index, set->value);
     }
   }
 };
