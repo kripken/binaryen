@@ -345,11 +345,10 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
   }
 
   // Special handling of certain binary operations.
-  if (auto* binary = value->dynCast<Binary>()) {
+  {
     // x = y + 1
     Index y;
-    if (Abstract::getBinary(binary->type, Abstract::Add) == binary->op &&
-        matches(binary->left, local(&y)) && matches(binary->right, ival(1))) {
+    if (matches(value, binary(Abstract::Add, local(&y), ival(1)))) {
       // Convert the constraints we know about y to ones about x, removing
       // ones we cannot reason about.
       auto newConstraints = get(y);
