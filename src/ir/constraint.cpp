@@ -311,6 +311,22 @@ void BasicBlockConstraintMap::set(Index index, const Constraint& c) {
   approximateAnd(index, c);
 }
 
+void BasicBlockConstraintMap::set(Index index, const AndedConstraintSet& constraints) {
+  // As above, but with a loop after.
+  assert(!unreachable);
+  eraseStaleRefs(index);
+  map.erase(index);
+
+  // Apply the constraints, if there are any.
+  if (constraints.provesNothing()) {
+    setProvesNothing(index);
+  } else {
+    for (auto& constraints : set) {
+      approximateAnd(index, c);
+    }
+  }
+}
+
 void BasicBlockConstraintMap::setProvesNothing(Index index) {
   assert(!unreachable);
   eraseStaleRefs(index);
@@ -453,17 +469,52 @@ void BasicBlockConstraintMap::eraseStaleRefs(Index index) {
 }
 
 void BasicBlockConstraintMap::apply(LocalSet* localSet) {
+  // Apply a constraint to a value.
   if (Properties::isSingleConstantExpression(localSet->value)) {
-    // Apply a constraint to this value.
     auto value = Properties::getLiteral(localSet->value);
     set(localSet->index, Constraint{Abstract::Eq, {value}});
     return;
   }
+
+  // Apply a constraint to a local.
   if (auto* get = localSet->value->dynCast<LocalGet>()) {
-    // Apply a constraint to this local.
     set(localSet->index, Constraint{Abstract::Eq, {get->index}});
     return;
   }
+
+  // Special handling of certain binary operations.
+  if (auto* binary = curr->dynCast<Binary>()) {
+    // x = y + 1
+    // TODO: generalize to any C
+    if (auto* y = binary->left->dynCast<LocalGet>()) {
+      if (auto* c = binary->right->dynCast<Const>();
+          c->type.isInteger() && c->value->getInteger() == 1 &&
+        Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
+      // Convert the constraints we know about y to ones about x, removing ones
+      // we cannot reason about.
+      auto newConstraints = get(y->index);
+      std::erase_if(newConstraints, [&](const Constraint& c) {
+        // x < c, x++  =>  x <= c
+        // This is simple to analyze, without needing to worry about overflowing
+        // etc.
+        // TODO Handle more cases, though maybe leaving other passes might
+        //      already handle as TODO (e.g. constant propagation can handle
+        //      equality).
+        if (c.is<Abstract::LtU, Literal>()) {
+          c.op = LtU;
+          return false;
+        }
+        if (c.is<Abstract::LtS, Literal>()) {
+          c.op = LtS;
+          return false;
+        }
+        // Anything else, we must delete.
+        return true;
+      });
+      set(localSet->index, newConstraints);
+    }
+  }
+
   // We know and can prove nothing.
   setProvesNothing(localSet->index);
 }

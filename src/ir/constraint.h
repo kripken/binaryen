@@ -63,6 +63,13 @@ struct Constraint {
   Constraint negate() const {
     return Constraint{Abstract::negateRelational(op), term};
   }
+
+  // Convenience method to check if a constraint has a particular operation and
+  // type of term.
+  template<Abstract::Op checkOp, typename T>
+  bool is() {
+    return op == checkOp && std::holds_alternative<T>(term);
+  }
 };
 
 // We limit constraints to a low number to ensure good performance even with
@@ -243,6 +250,9 @@ struct BasicBlockConstraintMap {
 
   // Apply a constraint to a local.
   void set(Index index, const Constraint& c);
+
+  // Apply a set of constraints to a local.
+  void set(Index index, const AndedConstraintSet& constraints);
 
   // Mark a local as unknown and able to prove nothing.
   void setProvesNothing(Index index);
