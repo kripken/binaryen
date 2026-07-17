@@ -332,6 +332,14 @@ TEST(ConstraintTest, TestAddOneSigned) {
   map.set(0, &add);
   EXPECT_EQ(map.get(0).size(), 1);
   EXPECT_EQ(map.get(0)[0], les_l7);
+
+  // As above, but using unsigned and not signed comparisons.
+  Constraint ltu_l7{LtU, {Index(7)}};
+  Constraint leu_l7{LeU, {Index(7)}};
+  map.set(0, ltu_l7);
+  map.set(0, &add);
+  EXPECT_EQ(map.get(0).size(), 1);
+  EXPECT_EQ(map.get(0)[0], leu_l7);
 }
 
 // TODO: test an approximateOr of { x = 10 } and { x >= 0 }, once we support
