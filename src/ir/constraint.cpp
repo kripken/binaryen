@@ -356,8 +356,9 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
           //
           // This is simple to analyze, without needing to worry about
           // overflowing etc, and handles the common case of loop increments.
-          // TODO Handle more cases, though maybe leaving other passes might
-          //      already handle as TODO (e.g. constant propagation can handle
+          //
+          // TODO Handle more cases, though maybe not stuff other passes might
+          //      already handle (e.g. constant propagation can handle
           //      equality).
           switch (c.op) {
             case Abstract::LtU:
