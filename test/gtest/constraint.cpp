@@ -240,6 +240,12 @@ TEST(ConstraintTest, TestDeredundancy) {
   EXPECT_EQ(t[0], eq0);
 }
 
+// Check that a set is equal to a constraint.
+static void check(const AndedConstraintSet& s, const Constraint& c) {
+  EXPECT_EQ(s.size(), 1);
+  EXPECT_EQ(s[0], c);
+}
+
 TEST(ConstraintTest, TestBasicBlockConstraintMap) {
   // Maps begin unreachable.
   BasicBlockConstraintMap map;
@@ -259,21 +265,18 @@ TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
 
   // Set local 0 to 0. It should read back the same.
   map.set(0, eq0);
-  EXPECT_EQ(map.get(0).size(), 1);
-  EXPECT_EQ(map.get(0)[0], eq0);
+  check(map.get(0), eq0);
 
   // Set another value, replacing the first.
   map.set(0, eq1);
-  EXPECT_EQ(map.get(0).size(), 1);
-  EXPECT_EQ(map.get(0)[0], eq1);
+  check(map.get(0), eq1);
 
   // Set a value using an expression.
   Const c;
   c.value = Literal(int32_t(2));
   c.type = Type::i32;
   map.set(0, &c);
-  EXPECT_EQ(map.get(0).size(), 1);
-  EXPECT_EQ(map.get(0)[0], eq2);
+  check(map.get(0), eq2);
 
   // Set an unfamiliar expression, leading to us knowing nothing.
   Nop nop;
@@ -307,39 +310,33 @@ TEST(ConstraintTest, TestAddOneSigned) {
 
   // Local 0 starts out less than 5.
   map.set(0, lts_c5);
-  EXPECT_EQ(map.get(0).size(), 1);
-  EXPECT_EQ(map.get(0)[0], lts_c5);
+  check(map.get(0), lts_c5);
 
   // Local 1 is equal to local 0 plus 1. That means it is less than, or equal
   // to, 5.
   map.set(1, &add);
-  EXPECT_EQ(map.get(1).size(), 1);
-  EXPECT_EQ(map.get(1)[0], les_c5);
+  check(map.get(1), les_c5);
 
   // Local 0 did not change.
-  EXPECT_EQ(map.get(0).size(), 1);
-  EXPECT_EQ(map.get(0)[0], lts_c5);
+  check(map.get(0), lts_c5);
 
   // Setting 0 to an add of itself also works.
   map.set(0, &add);
-  EXPECT_EQ(map.get(0).size(), 1);
-  EXPECT_EQ(map.get(0)[0], les_c5);
+  check(map.get(0), les_c5);
 
   // As above, but the constraints reference a local, not a constant.
   Constraint lts_l7{LtS, {Index(7)}};
   Constraint les_l7{LeS, {Index(7)}};
   map.set(0, lts_l7);
   map.set(0, &add);
-  EXPECT_EQ(map.get(0).size(), 1);
-  EXPECT_EQ(map.get(0)[0], les_l7);
+  check(map.get(0), les_l7);
 
   // As above, but using unsigned and not signed comparisons.
   Constraint ltu_l7{LtU, {Index(7)}};
   Constraint leu_l7{LeU, {Index(7)}};
   map.set(0, ltu_l7);
   map.set(0, &add);
-  EXPECT_EQ(map.get(0).size(), 1);
-  EXPECT_EQ(map.get(0)[0], leu_l7);
+  check(map.get(0), leu_l7);
 }
 
 // TODO: test an approximateOr of { x = 10 } and { x >= 0 }, once we support
