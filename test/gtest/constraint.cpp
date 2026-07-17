@@ -337,6 +337,22 @@ TEST(ConstraintTest, TestAddOneSigned) {
   map.set(0, ltu_l7);
   map.set(0, &add);
   check(map.get(0), leu_l7);
+
+  // As above, but with another constraint $x != $42, which must be discarded as
+  // we cannot infer how it changes due to the +=1 of the add (we might now be
+  // equal to local $42, for all we know).
+  Constraint ne_42{Ne, {Index(42)}};
+  map.set(0, ne_42);
+  map.approximateAnd(0, ltu_l7);
+  map.set(0, &add);
+  // After discarding what we can't reason about, we are left with something
+  // useful.
+  check(map.get(0), leu_l7);
+
+  // As above, but now all we have are things to discard.
+  map.set(0, ne_42);
+  map.set(0, &add);
+  EXPECT_TRUE(map.get(0).provesNothing());
 }
 
 // TODO: test an approximateOr of { x = 10 } and { x >= 0 }, once we support
