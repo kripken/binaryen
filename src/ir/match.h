@@ -890,40 +890,9 @@ inline decltype(auto) select(Select** binder, S1&& s1, S2&& s2, S3&& s3) {
   return Internal::SelectMatcher(binder, s1, s2, s3);
 }
 
-inline decltype(auto) local() {
-  return Internal::LocalGetMatcher(
-    nullptr, Internal::Any<Index>(nullptr));
-}
-inline decltype(auto) local(Index index) {
-  return Internal::LocalGetMatcher(
-    nullptr, Internal::Exact<Index>(nullptr, index));
-}
-// Disambiguate literal 0, which could otherwise be interpreted as a pointer
-inline decltype(auto) local(int index) { return local(Index(index)); }
 inline decltype(auto) local(Index* binder) {
   return Internal::LocalGetMatcher(
     nullptr, Internal::Any(binder));
-}
-inline decltype(auto) local(LocalGet** binder) {
-  return Internal::LocalGetMatcher(
-    binder, Internal::Any<Index>(nullptr));
-}
-inline decltype(auto) local(LocalGet** binder, Index index) {
-  return Internal::LocalGetMatcher(
-    binder, Internal::Exact<Index>(nullptr, index));
-}
-inline decltype(auto) local(LocalGet** binder, int index) {
-  return local(binder, Index(index));
-}
-inline decltype(auto) local(LocalGet** binder, Index* indexBinder) {
-  return Internal::LocalGetMatcher(
-    binder, Internal::Any(indexBinder));
-}
-template<class S> inline decltype(auto) local(S&& s) {
-  return Internal::LocalGetMatcher(nullptr, std::forward<S>(s));
-}
-template<class S> inline decltype(auto) local(LocalGet** binder, S&& s) {
-  return Internal::LocalGetMatcher(binder, std::forward<S>(s));
 }
 
 } // namespace wasm::Match
