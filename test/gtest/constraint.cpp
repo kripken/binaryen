@@ -284,12 +284,9 @@ TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
 TEST(ConstraintTest, TestAddOneSigned) {
   // Less then, signed, a constant 5.
   Constraint lts_c5{LtS, {Literal(int32_t(5))}};
-  // Less then, signed, a local 7.
-  Constraint lts_l7{LtS, {Index(7)}};
 
   // Less than, or equal.
   Constraint les_c5{LeS, {Literal(int32_t(5))}};
-  Constraint les_l7{LeS, {Index(7)}};
 
   BasicBlockConstraintMap map;
   map.setReachable();
@@ -304,7 +301,7 @@ TEST(ConstraintTest, TestAddOneSigned) {
 
   Binary add;
   add.op = AddInt32;
-  add.type == Type::i32;
+  add.type = Type::i32;
   add.left = &get;
   add.right = &c;
 
@@ -318,6 +315,12 @@ TEST(ConstraintTest, TestAddOneSigned) {
   map.set(1, &add);
   EXPECT_EQ(map.get(1).size(), 1);
   EXPECT_EQ(map.get(1)[0], les_c5);
+
+/*
+  // Less then, signed, a local 7.
+  Constraint lts_l7{LtS, {Index(7)}};
+  Constraint les_l7{LeS, {Index(7)}};
+*/
 }
 
 // TODO: test an approximateOr of { x = 10 } and { x >= 0 }, once we support
