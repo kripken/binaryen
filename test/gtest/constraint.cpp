@@ -240,12 +240,22 @@ TEST(ConstraintTest, TestDeredundancy) {
   EXPECT_EQ(t[0], eq0);
 }
 
-TEST(ConstraintTest, TestApply) {
+TEST(ConstraintTest, TestBasicBlockConstraintMap) {
+  // Maps begin unreachable.
+  BasicBlockConstraintMap map;
+
+  EXPECT_TRUE(map.unreachable);
+  map.setReachable();
+  EXPECT_FALSE(map.unreachable);
+}
+
+TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
   Constraint eq0{Eq, {Literal(int32_t(0))}};
   Constraint eq1{Eq, {Literal(int32_t(1))}};
   Constraint eq2{Eq, {Literal(int32_t(2))}};
 
   BasicBlockConstraintMap map;
+  map.setReachable();
 
   // Set local 0 to 0. It should read back the same.
   map.set(0, eq0);
