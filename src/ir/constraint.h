@@ -63,12 +63,6 @@ struct Constraint {
   Constraint negate() const {
     return Constraint{Abstract::negateRelational(op), term};
   }
-
-  // Convenience method to check if a constraint has a particular operation and
-  // type of term.
-  template<Abstract::Op checkOp, typename T> bool is() const {
-    return op == checkOp && std::holds_alternative<T>(term);
-  }
 };
 
 // We limit constraints to a low number to ensure good performance even with

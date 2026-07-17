@@ -344,7 +344,6 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
   // Special handling of certain binary operations.
   if (auto* binary = value->dynCast<Binary>()) {
     // x = y + 1
-    // TODO: generalize to any C
     if (auto* y = binary->left->dynCast<LocalGet>()) {
       if (auto* c = binary->right->dynCast<Const>();
           c && c->type.isInteger() && c->value.getInteger() == 1 &&
@@ -360,16 +359,17 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
           // TODO Handle more cases, though maybe leaving other passes might
           //      already handle as TODO (e.g. constant propagation can handle
           //      equality).
-          if (c.is<Abstract::LtU, Literal>()) {
-            c.op = Abstract::LeU;
-            return false;
+          switch (c.op) {
+            case Abstract::LtU:
+              c.op = Abstract::LeU;
+              return false;
+            case Abstract::LtS:
+              c.op = Abstract::LeS;
+              return false;
+            default:
+              // Anything else, we must delete.
+              return true;
           }
-          if (c.is<Abstract::LtS, Literal>()) {
-            c.op = Abstract::LeS;
-            return false;
-          }
-          // Anything else, we must delete.
-          return true;
         });
         set(index, newConstraints);
         return;
