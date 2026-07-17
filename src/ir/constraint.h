@@ -66,8 +66,7 @@ struct Constraint {
 
   // Convenience method to check if a constraint has a particular operation and
   // type of term.
-  template<Abstract::Op checkOp, typename T>
-  bool is() {
+  template<Abstract::Op checkOp, typename T> bool is() {
     return op == checkOp && std::holds_alternative<T>(term);
   }
 };

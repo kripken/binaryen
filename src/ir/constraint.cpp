@@ -311,7 +311,8 @@ void BasicBlockConstraintMap::set(Index index, const Constraint& c) {
   approximateAnd(index, c);
 }
 
-void BasicBlockConstraintMap::set(Index index, const AndedConstraintSet& constraints) {
+void BasicBlockConstraintMap::set(Index index,
+                                  const AndedConstraintSet& constraints) {
   // As above, but with a loop after.
   assert(!unreachable);
   eraseStaleRefs(index);
@@ -489,83 +490,84 @@ void BasicBlockConstraintMap::apply(LocalSet* localSet) {
     if (auto* y = binary->left->dynCast<LocalGet>()) {
       if (auto* c = binary->right->dynCast<Const>();
           c->type.isInteger() && c->value->getInteger() == 1 &&
-        Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
-      // Convert the constraints we know about y to ones about x, removing ones
-      // we cannot reason about.
-      auto newConstraints = get(y->index);
-      std::erase_if(newConstraints, [&](const Constraint& c) {
-        // x < c, x++  =>  x <= c
-        // This is simple to analyze, without needing to worry about overflowing
-        // etc.
-        // TODO Handle more cases, though maybe leaving other passes might
-        //      already handle as TODO (e.g. constant propagation can handle
-        //      equality).
-        if (c.is<Abstract::LtU, Literal>()) {
-          c.op = LtU;
-          return false;
-        }
-        if (c.is<Abstract::LtS, Literal>()) {
-          c.op = LtS;
-          return false;
-        }
-        // Anything else, we must delete.
-        return true;
-      });
-      set(localSet->index, newConstraints);
+          Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
+        // Convert the constraints we know about y to ones about x, removing
+        // ones we cannot reason about.
+        auto newConstraints = get(y->index);
+        std::erase_if(newConstraints, [&](const Constraint& c) {
+          // x < c, x++  =>  x <= c
+          // This is simple to analyze, without needing to worry about
+          // overflowing etc.
+          // TODO Handle more cases, though maybe leaving other passes might
+          //      already handle as TODO (e.g. constant propagation can handle
+          //      equality).
+          if (c.is<Abstract::LtU, Literal>()) {
+            c.op = LtU;
+            return false;
+          }
+          if (c.is<Abstract::LtS, Literal>()) {
+            c.op = LtS;
+            return false;
+          }
+          // Anything else, we must delete.
+          return true;
+        });
+        set(localSet->index, newConstraints);
+      }
     }
+
+    // We know and can prove nothing.
+    setProvesNothing(localSet->index);
   }
 
-  // We know and can prove nothing.
-  setProvesNothing(localSet->index);
-}
-
-std::ostream& operator<<(std::ostream& o, const Constraint& c) {
-  o << "Constraint{" << c.op << ", ";
-  if (auto* cc = std::get_if<Literal>(&c.term)) {
-    o << *cc;
-  } else if (auto* i = std::get_if<Index>(&c.term)) {
-    o << "Index(" << *i << ')';
-  }
-  o << '}';
-  return o;
-}
-
-std::ostream& operator<<(std::ostream& o, const AndedConstraintSet& set) {
-  if (set.provesEverything()) {
-    o << "AndedConstraintSet(contradiction)";
+  std::ostream& operator<<(std::ostream& o, const Constraint& c) {
+    o << "Constraint{" << c.op << ", ";
+    if (auto* cc = std::get_if<Literal>(&c.term)) {
+      o << *cc;
+    } else if (auto* i = std::get_if<Index>(&c.term)) {
+      o << "Index(" << *i << ')';
+    }
+    o << '}';
     return o;
   }
-  o << "AndedConstraintSet{";
-  bool first = true;
-  for (auto& constraint : set) {
-    if (first) {
-      first = false;
-    } else {
-      o << ", ";
-    }
-    o << constraint;
-  }
-  o << '}';
-  return o;
-}
 
-std::ostream& operator<<(std::ostream& o, const BasicBlockConstraintMap& map) {
-  if (map.unreachable) {
-    o << "BasicBlockConstraintMap(unreachable)";
+  std::ostream& operator<<(std::ostream& o, const AndedConstraintSet& set) {
+    if (set.provesEverything()) {
+      o << "AndedConstraintSet(contradiction)";
+      return o;
+    }
+    o << "AndedConstraintSet{";
+    bool first = true;
+    for (auto& constraint : set) {
+      if (first) {
+        first = false;
+      } else {
+        o << ", ";
+      }
+      o << constraint;
+    }
+    o << '}';
     return o;
   }
-  o << "BasicBlockConstraintMap{";
-  bool first = true;
-  for (auto& [local, constraints] : map.map) {
-    if (first) {
-      first = false;
-    } else {
-      o << ", ";
+
+  std::ostream& operator<<(std::ostream& o,
+                           const BasicBlockConstraintMap& map) {
+    if (map.unreachable) {
+      o << "BasicBlockConstraintMap(unreachable)";
+      return o;
     }
-    o << local << ": " << constraints;
+    o << "BasicBlockConstraintMap{";
+    bool first = true;
+    for (auto& [local, constraints] : map.map) {
+      if (first) {
+        first = false;
+      } else {
+        o << ", ";
+      }
+      o << local << ": " << constraints;
+    }
+    o << '}';
+    return o;
   }
-  o << '}';
-  return o;
-}
 
 } // namespace wasm::constraint
