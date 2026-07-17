@@ -493,7 +493,7 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
         // Convert the constraints we know about y to ones about x, removing
         // ones we cannot reason about.
         auto newConstraints = get(y->index);
-        std::erase_if(newConstraints, [&](const Constraint& c) {
+        std::erase_if(newConstraints, [&](Constraint& c) {
           // x < c, x++  =>  x <= c
           // This is simple to analyze, without needing to worry about
           // overflowing etc.
@@ -501,11 +501,11 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
           //      already handle as TODO (e.g. constant propagation can handle
           //      equality).
           if (c.is<Abstract::LtU, Literal>()) {
-            c.op = LtU;
+            c.op = Abstract::LeU;
             return false;
           }
           if (c.is<Abstract::LtS, Literal>()) {
-            c.op = LtS;
+            c.op = Abstract::LeS;
             return false;
           }
           // Anything else, we must delete.
