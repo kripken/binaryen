@@ -488,13 +488,14 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
     // TODO: generalize to any C
     if (auto* y = binary->left->dynCast<LocalGet>()) {
       if (auto* c = binary->right->dynCast<Const>();
-          c->type.isInteger() && c->value.getInteger() == 1 &&
+          c && c->type.isInteger() && c->value.getInteger() == 1 &&
           Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
         // Convert the constraints we know about y to ones about x, removing
         // ones we cannot reason about.
         auto newConstraints = get(y->index);
         std::erase_if(newConstraints, [&](Constraint& c) {
           // x < c, x++  =>  x <= c
+          //
           // This is simple to analyze, without needing to worry about
           // overflowing etc.
           // TODO Handle more cases, though maybe leaving other passes might
@@ -512,6 +513,7 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
           return true;
         });
         set(index, newConstraints);
+        return;
       }
     }
   }
