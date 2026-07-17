@@ -347,12 +347,12 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
   // Special handling of certain binary operations.
   if (auto* binary = value->dynCast<Binary>()) {
     // x = y + 1
-    Index* y;
+    Index y;
     if (matches(binary->left, local(&y)) && matches(binary->right, ival(1)) &&
         Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
       // Convert the constraints we know about y to ones about x, removing
       // ones we cannot reason about.
-      auto newConstraints = get(y->index);
+      auto newConstraints = get(y);
       std::erase_if(newConstraints, [&](Constraint& c) {
         // x < c, x++  =>  x <= c
         //
