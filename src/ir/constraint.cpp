@@ -520,54 +520,53 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
   setProvesNothing(index);
 }
 
-  std::ostream& operator<<(std::ostream& o, const Constraint& c) {
-    o << "Constraint{" << c.op << ", ";
-    if (auto* cc = std::get_if<Literal>(&c.term)) {
-      o << *cc;
-    } else if (auto* i = std::get_if<Index>(&c.term)) {
-      o << "Index(" << *i << ')';
-    }
-    o << '}';
-    return o;
+std::ostream& operator<<(std::ostream& o, const Constraint& c) {
+  o << "Constraint{" << c.op << ", ";
+  if (auto* cc = std::get_if<Literal>(&c.term)) {
+    o << *cc;
+  } else if (auto* i = std::get_if<Index>(&c.term)) {
+    o << "Index(" << *i << ')';
   }
+  o << '}';
+  return o;
+}
 
-  std::ostream& operator<<(std::ostream& o, const AndedConstraintSet& set) {
-    if (set.provesEverything()) {
-      o << "AndedConstraintSet(contradiction)";
-      return o;
-    }
-    o << "AndedConstraintSet{";
-    bool first = true;
-    for (auto& constraint : set) {
-      if (first) {
-        first = false;
-      } else {
-        o << ", ";
-      }
-      o << constraint;
-    }
-    o << '}';
+std::ostream& operator<<(std::ostream& o, const AndedConstraintSet& set) {
+  if (set.provesEverything()) {
+    o << "AndedConstraintSet(contradiction)";
     return o;
   }
+  o << "AndedConstraintSet{";
+  bool first = true;
+  for (auto& constraint : set) {
+    if (first) {
+      first = false;
+    } else {
+      o << ", ";
+    }
+    o << constraint;
+  }
+  o << '}';
+  return o;
+}
 
-  std::ostream& operator<<(std::ostream& o,
-                           const BasicBlockConstraintMap& map) {
-    if (map.unreachable) {
-      o << "BasicBlockConstraintMap(unreachable)";
-      return o;
-    }
-    o << "BasicBlockConstraintMap{";
-    bool first = true;
-    for (auto& [local, constraints] : map.map) {
-      if (first) {
-        first = false;
-      } else {
-        o << ", ";
-      }
-      o << local << ": " << constraints;
-    }
-    o << '}';
+std::ostream& operator<<(std::ostream& o, const BasicBlockConstraintMap& map) {
+  if (map.unreachable) {
+    o << "BasicBlockConstraintMap(unreachable)";
     return o;
   }
+  o << "BasicBlockConstraintMap{";
+  bool first = true;
+  for (auto& [local, constraints] : map.map) {
+    if (first) {
+      first = false;
+    } else {
+      o << ", ";
+    }
+    o << local << ": " << constraints;
+  }
+  o << '}';
+  return o;
+}
 
 } // namespace wasm::constraint
