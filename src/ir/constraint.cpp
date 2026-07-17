@@ -347,36 +347,35 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
   // Special handling of certain binary operations.
   if (auto* binary = value->dynCast<Binary>()) {
     // x = y + 1
-    if (auto* y = binary->left->dynCast<LocalGet>()) {
-      if (matches(binary->right, ival(1)) &&
-          Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
-        // Convert the constraints we know about y to ones about x, removing
-        // ones we cannot reason about.
-        auto newConstraints = get(y->index);
-        std::erase_if(newConstraints, [&](Constraint& c) {
-          // x < c, x++  =>  x <= c
-          //
-          // This is simple to analyze, without needing to worry about
-          // overflowing etc, and handles the common case of loop increments.
-          //
-          // TODO Handle more cases, though maybe not stuff other passes might
-          //      already handle (e.g. constant propagation can handle
-          //      equality).
-          switch (c.op) {
-            case Abstract::LtU:
-              c.op = Abstract::LeU;
-              return false;
-            case Abstract::LtS:
-              c.op = Abstract::LeS;
-              return false;
-            default:
-              // Anything else, we must delete.
-              return true;
-          }
-        });
-        set(index, newConstraints);
-        return;
-      }
+    Index* y;
+    if (matches(binary->left, local(&y)) && matches(binary->right, ival(1)) &&
+        Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
+      // Convert the constraints we know about y to ones about x, removing
+      // ones we cannot reason about.
+      auto newConstraints = get(y->index);
+      std::erase_if(newConstraints, [&](Constraint& c) {
+        // x < c, x++  =>  x <= c
+        //
+        // This is simple to analyze, without needing to worry about
+        // overflowing etc, and handles the common case of loop increments.
+        //
+        // TODO Handle more cases, though maybe not stuff other passes might
+        //      already handle (e.g. constant propagation can handle
+        //      equality).
+        switch (c.op) {
+          case Abstract::LtU:
+            c.op = Abstract::LeU;
+            return false;
+          case Abstract::LtS:
+            c.op = Abstract::LeS;
+            return false;
+          default:
+            // Anything else, we must delete.
+            return true;
+        }
+      });
+      set(index, newConstraints);
+      return;
     }
   }
 
