@@ -497,7 +497,7 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
           // x < c, x++  =>  x <= c
           //
           // This is simple to analyze, without needing to worry about
-          // overflowing etc.
+          // overflowing etc, and handles the common case of loop increments.
           // TODO Handle more cases, though maybe leaving other passes might
           //      already handle as TODO (e.g. constant propagation can handle
           //      equality).
