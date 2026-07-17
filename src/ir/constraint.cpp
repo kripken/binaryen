@@ -472,8 +472,7 @@ void BasicBlockConstraintMap::eraseStaleRefs(Index index) {
 void BasicBlockConstraintMap::apply(Index index, Expression* value) {
   // Apply a constraint to a value.
   if (Properties::isSingleConstantExpression(value)) {
-    auto value = Properties::getLiteral(value);
-    set(index, Constraint{Abstract::Eq, {value}});
+    set(index, Constraint{Abstract::Eq, {Properties::getLiteral(value)}});
     return;
   }
 
@@ -489,7 +488,7 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
     // TODO: generalize to any C
     if (auto* y = binary->left->dynCast<LocalGet>()) {
       if (auto* c = binary->right->dynCast<Const>();
-          c->type.isInteger() && c->value->getInteger() == 1 &&
+          c->type.isInteger() && c->value.getInteger() == 1 &&
           Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
         // Convert the constraints we know about y to ones about x, removing
         // ones we cannot reason about.
@@ -512,12 +511,12 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
           // Anything else, we must delete.
           return true;
         });
-        set(localSet->index, newConstraints);
+        set(index, newConstraints);
       }
     }
 
     // We know and can prove nothing.
-    setProvesNothing(localSet->index);
+    setProvesNothing(index);
   }
 
   std::ostream& operator<<(std::ostream& o, const Constraint& c) {
