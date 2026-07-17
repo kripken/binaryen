@@ -348,8 +348,8 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
   if (auto* binary = value->dynCast<Binary>()) {
     // x = y + 1
     Index y;
-    if (matches(binary->left, local(&y)) && matches(binary->right, ival(1)) &&
-        Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
+    if (Abstract::getBinary(binary->type, Abstract::Add) == binary->op &&
+        matches(binary->left, local(&y)) && matches(binary->right, ival(1))) {
       // Convert the constraints we know about y to ones about x, removing
       // ones we cannot reason about.
       auto newConstraints = get(y);
