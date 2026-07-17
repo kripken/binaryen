@@ -322,7 +322,7 @@ void BasicBlockConstraintMap::set(Index index,
   if (constraints.provesNothing()) {
     setProvesNothing(index);
   } else {
-    for (auto& constraints : set) {
+    for (auto& c : constraints) {
       approximateAnd(index, c);
     }
   }
@@ -469,22 +469,22 @@ void BasicBlockConstraintMap::eraseStaleRefs(Index index) {
   }
 }
 
-void BasicBlockConstraintMap::apply(LocalSet* localSet) {
+void BasicBlockConstraintMap::apply(Index index, Expression* value) {
   // Apply a constraint to a value.
-  if (Properties::isSingleConstantExpression(localSet->value)) {
-    auto value = Properties::getLiteral(localSet->value);
-    set(localSet->index, Constraint{Abstract::Eq, {value}});
+  if (Properties::isSingleConstantExpression(value)) {
+    auto value = Properties::getLiteral(value);
+    set(index, Constraint{Abstract::Eq, {value}});
     return;
   }
 
   // Apply a constraint to a local.
-  if (auto* get = localSet->value->dynCast<LocalGet>()) {
-    set(localSet->index, Constraint{Abstract::Eq, {get->index}});
+  if (auto* get = value->dynCast<LocalGet>()) {
+    set(index, Constraint{Abstract::Eq, {get->index}});
     return;
   }
 
   // Special handling of certain binary operations.
-  if (auto* binary = curr->dynCast<Binary>()) {
+  if (auto* binary = value->dynCast<Binary>()) {
     // x = y + 1
     // TODO: generalize to any C
     if (auto* y = binary->left->dynCast<LocalGet>()) {

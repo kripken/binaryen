@@ -282,9 +282,10 @@ struct BasicBlockConstraintMap {
     approximateAndInternal(index, c);
   }
 
-  // Given a local.set, apply it to the constraints. For example, if it is x = 5
-  // then we apply a constraint of 5 to x.
-  void apply(LocalSet* localSet);
+  // For a local index and an expression being written to it (in IR, using a
+  // local.set), apply it to the constraints. For example, if it is x = 5 then
+  // we apply a constraint of 5 to x.
+  void apply(Index index, Expression* value);
 
   // TODO: Add proves() here, which could do things like: if asked x == y, we
   // can answer False if we see x == c1, y == c2, and the constants c1, c2
