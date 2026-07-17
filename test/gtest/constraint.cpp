@@ -324,11 +324,14 @@ TEST(ConstraintTest, TestAddOneSigned) {
   map.set(0, &add);
   EXPECT_EQ(map.get(0).size(), 1);
   EXPECT_EQ(map.get(0)[0], les_c5);
-/*
-  // Less then, signed, a local 7.
+
+  // As above, but the constraints reference a local, not a constant.
   Constraint lts_l7{LtS, {Index(7)}};
   Constraint les_l7{LeS, {Index(7)}};
-*/
+  map.set(0, lts_l7);
+  map.set(0, &add);
+  EXPECT_EQ(map.get(0).size(), 1);
+  EXPECT_EQ(map.get(0)[0], les_l7);
 }
 
 // TODO: test an approximateOr of { x = 10 } and { x >= 0 }, once we support
