@@ -240,5 +240,40 @@ TEST(ConstraintTest, TestDeredundancy) {
   EXPECT_EQ(t[0], eq0);
 }
 
+TEST(ConstraintTest, TestApply) {
+  Constraint eq0{Eq, {Literal(int32_t(0))}};
+  Constraint eq1{Eq, {Literal(int32_t(1))}};
+  Constraint eq2{Eq, {Literal(int32_t(2))}};
+
+  BasicBlockConstraintMap map;
+
+  // Set local 0 to 0. It should read back the same.
+  map.set(0, eq0);
+  EXPECT_EQ(map.get(0).size(), 1);
+  EXPECT_EQ(map.get(0)[0], eq0);
+
+  // Set another value, replacing the first.
+  map.set(0, eq1);
+  EXPECT_EQ(map.get(0).size(), 1);
+  EXPECT_EQ(map.get(0)[0], eq1);
+
+  // Set a value using an expression.
+  Const c;
+  c.value = Literal(int32_t(2));
+  c.type = Type::i32;
+  map.set(0, &c);
+  EXPECT_EQ(map.get(0).size(), 1);
+  EXPECT_EQ(map.get(0)[0], eq2);
+
+  // Set an unfamiliar expression, leading to us knowing nothing.
+  Nop nop;
+  map.set(0, &nop);
+  EXPECT_TRUE(map.get(0).provesNothing());
+}
+
+TEST(ConstraintTest, TestAddOne) {
+  // TODO
+}
+
 // TODO: test an approximateOr of { x = 10 } and { x >= 0 }, once we support
 //       inequalities
