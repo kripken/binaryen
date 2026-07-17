@@ -316,6 +316,14 @@ TEST(ConstraintTest, TestAddOneSigned) {
   EXPECT_EQ(map.get(1).size(), 1);
   EXPECT_EQ(map.get(1)[0], les_c5);
 
+  // Local 0 did not change.
+  EXPECT_EQ(map.get(0).size(), 1);
+  EXPECT_EQ(map.get(0)[0], lts_c5);
+
+  // Setting 0 to an add of itself also works.
+  map.set(0, &add);
+  EXPECT_EQ(map.get(0).size(), 1);
+  EXPECT_EQ(map.get(0)[0], les_c5);
 /*
   // Less then, signed, a local 7.
   Constraint lts_l7{LtS, {Index(7)}};
