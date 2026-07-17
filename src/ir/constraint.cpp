@@ -514,10 +514,11 @@ void BasicBlockConstraintMap::apply(Index index, Expression* value) {
         set(index, newConstraints);
       }
     }
-
-    // We know and can prove nothing.
-    setProvesNothing(index);
   }
+
+  // We know and can prove nothing.
+  setProvesNothing(index);
+}
 
   std::ostream& operator<<(std::ostream& o, const Constraint& c) {
     o << "Constraint{" << c.op << ", ";
