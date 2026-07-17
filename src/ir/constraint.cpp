@@ -17,6 +17,7 @@
 #include <optional>
 
 #include "ir/constraint.h"
+#include "ir/match.h"
 #include "ir/properties.h"
 #include "wasm.h"
 
@@ -329,6 +330,8 @@ void BasicBlockConstraintMap::set(Index index,
 }
 
 void BasicBlockConstraintMap::set(Index index, Expression* value) {
+  using namespace Match;
+
   // Apply a constraint to a value.
   if (Properties::isSingleConstantExpression(value)) {
     set(index, Constraint{Abstract::Eq, {Properties::getLiteral(value)}});
@@ -345,8 +348,7 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
   if (auto* binary = value->dynCast<Binary>()) {
     // x = y + 1
     if (auto* y = binary->left->dynCast<LocalGet>()) {
-      if (auto* c = binary->right->dynCast<Const>();
-          c && c->type.isInteger() && c->value.getInteger() == 1 &&
+      if (matches(binary->right, ival(1)) &&
           Abstract::getBinary(binary->type, Abstract::Add) == binary->op) {
         // Convert the constraints we know about y to ones about x, removing
         // ones we cannot reason about.

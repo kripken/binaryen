@@ -878,6 +878,12 @@ inline decltype(auto) select(Select** binder, S1&& s1, S2&& s2, S3&& s3) {
   return Internal::SelectMatcher(binder, s1, s2, s3);
 }
 
+inline decltype(auto) local(Index* binder) {
+  // TODO The equivalent of
+  //  if (auto* get = curr->dynCast<LocalGet>()) { binder = get->index; }
+  //  else { binder = nullptr; }
+}
+
 } // namespace wasm::Match
 
 #endif // wasm_ir_match_h
