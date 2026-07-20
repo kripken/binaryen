@@ -104,7 +104,8 @@
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $no-unsigned (param $x i32) (result i32)
-  ;; The comparisons are unsigned. We do not optimize.
+  ;; The comparisons are unsigned. We do not optimize for the above reasons, but
+  ;; this is optimizable (< 0 is never true, when unsigned).
   (i32.or
    (i32.lt_u ;; this changed
     (local.get $x)
@@ -119,11 +120,11 @@
 
  ;; CHECK:      (func $no-nonzero (param $x i32) (result i32)
  ;; CHECK-NEXT:  (i32.or
- ;; CHECK-NEXT:   (i32.ne
+ ;; CHECK-NEXT:   (i32.lt_s
  ;; CHECK-NEXT:    (local.get $x)
  ;; CHECK-NEXT:    (i32.const -1)
  ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (i32.ge_u
+ ;; CHECK-NEXT:   (i32.ge_s
  ;; CHECK-NEXT:    (local.get $x)
  ;; CHECK-NEXT:    (i32.const 4000000)
  ;; CHECK-NEXT:   )
@@ -132,11 +133,11 @@
  (func $no-nonzero (param $x i32) (result i32)
   ;; The < 0 is not < another constant. We do not optimize.
   (i32.or
-   (i32.lt_u
+   (i32.lt_s
     (local.get $x)
     (i32.const -1) ;; this changed
    )
-   (i32.ge_u
+   (i32.ge_s
     (local.get $x)
     (i32.const 4000000)
    )
@@ -144,19 +145,25 @@
  )
 
  ;; CHECK:      (func $no-negative (param $x i32) (result i32)
- ;; CHECK-NEXT:  (i32.eq
- ;; CHECK-NEXT:   (local.get $x)
- ;; CHECK-NEXT:   (i32.const -1)
+ ;; CHECK-NEXT:  (i32.or
+ ;; CHECK-NEXT:   (i32.lt_s
+ ;; CHECK-NEXT:    (local.get $x)
+ ;; CHECK-NEXT:    (i32.const 0)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (i32.ge_s
+ ;; CHECK-NEXT:    (local.get $x)
+ ;; CHECK-NEXT:    (i32.const -1)
+ ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $no-negative (param $x i32) (result i32)
-  ;; The constant is not non-negative. We do not optimize.
+  ;; The constant is not non-negative. We do not optimize for the above reaosns
   (i32.or
-   (i32.lt_u
+   (i32.lt_s
     (local.get $x)
     (i32.const 0)
    )
-   (i32.ge_u
+   (i32.ge_s
     (local.get $x)
     (i32.const -1) ;; this changed
    )
@@ -164,19 +171,25 @@
  )
 
  ;; CHECK:      (func $no-different (param $x i32) (param $y i32) (result i32)
- ;; CHECK-NEXT:  (i32.ge_u
- ;; CHECK-NEXT:   (local.get $y)
- ;; CHECK-NEXT:   (i32.const 4000000)
+ ;; CHECK-NEXT:  (i32.or
+ ;; CHECK-NEXT:   (i32.lt_s
+ ;; CHECK-NEXT:    (local.get $x)
+ ;; CHECK-NEXT:    (i32.const 0)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (i32.ge_s
+ ;; CHECK-NEXT:    (local.get $y)
+ ;; CHECK-NEXT:    (i32.const 4000000)
+ ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $no-different (param $x i32) (param $y i32) (result i32)
   ;; The locals are not equal. We do not optimize.
   (i32.or
-   (i32.lt_u
+   (i32.lt_s
     (local.get $x)
     (i32.const 0)
    )
-   (i32.ge_u
+   (i32.ge_s
     (local.get $y) ;; this changed
     (i32.const 4000000)
    )
