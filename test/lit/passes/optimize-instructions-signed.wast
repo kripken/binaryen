@@ -2,6 +2,12 @@
 ;; RUN: wasm-opt %s --optimize-instructions -S -o - | filecheck %s
 
 (module
+ ;; CHECK:      (func $yes (param $x i32) (result i32)
+ ;; CHECK-NEXT:  (i32.ge_u
+ ;; CHECK-NEXT:   (local.get $x)
+ ;; CHECK-NEXT:   (i32.const 4000000)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $yes (param $x i32) (result i32)
   ;; Test conversions between signed and unsigned comparisons. Here we check if
   ;; x < 0 or x >= 4000000, but the comparisons are signed, so we are checking
@@ -19,6 +25,12 @@
   )
  )
 
+ ;; CHECK:      (func $yes-flipped (param $x i32) (result i32)
+ ;; CHECK-NEXT:  (i32.ge_u
+ ;; CHECK-NEXT:   (local.get $x)
+ ;; CHECK-NEXT:   (i32.const 4000000)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $yes-flipped (param $x i32) (result i32)
   ;; Ditto, but flipped. Also optimizable.
   (i32.or
@@ -33,6 +45,15 @@
   )
  )
 
+ ;; CHECK:      (func $yes-tee (param $x i32) (result i32)
+ ;; CHECK-NEXT:  (local $temp i32)
+ ;; CHECK-NEXT:  (i32.ge_u
+ ;; CHECK-NEXT:   (local.tee $temp
+ ;; CHECK-NEXT:    (local.get $x)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (i32.const 4000000)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $yes-tee (param $x i32) (result i32)
   ;; Ditto, with a tee'd local, also optimizable.
   (local $temp i32)
@@ -50,6 +71,15 @@
   )
  )
 
+ ;; CHECK:      (func $yes-tee-flipped (param $x i32) (result i32)
+ ;; CHECK-NEXT:  (local $temp i32)
+ ;; CHECK-NEXT:  (i32.ge_u
+ ;; CHECK-NEXT:   (local.tee $temp
+ ;; CHECK-NEXT:    (local.get $x)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (i32.const 4000000)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $yes-tee-flipped (param $x i32) (result i32)
   ;; Ditto, with tee+flip.
   (local $temp i32)
@@ -67,6 +97,12 @@
   )
  )
 
+ ;; CHECK:      (func $no-unsigned (param $x i32) (result i32)
+ ;; CHECK-NEXT:  (i32.ge_u
+ ;; CHECK-NEXT:   (local.get $x)
+ ;; CHECK-NEXT:   (i32.const 4000000)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $no-unsigned (param $x i32) (result i32)
   ;; The comparisons are unsigned. We do not optimize.
   (i32.or
@@ -81,6 +117,18 @@
   )
  )
 
+ ;; CHECK:      (func $no-nonzero (param $x i32) (result i32)
+ ;; CHECK-NEXT:  (i32.or
+ ;; CHECK-NEXT:   (i32.ne
+ ;; CHECK-NEXT:    (local.get $x)
+ ;; CHECK-NEXT:    (i32.const -1)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (i32.ge_u
+ ;; CHECK-NEXT:    (local.get $x)
+ ;; CHECK-NEXT:    (i32.const 4000000)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $no-nonzero (param $x i32) (result i32)
   ;; The < 0 is not < another constant. We do not optimize.
   (i32.or
@@ -95,6 +143,12 @@
   )
  )
 
+ ;; CHECK:      (func $no-negative (param $x i32) (result i32)
+ ;; CHECK-NEXT:  (i32.eq
+ ;; CHECK-NEXT:   (local.get $x)
+ ;; CHECK-NEXT:   (i32.const -1)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $no-negative (param $x i32) (result i32)
   ;; The constant is not non-negative. We do not optimize.
   (i32.or
@@ -109,6 +163,12 @@
   )
  )
 
+ ;; CHECK:      (func $no-different (param $x i32) (param $y i32) (result i32)
+ ;; CHECK-NEXT:  (i32.ge_u
+ ;; CHECK-NEXT:   (local.get $y)
+ ;; CHECK-NEXT:   (i32.const 4000000)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
  (func $no-different (param $x i32) (param $y i32) (result i32)
   ;; The locals are not equal. We do not optimize.
   (i32.or
