@@ -604,24 +604,15 @@ struct OptimizeInstructions
         Const* c;
         Expression* x;
         Expression* y;
-        if (
-            (matches(
-              curr,
-              binary(
-                Or,
-                binary(LtS, any(&x), ival(0)),
-                binary(GeS, any(&y), ival(&c))
-              )
-            ) ||
-            // Also flipped around the ||
-            matches(
-              curr,
-              binary(
-                Or,
-                binary(GeS, any(&x), ival(&c)),
-                binary(LtS, any(&y), ival(0))
-              )
-            )) &&
+        if ((matches(curr,
+                     binary(Or,
+                            binary(LtS, any(&x), ival(0)),
+                            binary(GeS, any(&y), ival(&c)))) ||
+             // Also flipped around the ||
+             matches(curr,
+                     binary(Or,
+                            binary(GeS, any(&x), ival(&c)),
+                            binary(LtS, any(&y), ival(0))))) &&
             c->value.getInteger() >= 0 && areConsecutiveInputsEqual(x, y)) {
           curr->op = Abstract::getBinary(curr->left->type, Abstract::GeU);
           curr->left = x;
