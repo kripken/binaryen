@@ -137,13 +137,27 @@ void AndedConstraintSet::approximateAnd(const Constraint& c) {
   auto result = proves(c);
   if (result == True) {
     // We already prove c to be true, so it adds nothing.
-    // TODO: we could also see if c proves us true, and replace things we
-    //       already have with c when possible
     return;
   } else if (result == False) {
     // We are now a contradiction.
     isContradiction = true;
     return;
+  }
+
+  // If c proves something already present to be true, it can just replace it.
+  for (auto& existing : *this) {
+    auto result = provesPair(c, existing);
+    if (result == True) {
+      existing = c;
+
+      // Sort to ensure we are in the right place.
+      std::sort(begin(), end());
+
+      return;
+    }
+
+    // There cannot be a contradiction here, because we checked for that above.
+    assert(result != False);
   }
 
   if (size() < MaxConstraints) {
@@ -159,25 +173,25 @@ void AndedConstraintSet::approximateAnd(const Constraint& c) {
   //       useful to implement that).
 }
 
-void AndedConstraintSet::approximateOr(const AndedConstraintSet& other) {
+bool AndedConstraintSet::approximateOr(const AndedConstraintSet& other) {
   // If one proves everything, the only thing that matters is the other.
+  if (other.provesEverything()) {
+    return false;
+  }
   if (provesEverything()) {
     *this = other;
-    return;
-  }
-  if (other.provesEverything()) {
-    return;
+    return true;
   }
 
   // If this is already implied by current constraints, then it is redundant.
   // E.g. if we are { x = 10 } and other is { x >= 0 } then all we need is
   // { x >= 0 } as the result of the OR.
+  if (other.proves(*this) == True) {
+    return false;
+  }
   if (proves(other) == True) {
     *this = other;
-    return;
-  }
-  if (other.proves(*this) == True) {
-    return;
+    return true;
   }
 
   // TODO smarts: handle <= > and so forth
@@ -185,6 +199,7 @@ void AndedConstraintSet::approximateOr(const AndedConstraintSet& other) {
   // Otherwise, we don't know how to nicely OR these things, and expand to the
   // trivial set of no constraints.
   clear();
+  return true;
 }
 
 std::optional<LocalConstraint> LocalConstraint::parse(Expression* curr) {
@@ -303,21 +318,22 @@ void BasicBlockConstraintMap::setProvesNothing(Index index) {
   map.erase(index);
 }
 
-void BasicBlockConstraintMap::approximateOr(
+bool BasicBlockConstraintMap::approximateOr(
   const BasicBlockConstraintMap& other) {
   // If one is unreachable, it adds nothing to the other.
   if (other.unreachable) {
-    return;
+    return false;
   }
   if (unreachable) {
     *this = other;
-    return;
+    return true;
   }
 
   // We only need to loop on our locals, as any local that is missing in us is
   // one that would end up proving nothing (and get removed).
+  bool changed = false;
   for (auto& [local, constraints] : map) {
-    constraints.approximateOr(other.get(local));
+    changed |= constraints.approximateOr(other.get(local));
   }
 
   // Anything that became trivial after the OR must be removed.
@@ -325,8 +341,14 @@ void BasicBlockConstraintMap::approximateOr(
     const auto& [local, constraints] = item;
     // We do not store contradictions.
     assert(!constraints.provesEverything());
-    return constraints.provesNothing();
+    if (constraints.provesNothing()) {
+      changed = true;
+      return true;
+    }
+    return false;
   });
+
+  return changed;
 }
 
 void BasicBlockConstraintMap::approximateAndInternal(Index index,
