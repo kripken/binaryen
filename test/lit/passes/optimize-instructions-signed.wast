@@ -157,7 +157,7 @@
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $no-negative (param $x i32) (result i32)
-  ;; The constant is not non-negative. We do not optimize for the above reaosns
+  ;; The constant is not non-negative. We do not optimize.
   (i32.or
    (i32.lt_s
     (local.get $x)
