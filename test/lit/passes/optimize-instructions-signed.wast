@@ -2,7 +2,7 @@
 ;; RUN: wasm-opt %s --optimize-instructions -S -o - | filecheck %s
 
 (module
- (func $test (param $x i32) (result i32)
+ (func $yes (param $x i32) (result i32)
   ;; Test conversions between signed and unsigned comparisons. Here we check if
   ;; x < 0 or x >= 4000000, but the comparisons are signed, so we are checking
   ;; if x >= 4000000 or the sign bit is set, which can be checked using a single
@@ -19,7 +19,8 @@
   )
  )
 
- (func $test-flipped (param $x i32) (result i32)
+ (func $yes-flipped (param $x i32) (result i32)
+  ;; Ditto, but flipped. Also optimizable.
   (i32.or
    (i32.ge_s
     (local.get $x)
@@ -32,7 +33,8 @@
   )
  )
 
- (func $test-tee (param $x i32) (result i32)
+ (func $yes-tee (param $x i32) (result i32)
+  ;; Ditto, with a tee'd local, also optimizable.
   (local $temp i32)
   (i32.or
    (i32.lt_s
@@ -48,7 +50,8 @@
   )
  )
 
- (func $test-tee-flipped (param $x i32) (result i32)
+ (func $yes-tee-flipped (param $x i32) (result i32)
+  ;; Ditto, with tee+flip.
   (local $temp i32)
   (i32.or
    (i32.ge_s
@@ -60,6 +63,62 @@
    (i32.lt_s
     (local.get $temp)
     (i32.const 0)
+   )
+  )
+ )
+
+ (func $no-unsigned (param $x i32) (result i32)
+  ;; The comparisons are unsigned. We do not optimize.
+  (i32.or
+   (i32.lt_u ;; this changed
+    (local.get $x)
+    (i32.const 0)
+   )
+   (i32.ge_u ;; this changed
+    (local.get $x)
+    (i32.const 4000000)
+   )
+  )
+ )
+
+ (func $no-nonzero (param $x i32) (result i32)
+  ;; The < 0 is not < another constant. We do not optimize.
+  (i32.or
+   (i32.lt_u
+    (local.get $x)
+    (i32.const -1) ;; this changed
+   )
+   (i32.ge_u
+    (local.get $x)
+    (i32.const 4000000)
+   )
+  )
+ )
+
+ (func $no-negative (param $x i32) (result i32)
+  ;; The constant is not non-negative. We do not optimize.
+  (i32.or
+   (i32.lt_u
+    (local.get $x)
+    (i32.const 0)
+   )
+   (i32.ge_u
+    (local.get $x)
+    (i32.const -1) ;; this changed
+   )
+  )
+ )
+
+ (func $no-different (param $x i32) (param $y i32) (result i32)
+  ;; The locals are not equal. We do not optimize.
+  (i32.or
+   (i32.lt_u
+    (local.get $x)
+    (i32.const 0)
+   )
+   (i32.ge_u
+    (local.get $y) ;; this changed
+    (i32.const 4000000)
    )
   )
  )
