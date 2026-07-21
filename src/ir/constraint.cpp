@@ -22,6 +22,46 @@
 
 namespace wasm::constraint {
 
+// To faciliate loop optimization, we implement two special opcodes. The first
+// is "Incrementing", which represents a value that is in the process of
+// incrementing. "x incrementing(0)" (local x has the constraint "Incrementing"
+// with a value of constant 0) means "x might be 0, or 1, or a value that is
+// higher, as part of a process of being incremented (by 1) each time. Likewise,
+// "x incremented(0)" means the same, but where x has been incremented at least
+// once already (this is the same as "incrementing(1)", but also handles
+// variable values that we can't add 1 to).
+//
+// This is an abstract/symbolic way to represent loop variables. As motivation,
+// consider this loop:
+//
+//  x = 0
+//  do {
+//    ..work..
+//    x++
+//  } while (x < 100)
+//
+// If we do a naive flow here, then the loop has two entries, one sending 0, and
+// one that is initially unreachable. At the top of the loop we therefore start
+// with 0, and the ++ turns that to 1. Now the top of the loop receives 0 and 1,
+// so we can infer constraints x >= 0 && x <= 1, and we can proceed here to
+// literally interpret the loop at compile time. But this is not what we want!
+// To handle long loops and ones against unknown variables, we want to find the
+// limit of what the loop variable can contain. We do that by making the x++
+// operation change the initial 0 value into incremented(0): it has been
+// incremented once so far, and it is in a loop where it may be incremented
+// further, so higher values are possible - but those values are reached through
+// increments of 1. Before branching to the top of the loop, we apply the
+// constraint x < 100, and that on top of "incremented(0)" means "x >= 1 &&
+// x < 100". Note how no overflow is possible, as the < 100 stops the process of
+// incrementation. After this, at the top of the loop the inputs are now 0 and
+// "x >= 1 && x < 100" which combine to "x >= 0 && x < 100", exactly as we want.
+//
+// One way to look at this is the same as infinity or episilon in calculus:
+// when proving limits, those are not actual values, but represent a *process*
+// that unfolds.
+const auto Incrementing = Abstract::User1;
+const auto Incremented = Abstract::User2;
+
 namespace {
 
 Result TrueFalse(bool x) { return x ? True : False; }
