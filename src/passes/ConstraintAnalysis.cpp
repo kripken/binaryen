@@ -428,20 +428,9 @@ struct ConstraintAnalysis
   void applyToConstraints(Expression* curr,
                           BasicBlockConstraintMap& constraints) {
     if (auto* set = curr->dynCast<LocalSet>()) {
-      if (!relevantLocals[set->index]) {
-        // No point to apply a constraint to an irrelevant local.
-        return;
-      }
-      if (Properties::isSingleConstantExpression(set->value)) {
-        // Apply a constraint to this value.
-        auto value = Properties::getLiteral(set->value);
-        constraints.set(set->index, Constraint{Abstract::Eq, {value}});
-      } else if (auto* get = set->value->dynCast<LocalGet>()) {
-        // Apply a constraint to this local.
-        constraints.set(set->index, Constraint{Abstract::Eq, {get->index}});
-      } else {
-        // We know and can prove nothing.
-        constraints.setProvesNothing(set->index);
+      // Only apply a constraint to a relevant local.
+      if (relevantLocals[set->index]) {
+        constraints.set(set->index, set->value);
       }
     }
   }

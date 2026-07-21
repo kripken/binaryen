@@ -17,6 +17,7 @@
 #include <optional>
 
 #include "ir/constraint.h"
+#include "ir/match.h"
 #include "ir/properties.h"
 #include "wasm.h"
 
@@ -408,6 +409,76 @@ void BasicBlockConstraintMap::set(Index index, const Constraint& c) {
 
   // Apply the constraint.
   approximateAnd(index, c);
+}
+
+void BasicBlockConstraintMap::set(Index index,
+                                  const AndedConstraintSet& constraints) {
+  // As above, but with a loop after.
+  assert(!unreachable);
+  eraseStaleRefs(index);
+  map.erase(index);
+
+  // Apply the constraints, if there are any.
+  if (constraints.provesNothing()) {
+    setProvesNothing(index);
+  } else {
+    for (auto& c : constraints) {
+      approximateAnd(index, c);
+    }
+  }
+}
+
+void BasicBlockConstraintMap::set(Index index, Expression* value) {
+  using namespace Match;
+
+  // Apply a constraint to a value.
+  if (Properties::isSingleConstantExpression(value)) {
+    set(index, Constraint{Abstract::Eq, {Properties::getLiteral(value)}});
+    return;
+  }
+
+  // Apply a constraint to a local.
+  if (auto* get = value->dynCast<LocalGet>()) {
+    set(index, Constraint{Abstract::Eq, {get->index}});
+    return;
+  }
+
+  // Special handling of certain binary operations.
+  {
+    // x = y + 1
+    Index y;
+    if (matches(value, binary(Abstract::Add, local(&y), ival(1)))) {
+      // Convert the constraints we know about y to ones about x, removing
+      // ones we cannot reason about.
+      auto newConstraints = get(y);
+      std::erase_if(newConstraints, [&](Constraint& c) {
+        // x < c, x++  =>  x <= c
+        //
+        // This is simple to analyze, without needing to worry about
+        // overflowing etc, and handles the common case of loop increments.
+        //
+        // TODO Handle more cases, though maybe not stuff other passes might
+        //      already handle (e.g. constant propagation can handle
+        //      equality).
+        switch (c.op) {
+          case Abstract::LtU:
+            c.op = Abstract::LeU;
+            return false;
+          case Abstract::LtS:
+            c.op = Abstract::LeS;
+            return false;
+          default:
+            // Anything else, we must delete.
+            return true;
+        }
+      });
+      set(index, newConstraints);
+      return;
+    }
+  }
+
+  // We know and can prove nothing.
+  setProvesNothing(index);
 }
 
 void BasicBlockConstraintMap::setProvesNothing(Index index) {
