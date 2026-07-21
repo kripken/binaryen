@@ -22,17 +22,9 @@
 
 namespace wasm::constraint {
 
-// To faciliate loop optimization, we implement two special opcodes. The first
-// is "Incrementing", which represents a value that is in the process of
-// incrementing. "x incrementing(0)" (local x has the constraint "Incrementing"
-// with a value of constant 0) means "x might be 0, or 1, or a value that is
-// higher, as part of a process of being incremented (by 1) each time. Likewise,
-// "x incremented(0)" means the same, but where x has been incremented at least
-// once already (this is the same as "incrementing(1)", but also handles
-// variable values that we can't add 1 to).
-//
-// This is an abstract/symbolic way to represent loop variables. As motivation,
-// consider this loop:
+// To faciliate loop optimization, we implement two special opcodes, which
+// represent an abstract/symbolic way to represent loop variables. As
+// motivation, consider this loop:
 //
 //  x = 0
 //  do {
@@ -46,19 +38,53 @@ namespace wasm::constraint {
 // so we can infer constraints x >= 0 && x <= 1, and we can proceed here to
 // literally interpret the loop at compile time. But this is not what we want!
 // To handle long loops and ones against unknown variables, we want to find the
-// limit of what the loop variable can contain. We do that by making the x++
-// operation change the initial 0 value into incremented(0): it has been
-// incremented once so far, and it is in a loop where it may be incremented
-// further, so higher values are possible - but those values are reached through
-// increments of 1. Before branching to the top of the loop, we apply the
-// constraint x < 100, and that on top of "incremented(0)" means "x >= 1 &&
-// x < 100". Note how no overflow is possible, as the < 100 stops the process of
-// incrementation. After this, at the top of the loop the inputs are now 0 and
-// "x >= 1 && x < 100" which combine to "x >= 0 && x < 100", exactly as we want.
+// limit of what the loop variable can contain.
 //
-// One way to look at this is the same as infinity or episilon in calculus:
-// when proving limits, those are not actual values, but represent a *process*
-// that unfolds.
+// To infer such limits, we make the x++ operation emit an "Incremented"
+// constraint. Incremented(0) means that the value was 0 and is now in the
+// process of incrementing, and in fact has been incremented once already.
+// Loosely, it means "this can be 1, or 2, or 3, and so forth". There is a
+// process of incrementation here which we do not know the bounds of yet, but we
+// know where it started. Using this, here is how a flow in ConstraintAnalysis
+// can operate:
+//
+//  * As mentioned above, initially the loop receives a single input 0.
+//  * x++ turns that 0 into Incremented(0).
+//  * To return to the top of the loop, we apply the constraint x < 100, and
+//    that on top of Incremented(0) gives us x >= 1 && x < 100: that is, the
+//    new constraints tells us that the process of incrementing must stop, and
+//    where.
+//  * Returning to the top of the loop, 0 is also possible, for a total of
+//    x >= 0 && x < 100, which is exactly what we want to infer, allowing us to
+//    remove bounds checks in the ..work.. code.
+//
+// We also want to optimize loops like this, where the condition is at the top:
+//
+//  x = 0
+//  while (x < 100) {
+//    ..work..
+//    x++
+//  }
+//
+// Now the flow looks like this:
+//
+//  * Again, initially the loop receives a single input 0.
+//  * 0 && x < 100 is still 0.
+//  * x++ turns that 0 into Incremented(0).
+//  * At the top of the loop, we merge 0 and Incremented(0) into
+//    Incrementing(0). This is the same as Incremented, except it has not
+//    necessarily been incremented once already, and it means, loosely, "this
+//    can be 0, or 1, or 2, and so forth".
+//  * Incrementing(0) && x < 100 turns into x >= 0 && x < 100, as we want.
+//
+// Note that Incremented(0) is the same as Incrementing(1). We provide both
+// because we need them to handle the non-constant case, i.e., Incremented(z)
+// for a local z.
+//
+// Incremented and Incrementing are sort of like infinity or episilon in
+// calculus: when proving limits, those are not actual values, but represent a
+// *process* that unfolds. The precise definition of that process is that the
+// value starts somewhere and grows by increments of 1 until it is stopped.
 const auto Incrementing = Abstract::User1;
 const auto Incremented = Abstract::User2;
 
