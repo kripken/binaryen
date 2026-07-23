@@ -450,23 +450,30 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
     if (matches(value, binary(Abstract::Add, local(&y), ival(1)))) {
       // Convert the constraints we know about y to ones about x, removing
       // ones we cannot reason about.
+      //
+      // Note that we don't try to handle all possible cases here, e.g. simple
+      // increments of constants not inside loops (other passes can infer such
+      // things).
       auto newConstraints = get(y);
       std::erase_if(newConstraints, [&](Constraint& c) {
-        // x < c, x++  =>  x <= c
-        //
-        // This is simple to analyze, without needing to worry about
-        // overflowing etc, and handles the common case of loop increments.
-        //
-        // TODO Handle more cases, though maybe not stuff other passes might
-        //      already handle (e.g. constant propagation can handle
-        //      equality).
         switch (c.op) {
-          case Abstract::LtU:
-            c.op = Abstract::LeU;
+          case Abstract::Eq:
+            // y = Y, x = y + 1  =>  x = Incremented(Y)
+            c.op = Incremented;
+            return false;
+#if 0
+XX maybe like before, turn < into <= and >= into >. Cheap and handles vars. But is it enough?
+          case Abstract::GeS:
+          case Abstract::GeU:
+            // y >= Y, x = y + 1  =>  x = Incremented(Y)
+            c.op = Incremented;
             return false;
           case Abstract::LtS:
-            c.op = Abstract::LeS;
+          case Abstract::LtU:
+            // y >= Y, x = y + 1  =>  x = Incremented(Y)
+            c.op = Incremented;
             return false;
+#endif
           default:
             // Anything else, we must delete.
             return true;
