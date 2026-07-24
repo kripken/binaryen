@@ -465,12 +465,12 @@ TEST(ConstraintTest, TestIncrement) {
   BasicBlockConstraintMap map;
   map.setReachable();
 
-  // Set $0 = 42
+  // Set $0 = 42.
   Constraint eq42{Eq, {Literal(int32_t(42))}};
   map.set(0, eq42);
   EXPECT_EQ(map.get(0), AndedConstraintSet{eq42});
 
-  // Prepare to do $1 = $0 + 1.
+  // Prepare to do $0 = $0 + 1.
   LocalGet get;
   get.index = 0;
   get.type = Type::i32;
@@ -485,24 +485,19 @@ TEST(ConstraintTest, TestIncrement) {
   add.left = &get;
   add.right = &c;
 
-  // $0 = 42 from earlier, and now we set $1 = $0 + 1 => $1 = Incremented(42)
-  map.set(1, &add);
+  // $0 = 42 from earlier, and now we set $0 = $0 + 1  =>  $0 = Incremented(42)
+  map.set(0, &add);
   AndedConstraintSet inced42{{Incremented, {Literal(int32_t(42))}}};
   EXPECT_EQ(map.get(1), inced42);
 
-  // Local 0 did not change.
-  EXPECT_EQ(map.get(0), AndedConstraintSet{eq42});
-
-  // Setting 0 to an add of itself also works.
-  map.set(0, &add);
-  EXPECT_EQ(map.get(0), inced42);
-
-  // As above, but we know nothing about the other local, so we just become an
-  // Incremented of that local.
-  map.setProvesNothing(0);
+  // Starting over, $0 = 42, and now do $1 = $0 + 1  =>  $1 = Incremented($0)
+  map.set(0, eq42);
   map.set(1, &add);
   AndedConstraintSet incedl0{{Incremented, {Index(0)}}};
-  EXPECT_EQ(map.get(0), incedl0);
+  EXPECT_EQ(map.get(1), incedl0);
+
+  // While doing that, local 0 did not change.
+  EXPECT_EQ(map.get(0), AndedConstraintSet{eq42});
 
   return;
 
