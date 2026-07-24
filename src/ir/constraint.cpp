@@ -236,18 +236,18 @@ Result AndedConstraintSet::proves(const AndedConstraintSet& other) const {
 namespace {
 
 // Do an AND on a pair of constraints, looking for a way to fuse them together
-// into a single constraint that represents them both, while assuming the
+// into a list of constraints that represents them both, while assuming the
 // constraints have an equal term. If we fail, return nullopt.
-std::optional<Constraint> fusedApproximateAndTermEqualPair(
+std::optional<ConstraintVector> fusedApproximateAndTermEqualPair(
   const Abstract::Op aOp, const Abstract::Op bOp, const Term& term) {
   using namespace Abstract;
 
   // x < C && x <= C  ===  x < C
   if (aOp == LtS && bOp == LeS) {
-    return Constraint{LtS, term};
+    return {Constraint{LtS, term}};
   }
   if (aOp == LtU && bOp == LeU) {
-    return Constraint{LtU, term};
+    return {Constraint{LtU, term}};
   }
 
   // TODO: all the rest
@@ -256,14 +256,14 @@ std::optional<Constraint> fusedApproximateAndTermEqualPair(
 }
 
 // Do an AND on a pair of constraints, looking for a way to fuse them together
-// into a single constraint that represents them both. If we fail, return
+// into a list of constraints that represents them both. If we fail, return
 // nullopt.
-std::optional<Constraint> fusedApproximateAndPair(const Constraint& a,
+std::optional<ConstraintVector> fusedApproximateAndPair(const Constraint& a,
                                                   const Constraint& b,
                                                   bool recursing = false) {
   // If a proves b is true, all we need is a (e.g. { x == 5 && x > 0 } => x == 5
   if (provesPair(a, b) == True) {
-    return a;
+    return {a};
   }
 
   if (a.term == b.term) {
@@ -301,9 +301,18 @@ void AndedConstraintSet::approximateAnd(const Constraint& c) {
   for (auto& existing : *this) {
     // Some ANDed constraints fuse together into a new constraint.
     if (auto fused = fusedApproximateAndPair(existing, c)) {
-      existing = *fused;
+      // Atm no pattern returns nothing, so we do not need to handle that case.
+      assert(!fused->empty());
 
-      // Sort to ensure we are in the right place.
+      // The first item can just replace |existing|.
+      existing = (*fused)[0];
+
+      // The rest can be appended, if we have room.
+      for (Index = 1; i < fused->size() && size() < MaxConstraints; i++) {
+        push_back((*fused)[i]);
+      }
+
+      // Sort to ensure everything is in the right place.
       std::sort(begin(), end());
 
       return;

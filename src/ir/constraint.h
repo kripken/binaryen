@@ -73,6 +73,10 @@ inline constexpr std::size_t MaxConstraints = 3;
 // What we infer from one thing about another: true/false, or unknown.
 enum Result { True, False, Unknown };
 
+// A vector of constraints of bounded length. This is the main storage we use
+// for constraints in various places.
+using ConstraintVector = inplace_vector<Constraint, MaxConstraints>;
+
 // A set of constraints connected by the logical "and" operation. That is, all
 // the constraints are simultaneously true about some value. In the examples in
 // the comments below, `x` is used for the thing all the constraints are talking
@@ -82,7 +86,7 @@ enum Result { True, False, Unknown };
 // While we are a vector, the order of constraints does not logically matter,
 // and we keep ourselves sorted in a canonical form, so that simple ==, != etc.
 // comparisons work. The canonical order also makes debug printing nicer.
-struct AndedConstraintSet : inplace_vector<Constraint, MaxConstraints> {
+struct AndedConstraintSet : ConstraintVector {
   // We could represent a contradiction using two constraints that contradict
   // each other (== 0 && != 0), but for simplicity we mark this explicitly.
   //
