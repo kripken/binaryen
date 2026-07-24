@@ -310,13 +310,13 @@ struct Matcher {
   };
 
   // Check if the pattern matches given inputs. Returns the mapping described above, if we succeed.
-  std::optional<VarTermMap> check(const AndedConstraintSet& a,
-                                           const AndedConstraintSet& b);
+  std::optional<VarTermMap> check(const Constraint& a,
+                                           const Constraint& b);
 
 private:
 
-  MatcherSet mc1;
-  MatcherSet mc2;
+  MatcherConstraint mc1;
+  MatcherConstraint mc2;
 
   struct Requirement {
     Var* a;
@@ -327,7 +327,7 @@ private:
   SmallVector<Requirement, 2> requirements;
 };
 
-Matcher::Matcher(const MatcherSet& mc1_, const MatcherSet& mc2_)
+Matcher::Matcher(const MatcherConstraint& mc1_, const MatcherConstraint& mc2_)
   : mc1(mc1_), mc2(mc2_) {
   // Sort the sets like Constraints are sorted, so that when we compare, things
   // line up.
@@ -341,7 +341,7 @@ Matcher& Matcher::require(Var& a, Abstract::Op op, Var& b) {
 }
 
 std::optional<Matcher::VarTermMap> Matcher::checkInternal(
-  const AndedConstraintSet& a, const AndedConstraintSet& b) {
+  const Constraint& a, const Constraint& b) {
 
   // TODO: optimize all this for speed
 
@@ -353,24 +353,23 @@ std::optional<Matcher::VarTermMap> Matcher::checkInternal(
   // Vars to concrete Terms.
   VarTermMap varTermMap;
 
-  auto parse = [&](const AndedConstraintSet& input, const MatcherSet& pattern) {
-    for (Index i = 0; i < input.size(); i++) {
-      // The operation must match.
-      if (input[i].op != pattern[i].op) {
+  auto parse = [&](const Constraint& input, const MatcherConstraint& pattern) {
+    // The operation must match.
+    if (input[i].op != pattern[i].op) {
+      return false;
+    }
+
+    // The term must match, or define a new unknown value.
+    auto [iter, inserted] =
+      varTermMap.insert({pattern[i].term, input[i].term});
+    if (!inserted) {
+      // The Var in the pattern is already mapped and known. The input here
+      // must match the prior appearance.
+      if (input[i].term != iter->second) {
         return false;
       }
-
-      // The term must match, or define a new unknown value.
-      auto [iter, inserted] =
-        varTermMap.insert({pattern[i].term, input[i].term});
-      if (!inserted) {
-        // The Var in the pattern is already mapped and known. The input here
-        // must match the prior appearance.
-        if (input[i].term != iter->second) {
-          return false;
-        }
-      }
     }
+
     return true;
   };
 
