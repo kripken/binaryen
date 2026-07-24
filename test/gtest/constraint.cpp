@@ -499,28 +499,10 @@ TEST(ConstraintTest, TestIncrement) {
   // While doing that, local 0 did not change.
   EXPECT_EQ(map.get(0), AndedConstraintSet{eq42});
 
-  return;
-
-  // As above, but using unsigned and not signed comparisons.
-  Constraint ltu_l7{LtU, {Index(7)}};
-  Constraint leu_l7{LeU, {Index(7)}};
-  map.set(0, ltu_l7);
-  map.set(0, &add);
-  EXPECT_EQ(map.get(0), AndedConstraintSet{leu_l7});
-
-  // As above, but with another constraint $x != $42, which must be discarded as
-  // we cannot infer how it changes due to the +=1 of the add (we might now be
-  // equal to local $42, for all we know).
-  Constraint ne_42{Ne, {Index(42)}};
-  map.set(0, ne_42);
-  map.approximateAnd(0, ltu_l7);
-  map.set(0, &add);
-  // After discarding what we can't reason about, we are left with something
-  // useful.
-  EXPECT_EQ(map.get(0), AndedConstraintSet{leu_l7});
-
-  // As above, but now all we have are things to discard.
-  map.set(0, ne_42);
+  // Starting over, $0 < 1337, no longer an equality, before we do $0++. Now we
+  // don't know how to prove anything after the ++.
+  Constraint lt1337{LtU, {Index(1337)}};
+  map.set(0, lt1337);
   map.set(0, &add);
   EXPECT_TRUE(map.get(0).provesNothing());
 }
