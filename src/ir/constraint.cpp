@@ -314,17 +314,11 @@ struct Matcher {
     }
   };
 
-  // Check if the pattern matches given inputs. The order of the inputs does not
-  // matter. Returns the mapping described above, if we succeed.
-  std::optional<VarTermMap> checkUnordered(const AndedConstraintSet& a,
-                                           const AndedConstraintSet& b) {
-    return checkUnorderedInternal(a, b);
-  }
+  // Check if the pattern matches given inputs. Returns the mapping described above, if we succeed.
+  std::optional<VarTermMap> check(const AndedConstraintSet& a,
+                                           const AndedConstraintSet& b);
 
 private:
-  std::optional<VarTermMap> checkUnorderedInternal(const AndedConstraintSet& a,
-                                                   const AndedConstraintSet& b,
-                                                   bool flipped = false);
 
   MatcherSet ms1;
   MatcherSet ms2;
@@ -351,21 +345,13 @@ Matcher& Matcher::require(Var& a, Abstract::Op op, Var& b) {
   return *this;
 }
 
-std::optional<Matcher::VarTermMap> Matcher::checkUnorderedInternal(
-  const AndedConstraintSet& a, const AndedConstraintSet& b, bool flipped) {
+std::optional<Matcher::VarTermMap> Matcher::checkInternal(
+  const AndedConstraintSet& a, const AndedConstraintSet& b) {
 
   // TODO: optimize all this for speed
 
-  auto fail = [&]() -> std::optional<Matcher::VarTermMap> {
-    // We failed, but try the flipped inputs if we haven't already.
-    if (!flipped) {
-      return checkUnorderedInternal(b, a, true);
-    }
-    return {};
-  };
-
   if (a.size() != ms1.size() || b.size() != ms2.size()) {
-    return fail();
+    return {};
   }
 
   // The sizes match, at least. Parse in more detail, building up a mapping of
@@ -394,7 +380,7 @@ std::optional<Matcher::VarTermMap> Matcher::checkUnorderedInternal(
   };
 
   if (!parse(a, ms1) || !parse(b, ms2)) {
-    return fail();
+    return {};
   }
 
   // Check requirements on the vars.
@@ -404,7 +390,7 @@ std::optional<Matcher::VarTermMap> Matcher::checkUnorderedInternal(
 
     // Check if { x == a } proves { x op b } is true.
     if (provesPair({Abstract::Eq, aTerm}, {op, bTerm}) != True) {
-      return fail();
+      return {};
     }
   }
 
