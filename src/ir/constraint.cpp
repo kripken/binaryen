@@ -580,17 +580,15 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
     // x = y + 1
     Index y;
     if (matches(value, binary(Add, local(&y), ival(1)))) {
-      if (y != index) {
-        // We are not incrementing the same local, but reading another. Simply
-        // set us to an Incremented of that other local.
-        set(index, Constraint{Incremented, {y}});
-        return;
-      }
-
-      // We are incrementing ourselves, x++. If we know that x is equal to
-      // something, we can set x as equal to Incremented(that thing).
-      for (auto& c : get(index)) {
-        if (c.op == Eq) {
+      // If we know that y is equal to a constant, we can set x as equal to
+      // Incremented(that thing).
+      //
+      // TODO: Handle locals and not just constants, but it is not clear we can
+      //       infer enough in those cases (without knowing a concrete initial
+      //       value, we can't infer that the incrementation process does not
+      //       overflow, for example).
+      for (auto& c : get(y)) {
+        if (c.op == Eq && std::holds_alternative<Literal>(c.term)) {
           set(index, Constraint{Incremented, c.term});
           return;
         }

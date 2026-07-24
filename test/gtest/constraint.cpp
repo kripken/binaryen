@@ -490,11 +490,11 @@ TEST(ConstraintTest, TestIncrement) {
   AndedConstraintSet inced42{{Incremented, {Literal(int32_t(42))}}};
   EXPECT_EQ(map.get(0), inced42);
 
-  // Starting over, $0 = 42, and now do $1 = $0 + 1  =>  $1 = Incremented($0)
+  // Starting over, $0 = 42, and now write to another local, $1 = $0 + 1. We can
+  // set that other local to Incremented(42), like before
   map.set(0, eq42);
   map.set(1, &add);
-  AndedConstraintSet incedl0{{Incremented, {Index(0)}}};
-  EXPECT_EQ(map.get(1), incedl0);
+  EXPECT_EQ(map.get(1), inced42);
 
   // While doing that, local 0 did not change.
   EXPECT_EQ(map.get(0), AndedConstraintSet{eq42});
