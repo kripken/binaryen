@@ -396,6 +396,7 @@ std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
   // allow for overflows, we know we can increment at most to that bound:
   // x = Incremented(C) && x <= D, where C < D  =>  x > C && x <= D
   Var C, D;
+  // XXX do we need Matcher... maybe nott
   if (auto result = Matcher({Incremented, C}, {LeS, D})
                       .require(C, LtS, D)
                       .check(self, other)) {
