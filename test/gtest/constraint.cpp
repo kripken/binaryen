@@ -422,6 +422,7 @@ TEST(ConstraintTest, TestBasicBlockConstraintMap) {
   // Maps begin unreachable.
   BasicBlockConstraintMap map;
 
+  // Maps can be marked reachable.
   EXPECT_TRUE(map.unreachable);
   map.setReachable();
   EXPECT_FALSE(map.unreachable);
@@ -454,6 +455,11 @@ TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
   Nop nop;
   map.set(0, &nop);
   EXPECT_TRUE(map.get(0).provesNothing());
+
+  // Setting a contradiction makes the entire map unreachable.
+  AndedConstraintSet contradiction;
+  map.set(0, contradiction);
+  EXPECT_TRUE(map.unreachable);
 }
 
 TEST(ConstraintTest, TestAddOneSigned) {
