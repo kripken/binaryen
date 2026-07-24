@@ -261,7 +261,7 @@ std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
   // If we see an upper bound to the process of incrementation, which does not
   // allow for overflows, we know we can increment at most to that bound:
   // x = Incremented(C) && x <[=] D, where C < D  =>  x > C && x <[=] D
-  if (a.op == Incremented
+  if (a.op == Incremented && b.op == 
 }
 
 // Do an AND on a pair of constraints, looking for a way to fuse them together
