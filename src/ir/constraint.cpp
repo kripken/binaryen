@@ -580,33 +580,23 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
     // x = y + 1
     Index y;
     if (matches(value, binary(Add, local(&y), ival(1)))) {
-      // Convert the constraints we know about y to ones about x, removing
-      // ones we cannot reason about, and increment by 1.
-      auto newConstraints = get(y);
-
-      std::erase_if(newConstraints, [&](Constraint& c) {
-        if (c.op == Eq) {
-          // y = Y, x = y + 1  =>  x = Incremented(Y)
-          c.op = Incremented;
-          return false;
-        }
-
-        // Anything else, we must delete.
-        // TODO: increment more things, e.g. >= can turn into >, but it is not
-        //       clear how important this is.
-        return true;
-      });
-
-      // If we are an incrementation of another local, and we couldn't infer
-      // anything, we can at least say that we are Incremented(that local). We
-      // can't do this for the same local as us, as x = x + 1 tramples the old
-      // info on us, and x = Incremented(x) is meaningless.
-      if (newConstraints.provesNothing() && y != index) {
-        newConstraints.set({Incremented, Index(y)});
+      if (y != index) {
+        // We are not incrementing the same local, but reading another. Simply
+        // set us to an Incremented of that other local.
+        set(index, Constraint{Incremented, {y}});
+        return;
       }
 
-      set(index, newConstraints);
-      return;
+      // We are incrementing ourselves, x++. If we know that x is equal to
+      // something, we can set x as equal to Incremented(that thing).
+      for (auto& c : get(index)) {
+        if (c.op == Eq) {
+          set(index, Constraint{Incremented, c.term});
+          return;
+        }
+      }
+
+      // Otherwise, fall through to below: we don't know how to increment this.
     }
   }
 
@@ -661,7 +651,7 @@ void BasicBlockConstraintMap::approximateAndInternal(Index index,
   assert(!unreachable);
 
   Constraint actual = c;
-  if (flip) {
+  if (flip && (Abstract::isRelationalSymmetric(c.op) || Abstract::isRelationalAntisymmetric(c.op))) {
     LocalConstraint flipped{index, c};
     flipped.flip();
     index = flipped.local;

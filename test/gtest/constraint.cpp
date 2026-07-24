@@ -498,7 +498,7 @@ TEST(ConstraintTest, TestIncrement) {
   EXPECT_EQ(map.get(0), inced42);
 
   // As above, but we know nothing about the other local, so we just become an
-  // incremented of that local.
+  // Incremented of that local.
   map.setProvesNothing(0);
   map.set(1, &add);
   AndedConstraintSet incedl0{{Incremented, {Index(0)}}};
