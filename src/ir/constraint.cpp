@@ -309,12 +309,11 @@ struct Matcher {
     }
   };
 
-  // Check if the pattern matches given inputs. Returns the mapping described above, if we succeed.
-  std::optional<VarTermMap> check(const Constraint& a,
-                                           const Constraint& b);
+  // Check if the pattern matches given inputs. Returns the mapping described
+  // above, if we succeed.
+  std::optional<VarTermMap> check(const Constraint& a, const Constraint& b);
 
 private:
-
   MatcherConstraint mc1;
   MatcherConstraint mc2;
 
@@ -340,8 +339,8 @@ Matcher& Matcher::require(Var& a, Abstract::Op op, Var& b) {
   return *this;
 }
 
-std::optional<Matcher::VarTermMap> Matcher::checkInternal(
-  const Constraint& a, const Constraint& b) {
+std::optional<Matcher::VarTermMap> Matcher::checkInternal(const Constraint& a,
+                                                          const Constraint& b) {
 
   // TODO: optimize all this for speed
 
@@ -360,8 +359,7 @@ std::optional<Matcher::VarTermMap> Matcher::checkInternal(
     }
 
     // The term must match, or define a new unknown value.
-    auto [iter, inserted] =
-      varTermMap.insert({pattern[i].term, input[i].term});
+    auto [iter, inserted] = varTermMap.insert({pattern[i].term, input[i].term});
     if (!inserted) {
       // The Var in the pattern is already mapped and known. The input here
       // must match the prior appearance.
@@ -412,8 +410,8 @@ std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
 // into a list of constraints that represents them both. If we fail, return
 // nullopt.
 std::optional<ConstraintVector> approximateAndPair(const Constraint& a,
-                                                  const Constraint& b,
-                                                  bool recursing = false) {
+                                                   const Constraint& b,
+                                                   bool recursing = false) {
   // If a proves b is true, all we need is a (e.g. { x == 5 && x > 0 } => x == 5
   if (provesPair(a, b) == True) {
     return ConstraintVector{a};
@@ -815,7 +813,8 @@ void BasicBlockConstraintMap::approximateAndInternal(Index index,
   assert(!unreachable);
 
   Constraint actual = c;
-  if (flip && (Abstract::isRelationalSymmetric(c.op) || Abstract::isRelationalAntisymmetric(c.op))) {
+  if (flip && (Abstract::isRelationalSymmetric(c.op) ||
+               Abstract::isRelationalAntisymmetric(c.op))) {
     LocalConstraint flipped{index, c};
     flipped.flip();
     index = flipped.local;
