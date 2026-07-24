@@ -548,6 +548,9 @@ void BasicBlockConstraintMap::set(Index index,
   // Apply the constraints, if there are any.
   if (constraints.provesNothing()) {
     setProvesNothing(index);
+  } else if (constraints.provesEverything()) {
+    unreachable = true;
+    map.clear();
   } else {
     for (auto& c : constraints) {
       approximateAnd(index, c);

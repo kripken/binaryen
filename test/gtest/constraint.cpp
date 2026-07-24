@@ -240,121 +240,6 @@ TEST(ConstraintTest, TestDeredundancy) {
   EXPECT_EQ(t[0], eq0);
 }
 
-// Check that a set is equal to a constraint.
-static void check(const AndedConstraintSet& s, const Constraint& c) {
-  EXPECT_EQ(s.size(), 1);
-  EXPECT_EQ(s[0], c);
-}
-
-TEST(ConstraintTest, TestBasicBlockConstraintMap) {
-  // Maps begin unreachable.
-  BasicBlockConstraintMap map;
-
-  EXPECT_TRUE(map.unreachable);
-  map.setReachable();
-  EXPECT_FALSE(map.unreachable);
-}
-
-TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
-  Constraint eq0{Eq, {Literal(int32_t(0))}};
-  Constraint eq1{Eq, {Literal(int32_t(1))}};
-  Constraint eq2{Eq, {Literal(int32_t(2))}};
-
-  BasicBlockConstraintMap map;
-  map.setReachable();
-
-  // Set local 0 to 0. It should read back the same.
-  map.set(0, eq0);
-  check(map.get(0), eq0);
-
-  // Set another value, replacing the first.
-  map.set(0, eq1);
-  check(map.get(0), eq1);
-
-  // Set a value using an expression.
-  Const c;
-  c.value = Literal(int32_t(2));
-  c.type = Type::i32;
-  map.set(0, &c);
-  check(map.get(0), eq2);
-
-  // Set an unfamiliar expression, leading to us knowing nothing.
-  Nop nop;
-  map.set(0, &nop);
-  EXPECT_TRUE(map.get(0).provesNothing());
-}
-
-TEST(ConstraintTest, TestAddOneSigned) {
-  // Less then, signed, a constant 5.
-  Constraint lts_c5{LtS, {Literal(int32_t(5))}};
-
-  // Less than, or equal.
-  Constraint les_c5{LeS, {Literal(int32_t(5))}};
-
-  BasicBlockConstraintMap map;
-  map.setReachable();
-
-  LocalGet get;
-  get.index = 0;
-  get.type = Type::i32;
-
-  Const c;
-  c.value = Literal(int32_t(1));
-  c.type = Type::i32;
-
-  Binary add;
-  add.op = AddInt32;
-  add.type = Type::i32;
-  add.left = &get;
-  add.right = &c;
-
-  // Local 0 starts out less than 5.
-  map.set(0, lts_c5);
-  check(map.get(0), lts_c5);
-
-  // Local 1 is equal to local 0 plus 1. That means it is less than, or equal
-  // to, 5.
-  map.set(1, &add);
-  check(map.get(1), les_c5);
-
-  // Local 0 did not change.
-  check(map.get(0), lts_c5);
-
-  // Setting 0 to an add of itself also works.
-  map.set(0, &add);
-  check(map.get(0), les_c5);
-
-  // As above, but the constraints reference a local, not a constant.
-  Constraint lts_l7{LtS, {Index(7)}};
-  Constraint les_l7{LeS, {Index(7)}};
-  map.set(0, lts_l7);
-  map.set(0, &add);
-  check(map.get(0), les_l7);
-
-  // As above, but using unsigned and not signed comparisons.
-  Constraint ltu_l7{LtU, {Index(7)}};
-  Constraint leu_l7{LeU, {Index(7)}};
-  map.set(0, ltu_l7);
-  map.set(0, &add);
-  check(map.get(0), leu_l7);
-
-  // As above, but with another constraint $x != $42, which must be discarded as
-  // we cannot infer how it changes due to the +=1 of the add (we might now be
-  // equal to local $42, for all we know).
-  Constraint ne_42{Ne, {Index(42)}};
-  map.set(0, ne_42);
-  map.approximateAnd(0, ltu_l7);
-  map.set(0, &add);
-  // After discarding what we can't reason about, we are left with something
-  // useful.
-  check(map.get(0), leu_l7);
-
-  // As above, but now all we have are things to discard.
-  map.set(0, ne_42);
-  map.set(0, &add);
-  EXPECT_TRUE(map.get(0).provesNothing());
-}
-
 static void checkOr(const AndedConstraintSet& a,
                     const AndedConstraintSet& b,
                     const AndedConstraintSet& result) {
@@ -525,4 +410,119 @@ TEST(ConstraintTest, TestAndLoop) {
   // Extra info on the other side, same result.
   // x <= y && { x < y && x != 42 }  =>  x < y && x != 42
   checkAnd(ley, {lty[0], ne42}, {lty[0], ne42});
+}
+
+// Check that a set is equal to a constraint.
+static void check(const AndedConstraintSet& s, const Constraint& c) {
+  EXPECT_EQ(s.size(), 1);
+  EXPECT_EQ(s[0], c);
+}
+
+TEST(ConstraintTest, TestBasicBlockConstraintMap) {
+  // Maps begin unreachable.
+  BasicBlockConstraintMap map;
+
+  EXPECT_TRUE(map.unreachable);
+  map.setReachable();
+  EXPECT_FALSE(map.unreachable);
+}
+
+TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
+  Constraint eq0{Eq, {Literal(int32_t(0))}};
+  Constraint eq1{Eq, {Literal(int32_t(1))}};
+  Constraint eq2{Eq, {Literal(int32_t(2))}};
+
+  BasicBlockConstraintMap map;
+  map.setReachable();
+
+  // Set local 0 to 0. It should read back the same.
+  map.set(0, eq0);
+  check(map.get(0), eq0);
+
+  // Set another value, replacing the first.
+  map.set(0, eq1);
+  check(map.get(0), eq1);
+
+  // Set a value using an expression.
+  Const c;
+  c.value = Literal(int32_t(2));
+  c.type = Type::i32;
+  map.set(0, &c);
+  check(map.get(0), eq2);
+
+  // Set an unfamiliar expression, leading to us knowing nothing.
+  Nop nop;
+  map.set(0, &nop);
+  EXPECT_TRUE(map.get(0).provesNothing());
+}
+
+TEST(ConstraintTest, TestAddOneSigned) {
+  // Less then, signed, a constant 5.
+  Constraint lts_c5{LtS, {Literal(int32_t(5))}};
+
+  // Less than, or equal.
+  Constraint les_c5{LeS, {Literal(int32_t(5))}};
+
+  BasicBlockConstraintMap map;
+  map.setReachable();
+
+  LocalGet get;
+  get.index = 0;
+  get.type = Type::i32;
+
+  Const c;
+  c.value = Literal(int32_t(1));
+  c.type = Type::i32;
+
+  Binary add;
+  add.op = AddInt32;
+  add.type = Type::i32;
+  add.left = &get;
+  add.right = &c;
+
+  // Local 0 starts out less than 5.
+  map.set(0, lts_c5);
+  check(map.get(0), lts_c5);
+
+  // Local 1 is equal to local 0 plus 1. That means it is less than, or equal
+  // to, 5.
+  map.set(1, &add);
+  check(map.get(1), les_c5);
+
+  // Local 0 did not change.
+  check(map.get(0), lts_c5);
+
+  // Setting 0 to an add of itself also works.
+  map.set(0, &add);
+  check(map.get(0), les_c5);
+
+  // As above, but the constraints reference a local, not a constant.
+  Constraint lts_l7{LtS, {Index(7)}};
+  Constraint les_l7{LeS, {Index(7)}};
+  map.set(0, lts_l7);
+  map.set(0, &add);
+  check(map.get(0), les_l7);
+
+  // As above, but using unsigned and not signed comparisons.
+  Constraint ltu_l7{LtU, {Index(7)}};
+  Constraint leu_l7{LeU, {Index(7)}};
+  map.set(0, ltu_l7);
+  map.set(0, &add);
+  check(map.get(0), leu_l7);
+
+  // As above, but with another constraint $x != $42, which must be discarded as
+  // we cannot infer how it changes due to the +=1 of the add (we might now be
+  // equal to local $42, for all we know).
+  Constraint ne_42{Ne, {Index(42)}};
+  map.set(0, ne_42);
+  map.approximateAnd(0, ltu_l7);
+  map.set(0, &add);
+  // After discarding what we can't reason about, we are left with something
+  // useful.
+  check(map.get(0), leu_l7);
+
+  // As above, but now all we have are things to discard.
+  map.set(0, ne_42);
+  map.set(0, &add);
+  EXPECT_TRUE(map.get(0).provesNothing());
 }
