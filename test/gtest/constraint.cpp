@@ -412,12 +412,6 @@ TEST(ConstraintTest, TestAndLoop) {
   checkAnd(ley, {lty[0], ne42}, {lty[0], ne42});
 }
 
-// Check that a set is equal to a constraint.
-static void check(const AndedConstraintSet& s, const Constraint& c) {
-  EXPECT_EQ(s.size(), 1);
-  EXPECT_EQ(s[0], c);
-}
-
 TEST(ConstraintTest, TestBasicBlockConstraintMap) {
   // Maps begin unreachable.
   BasicBlockConstraintMap map;
@@ -438,18 +432,18 @@ TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
 
   // Set local 0 to 0. It should read back the same.
   map.set(0, eq0);
-  check(map.get(0), eq0);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{eq0});
 
   // Set another value, replacing the first.
   map.set(0, eq1);
-  check(map.get(0), eq1);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{eq1});
 
   // Set a value using an expression.
   Const c;
   c.value = Literal(int32_t(2));
   c.type = Type::i32;
   map.set(0, &c);
-  check(map.get(0), eq2);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{eq2});
 
   // Set an unfamiliar expression, leading to us knowing nothing.
   Nop nop;
@@ -489,33 +483,33 @@ TEST(ConstraintTest, TestAddOneSigned) {
 
   // Local 0 starts out less than 5.
   map.set(0, lts_c5);
-  check(map.get(0), lts_c5);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{lts_c5});
 
   // Local 1 is equal to local 0 plus 1. That means it is less than, or equal
   // to, 5.
   map.set(1, &add);
-  check(map.get(1), les_c5);
+  EXPECT_EQ(map.get(1), AndedConstraintSet{les_c5});
 
   // Local 0 did not change.
-  check(map.get(0), lts_c5);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{lts_c5});
 
   // Setting 0 to an add of itself also works.
   map.set(0, &add);
-  check(map.get(0), les_c5);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{les_c5});
 
   // As above, but the constraints reference a local, not a constant.
   Constraint lts_l7{LtS, {Index(7)}};
   Constraint les_l7{LeS, {Index(7)}};
   map.set(0, lts_l7);
   map.set(0, &add);
-  check(map.get(0), les_l7);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{les_l7});
 
   // As above, but using unsigned and not signed comparisons.
   Constraint ltu_l7{LtU, {Index(7)}};
   Constraint leu_l7{LeU, {Index(7)}};
   map.set(0, ltu_l7);
   map.set(0, &add);
-  check(map.get(0), leu_l7);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{leu_l7});
 
   // As above, but with another constraint $x != $42, which must be discarded as
   // we cannot infer how it changes due to the +=1 of the add (we might now be
@@ -526,7 +520,7 @@ TEST(ConstraintTest, TestAddOneSigned) {
   map.set(0, &add);
   // After discarding what we can't reason about, we are left with something
   // useful.
-  check(map.get(0), leu_l7);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{leu_l7});
 
   // As above, but now all we have are things to discard.
   map.set(0, ne_42);
