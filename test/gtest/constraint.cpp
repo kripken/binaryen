@@ -497,14 +497,14 @@ TEST(ConstraintTest, TestIncrement) {
   map.set(0, &add);
   EXPECT_EQ(map.get(0), inced42);
 
-return;
+  // As above, but we know nothing about the other local, so we just become an
+  // incremented of that local.
+  map.setProvesNothing(0);
+  map.set(1, &add);
+  AndedConstraintSet incedl0{{Incremented, {Index(0)}}};
+  EXPECT_EQ(map.get(0), incedl0);
 
-  // As above, but the constraints reference a local, not a constant.
-  Constraint lts_l7{LtS, {Index(7)}};
-  Constraint les_l7{LeS, {Index(7)}};
-  map.set(0, lts_l7);
-  map.set(0, &add);
-  EXPECT_EQ(map.get(0), AndedConstraintSet{les_l7});
+return;
 
   // As above, but using unsigned and not signed comparisons.
   Constraint ltu_l7{LtU, {Index(7)}};

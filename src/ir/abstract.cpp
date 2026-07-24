@@ -56,6 +56,8 @@ std::ostream& operator<<(std::ostream& o, Op op) {
     HANDLE(GtU)
     HANDLE(GeS)
     HANDLE(GeU)
+    HANDLE(User1)
+    HANDLE(User2)
     default:
       WASM_UNREACHABLE("bad abstract op");
   }

@@ -583,6 +583,7 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
       // Convert the constraints we know about y to ones about x, removing
       // ones we cannot reason about, and increment by 1.
       auto newConstraints = get(y);
+
       std::erase_if(newConstraints, [&](Constraint& c) {
         if (c.op == Eq) {
           // y = Y, x = y + 1  =>  x = Incremented(Y)
@@ -595,6 +596,15 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
         //       clear how important this is.
         return true;
       });
+
+      // If we are an incrementation of another local, and we couldn't infer
+      // anything, we can at least say that we are Incremented(that local). We
+      // can't do this for the same local as us, as x = x + 1 tramples the old
+      // info on us, and x = Incremented(x) is meaningless.
+      if (newConstraints.provesNothing() && y != index) {
+        newConstraints.set({Incremented, Index(y)});
+      }
+
       set(index, newConstraints);
       return;
     }
