@@ -287,15 +287,10 @@ struct MatcherConstraint {
   }
 };
 
-// A matcher AndedConstraintSet, which abstracts over the normal one to support
-// MatcherConstraints.
-using MatcherSet = inplace_vector<MatcherConstraint, MaxConstraints>;
-
-// A matcher object. This pattern-matches over abstractions of
-// AndedConstraintSets.
+// A matcher object. This pattern-matches over abstractions of Constraints.
 struct Matcher {
   // Set up a pattern containing two sets of constraints.
-  Matcher(const MatcherSet& ms1_, const MatcherSet& ms2_);
+  Matcher(const MatcherConstraint& mc1_, const MatcherConstraint& mc2_);
 
   // Add a requirement on this pattern, a demand on the Vars. For example, we
   // can require that Var A - whatever we matched it as - is less than Var B -
@@ -320,8 +315,8 @@ struct Matcher {
 
 private:
 
-  MatcherSet ms1;
-  MatcherSet ms2;
+  MatcherSet mc1;
+  MatcherSet mc2;
 
   struct Requirement {
     Var* a;
@@ -332,12 +327,12 @@ private:
   SmallVector<Requirement, 2> requirements;
 };
 
-Matcher::Matcher(const MatcherSet& ms1_, const MatcherSet& ms2_)
-  : ms1(ms1_), ms2(ms2_) {
+Matcher::Matcher(const MatcherSet& mc1_, const MatcherSet& mc2_)
+  : mc1(mc1_), mc2(mc2_) {
   // Sort the sets like Constraints are sorted, so that when we compare, things
   // line up.
-  std::sort(ms1.begin(), ms1.end());
-  std::sort(ms2.begin(), ms2.end());
+  std::sort(mc1.begin(), mc1.end());
+  std::sort(mc2.begin(), mc2.end());
 }
 
 Matcher& Matcher::require(Var& a, Abstract::Op op, Var& b) {
@@ -350,7 +345,7 @@ std::optional<Matcher::VarTermMap> Matcher::checkInternal(
 
   // TODO: optimize all this for speed
 
-  if (a.size() != ms1.size() || b.size() != ms2.size()) {
+  if (a.size() != mc1.size() || b.size() != mc2.size()) {
     return {};
   }
 
@@ -379,7 +374,7 @@ std::optional<Matcher::VarTermMap> Matcher::checkInternal(
     return true;
   };
 
-  if (!parse(a, ms1) || !parse(b, ms2)) {
+  if (!parse(a, mc1) || !parse(b, mc2)) {
     return {};
   }
 
