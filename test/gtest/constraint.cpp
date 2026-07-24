@@ -488,7 +488,7 @@ TEST(ConstraintTest, TestIncrement) {
   // $0 = 42 from earlier, and now we set $0 = $0 + 1  =>  $0 = Incremented(42)
   map.set(0, &add);
   AndedConstraintSet inced42{{Incremented, {Literal(int32_t(42))}}};
-  EXPECT_EQ(map.get(1), inced42);
+  EXPECT_EQ(map.get(0), inced42);
 
   // Starting over, $0 = 42, and now do $1 = $0 + 1  =>  $1 = Incremented($0)
   map.set(0, eq42);
