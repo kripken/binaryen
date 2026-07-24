@@ -244,10 +244,10 @@ std::optional<ConstraintVector> fusedApproximateAndTermEqualPair(
 
   // x < C && x <= C  ===  x < C
   if (aOp == LtS && bOp == LeS) {
-    return {Constraint{LtS, term}};
+    return ConstraintVector{Constraint{LtS, term}};
   }
   if (aOp == LtU && bOp == LeU) {
-    return {Constraint{LtU, term}};
+    return ConstraintVector{Constraint{LtU, term}};
   }
 
   // TODO: all the rest
@@ -263,7 +263,7 @@ std::optional<ConstraintVector> fusedApproximateAndPair(const Constraint& a,
                                                   bool recursing = false) {
   // If a proves b is true, all we need is a (e.g. { x == 5 && x > 0 } => x == 5
   if (provesPair(a, b) == True) {
-    return {a};
+    return ConstraintVector{a};
   }
 
   if (a.term == b.term) {
@@ -308,7 +308,7 @@ void AndedConstraintSet::approximateAnd(const Constraint& c) {
       existing = (*fused)[0];
 
       // The rest can be appended, if we have room.
-      for (Index = 1; i < fused->size() && size() < MaxConstraints; i++) {
+      for (Index i = 1; i < fused->size() && size() < MaxConstraints; i++) {
         push_back((*fused)[i]);
       }
 
