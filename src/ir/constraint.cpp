@@ -87,7 +87,9 @@ namespace wasm::constraint {
 // One way of looking at Incremented/Incrementing is as abstract operations with
 // specific semantics defined over them. Another perspective is to see them as
 // sort of like infinity or episilon in calculus: when proving limits, those are
-// not actual values, but represent a *process* that unfolds.
+// not actual values, but represent a *process* that unfolds (i.e. f(infinity)
+// does not mean "calculate f on this one value" but rather "calculate f on a
+// sequence of values and see what happens").
 const auto Incrementing = Abstract::User1;
 const auto Incremented = Abstract::User2;
 
