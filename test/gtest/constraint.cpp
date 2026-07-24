@@ -460,7 +460,7 @@ TEST(ConstraintTest, TestIncrement) {
   // These opcodes are not defined in the public header, as they are an internal
   // detail, but we do want to test them here.
   const auto Incremented = Abstract::User1;
-  //const auto Incrementing = Abstract::User2;
+  // const auto Incrementing = Abstract::User2;
 
   BasicBlockConstraintMap map;
   map.setReachable();
@@ -504,7 +504,7 @@ TEST(ConstraintTest, TestIncrement) {
   AndedConstraintSet incedl0{{Incremented, {Index(0)}}};
   EXPECT_EQ(map.get(0), incedl0);
 
-return;
+  return;
 
   // As above, but using unsigned and not signed comparisons.
   Constraint ltu_l7{LtU, {Index(7)}};
