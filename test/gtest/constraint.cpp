@@ -452,7 +452,6 @@ TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
 
   // Setting a contradiction makes the entire map unreachable.
   AndedConstraintSet contradiction;
-std::cout << "SET C\n";
   map.set(0, contradiction);
   EXPECT_TRUE(map.unreachable);
 }
