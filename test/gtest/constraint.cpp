@@ -526,4 +526,3 @@ TEST(ConstraintTest, TestAndLoop) {
   // x <= y && { x < y && x != 42 }  =>  x < y && x != 42
   checkAnd(ley, {lty[0], ne42}, {lty[0], ne42});
 }
-
