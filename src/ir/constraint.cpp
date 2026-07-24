@@ -90,8 +90,8 @@ namespace wasm::constraint {
 // not actual values, but represent a *process* that unfolds (i.e. f(infinity)
 // does not mean "calculate f on this one value" but rather "calculate f on a
 // sequence of values and see what happens").
-const auto Incrementing = Abstract::User1;
-const auto Incremented = Abstract::User2;
+const auto Incremented = Abstract::User1;
+const auto Incrementing = Abstract::User2;
 
 namespace {
 

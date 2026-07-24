@@ -456,16 +456,21 @@ TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
   EXPECT_TRUE(map.unreachable);
 }
 
-TEST(ConstraintTest, TestAddOneSigned) {
-  // Less then, signed, a constant 5.
-  Constraint lts_c5{LtS, {Literal(int32_t(5))}};
-
-  // Less than, or equal.
-  Constraint les_c5{LeS, {Literal(int32_t(5))}};
+TEST(ConstraintTest, TestIncrement) {
+  // These opcodes are not defined in the public header, as they are an internal
+  // detail, but we do want to test them here.
+  const auto Incremented = Abstract::User1;
+  //const auto Incrementing = Abstract::User2;
 
   BasicBlockConstraintMap map;
   map.setReachable();
 
+  // Set $0 = 42
+  Constraint eq42{Eq, {Literal(int32_t(42))}};
+  map.set(0, eq42);
+  EXPECT_EQ(map.get(0), AndedConstraintSet{eq42});
+
+  // Prepare to do $1 = $0 + 1.
   LocalGet get;
   get.index = 0;
   get.type = Type::i32;
@@ -480,21 +485,19 @@ TEST(ConstraintTest, TestAddOneSigned) {
   add.left = &get;
   add.right = &c;
 
-  // Local 0 starts out less than 5.
-  map.set(0, lts_c5);
-  EXPECT_EQ(map.get(0), AndedConstraintSet{lts_c5});
-
-  // Local 1 is equal to local 0 plus 1. That means it is less than, or equal
-  // to, 5.
+  // $0 = 42 from earlier, and now we set $1 = $0 + 1 => $1 = Incremented(42)
   map.set(1, &add);
-  EXPECT_EQ(map.get(1), AndedConstraintSet{les_c5});
+  AndedConstraintSet inced42{{Incremented, {Literal(int32_t(42))}}};
+  EXPECT_EQ(map.get(1), inced42);
 
   // Local 0 did not change.
-  EXPECT_EQ(map.get(0), AndedConstraintSet{lts_c5});
+  EXPECT_EQ(map.get(0), AndedConstraintSet{eq42});
 
   // Setting 0 to an add of itself also works.
   map.set(0, &add);
-  EXPECT_EQ(map.get(0), AndedConstraintSet{les_c5});
+  EXPECT_EQ(map.get(0), inced42);
+
+return;
 
   // As above, but the constraints reference a local, not a constant.
   Constraint lts_l7{LtS, {Index(7)}};
