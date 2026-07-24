@@ -545,10 +545,11 @@ void BasicBlockConstraintMap::set(Index index,
   eraseStaleRefs(index);
   map.erase(index);
 
-  // Apply the constraints, if there are any.
+  // Apply the constraints.
   if (constraints.provesNothing()) {
     setProvesNothing(index);
   } else if (constraints.provesEverything()) {
+    // The entire basic block is unreachable.
     unreachable = true;
     map.clear();
   } else {
@@ -560,16 +561,17 @@ void BasicBlockConstraintMap::set(Index index,
 
 void BasicBlockConstraintMap::set(Index index, Expression* value) {
   using namespace Match;
+  using namespace Abstract;
 
   // Apply a constraint to a value.
   if (Properties::isSingleConstantExpression(value)) {
-    set(index, Constraint{Abstract::Eq, {Properties::getLiteral(value)}});
+    set(index, Constraint{Eq, {Properties::getLiteral(value)}});
     return;
   }
 
   // Apply a constraint to a local.
   if (auto* get = value->dynCast<LocalGet>()) {
-    set(index, Constraint{Abstract::Eq, {get->index}});
+    set(index, Constraint{Eq, {get->index}});
     return;
   }
 
@@ -577,37 +579,21 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
   {
     // x = y + 1
     Index y;
-    if (matches(value, binary(Abstract::Add, local(&y), ival(1)))) {
+    if (matches(value, binary(Add, local(&y), ival(1)))) {
       // Convert the constraints we know about y to ones about x, removing
-      // ones we cannot reason about.
-      //
-      // Note that we don't try to handle all possible cases here, e.g. simple
-      // increments of constants not inside loops (other passes can infer such
-      // things).
+      // ones we cannot reason about, and increment by 1.
       auto newConstraints = get(y);
       std::erase_if(newConstraints, [&](Constraint& c) {
-        switch (c.op) {
-          case Abstract::Eq:
-            // y = Y, x = y + 1  =>  x = Incremented(Y)
-            c.op = Incremented;
-            return false;
-#if 0
-XX maybe like before, turn < into <= and >= into >. Cheap and handles vars. But is it enough?
-          case Abstract::GeS:
-          case Abstract::GeU:
-            // y >= Y, x = y + 1  =>  x = Incremented(Y)
-            c.op = Incremented;
-            return false;
-          case Abstract::LtS:
-          case Abstract::LtU:
-            // y >= Y, x = y + 1  =>  x = Incremented(Y)
-            c.op = Incremented;
-            return false;
-#endif
-          default:
-            // Anything else, we must delete.
-            return true;
+        if (c.op == Eq) {
+          // y = Y, x = y + 1  =>  x = Incremented(Y)
+          c.op = Incremented;
+          return false;
         }
+
+        // Anything else, we must delete.
+        // TODO: increment more things, e.g. >= can turn into >, but it is not
+        //       clear how important this is.
+        return true;
       });
       set(index, newConstraints);
       return;
