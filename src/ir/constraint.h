@@ -113,7 +113,7 @@ struct AndedConstraintSet : inplace_vector<Constraint, MaxConstraints> {
 
   // An empty set of contradictions means we know nothing, and so anything is
   // possible, and we can prove nothing.
-  bool provesNothing() const { return isContradiction && empty(); }
+  bool provesNothing() const { return !isContradiction && empty(); }
 
   void setProvesNothing() {
     clear();
