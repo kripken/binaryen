@@ -245,7 +245,8 @@ public:
   makeStructRMW(AtomicRMWOp op, HeapType type, Index field, MemoryOrder order);
   Result<> makeStructCmpxchg(HeapType type, Index field, MemoryOrder order);
   Result<> makeStructWait(HeapType type, Index index);
-  Result<> makeStructNotify(HeapType type, Index index);
+  Result<> makeWaitqueueNew();
+  Result<> makeWaitqueueNotify();
   Result<> makeArrayNew(HeapType type);
   Result<> makeArrayNewDefault(HeapType type);
   Result<> makeArrayNewData(HeapType type, Name data);
@@ -253,9 +254,17 @@ public:
   Result<> makeArrayNewFixed(HeapType type, uint32_t arity);
   Result<> makeArrayGet(HeapType type, bool signed_, MemoryOrder order);
   Result<> makeArraySet(HeapType type, MemoryOrder order);
-  Result<>
-  makeArrayLoad(HeapType arrayType, unsigned bytes, bool signed_, Type type);
-  Result<> makeArrayStore(HeapType arrayType, unsigned bytes, Type type);
+  Result<> makeArrayLoad(HeapType arrayType,
+                         unsigned bytes,
+                         bool signed_,
+                         Address offset,
+                         Address align,
+                         Type type);
+  Result<> makeArrayStore(HeapType arrayType,
+                          unsigned bytes,
+                          Address offset,
+                          Address align,
+                          Type type);
   Result<> makeArrayLen();
   Result<> makeArrayCopy(HeapType destType, HeapType srcType);
   Result<> makeArrayFill(HeapType type);

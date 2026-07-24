@@ -581,14 +581,6 @@ public:
     return popConstrainedChildren(children);
   }
 
-  Result<>
-  visitStructNotify(StructNotify* curr,
-                    std::optional<HeapType> structType = std::nullopt) {
-    std::vector<Child> children;
-    ConstraintCollector{builder, children}.visitStructNotify(curr, structType);
-    return popConstrainedChildren(children);
-  }
-
   Result<> visitArrayGet(ArrayGet* curr,
                          std::optional<HeapType> ht = std::nullopt) {
     std::vector<Child> children;
@@ -2359,36 +2351,24 @@ Result<> IRBuilder::makeStructWait(HeapType type, Index index) {
     return Err{"struct.wait field index out of bounds"};
   }
 
-  if (type.getStruct().fields.at(index).packedType !=
-      Field::PackedType::WaitQueue) {
-    return Err{"struct.wait field index must contain a `waitqueue`"};
-  }
-
   StructWait curr(wasm.allocator);
   CHECK_ERR(ChildPopper{*this}.visitStructWait(&curr, type));
   CHECK_ERR(validateTypeAnnotation(type, curr.ref));
-  push(builder.makeStructWait(index, curr.ref, curr.expected, curr.timeout));
+  push(builder.makeStructWait(
+    index, curr.ref, curr.waitqueue, curr.expected, curr.timeout));
   return Ok{};
 }
 
-Result<> IRBuilder::makeStructNotify(HeapType type, Index index) {
-  if (!type.isStruct()) {
-    return Err{"expected struct type annotation on struct.notify"};
-  }
-  // This is likely checked in the caller by the `fieldidx` parser.
-  if (index >= type.getStruct().fields.size()) {
-    return Err{"struct.notify field index out of bounds"};
-  }
+Result<> IRBuilder::makeWaitqueueNew() {
+  WaitqueueNew curr(wasm.allocator);
+  push(builder.makeWaitqueueNew());
+  return Ok{};
+}
 
-  if (type.getStruct().fields.at(index).packedType !=
-      Field::PackedType::WaitQueue) {
-    return Err{"struct.notify field index must contain a `waitqueue`"};
-  }
-
-  StructNotify curr(wasm.allocator);
-  CHECK_ERR(ChildPopper{*this}.visitStructNotify(&curr, type));
-  CHECK_ERR(validateTypeAnnotation(type, curr.ref));
-  push(builder.makeStructNotify(index, curr.ref, curr.count));
+Result<> IRBuilder::makeWaitqueueNotify() {
+  WaitqueueNotify curr(wasm.allocator);
+  CHECK_ERR(ChildPopper{*this}.visitWaitqueueNotify(&curr));
+  push(builder.makeWaitqueueNotify(curr.waitqueue, curr.count));
   return Ok{};
 }
 
@@ -2463,8 +2443,11 @@ Result<> IRBuilder::makeArraySet(HeapType type, MemoryOrder order) {
   return Ok{};
 }
 
-Result<>
-IRBuilder::makeArrayStore(HeapType arrayType, unsigned bytes, Type type) {
+Result<> IRBuilder::makeArrayStore(HeapType arrayType,
+                                   unsigned bytes,
+                                   Address offset,
+                                   Address align,
+                                   Type type) {
   if (!arrayType.isArray()) {
     return Err{"expected array type annotation on array store"};
   }
@@ -2473,13 +2456,16 @@ IRBuilder::makeArrayStore(HeapType arrayType, unsigned bytes, Type type) {
   CHECK_ERR(ChildPopper{*this}.visitArrayStore(&curr, arrayType, type));
 
   CHECK_ERR(validateTypeAnnotation(arrayType, curr.ref));
-  push(builder.makeArrayStore(bytes, curr.ref, curr.index, curr.value));
+  push(builder.makeArrayStore(
+    bytes, offset, align, curr.ref, curr.index, curr.value));
   return Ok{};
 }
 
 Result<> IRBuilder::makeArrayLoad(HeapType arrayType,
                                   unsigned bytes,
                                   bool signed_,
+                                  Address offset,
+                                  Address align,
                                   Type type) {
   if (!arrayType.isArray()) {
     return Err{"expected array type annotation on array load"};
@@ -2489,7 +2475,8 @@ Result<> IRBuilder::makeArrayLoad(HeapType arrayType,
   CHECK_ERR(ChildPopper{*this}.visitArrayLoad(&curr, arrayType));
 
   CHECK_ERR(validateTypeAnnotation(arrayType, curr.ref));
-  push(builder.makeArrayLoad(bytes, signed_, curr.ref, curr.index, type));
+  push(builder.makeArrayLoad(
+    bytes, signed_, offset, align, curr.ref, curr.index, type));
   return Ok{};
 }
 

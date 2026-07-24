@@ -805,8 +805,7 @@ void WideIntAddSub::finalize() {
       rightHigh->type == Type::unreachable) {
     type = Type::unreachable;
   } else {
-    static Type i64Pair = Types::getI64Pair();
-    type = i64Pair;
+    type = Types::getI64Pair();
   }
 }
 
@@ -814,8 +813,7 @@ void WideIntMul::finalize() {
   if (left->type == Type::unreachable || right->type == Type::unreachable) {
     type = Type::unreachable;
   } else {
-    static Type i64Pair = Types::getI64Pair();
-    type = i64Pair;
+    type = Types::getI64Pair();
   }
 }
 
@@ -1326,9 +1324,28 @@ void StructCmpxchg::finalize() {
   }
 }
 
-void StructWait::finalize() { type = Type::i32; }
+void StructWait::finalize() {
+  if (ref->type == Type::unreachable || waitqueue->type == Type::unreachable ||
+      expected->type == Type::unreachable ||
+      timeout->type == Type::unreachable) {
+    type = Type::unreachable;
+  } else {
+    type = Type::i32;
+  }
+}
 
-void StructNotify::finalize() { type = Type::i32; }
+void WaitqueueNew::finalize() {
+  type = Type(HeapTypes::sharedWaitqueue, NonNullable);
+}
+
+void WaitqueueNotify::finalize() {
+  if (waitqueue->type == Type::unreachable ||
+      count->type == Type::unreachable) {
+    type = Type::unreachable;
+  } else {
+    type = Type::i32;
+  }
+}
 
 void ArrayNew::finalize() {
   if (size->type == Type::unreachable ||

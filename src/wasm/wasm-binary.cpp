@@ -1902,6 +1902,12 @@ void WasmBinaryWriter::writeType(Type type) {
         case HeapType::nocont:
           o << S32LEB(BinaryConsts::EncodedType::nullcontref);
           return;
+        case HeapType::waitqueue:
+          o << S32LEB(BinaryConsts::EncodedHeapType::waitqueue);
+          return;
+        case HeapType::nowaitqueue:
+          o << S32LEB(BinaryConsts::EncodedHeapType::nowaitqueue);
+          return;
       }
     }
     if (type.isNullable()) {
@@ -2004,6 +2010,12 @@ void WasmBinaryWriter::writeHeapType(HeapType type, Exactness exactness) {
     case HeapType::nocont:
       ret = BinaryConsts::EncodedHeapType::nocont;
       break;
+    case HeapType::waitqueue:
+      ret = BinaryConsts::EncodedHeapType::waitqueue;
+      break;
+    case HeapType::nowaitqueue:
+      ret = BinaryConsts::EncodedHeapType::nowaitqueue;
+      break;
   }
   o << S64LEB(ret); // TODO: Actually s33
 }
@@ -2018,8 +2030,6 @@ void WasmBinaryWriter::writeField(const Field& field) {
       o << S32LEB(BinaryConsts::EncodedType::i8);
     } else if (field.packedType == Field::i16) {
       o << S32LEB(BinaryConsts::EncodedType::i16);
-    } else if (field.packedType == Field::WaitQueue) {
-      o << S32LEB(BinaryConsts::EncodedType::waitQueue);
     } else {
       WASM_UNREACHABLE("invalid packed type");
     }
@@ -2477,6 +2487,12 @@ bool WasmBinaryReader::getBasicHeapType(int64_t code, HeapType& out) {
     case BinaryConsts::EncodedHeapType::nocont:
       out = HeapType::nocont;
       return true;
+    case BinaryConsts::EncodedHeapType::waitqueue:
+      out = HeapType::waitqueue;
+      return true;
+    case BinaryConsts::EncodedHeapType::nowaitqueue:
+      out = HeapType::nowaitqueue;
+      return true;
     default:
       return false;
   }
@@ -2762,10 +2778,6 @@ void WasmBinaryReader::readTypes() {
     if (typeCode == BinaryConsts::EncodedType::i16) {
       auto mutable_ = readMutability();
       return Field(Field::i16, mutable_);
-    }
-    if (typeCode == BinaryConsts::EncodedType::waitQueue) {
-      auto mutable_ = readMutability();
-      return Field(Field::WaitQueue, mutable_);
     }
     // It's a regular wasm value.
     auto type = makeType(typeCode);
@@ -3394,7 +3406,8 @@ Result<> WasmBinaryReader::readLoad(unsigned bytes, bool signed_, Type type) {
   auto [mem, align, offset, backing] = getMemarg();
   if (backing == BackingType::Array) {
     HeapType arrayType = getIndexedHeapType();
-    return builder.makeArrayLoad(arrayType, bytes, signed_, type);
+    return builder.makeArrayLoad(
+      arrayType, bytes, signed_, offset, align, type);
   }
   return builder.makeLoad(bytes, signed_, offset, align, type, mem);
 }
@@ -3403,7 +3416,7 @@ Result<> WasmBinaryReader::readStore(unsigned bytes, Type type) {
   auto [mem, align, offset, backing] = getMemarg();
   if (backing == BackingType::Array) {
     HeapType arrayType = getIndexedHeapType();
-    return builder.makeArrayStore(arrayType, bytes, type);
+    return builder.makeArrayStore(arrayType, bytes, offset, align, type);
   }
   return builder.makeStore(bytes, offset, align, type, mem);
 }
@@ -4041,10 +4054,11 @@ Result<> WasmBinaryReader::readInst() {
           auto index = getU32LEB();
           return builder.makeStructWait(structType, index);
         }
-        case BinaryConsts::StructNotify: {
-          auto structType = getIndexedHeapType();
-          auto index = getU32LEB();
-          return builder.makeStructNotify(structType, index);
+        case BinaryConsts::WaitqueueNotify: {
+          return builder.makeWaitqueueNotify();
+        }
+        case BinaryConsts::WaitqueueNew: {
+          return builder.makeWaitqueueNew();
         }
       }
       return Err{"unknown atomic operation " + std::to_string(op)};
@@ -4111,12 +4125,10 @@ Result<> WasmBinaryReader::readInst() {
           return builder.makeElemDrop(elem);
         }
         case BinaryConsts::F32_F16LoadMem: {
-          auto [mem, align, offset, backing] = getMemarg();
-          return builder.makeLoad(2, false, offset, align, Type::f32, mem);
+          return readLoad(2, false, Type::f32);
         }
         case BinaryConsts::F32_F16StoreMem: {
-          auto [mem, align, offset, backing] = getMemarg();
-          return builder.makeStore(2, offset, align, Type::f32, mem);
+          return readStore(2, Type::f32);
         }
       }
       return Err{"unknown misc operation: " + std::to_string(op)};
@@ -4666,12 +4678,10 @@ Result<> WasmBinaryReader::readInst() {
         case BinaryConsts::V128Const:
           return builder.makeConst(getVec128Literal());
         case BinaryConsts::V128Store: {
-          auto [mem, align, offset, backing] = getMemarg();
-          return builder.makeStore(16, offset, align, Type::v128, mem);
+          return readStore(16, Type::v128);
         }
         case BinaryConsts::V128Load: {
-          auto [mem, align, offset, backing] = getMemarg();
-          return builder.makeLoad(16, false, offset, align, Type::v128, mem);
+          return readLoad(16, false, Type::v128);
         }
         case BinaryConsts::V128Load8Splat: {
           auto [mem, align, offset, backing] = getMemarg();
@@ -5759,6 +5769,7 @@ WasmBinaryReader::readMemoryAccess(bool isAtomic, bool isRMW) {
       throwError(
         "Memory index and memory order are not allowed for array backing.");
     }
+    offset = getU32LEB();
   } else {
     WASM_UNREACHABLE("Invalid backing type");
   }
