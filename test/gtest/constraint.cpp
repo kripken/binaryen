@@ -508,5 +508,11 @@ TEST(ConstraintTest, TestIncrement) {
 }
 
 TEST(ConstraintTest, TestIncrementAnd) {
+  // x = Incremented(C) && x <= D, where C < D  =>  x > C && x <= D
+  Constraint inced5{Incremented, {Literal(int32_t(5))}};
+  Constraint les10{LeS, {Literal(int32_t(10))}};
+  Constraint gts5{GtS, {Literal(int32_t(5))}};
+  checkAnd({inced5}, {les10}, {gts5, les10});
+
 }
 
