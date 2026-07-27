@@ -456,12 +456,12 @@ TEST(ConstraintTest, TestBasicBlockConstraintMap_Set) {
   EXPECT_TRUE(map.unreachable);
 }
 
-TEST(ConstraintTest, TestIncrement) {
-  // These opcodes are not defined in the public header, as they are an internal
-  // detail, but we do want to test them here.
-  const auto Incremented = Abstract::User1;
-  // const auto Incrementing = Abstract::User2;
+// These opcodes are not defined in the public header, as they are an internal
+// detail, but we do want to test them here.
+const auto Incremented = Abstract::User1;
+const auto Incrementing = Abstract::User2;
 
+TEST(ConstraintTest, TestIncrement) {
   BasicBlockConstraintMap map;
   map.setReachable();
 
@@ -506,3 +506,7 @@ TEST(ConstraintTest, TestIncrement) {
   map.set(0, &add);
   EXPECT_TRUE(map.get(0).provesNothing());
 }
+
+TEST(ConstraintTest, TestIncrementAnd) {
+}
+
