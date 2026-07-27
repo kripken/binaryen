@@ -514,6 +514,11 @@ TEST(ConstraintTest, TestIncrementAnd) {
   Constraint gts5{GtS, {Literal(int32_t(5))}};
   checkAnd({inced5}, {les10}, {gts5, les10});
 
+  // x = Incremented(9) && x <= 10  =>  x > 9 && x <= 10
+  Constraint inced9{Incremented, {Literal(int32_t(9))}};
+  Constraint gts9{GtS, {Literal(int32_t(9))}};
+  checkAnd({inced9}, {les10}, {gts9, les10});
+
   // An overflow is possible, so we cannot infer a lower bound:
   Constraint inced10{Incremented, {Literal(int32_t(10))}};
   checkAnd({inced10}, {les10}, {les10});
