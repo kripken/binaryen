@@ -60,8 +60,12 @@ struct Constraint {
     return term < other.term;
   }
 
-  Constraint negate() const {
-    return Constraint{Abstract::negateRelational(op), term};
+  std::optional<Constraint> negate() const {
+    if (Abstract::isRelationalSymmetric(op) ||
+        Abstract::isRelationalAntisymmetric(op)) {
+      return Constraint{Abstract::negateRelational(op), term};
+    }
+    return {};
   }
 };
 

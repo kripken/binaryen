@@ -385,7 +385,7 @@ struct ConstraintAnalysis
     auto parsed = LocalConstraint::parseCondition(iff->condition);
     if (parsed && !physicalSuccessor) {
       // We are in the ifFalse, so negate the condition.
-      parsed->constraint = parsed->constraint.negate();
+      parsed->constraint = *parsed->constraint.negate();
     }
     return parsed;
   }
@@ -399,7 +399,7 @@ struct ConstraintAnalysis
     auto parsed = LocalConstraint::parseCondition(br->condition);
     if (parsed && physicalSuccessor) {
       // The branch was not taken, so negate the condition.
-      parsed->constraint = parsed->constraint.negate();
+      parsed->constraint = *parsed->constraint.negate();
     }
     return parsed;
   }
@@ -418,7 +418,7 @@ struct ConstraintAnalysis
     auto parsed = LocalConstraint::parseCondition(brOn->ref);
     // Negate depending on the op and (similar to Break) the successor.
     if (parsed && ((brOn->op == BrOnNull) ^ physicalSuccessor)) {
-      parsed->constraint = parsed->constraint.negate();
+      parsed->constraint = *parsed->constraint.negate();
     }
     return parsed;
   }
