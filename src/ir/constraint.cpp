@@ -400,9 +400,11 @@ std::optional<Matcher::VarTermMap> Matcher::checkInternal(const Constraint& a,
 */
 #endif
 
-// Handle Incremented/Incrementing in AND operations.
-std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
+// Do an AND on a pair of constraints, where a.op is Incremented.
+std::optional<ConstraintVector> approximateAndIncremented(const Constraint& a,
                                                         const Constraint& b) {
+  assert(a.op == Incremented);
+
   using namespace Abstract;
 
   // If we see an upper bound to the process of incrementation, which does not
@@ -413,7 +415,7 @@ std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
   // Note what happens if we don't have C < D: x = Incremented(10) && x <= 5 can
   // only be true if x incremented up from 10, overflowed, and then became <= 5.
   // In this case, we can't apply the constraint x > 10.
-  if (a.op == Incremented && b.op == LeS) {
+  if (b.op == LeS) {
     if (auto* ac = std::get_if<Literal>(&a.term)) {
       if (auto* bc = std::get_if<Literal>(&b.term)) {
         if (TrueFalse(ac->leS(*bc))) {
@@ -421,6 +423,9 @@ std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
         }
       }
     }
+    // Otherwise, there might be an overflow, but we can at least keep b (x <= 5
+    // in the example above).
+    return ConstraintVector{b};
   }
 
   return std::nullopt;
@@ -443,8 +448,10 @@ std::optional<ConstraintVector> approximateAndPair(const Constraint& a,
     }
   }
 
-  if (auto result = approximateAndIncrement(a, b)) {
-    return result;
+  if (a.op == Incremented) {
+    if (auto result = approximateAndIncremented(a, b)) {
+      return result;
+    }
   }
 
   if (!recursing) {
