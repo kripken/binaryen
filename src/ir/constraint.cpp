@@ -418,7 +418,7 @@ std::optional<ConstraintVector> approximateAndIncremented(const Constraint& a,
   if (b.op == LeS) {
     if (auto* ac = std::get_if<Literal>(&a.term)) {
       if (auto* bc = std::get_if<Literal>(&b.term)) {
-        if (TrueFalse(ac->leS(*bc))) {
+        if (TrueFalse(ac->leS(*bc)) == True) {
           return ConstraintVector{Constraint{GtS, a.term}, b};
         }
       }

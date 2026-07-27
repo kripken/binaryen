@@ -344,18 +344,18 @@ TEST(ConstraintTest, TestOrLoop) {
 
 static void checkAnd(const AndedConstraintSet& a,
                      const AndedConstraintSet& b,
-                     const AndedConstraintSet& result) {
+                     const AndedConstraintSet& expected) {
   auto anded = a;
   for (auto& bc : b) {
     anded.approximateAnd(bc);
   }
-  EXPECT_EQ(anded, result);
+  EXPECT_EQ(anded, expected);
 
   anded = b;
   for (auto& ac : a) {
     anded.approximateAnd(ac);
   }
-  EXPECT_EQ(anded, result);
+  EXPECT_EQ(anded, expected);
 }
 
 TEST(ConstraintTest, TestAndInequality) {
