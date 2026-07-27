@@ -226,4 +226,76 @@
       )
     )
   )
+
+  ;; CHECK:      (func $bound-incremented (type $0)
+  ;; CHECK-NEXT:  (local $x i32)
+  ;; CHECK-NEXT:  (loop $loop
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (i32.ge_s
+  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:     (i32.const 0)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.set $x
+  ;; CHECK-NEXT:    (i32.add
+  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:     (i32.const 1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (if
+  ;; CHECK-NEXT:    (i32.lt_s
+  ;; CHECK-NEXT:     (local.get $x)
+  ;; CHECK-NEXT:     (i32.const 100)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (then
+  ;; CHECK-NEXT:     (br $loop)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $bound-incremented
+    ;; A realistic loop, with an $x++ and a single bounds check. We must infer
+    ;; that no overflow happens in order to prove the two values at the top of
+    ;; the loop are true.
+    (local $x i32)
+    (loop $loop
+      ;; We can infer these are true.
+      (drop
+        (i32.ge_s
+          (local.get $x)
+          (i32.const 0)
+        )
+      )
+      (drop
+        (i32.lt_s
+          (local.get $x)
+          (i32.const 100)
+        )
+      )
+      ;; This changed: x++
+      (local.set $x
+        (i32.add
+          (local.get $x)
+          (i32.const 1)
+        )
+      )
+      (if
+        (i32.lt_s
+          (local.get $x)
+          (i32.const 100)
+        )
+        (then
+          (br $loop)
+        )
+      )
+    )
+  )
+
+  ;; CHECK:      (func $bound-incremented-2-no (type $0)
+  ;; CHECK-NEXT: )
+  (func $bound-incremented-2-no
+  )
 )

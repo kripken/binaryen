@@ -100,6 +100,8 @@ Result TrueFalse(bool x) { return x ? True : False; }
 
 Result TrueFalse(Literal x) { return TrueFalse(x.getUnsigned()); }
 
+bool isTrue(Literal x) { return x.getUnsigned(); }
+
 // Evaluate whether a => b, where a and b are operations on constants.
 Result provesConstantPair(Abstract::Op aOp,
                           const Literal& aConstant,
@@ -409,19 +411,22 @@ std::optional<ConstraintVector> approximateAndIncremented(const Constraint& a,
   using namespace Abstract;
 
   // If we see an upper bound to the process of incrementation, which does not
-  // allow for overflows, we know we can increment at most to that bound:
-  //
-  //   x = Incremented(C) && x <= D, where C < D  =>  x > C && x <= D
-  //
-  // Note what happens if we don't have C < D: x = Incremented(10) && x <= 5 can
-  // only be true if x incremented up from 10, overflowed, and then became <= 5.
-  // In this case, we can't apply the constraint x > 10.
-  if (b.op == LeS) {
-    if (auto* ac = std::get_if<Literal>(&a.term)) {
-      if (auto* bc = std::get_if<Literal>(&b.term)) {
-        if (TrueFalse(ac->ltS(*bc)) == True) {
-          return ConstraintVector{Constraint{GtS, a.term}, b};
-        }
+  // allow for overflows, we know we can increment at most to that bound.
+  if (auto* ac = std::get_if<Literal>(&a.term)) {
+    if (auto* bc = std::get_if<Literal>(&b.term)) {
+      // x = Incremented(C) && x <= D, where C < D  =>  x > C && x <= D
+      //
+      // Note what happens if we don't have C < D: x = Incremented(10) && x <= 5
+      // can only be true if x incremented up from 10, overflowed, and then
+      // became <= 5. In this case, we can't apply the constraint x > 10.
+      if (b.op == LeS && isTrue(ac->ltS(*bc))) {
+        return ConstraintVector{Constraint{GtS, a.term}, b};
+      }
+
+      // x = Incremented(C) && x < D, where C < D - 1  =>  x > C && x < D
+      auto one = Literal::makeFromInt32(1, ac->type);
+      if (b.op == LtS && isTrue(ac->add(one).ltS(*bc))) {
+        return ConstraintVector{Constraint{GtS, a.term}, b};
       }
     }
     // Otherwise, there might be an overflow, but we can at least keep b (x <= 5

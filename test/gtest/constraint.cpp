@@ -507,7 +507,7 @@ TEST(ConstraintTest, TestIncrement) {
   EXPECT_TRUE(map.get(0).provesNothing());
 }
 
-TEST(ConstraintTest, TestIncrementAnd) {
+TEST(ConstraintTest, TestIncrementAndLeS) {
   // x = Incremented(5) && x <= 10  =>  x > 5 && x <= 10
   Constraint inced5{Incremented, {Literal(int32_t(5))}};
   Constraint les10{LeS, {Literal(int32_t(10))}};
@@ -520,7 +520,28 @@ TEST(ConstraintTest, TestIncrementAnd) {
   checkAnd({inced9}, {les10}, {gts9, les10});
 
   // An overflow is possible, so we cannot infer a lower bound:
+  // x = Incremented(10) && x <= 10  =>  x <= 10
   Constraint inced10{Incremented, {Literal(int32_t(10))}};
   checkAnd({inced10}, {les10}, {les10});
+}
+
+TEST(ConstraintTest, TestIncrementAndLtS) {
+  // As above, but LeS replaced with LtS
+  // x = Incremented(5) && x < 10  =>  x > 5 && x < 10
+  Constraint inced5{Incremented, {Literal(int32_t(5))}};
+  Constraint lts10{LtS, {Literal(int32_t(10))}};
+  Constraint gts5{GtS, {Literal(int32_t(5))}};
+  checkAnd({inced5}, {lts10}, {gts5, lts10});
+
+  // An overflow is possible, so we cannot infer a lower bound:
+  // x = Incremented(9) && x < 10  => x < 10
+  Constraint inced9{Incremented, {Literal(int32_t(9))}};
+  checkAnd({inced9}, {lts10}, {lts10});
+
+  // But 8 cannot overflow.
+  // x = Incremented(8) && x < 10  =>  x > 8 && x < 10
+  Constraint inced8{Incremented, {Literal(int32_t(8))}};
+  Constraint gts8{GtS, {Literal(int32_t(8))}};
+  checkAnd({inced8}, {lts10}, {gts8, lts10});
 }
 
