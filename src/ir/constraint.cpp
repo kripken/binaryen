@@ -255,8 +255,7 @@ std::optional<Constraint> fusedApproximateAndTermEqualPair(
   return {};
 }
 
-namespace {
-
+#if 0
 // A variable in a match. If we see the same Var - identified by address - in
 // two places, it must be equal in them. For example,
 //
@@ -389,12 +388,7 @@ std::optional<Matcher::VarTermMap> Matcher::checkInternal(const Constraint& a,
   return varTermMap;
 }
 
-// Handle Incremented/Incrementing in AND operations.
-std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
-                                                        const Constraint& b) {
-  // If we see an upper bound to the process of incrementation, which does not
-  // allow for overflows, we know we can increment at most to that bound:
-  // x = Incremented(C) && x <= D, where C < D  =>  x > C && x <= D
+/*
   Var C, D;
   // XXX do we need Matcher... maybe nott
   if (auto result = Matcher({Incremented, C}, {LeS, D})
@@ -403,8 +397,33 @@ std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
     auto& values = *result;
     return ConstraintVector{{GtS, values[C]}, {LeS, values[D]}};
   }
-  // TODO: unsigned etc.
-  return nullopt;
+*/
+#endif
+
+// Handle Incremented/Incrementing in AND operations.
+std::optional<ConstraintVector> approximateAndIncrement(const Constraint& a,
+                                                        const Constraint& b) {
+  using namespace Abstract;
+
+  // If we see an upper bound to the process of incrementation, which does not
+  // allow for overflows, we know we can increment at most to that bound:
+  //
+  //   x = Incremented(C) && x <= D, where C < D  =>  x > C && x <= D
+  //
+  // Note what happens if we don't have C < D: x = Incremented(10) && x <= 5 can
+  // only be true if x incremented up from 10, overflowed, and then became <= 5.
+  // In this case, we can't apply the constraint x > 10.
+  if (a.op == Incremented && b.op == LeS) {
+    if (auto* ac = std::get_if<Literal>(&a.term)) {
+      if (auto* bc = std::get_if<Literal>(&b.term)) {
+        if (TrueFalse(ac->leS(*bc))) {
+          return ConstraintVector{Constraint{GtS, a.term}, b};
+        }
+      }
+    }
+  }
+
+  return std::nullopt;
 }
 
 // Do an AND on a pair of constraints, looking for a way to fuse them together
