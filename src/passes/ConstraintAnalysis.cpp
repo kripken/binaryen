@@ -266,17 +266,25 @@ struct ConstraintAnalysis
         if (auto branch = getBranchConstraints(block, out);
             branch && checkRelevancy(*branch)) {
           auto sentConstraints = constraints;
+std::cout << "sent to and: " << sentConstraints << '\n';
           sentConstraints.approximateAnd(branch->local, branch->constraint);
+std::cout << "    &&     : " << branch->constraint << '\n';
+std::cout << "    =>     : " << sentConstraints << '\n';
+std::cout << "ORing that with " << outStartConstraints << '\n';
           // If anything changed at the start of the target block, flow onwards.
           if (outStartConstraints.approximateOr(sentConstraints)) {
             work.push(out);
           }
+std::cout << "    =>          " << outStartConstraints << '\n';
         } else {
           // There are no specific branch constraints, so send the unmodified
           // |constraints|, avoiding a copy.
+std::cout << "simple Cs, to OR: " << constraints << '\n';
+std::cout << "      ||          " << outStartConstraints << '\n';
           if (outStartConstraints.approximateOr(constraints)) {
             work.push(out);
           }
+std::cout << "    =>            " << outStartConstraints << '\n';
         }
       }
     }

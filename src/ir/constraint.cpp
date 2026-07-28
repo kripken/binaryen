@@ -417,6 +417,16 @@ std::optional<ConstraintVector> approximateAndIncremented(const Constraint& a,
       // x = Incremented(C) && x <= D, where C < D  =>  x > C && x <= D
       //
       // Note what happens if we don't have C < D: x = Incremented(10) && x <= 5
+      is a contradiction
+      or else how can we get here after many incs, doesn't that mean we can prove nothing good either..?
+
+XXX
+while (1) {
+  if (cond) {
+    use Incremented(0). It may first arrive here as 10, not as 0!!!1
+  }
+}
+
       // can only be true if x incremented up from 10, overflowed, and then
       // became <= 5. In this case, we can't apply the constraint x > 10.
       if (b.op == LeS && isTrue(ac->ltS(*bc))) {
