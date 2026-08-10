@@ -1,4 +1,54 @@
 /*
+Bu g in this branch!
+
+(module
+ (type $0 (func (param i32) (result i32)))
+ (type $1 (func))
+ (global $global$0 (mut i32) (i32.const 0))
+ (export "yes-flipped_invoker" (func $1))
+ (func $0 (param $0 i32) (result i32)
+  (global.set $global$0
+   (i32.const 0)
+  )
+  (i32.or
+   (i32.ge_s
+    (if (result i32)
+     (i32.const 1)
+     (then
+      (unreachable)
+     )
+     (else
+      (local.get $0)
+     )
+    )
+    (i32.const 0)
+   )
+   (i32.lt_s
+    (local.get $0)
+    (i32.const 0)
+   )
+  )
+ )
+ (func $1
+  (drop
+   (call $0
+    (i32.const 0)
+   )
+  )
+ )
+)
+
+bin/wasm-opt a.wat --monomorphize -all --fuzz-exec
+ninja: no work to do.
+[fuzz-exec] export yes-flipped_invoker
+[trap unreachable]
+[fuzz-exec] export yes-flipped_invoker
+[fuzz-exec] comparing yes-flipped_invoker
+[fuzz-exec] optimization passes changed results
+
+*/
+
+/*
  * Copyright 2016 WebAssembly Community Group participants
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
