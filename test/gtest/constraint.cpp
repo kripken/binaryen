@@ -666,7 +666,7 @@ TEST(ConstraintTest, TestSetContradict) {
   map.setReachable();
 
   // $0 == $1.
-  map.set(0, {{Eq, Index(1)}, {Eq, Literal(int32_t(0))}});
+  map.set(0, {{Eq, Index(1)}});
   EXPECT_FALSE(map.unreachable);
 
   // Add $0 == 0 (e.g. when taking a branch on that condition).
@@ -679,4 +679,22 @@ TEST(ConstraintTest, TestSetContradict) {
   // {$0 == 0}, {$1 == $0, $1 != 0}, where the contradiction is not immediate).
   map.approximateAnd(1, {Ne, Literal(int32_t(0))});
   EXPECT_TRUE(map.unreachable);
+}
+
+TEST(ConstraintTest, TestSetContradict2) {
+  // As above, in reverse order.
+  BasicBlockConstraintMap map;
+  map.setReachable();
+
+  // $0 == $1.
+  map.set(0, {{Eq, Index(1)}});
+  EXPECT_FALSE(map.unreachable);
+
+  // Add $1 != 0.
+  map.approximateAnd(1, {Ne, Literal(int32_t(0))});
+  EXPECT_FALSE(map.unreachable);
+
+  // Add $0 == 0. As before, we end up with a contradiction.
+  map.approximateAnd(0, {Eq, Literal(int32_t(0))});
+  EXPECT_TRUE(map.unreachable); // XXX
 }
