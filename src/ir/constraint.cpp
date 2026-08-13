@@ -688,6 +688,23 @@ void BasicBlockConstraintMap::approximateAndInternal(Index index,
     }
   }
 
+  // If we are applying an Eq constraint to a constant, then propagate it to
+  // existing constraints in other locals (similar to the propagation just above
+  // us). That is, if we are setting x = 10, and previously we had y != x, we
+  // can say that y != 10.
+  if (actual.op == Abstract::Eq &&
+      std::holds_alternative<Literal>(actual.term)) {
+    if (auto iter = refs.find(index); iter != refs.end()) {
+      for (auto& otherIndex : iter->second) {
+        for (auto& otherC : map[otherIndex]) {
+          if (otherC.term == Term{index}) {
+            otherC.term = actual.term;
+          }
+        }
+      }
+    }
+  }
+
   // Refer to the constraints for this index. If this is the first access of
   // the local, then we insert a new item into the map, which has a default of
   // proxesEverything, which we need to flip (provesEverything cannot otherwise

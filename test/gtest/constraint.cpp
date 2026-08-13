@@ -660,3 +660,23 @@ TEST(ConstraintTest, TestEqConstraints) {
   // having $1 > $0 and needing to look $0 up.
   check(map.get(1), {GtS, {Literal(int32_t(42))}});
 }
+
+TEST(ConstraintTest, TestSetNotContradict) {
+  BasicBlockConstraintMap map;
+  map.setReachable();
+
+  // $0 == $1.
+  map.set(0, {{Eq, Index(1)}, {Eq, Literal(int32_t(0))}});
+  EXPECT_FALSE(map.unreachable);
+
+  // Add $0 == 0 (e.g. when taking a branch on that condition).
+  map.approximateAnd(0, {Eq, Literal(int32_t(0))});
+  EXPECT_FALSE(map.unreachable);
+
+  // Add $1 != 0. Since $0 == $1, this is a contradiction. We notice that by
+  // propagating the constant 0 in the approximateAnd, after which adding the
+  // != 0 now shows a contradiction (if we did not propagate, we'd end up with
+  // {$0 == 0}, {$1 == $0, $1 != 0}, where the contradiction is not immediate).
+  map.approximateAnd(1, {Ne, Literal(int32_t(0))});
+  EXPECT_TRUE(map.unreachable);
+}
