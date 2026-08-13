@@ -661,7 +661,7 @@ TEST(ConstraintTest, TestEqConstraints) {
   check(map.get(1), {GtS, {Literal(int32_t(42))}});
 }
 
-TEST(ConstraintTest, TestSetNotContradict) {
+TEST(ConstraintTest, TestSetContradict) {
   BasicBlockConstraintMap map;
   map.setReachable();
 
