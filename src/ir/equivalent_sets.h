@@ -21,9 +21,7 @@
 
 namespace wasm {
 
-//
 // A map of each index to all those it is equivalent to, and some helpers.
-//
 struct EquivalentSets {
   // A set of indexes. This is ordered for deterministic iteration.
   using Set = std::set<Index>;
@@ -86,6 +84,74 @@ struct EquivalentSets {
     }
     return nullptr;
   }
+};
+
+// Similar to EquivalentSets, but does not allow for iteration over the
+// equivalent indexes to a particular index, i.e., getEquivalents() is not
+// provided. Instead, this focuses on providing an *indexing* of the locals,
+// where equivalent ones get the same index. This makes checking if any two
+// given indexes are equal a fast operation.
+struct EquivalentIndexing {
+  // Mapping of input indexes to output/logical indexes. Two input indexes
+  // with the same logical index are equivalent.
+  std::unordered_map<Index, Index> map;
+
+  // Clears the state completely, removing all equivalences.
+  void clear() { map.clear(); }
+
+  // Resets an index, removing any equivalences between it and others.
+  void reset(Index index) {
+    map.erase(index);
+  }
+
+  // For convenience, start logical indexes from 1, which simplifies the code
+  // below. We never reuse indexes, which means this is not suitable for
+  // extremely-long-running tasks.
+  Index nextLogicalIndex = 1;
+
+  // Adds a new equivalence between two indexes.
+  // `justReset` is an index that was just reset, and has no
+  // equivalences. `other` may have existing equivalences.
+  void add(Index justReset, Index other) {
+    assert(!map.contains(justReset));
+
+    auto& otherLogicalIndex = map[other];
+    if (otherLogicalIndex != 0) {
+      // Use `other`'s existing index.
+      map[justReset] = otherLogicalIndex;
+    } else {
+      // There was no prior index for `other`.
+      assert(nextLogicalIndex != std::numeric_limits<Index>::max());
+      map[justReset] = otherLogicalIndex = nextLogicalIndex++;
+    }
+  }
+
+  std::optional<Index> getLogicalIndex(Index index) {
+    auto iter = map.find(index);
+    if (iter != map.end()) {
+      return iter->second;
+    }
+    return {};
+  }
+
+  // Checks whether two indexes are equivalent.
+  bool check(Index a, Index b) {
+    if (a == b) {
+      // An index is always equivalent to itself.
+      return true;
+    }
+
+    if (auto aLogical = getLogicalIndex(a)) {
+      if (auto bLogical = getLogicalIndex(b)) {
+        // We return true if we know a logical index for both, and they match.
+        return *aLogical == *bLogical;
+      }
+    }
+
+    // Otherwise, we can't say they are equivalent.
+    return false;
+  }
+
 };
 
 } // namespace wasm

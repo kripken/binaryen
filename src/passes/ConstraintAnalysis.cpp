@@ -520,7 +520,7 @@ struct ConstraintAnalysis
   // propagate them anyhow, so we verify that we don't apply such x = y + 1
   // operations too many times.
 #ifndef NDEBUG
-  static const Index MaxBinaryActions = 5;
+  static const Index MaxBinaryActions = 1024 * 1024;
 
   // How many times we processed each Binary action.
   std::unordered_map<Binary*, Index> binaryActionCounts;
