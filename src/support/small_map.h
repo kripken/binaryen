@@ -124,9 +124,25 @@ public:
       }
     }
 
+    bool isEnd() const {
+      if (!parent || parent->empty()) {
+        return true;
+      }
+      if (usingFixed) {
+        return fixedIndex >= parent->size();
+      } else {
+        return flexibleIterator == parent->flexible.end();
+      }
+    }
+
     bool operator==(const IteratorBase& other) const {
       if (parent != other.parent) {
         return false;
+      }
+      bool thisEnd = isEnd();
+      bool otherEnd = other.isEnd();
+      if (thisEnd || otherEnd) {
+        return thisEnd == otherEnd;
       }
       if (usingFixed != other.usingFixed) {
         Fatal() << "SmallMap does not support changes while iterating";

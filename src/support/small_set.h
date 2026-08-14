@@ -452,9 +452,25 @@ public:
       }
     }
 
+    bool isEnd() const {
+      if (!parent || parent->empty()) {
+        return true;
+      }
+      if (usingFixed) {
+        return fixedIndex >= parent->size();
+      } else {
+        return flexibleIterator == parent->flexible.end();
+      }
+    }
+
     bool operator==(const Iterator& other) const {
       if (parent != other.parent) {
         return false;
+      }
+      bool thisEnd = isEnd();
+      bool otherEnd = other.isEnd();
+      if (thisEnd || otherEnd) {
+        return thisEnd == otherEnd;
       }
       // std::set allows changes while iterating. For us here, though, it would
       // be nontrivial to support that given we have two iterators that we
