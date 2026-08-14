@@ -26,6 +26,7 @@
 #include <variant>
 
 #include "ir/abstract.h"
+#include "support/equivalent_sets.h"
 #include "support/inplace_vector.h"
 #include "support/utilities.h"
 #include "wasm.h"
@@ -315,17 +316,12 @@ struct BasicBlockConstraintMap {
                                   const BasicBlockConstraintMap& map);
 
 private:
-  std::unordered_map<Index, AndedConstraintSet> map;
+  // To handle equivalent local indexes, we use a logical indexing. When two
+  // locals are equal, they have the same logical index.
+  EquivalentIndexing logicalIndexing;
 
-  // Maps an index to the locals that have constraints referring to it. When a
-  // local is modified, we need to wipe all those constraints, which become
-  // stale.
-  //
-  // It is ok (but unoptimal in efficiency) if we have stale refs here, e.g. due
-  // to approximation removing a constraint. Whenever there is a reference,
-  // however, it must be noted here, so that when things get stale we can remove
-  // them.
-  std::unordered_map<Index, std::unordered_set<Index>> refs;
+  // The main map of logical indexes to constraints.
+  std::unordered_map<Index, AndedConstraintSet> logicalConstraints;
 
   // Given a constraint on a local, note refs.
   void noteRefs(Index index, const Constraint& c);
