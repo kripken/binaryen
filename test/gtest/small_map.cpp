@@ -281,3 +281,39 @@ TEST(SmallMapTest, NonTrivialAndMoveOnlyTypes) {
   EXPECT_EQ(*map2[2], 200);
   EXPECT_EQ(*map2[3], 300);
 }
+
+TEST(SmallMapTest, EraseIf) {
+  // Test in fixed mode
+  SmallUnorderedMap<int, int, 5> fixedMap{{1, 10}, {2, 21}, {3, 30}, {4, 41}};
+  EXPECT_TRUE(fixedMap.TEST_ONLY_NEVER_USE_usingFixed());
+  size_t removed = std::erase_if(fixedMap, [](const auto& item) {
+    return item.second % 2 == 1; // erase odd values
+  });
+  EXPECT_EQ(removed, 2u);
+  EXPECT_EQ(fixedMap.size(), 2u);
+  EXPECT_TRUE(fixedMap.contains(1));
+  EXPECT_TRUE(fixedMap.contains(3));
+  EXPECT_FALSE(fixedMap.contains(2));
+  EXPECT_FALSE(fixedMap.contains(4));
+
+  // Test in flexible mode
+  SmallUnorderedMap<int, int, 2> flexMap{{1, 10}, {2, 21}, {3, 30}, {4, 41}};
+  EXPECT_FALSE(flexMap.TEST_ONLY_NEVER_USE_usingFixed());
+  removed = std::erase_if(
+    flexMap, [](const auto& item) { return item.second % 2 == 1; });
+  EXPECT_EQ(removed, 2u);
+  EXPECT_EQ(flexMap.size(), 2u);
+  EXPECT_TRUE(flexMap.contains(1));
+  EXPECT_TRUE(flexMap.contains(3));
+
+  // Test ordered map in fixed mode
+  SmallMap<int, int, 5> fixedOrderedMap{{1, 10}, {2, 21}, {3, 30}, {4, 41}};
+  EXPECT_TRUE(fixedOrderedMap.TEST_ONLY_NEVER_USE_usingFixed());
+  removed = std::erase_if(fixedOrderedMap, [](const auto& item) {
+    return item.first % 2 == 0; // erase even keys
+  });
+  EXPECT_EQ(removed, 2u);
+  EXPECT_EQ(fixedOrderedMap.size(), 2u);
+  EXPECT_TRUE(fixedOrderedMap.contains(1));
+  EXPECT_TRUE(fixedOrderedMap.contains(3));
+}

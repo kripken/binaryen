@@ -580,6 +580,49 @@ inline void swap(SmallUnorderedMap<Key, Value, N>& a,
   a.swap(b);
 }
 
+namespace detail {
+
+template<typename T> struct is_small_map_or_derived {
+private:
+  template<typename Key,
+           typename Value,
+           size_t N,
+           typename FixedStorage,
+           typename FlexibleMap>
+  static std::true_type
+  test(const SmallMapBase<Key, Value, N, FixedStorage, FlexibleMap>*);
+  static std::false_type test(...);
+
+public:
+  static constexpr bool value = decltype(test(std::declval<T*>()))::value;
+};
+
+} // namespace detail
+
+template<typename Map, typename Pred>
+  requires detail::is_small_map_or_derived<Map>::value
+size_t erase_if(Map& c, Pred pred) {
+  auto old_size = c.size();
+  for (auto i = c.begin(); i != c.end();) {
+    if (pred(*i)) {
+      i = c.erase(i);
+    } else {
+      ++i;
+    }
+  }
+  return old_size - c.size();
+}
+
 } // namespace wasm
+
+namespace std {
+
+template<typename Map, typename Pred>
+  requires wasm::detail::is_small_map_or_derived<Map>::value
+size_t erase_if(Map& c, Pred pred) {
+  return wasm::erase_if(c, pred);
+}
+
+} // namespace std
 
 #endif // wasm_support_small_map_h

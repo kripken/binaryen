@@ -430,6 +430,12 @@ public:
     IteratorBase(const Parent* parent)
       : parent(parent), usingFixed(parent->usingFixed()) {}
 
+    IteratorBase(const Parent* parent, size_t index)
+      : parent(parent), usingFixed(true), fixedIndex(index) {}
+
+    IteratorBase(const Parent* parent, FlexibleIterator fit)
+      : parent(parent), usingFixed(false), flexibleIterator(fit) {}
+
     void setBegin() {
       if (usingFixed) {
         fixedIndex = 0;
@@ -475,6 +481,12 @@ public:
       return *this;
     }
 
+    Iterator operator++(int) {
+      Iterator tmp = *this;
+      ++(*this);
+      return tmp;
+    }
+
     const value_type& operator*() const {
       if (this->usingFixed) {
         return this->parent->fixed.get(this->fixedIndex);
@@ -513,6 +525,18 @@ public:
   using iterator = Iterator;
   using const_iterator = Iterator;
 
+  iterator erase(const_iterator pos) {
+    assert(pos != end());
+    if (usingFixed()) {
+      size_t idx = pos.fixedIndex;
+      fixed.eraseAt(idx);
+      return iterator(this, idx);
+    } else {
+      auto nextFlexIt = flexible.erase(pos.flexibleIterator);
+      return iterator(this, nextFlexIt);
+    }
+  }
+
   // Test-only method to allow unit tests to verify the right internal
   // behavior.
   bool TEST_ONLY_NEVER_USE_usingFixed() { return usingFixed(); }
@@ -528,6 +552,45 @@ class SmallUnorderedSet : public SmallSetBase<T,
                                               UnorderedFixedStorage<T, N>,
                                               std::unordered_set<T>> {};
 
+namespace detail {
+
+template<typename T> struct is_small_set_or_derived {
+private:
+  template<typename T2, size_t N, typename FixedStorage, typename FlexibleSet>
+  static std::true_type
+  test(const SmallSetBase<T2, N, FixedStorage, FlexibleSet>*);
+  static std::false_type test(...);
+
+public:
+  static constexpr bool value = decltype(test(std::declval<T*>()))::value;
+};
+
+} // namespace detail
+
+template<typename Set, typename Pred>
+  requires detail::is_small_set_or_derived<Set>::value
+size_t erase_if(Set& c, Pred pred) {
+  auto old_size = c.size();
+  for (auto i = c.begin(); i != c.end();) {
+    if (pred(*i)) {
+      i = c.erase(i);
+    } else {
+      ++i;
+    }
+  }
+  return old_size - c.size();
+}
+
 } // namespace wasm
+
+namespace std {
+
+template<typename Set, typename Pred>
+  requires wasm::detail::is_small_set_or_derived<Set>::value
+size_t erase_if(Set& c, Pred pred) {
+  return wasm::erase_if(c, pred);
+}
+
+} // namespace std
 
 #endif // wasm_support_small_set_h
