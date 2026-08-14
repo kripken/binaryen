@@ -100,9 +100,7 @@ struct EquivalentIndexing {
   void clear() { map.clear(); }
 
   // Resets an index, removing any equivalences between it and others.
-  void reset(Index index) {
-    map.erase(index);
-  }
+  void reset(Index index) { map.erase(index); }
 
   // For convenience, start logical indexes from 1, which simplifies the code
   // below. We never reuse indexes, which means this is not suitable for
@@ -151,7 +149,6 @@ struct EquivalentIndexing {
     // Otherwise, we can't say they are equivalent.
     return false;
   }
-
 };
 
 } // namespace wasm
