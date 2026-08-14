@@ -15,6 +15,7 @@ set(unittest_SOURCES
   delta_debugging.cpp
   dfa_minimization.cpp
   disjoint_sets.cpp
+  equivalent_sets.cpp
   graph.cpp
   int128.cpp
   leaves.cpp
