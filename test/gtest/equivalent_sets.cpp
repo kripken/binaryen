@@ -246,7 +246,8 @@ TEST(EquivalentIndexingTest, DifferentialWithEquivalentSets) {
   for (size_t iter = 0; iter < 200; ++iter) {
     uint32_t op = nextRand() % 10;
     if (op < 6) {
-      // Add: pick an inactive (untracked) index as `justReset`, and an arbitrary other index
+      // Add: pick an inactive (untracked) index as `justReset`, and an
+      // arbitrary other index
       std::vector<Index> inactiveIndices;
       for (Index i = 0; i < numLocals; ++i) {
         if (!active[i]) {
