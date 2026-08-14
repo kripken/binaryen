@@ -26,7 +26,7 @@
 #include <variant>
 
 #include "ir/abstract.h"
-#include "support/equivalent_sets.h"
+#include "ir/equivalent_sets.h"
 #include "support/inplace_vector.h"
 #include "support/utilities.h"
 #include "wasm.h"
@@ -261,7 +261,7 @@ struct BasicBlockConstraintMap {
 
   void setReachable() {
     unreachable = false;
-    assert(map.empty());
+    assert(logicalConstraints.empty());
   }
 
   // Apply a constraint to a local, replacing anything before.
@@ -281,13 +281,15 @@ struct BasicBlockConstraintMap {
     // We should not be called in unreachable code.
     assert(!unreachable);
 
-    if (auto iter = map.find(index); iter != map.end()) {
-      auto& constraints = iter->second;
-      // If we can prove nothing, we should have removed it from the map.
-      assert(!constraints.provesNothing());
-      // If we can prove everything, we should be entirely unreachable.
-      assert(!constraints.provesEverything());
-      return constraints;
+    if (auto logical = logicalIndexing.getLogicalIndex(index)) {
+      if (auto iter = logicalConstraints.find(*logical); iter != logicalConstraints.end()) {
+        auto& constraints = iter->second;
+        // If we can prove nothing, we should have removed it from the map.
+        assert(!constraints.provesNothing());
+        // If we can prove everything, we should be entirely unreachable.
+        assert(!constraints.provesEverything());
+        return constraints;
+      }
     }
     return AndedConstraintSet::makeProvesNothing();
   }
@@ -308,8 +310,8 @@ struct BasicBlockConstraintMap {
   // can answer False if we see x == c1, y == c2, and the constants c1, c2
   // differ.
 
-  bool operator!=(const BasicBlockConstraintMap& other) {
-    return unreachable != other.unreachable || map != other.map;
+  bool operator!=(const BasicBlockConstraintMap& other) const {
+    return unreachable != other.unreachable || logicalIndexing != other.logicalIndexing || logicalConstraints != other.logicalConstraints;
   }
 
   friend std::ostream& operator<<(std::ostream& o,
@@ -320,14 +322,13 @@ private:
   // locals are equal, they have the same logical index.
   EquivalentIndexing logicalIndexing;
 
-  // The main map of logical indexes to constraints.
+  // The main map of logical indexes to constraints. The indexing of the
+  // constraints is logical, and also the indexes used *in* the constraints is
+  // logical. I.e. if we set x < y && x < z, and y == z, then we actually store
+  // logical(x) < logical(y) && logical(x) < logical(z), and the rhs end up
+  // identical (so we just store one).
+  // TODO: how to remove stale logical constraints..?
   std::unordered_map<Index, AndedConstraintSet> logicalConstraints;
-
-  // Given a constraint on a local, note refs.
-  void noteRefs(Index index, const Constraint& c);
-
-  // Given an index, erase constraints referring to it.
-  void eraseStaleRefs(Index index);
 
   // Internal version, with a flag to flip the constraint. Whenever we apply
   // e.g. x == y, we also apply y == x to y, to maintain the invariant described

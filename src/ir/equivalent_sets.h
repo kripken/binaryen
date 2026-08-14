@@ -124,7 +124,7 @@ struct EquivalentIndexing {
     }
   }
 
-  std::optional<Index> getLogicalIndex(Index index) {
+  std::optional<Index> getLogicalIndex(Index index) const {
     auto iter = map.find(index);
     if (iter != map.end()) {
       return iter->second;
@@ -133,7 +133,7 @@ struct EquivalentIndexing {
   }
 
   // Checks whether two indexes are equivalent.
-  bool check(Index a, Index b) {
+  bool check(Index a, Index b) const {
     if (a == b) {
       // An index is always equivalent to itself.
       return true;
@@ -148,6 +148,11 @@ struct EquivalentIndexing {
 
     // Otherwise, we can't say they are equivalent.
     return false;
+  }
+
+  bool operator!=(const EquivalentIndexing& other) const {
+    // TODO: the actual indexes don't matter, just the shape
+    return map != other.map;
   }
 };
 

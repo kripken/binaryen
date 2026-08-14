@@ -515,8 +515,10 @@ void BasicBlockConstraintMap::set(Index index,
   assert(!unreachable);
 
   // Clear the old state.
-  eraseStaleRefs(index);
-  map.erase(index);
+  if (auto iter = logicalIndexing.find(index); iter != logicalIndexing.end()) {
+    map.erase(iter->second); XXX add logical layer in teh middle
+    logicalIndexing.erase(iter);
+  }
 
   // Apply the constraints, if there are any.
   if (constraints.provesNothing()) {
@@ -620,7 +622,6 @@ void BasicBlockConstraintMap::set(Index index, Expression* value) {
 
 void BasicBlockConstraintMap::setProvesNothing(Index index) {
   assert(!unreachable);
-  eraseStaleRefs(index);
   map.erase(index);
 }
 
@@ -710,11 +711,6 @@ void BasicBlockConstraintMap::approximateAndInternal(Index index,
   // information as this is an approximate AND, but we cannot lose it all).
   assert(!indexConstraints.provesNothing());
 
-  // Add a ref of what we are adding. Note that the approximation above may end
-  // up not actually adding this, or adding only part of this, but it is safe to
-  // always add a ref (at the cost of minor wasted work).
-  noteRefs(index, actual);
-
   // If this is not the flipped version, and it refers to a local, add the
   // flipped one too.
   if (!flip && std::holds_alternative<Index>(actual.term)) {
@@ -736,39 +732,6 @@ void BasicBlockConstraintMap::approximateAndInternal(Index index,
             return;
           }
         }
-      }
-    }
-  }
-}
-
-void BasicBlockConstraintMap::noteRefs(Index index, const Constraint& c) {
-  if (auto* i = std::get_if<Index>(&c.term)) {
-    refs[*i].insert(index);
-  }
-}
-
-void BasicBlockConstraintMap::eraseStaleRefs(Index index) {
-  auto iter = refs.find(index);
-  if (iter == refs.end()) {
-    return;
-  }
-
-  auto& refIndexes = iter->second;
-
-  for (auto refIndex : refIndexes) {
-    if (auto iter = map.find(refIndex); iter != map.end()) {
-      auto& refConstraints = iter->second;
-      std::erase_if(refConstraints, [&](const auto& c) {
-        if (auto* i = std::get_if<Index>(&c.term)) {
-          if (*i == index) {
-            return true;
-          }
-        }
-        return false;
-      });
-      if (refConstraints.empty()) {
-        // This became trivial.
-        map.erase(iter);
       }
     }
   }
