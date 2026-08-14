@@ -27,6 +27,7 @@
 
 #include "ir/abstract.h"
 #include "support/inplace_vector.h"
+#include "support/small_map.h"
 #include "support/utilities.h"
 #include "wasm.h"
 
@@ -315,7 +316,7 @@ struct BasicBlockConstraintMap {
                                   const BasicBlockConstraintMap& map);
 
 private:
-  std::unordered_map<Index, AndedConstraintSet> map;
+  SmallUnorderedMap<Index, AndedConstraintSet, 3> map;
 
   // Maps an index to the locals that have constraints referring to it. When a
   // local is modified, we need to wipe all those constraints, which become
