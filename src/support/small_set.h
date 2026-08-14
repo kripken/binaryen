@@ -34,9 +34,21 @@
 
 namespace wasm {
 
+template<typename T> struct Identity {
+  constexpr const T& operator()(const T& x) const { return x; }
+};
+
+template<typename Key, typename Value> struct PairKey {
+  constexpr const Key& operator()(const std::pair<Key, Value>& x) const {
+    return x.first;
+  }
+  constexpr const Key& operator()(const std::pair<const Key, Value>& x) const {
+    return x.first;
+  }
+};
+
 template<typename T, size_t N> struct FixedStorageBase {
   size_t used = 0;
-  std::array<T, N> storage;
 
   enum InsertResult {
     // Either we inserted a new item, or the item already existed, so no error
@@ -47,83 +59,240 @@ template<typename T, size_t N> struct FixedStorageBase {
     // must handle.
     CouldNotInsert
   };
+
+private:
+  union Entry {
+    T val;
+    Entry() {}
+    ~Entry() {}
+  };
+  std::array<Entry, N == 0 ? 1 : N> storage_;
+
+public:
+  FixedStorageBase() = default;
+
+  FixedStorageBase(const FixedStorageBase& other) : used(other.used) {
+    for (size_t i = 0; i < used; i++) {
+      constructAt(i, other.get(i));
+    }
+  }
+
+  FixedStorageBase(FixedStorageBase&& other) noexcept : used(other.used) {
+    for (size_t i = 0; i < used; i++) {
+      moveConstructAt(i, std::move(other.get(i)));
+    }
+    other.clear();
+  }
+
+  FixedStorageBase& operator=(const FixedStorageBase& other) {
+    if (this != &other) {
+      clear();
+      used = other.used;
+      for (size_t i = 0; i < used; i++) {
+        constructAt(i, other.get(i));
+      }
+    }
+    return *this;
+  }
+
+  FixedStorageBase& operator=(FixedStorageBase&& other) noexcept {
+    if (this != &other) {
+      clear();
+      used = other.used;
+      for (size_t i = 0; i < used; i++) {
+        moveConstructAt(i, std::move(other.get(i)));
+      }
+      other.clear();
+    }
+    return *this;
+  }
+
+  ~FixedStorageBase() { clear(); }
+
+  void clear() {
+    for (size_t i = 0; i < used; i++) {
+      destroyAt(i);
+    }
+    used = 0;
+  }
+
+  template<typename... Args> void constructAt(size_t i, Args&&... args) {
+    assert(i < (N == 0 ? 1 : N));
+    new (&storage_[i].val) T(std::forward<Args>(args)...);
+  }
+
+  void destroyAt(size_t i) {
+    assert(i < (N == 0 ? 1 : N));
+    storage_[i].val.~T();
+  }
+
+  void moveConstructFromIndex(size_t dst, size_t src) {
+    assert(dst < (N == 0 ? 1 : N));
+    assert(src < (N == 0 ? 1 : N));
+    new (&storage_[dst].val) T(std::move(storage_[src].val));
+    destroyAt(src);
+  }
+
+  template<typename U> void moveConstructAt(size_t dst, U&& src) {
+    assert(dst < (N == 0 ? 1 : N));
+    new (&storage_[dst].val) T(std::forward<U>(src));
+  }
+
+  T& get(size_t i) {
+    assert(i < used);
+    return storage_[i].val;
+  }
+
+  const T& get(size_t i) const {
+    assert(i < used);
+    return storage_[i].val;
+  }
+
+  T& operator[](size_t i) { return get(i); }
+  const T& operator[](size_t i) const { return get(i); }
 };
 
-template<typename T, size_t N>
+template<typename T, size_t N, typename Key = T, typename GetKey = Identity<T>>
 struct UnorderedFixedStorage : public FixedStorageBase<T, N> {
   using InsertResult = typename FixedStorageBase<T, N>::InsertResult;
 
-  InsertResult insert(const T& x) {
+  size_t findIndex(const Key& k) const {
+    GetKey getKey;
     for (size_t i = 0; i < this->used; i++) {
-      if (this->storage[i] == x) {
-        return InsertResult::NoError;
+      if (getKey(this->get(i)) == k) {
+        return i;
       }
+    }
+    return this->used;
+  }
+
+  size_t findInsertionIndex(const Key& /*k*/) const { return this->used; }
+
+  InsertResult insert(const T& x) {
+    GetKey getKey;
+    if (findIndex(getKey(x)) != this->used) {
+      return InsertResult::NoError;
     }
     assert(this->used <= N);
     if (this->used == N) {
       return InsertResult::CouldNotInsert;
     }
-    this->storage[this->used++] = x;
+    this->constructAt(this->used++, x);
     return InsertResult::NoError;
   }
 
-  void erase(const T& x) {
-    for (size_t i = 0; i < this->used; i++) {
-      if (this->storage[i] == x) {
-        // We found the item; erase it by moving the final item to replace it
-        // and truncating the size.
-        this->used--;
-        this->storage[i] = this->storage[this->used];
-        return;
-      }
-    }
-  }
-};
-
-template<typename T, size_t N>
-struct OrderedFixedStorage : public FixedStorageBase<T, N> {
-  using InsertResult = typename FixedStorageBase<T, N>::InsertResult;
-
-  InsertResult insert(const T& x) {
-    // Find the insertion point |i| where x should be placed.
-    size_t i = 0;
-    while (i < this->used && this->storage[i] < x) {
-      i++;
-    }
-    if (i < this->used && this->storage[i] == x) {
-      // The item already exists.
+  InsertResult insert(T&& x) {
+    GetKey getKey;
+    if (findIndex(getKey(x)) != this->used) {
       return InsertResult::NoError;
     }
-    // |i| is now the location where x should be placed.
-
     assert(this->used <= N);
     if (this->used == N) {
       return InsertResult::CouldNotInsert;
     }
+    this->constructAt(this->used++, std::move(x));
+    return InsertResult::NoError;
+  }
 
+  void erase(const Key& k) {
+    size_t i = findIndex(k);
     if (i != this->used) {
-      // Push things forward to make room for x.
-      for (size_t j = this->used; j >= i + 1; j--) {
-        this->storage[j] = this->storage[j - 1];
+      eraseAt(i);
+    }
+  }
+
+  void eraseAt(size_t i) {
+    assert(i < this->used);
+    this->destroyAt(i);
+    if (i != this->used - 1) {
+      this->moveConstructFromIndex(i, this->used - 1);
+    }
+    this->used--;
+  }
+};
+
+template<typename T, size_t N, typename Key = T, typename GetKey = Identity<T>>
+struct OrderedFixedStorage : public FixedStorageBase<T, N> {
+  using InsertResult = typename FixedStorageBase<T, N>::InsertResult;
+
+  size_t findInsertionIndex(const Key& k) const {
+    GetKey getKey;
+    size_t i = 0;
+    while (i < this->used && getKey(this->get(i)) < k) {
+      i++;
+    }
+    return i;
+  }
+
+  size_t findIndex(const Key& k) const {
+    size_t i = findInsertionIndex(k);
+    if (i < this->used) {
+      GetKey getKey;
+      if (getKey(this->get(i)) == k) {
+        return i;
       }
     }
+    return this->used;
+  }
 
-    this->storage[i] = x;
+  InsertResult insert(const T& x) {
+    GetKey getKey;
+    const Key& k = getKey(x);
+    size_t i = findInsertionIndex(k);
+    if (i < this->used && getKey(this->get(i)) == k) {
+      return InsertResult::NoError;
+    }
+    assert(this->used <= N);
+    if (this->used == N) {
+      return InsertResult::CouldNotInsert;
+    }
+    if (i != this->used) {
+      this->moveConstructFromIndex(this->used, this->used - 1);
+      for (size_t j = this->used - 1; j > i; j--) {
+        this->moveConstructFromIndex(j, j - 1);
+      }
+    }
+    this->constructAt(i, x);
     this->used++;
     return InsertResult::NoError;
   }
 
-  void erase(const T& x) {
-    for (size_t i = 0; i < this->used; i++) {
-      if (this->storage[i] == x) {
-        // We found the item; move things backwards and shrink.
-        for (size_t j = i + 1; j < this->used; j++) {
-          this->storage[j - 1] = this->storage[j];
-        }
-        this->used--;
-        return;
+  InsertResult insert(T&& x) {
+    GetKey getKey;
+    const Key& k = getKey(x);
+    size_t i = findInsertionIndex(k);
+    if (i < this->used && getKey(this->get(i)) == k) {
+      return InsertResult::NoError;
+    }
+    assert(this->used <= N);
+    if (this->used == N) {
+      return InsertResult::CouldNotInsert;
+    }
+    if (i != this->used) {
+      this->moveConstructFromIndex(this->used, this->used - 1);
+      for (size_t j = this->used - 1; j > i; j--) {
+        this->moveConstructFromIndex(j, j - 1);
       }
     }
+    this->constructAt(i, std::move(x));
+    this->used++;
+    return InsertResult::NoError;
+  }
+
+  void erase(const Key& k) {
+    size_t i = findIndex(k);
+    if (i != this->used) {
+      eraseAt(i);
+    }
+  }
+
+  void eraseAt(size_t i) {
+    assert(i < this->used);
+    this->destroyAt(i);
+    for (size_t j = i + 1; j < this->used; j++) {
+      this->moveConstructFromIndex(j - 1, j);
+    }
+    this->used--;
   }
 };
 
@@ -166,11 +335,12 @@ public:
         // to flexible.
         assert(fixed.used == N);
         assert(flexible.empty());
-        flexible.insert(fixed.storage.begin(),
-                        fixed.storage.begin() + fixed.used);
+        for (size_t i = 0; i < fixed.used; i++) {
+          flexible.insert(std::move(fixed.get(i)));
+        }
         flexible.insert(x);
         assert(!usingFixed());
-        fixed.used = 0;
+        fixed.clear();
       }
     } else {
       flexible.insert(x);
@@ -187,12 +357,7 @@ public:
 
   bool contains(const T& x) const {
     if (usingFixed()) {
-      for (size_t i = 0; i < fixed.used; i++) {
-        if (fixed.storage[i] == x) {
-          return true;
-        }
-      }
-      return false;
+      return fixed.findIndex(x) != fixed.used;
     } else {
       return flexible.contains(x);
     }
@@ -209,7 +374,7 @@ public:
   bool empty() const { return size() == 0; }
 
   void clear() {
-    fixed.used = 0;
+    fixed.clear();
     flexible.clear();
   }
 
@@ -219,13 +384,19 @@ public:
       return false;
     }
     if (usingFixed()) {
-      return std::all_of(fixed.storage.begin(),
-                         fixed.storage.begin() + fixed.used,
-                         [&other](const T& x) { return other.contains(x); });
+      for (size_t i = 0; i < fixed.used; i++) {
+        if (!other.contains(fixed.get(i))) {
+          return false;
+        }
+      }
+      return true;
     } else if (other.usingFixed()) {
-      return std::all_of(other.fixed.storage.begin(),
-                         other.fixed.storage.begin() + other.fixed.used,
-                         [this](const T& x) { return contains(x); });
+      for (size_t i = 0; i < other.fixed.used; i++) {
+        if (!contains(other.fixed.get(i))) {
+          return false;
+        }
+      }
+      return true;
     } else {
       return flexible == other.flexible;
     }
@@ -306,11 +477,13 @@ public:
 
     const value_type& operator*() const {
       if (this->usingFixed) {
-        return this->parent->fixed.storage[this->fixedIndex];
+        return this->parent->fixed.get(this->fixedIndex);
       } else {
         return *this->flexibleIterator;
       }
     }
+
+    const value_type* operator->() const { return &**this; }
   };
 
   using Iterator = IteratorBase<SmallSetBase<T, N, FixedStorage, FlexibleSet>,
