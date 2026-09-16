@@ -103,64 +103,31 @@ private:
 
 class EvallingRuntimeTable : public RuntimeTable {
 public:
-  // TODO: putting EvallingModuleRunner into its own header would allow us to
-  // take an EvallingModuleRunner as input here instead of passing functions.
-  EvallingRuntimeTable(Table table,
-                       const bool& instanceInitialized,
-                       const Module& wasm,
-                       std::function<Literal(Name, Type)> makeFuncData)
-    : RuntimeTable(table), instanceInitialized(instanceInitialized), wasm(wasm),
-      makeFuncData(std::move(makeFuncData)) {}
+  EvallingRuntimeTable(Literal initial,
+                       Table table,
+                       const bool& instanceInitialized)
+    : RuntimeTable(table), instanceInitialized(instanceInitialized),
+      initial(initial) {}
 
   void set(Address i, Literal l) override {
     if (instanceInitialized) {
       throw FailToEvalException("tableStore after init: TODO");
     }
+    if (i >= tableDefinition.initial) {
+      throw FailToEvalException("tableStore out of bounds");
+    }
+    table[i] = std::move(l);
   }
 
   Literal get(Address index) const override {
-    // Look through the segments and find the value. Segments can overlap,
-    // so we want the last one.
-    Expression* value = nullptr;
-    for (auto& segment : wasm.elementSegments) {
-      if (segment->table != tableDefinition.name) {
-        continue;
-      }
-
-      Index start;
-      // look for the index in this segment. if it has a constant offset, we
-      // look in the proper range. if it instead gets a global, we rely on the
-      // fact that when not dynamically linking then the table is loaded at
-      // offset 0.
-      // TODO: This is an Emscripten-specific assumption. We can add an
-      // Emscripten-only mode and only make the assumption in that case.
-      if (auto* c = segment->offset->dynCast<Const>()) {
-        start = c->value.getInteger();
-      } else if (segment->offset->is<GlobalGet>()) {
-        start = 0;
-      } else {
-        // TODO: Handle extended consts.
-        // wasm spec only allows const and global.get there
-        WASM_UNREACHABLE("invalid expr type");
-      }
-      auto end = start + segment->data.size();
-      if (start <= index && index < end) {
-        value = segment->data[index - start];
-      }
+    if (index >= tableDefinition.initial) {
+      throw FailToEvalException("out of bounds table access");
     }
-
-    if (!value) {
-      // No segment had a value for this.
-      // TODO: Handle non-function tables.
-      return Literal::makeNull(HeapTypes::func);
+    auto it = table.find(index);
+    if (it != table.end()) {
+      return it->second;
     }
-    if (!Properties::isConstantExpression(value)) {
-      throw FailToEvalException("tableLoad of non-literal");
-    }
-    if (auto* r = value->dynCast<RefFunc>()) {
-      return makeFuncData(r->func, r->type);
-    }
-    return Properties::getLiteral(value);
+    return initial;
   }
 
   [[nodiscard]] virtual std::optional<Address> grow(Address delta,
@@ -169,14 +136,13 @@ public:
   }
 
   Address size() const override {
-    // See set() above, we assume the table is not modified FIXME
     return tableDefinition.initial;
   }
 
 private:
   const bool& instanceInitialized;
-  const Module& wasm;
-  const std::function<Literal(Name, Type)> makeFuncData;
+  Literal initial;
+  std::unordered_map<Address, Literal> table;
 };
 
 class EvallingModuleRunner : public ModuleRunnerBase<EvallingModuleRunner> {
@@ -191,14 +157,9 @@ public:
         externalInterface,
         std::make_shared<EvallingImportResolver>(),
         linkedInstances_,
-        // TODO: Only use EvallingRuntimeTable for table imports. We can use
-        // RealRuntimeTable for non-imported tables.
-        [this, &instanceInitialized](Literal initial, Table table) {
+        [&instanceInitialized](Literal initial, Table table) {
           return std::make_unique<EvallingRuntimeTable>(
-            table,
-            instanceInitialized,
-            this->wasm,
-            [this](Name name, Type type) { return makeFuncData(name, type); });
+            initial, table, instanceInitialized);
         }) {}
 
   Flow visitGlobalGet(GlobalGet* curr) {
