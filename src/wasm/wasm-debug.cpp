@@ -677,8 +677,18 @@ struct LocationUpdater {
 // Earlier LLVM used to use 0 there, and newer versions use -1 or -2 depending
 // on the DWARF section. For now, support them all, but TODO stop supporting 0,
 // as there are apparently some possible corner cases where 0 is a valid value.
+static const BinaryLocation TOMBSTONE = -1;
+
+// A location that is ignoreable, i.e., not a special value like 0 or -1 (which
+// would indicate an end or a base in .debug_loc or .debug_ranges).
+static const BinaryLocation IGNOREABLE_LOCATION = 1;
+
+static bool isNonZeroTombstone(uint32_t x) {
+  return x == uint32_t(-1) || x == uint32_t(-2);
+}
+
 static bool isTombstone(uint32_t x) {
-  return x == 0 || x == uint32_t(-1) || x == uint32_t(-2);
+  return x == 0 || isNonZeroTombstone(x);
 }
 
 // Update debug lines, and update the locationUpdater with debug line offset
@@ -810,19 +820,29 @@ static void iterContextAndYAML(const T& contextList, U& yamlList, W func) {
   assert(yamlValue == yamlList.end());
 }
 
+using AddressRange = std::pair<BinaryLocation, BinaryLocation>;
+
 // Updates a YAML entry from a DWARF DIE. Also updates LocationUpdater
 // associating each .debug_loc entry with the base address of its corresponding
-// compilation unit.
-static void updateDIE(const llvm::DWARFDebugInfoEntry& DIE,
+// compilation unit. Returns true if this DIE defines a scope whose address
+// range is invalid/dead.
+static bool updateDIE(const llvm::DWARFDebugInfoEntry& DIE,
                       llvm::DWARFYAML::Entry& yamlEntry,
                       const llvm::DWARFAbbreviationDeclaration* abbrevDecl,
+                      llvm::DWARFYAML::Data& yaml,
+                      uint8_t unitAddrSize,
                       LocationUpdater& locationUpdater,
-                      size_t compileUnitIndex) {
+                      size_t compileUnitIndex,
+                      bool inDeadScope,
+                      llvm::DWARFYAML::FormValue*& cuRangesYaml,
+                      BinaryLocation& cuNewLowPC,
+                      std::vector<AddressRange>& liveSubprogramRanges) {
   auto tag = DIE.getTag();
-  // Pairs of low/high_pc require some special handling, as the high
-  // may be an offset relative to the low. First, process everything but
-  // the high pcs, so we see the low pcs first.
-  BinaryLocation oldLowPC = 0, newLowPC = 0;
+  llvm::DWARFYAML::FormValue* lowPCYaml = nullptr;
+  llvm::DWARFYAML::FormValue* highPCYaml = nullptr;
+  llvm::dwarf::Form highPCForm = llvm::dwarf::Form(0);
+  llvm::DWARFYAML::FormValue* rangesYaml = nullptr;
+
   iterContextAndYAML(
     abbrevDecl->attributes(),
     yamlEntry.Values,
@@ -830,28 +850,12 @@ static void updateDIE(const llvm::DWARFDebugInfoEntry& DIE,
         llvm::DWARFYAML::FormValue& yamlValue) {
       auto attr = attrSpec.Attr;
       if (attr == llvm::dwarf::DW_AT_low_pc) {
-        // This is an address.
-        BinaryLocation oldValue = yamlValue.Value, newValue = 0;
-        if (tag == llvm::dwarf::DW_TAG_GNU_call_site ||
-            tag == llvm::dwarf::DW_TAG_inlined_subroutine ||
-            tag == llvm::dwarf::DW_TAG_lexical_block ||
-            tag == llvm::dwarf::DW_TAG_label) {
-          newValue = locationUpdater.getNewStart(oldValue);
-        } else if (tag == llvm::dwarf::DW_TAG_compile_unit) {
-          newValue = locationUpdater.getNewFuncStart(oldValue);
-          // Per the DWARF spec, "The base address of a compile unit is
-          // defined as the value of the DW_AT_low_pc attribute, if present."
-          locationUpdater.compileUnitBases[compileUnitIndex] =
-            LocationUpdater::OldToNew{oldValue, newValue};
-        } else if (tag == llvm::dwarf::DW_TAG_subprogram) {
-          newValue = locationUpdater.getNewFuncStart(oldValue);
-        } else {
-          Fatal() << "unknown tag with low_pc "
-                  << llvm::dwarf::TagString(tag).str();
-        }
-        oldLowPC = oldValue;
-        newLowPC = newValue;
-        yamlValue.Value = newValue;
+        lowPCYaml = &yamlValue;
+      } else if (attr == llvm::dwarf::DW_AT_high_pc) {
+        highPCYaml = &yamlValue;
+        highPCForm = attrSpec.Form;
+      } else if (attr == llvm::dwarf::DW_AT_ranges) {
+        rangesYaml = &yamlValue;
       } else if (attr == llvm::dwarf::DW_AT_stmt_list) {
         // This is an offset into the debug line section.
         yamlValue.Value =
@@ -862,40 +866,189 @@ static void updateDIE(const llvm::DWARFDebugInfoEntry& DIE,
         locationUpdater.locToUnitMap[locOffset] = compileUnitIndex;
       }
     });
-  // Next, process the high_pcs.
-  // TODO: do this more efficiently, without a second traversal (but that's a
-  //       little tricky given the special double-traversal we have).
-  iterContextAndYAML(
-    abbrevDecl->attributes(),
-    yamlEntry.Values,
-    [&](const llvm::DWARFAbbreviationDeclaration::AttributeSpec& attrSpec,
-        llvm::DWARFYAML::FormValue& yamlValue) {
-      auto attr = attrSpec.Attr;
-      if (attr != llvm::dwarf::DW_AT_high_pc) {
-        return;
+
+  if (tag == llvm::dwarf::DW_TAG_compile_unit) {
+    if (rangesYaml) {
+      cuRangesYaml = rangesYaml;
+    }
+    BinaryLocation oldLowPC = 0, newLowPC = 0;
+    bool lowPCNonZeroTombstone = false;
+    if (lowPCYaml) {
+      oldLowPC = lowPCYaml->Value;
+      if (isNonZeroTombstone(oldLowPC)) {
+        lowPCNonZeroTombstone = true;
+        lowPCYaml->Value = TOMBSTONE;
+        locationUpdater.compileUnitBases[compileUnitIndex] =
+          LocationUpdater::OldToNew{0, 0};
+      } else {
+        if (!isTombstone(oldLowPC)) {
+          newLowPC = locationUpdater.getNewFuncStart(oldLowPC);
+        }
+        // Per the DWARF spec, "The base address of a compile unit is
+        // defined as the value of the DW_AT_low_pc attribute, if present."
+        locationUpdater.compileUnitBases[compileUnitIndex] =
+          LocationUpdater::OldToNew{oldLowPC, newLowPC};
+        lowPCYaml->Value = newLowPC;
+        cuNewLowPC = newLowPC;
       }
-      BinaryLocation oldValue = yamlValue.Value, newValue = 0;
-      bool isRelative = attrSpec.Form == llvm::dwarf::DW_FORM_data4;
-      if (isRelative) {
-        oldValue += oldLowPC;
+    }
+    if (highPCYaml) {
+      bool isRelative = highPCForm == llvm::dwarf::DW_FORM_data4;
+      if (lowPCNonZeroTombstone) {
+        highPCYaml->Value = isRelative ? 0 : TOMBSTONE;
+      } else {
+        BinaryLocation oldHighPC = highPCYaml->Value;
+        if (isRelative) {
+          oldHighPC += oldLowPC;
+        }
+        BinaryLocation newHighPC = 0;
+        if (!isTombstone(oldHighPC)) {
+          newHighPC = locationUpdater.getNewFuncEnd(oldHighPC);
+        }
+        if (isRelative) {
+          newHighPC -= newLowPC;
+        }
+        highPCYaml->Value = newHighPC;
       }
+    }
+    return false;
+  }
+
+  bool scopeDead = inDeadScope;
+
+  if (lowPCYaml) {
+    BinaryLocation oldLowPC = lowPCYaml->Value;
+    BinaryLocation newLowPC = 0;
+    bool lowPCInvalid = inDeadScope || isTombstone(oldLowPC);
+    if (!lowPCInvalid) {
       if (tag == llvm::dwarf::DW_TAG_GNU_call_site ||
           tag == llvm::dwarf::DW_TAG_inlined_subroutine ||
           tag == llvm::dwarf::DW_TAG_lexical_block ||
           tag == llvm::dwarf::DW_TAG_label) {
-        newValue = locationUpdater.getNewExprEnd(oldValue);
-      } else if (tag == llvm::dwarf::DW_TAG_compile_unit ||
-                 tag == llvm::dwarf::DW_TAG_subprogram) {
-        newValue = locationUpdater.getNewFuncEnd(oldValue);
+        newLowPC = locationUpdater.getNewStart(oldLowPC);
+      } else if (tag == llvm::dwarf::DW_TAG_subprogram) {
+        newLowPC = locationUpdater.getNewFuncStart(oldLowPC);
       } else {
         Fatal() << "unknown tag with low_pc "
                 << llvm::dwarf::TagString(tag).str();
       }
-      if (isRelative) {
-        newValue -= newLowPC;
+      if (isTombstone(newLowPC)) {
+        lowPCInvalid = true;
       }
-      yamlValue.Value = newValue;
-    });
+    }
+
+    if (highPCYaml) {
+      bool isRelative = highPCForm == llvm::dwarf::DW_FORM_data4;
+      BinaryLocation rawHighPC = highPCYaml->Value;
+      BinaryLocation newHighPC = 0;
+      bool highPCInvalid =
+        lowPCInvalid || (isRelative && rawHighPC == 0) ||
+        (!isRelative && isTombstone(rawHighPC));
+      if (!highPCInvalid) {
+        BinaryLocation oldHighPC =
+          isRelative ? oldLowPC + rawHighPC : rawHighPC;
+        if (isTombstone(oldHighPC)) {
+          highPCInvalid = true;
+        } else {
+          if (tag == llvm::dwarf::DW_TAG_GNU_call_site ||
+              tag == llvm::dwarf::DW_TAG_inlined_subroutine ||
+              tag == llvm::dwarf::DW_TAG_lexical_block ||
+              tag == llvm::dwarf::DW_TAG_label) {
+            newHighPC = locationUpdater.getNewExprEnd(oldHighPC);
+          } else if (tag == llvm::dwarf::DW_TAG_subprogram) {
+            newHighPC = locationUpdater.getNewFuncEnd(oldHighPC);
+          } else {
+            Fatal() << "unknown tag with low_pc "
+                    << llvm::dwarf::TagString(tag).str();
+          }
+          if (isTombstone(newHighPC) || newLowPC > newHighPC) {
+            highPCInvalid = true;
+          }
+        }
+      }
+
+      if (lowPCInvalid || highPCInvalid) {
+        lowPCYaml->Value = TOMBSTONE;
+        highPCYaml->Value = isRelative ? 0 : TOMBSTONE;
+        scopeDead = true;
+      } else {
+        lowPCYaml->Value = newLowPC;
+        highPCYaml->Value = isRelative ? newHighPC - newLowPC : newHighPC;
+        if (tag == llvm::dwarf::DW_TAG_subprogram) {
+          liveSubprogramRanges.emplace_back(newLowPC, newHighPC);
+        }
+      }
+    } else {
+      if (lowPCInvalid) {
+        lowPCYaml->Value = TOMBSTONE;
+        scopeDead = true;
+      } else {
+        lowPCYaml->Value = newLowPC;
+      }
+    }
+  } else if (highPCYaml) {
+    bool isRelative = highPCForm == llvm::dwarf::DW_FORM_data4;
+    highPCYaml->Value = isRelative ? 0 : TOMBSTONE;
+    scopeDead = true;
+  }
+
+  if (rangesYaml && scopeDead && unitAddrSize == AddressSize) {
+    BinaryLocation newOffset = yaml.Ranges.size() * 2 * AddressSize;
+    yaml.Ranges.push_back({0, 0, -1ULL});
+    rangesYaml->Value = newOffset;
+  }
+
+  return scopeDead;
+}
+
+static bool rangeListCoversSubprograms(
+  const std::vector<llvm::DWARFYAML::Range>& ranges,
+  BinaryLocation offset,
+  BinaryLocation cuBase,
+  const std::vector<AddressRange>& subprograms) {
+  size_t entryByteSize = 2 * AddressSize;
+  if (offset % entryByteSize != 0) {
+    return false;
+  }
+  size_t startIndex = offset / entryByteSize;
+  if (startIndex >= ranges.size()) {
+    return false;
+  }
+  std::vector<AddressRange> activeRanges;
+  BinaryLocation base = cuBase;
+  bool foundEnd = false;
+  for (size_t i = startIndex; i < ranges.size(); i++) {
+    const auto& entry = ranges[i];
+    if (entry.Start == 0 && entry.End == 0) {
+      foundEnd = true;
+      break;
+    }
+    if (entry.Start == TOMBSTONE) {
+      base = entry.End;
+      continue;
+    }
+    if (entry.Start == IGNOREABLE_LOCATION &&
+        entry.End == IGNOREABLE_LOCATION) {
+      continue;
+    }
+    activeRanges.emplace_back(base + entry.Start, base + entry.End);
+  }
+  if (!foundEnd) {
+    return false;
+  }
+  for (const auto& [subLow, subHigh] : subprograms) {
+    bool covered = false;
+    for (const auto& [rangeLow, rangeHigh] : activeRanges) {
+      if (rangeLow <= subLow && subHigh <= rangeHigh) {
+        covered = true;
+        break;
+      }
+    }
+    if (!covered) {
+      return false;
+    }
+  }
+  return true;
 }
 
 static void updateCompileUnits(const BinaryenDWARFInfo& info,
@@ -917,6 +1070,10 @@ static void updateCompileUnits(const BinaryenDWARFInfo& info,
         yamlUnit.AddrSize = NewAddrSize;
         yamlUnit.AddrSizeChanged = true;
       }
+      llvm::DWARFYAML::FormValue* cuRangesYaml = nullptr;
+      BinaryLocation cuNewLowPC = 0;
+      std::vector<AddressRange> liveSubprogramRanges;
+      std::optional<uint32_t> deadScopeDepth;
       // Process the DIEs in each compile unit.
       iterContextAndYAML(
         CU->dies(),
@@ -927,11 +1084,42 @@ static void updateCompileUnits(const BinaryenDWARFInfo& info,
           // change.
           auto abbrevDecl = DIE.getAbbreviationDeclarationPtr();
           if (abbrevDecl) {
+            auto depth = DIE.getDepth();
+            if (deadScopeDepth && depth <= *deadScopeDepth) {
+              deadScopeDepth.reset();
+            }
+            bool inDeadScope = deadScopeDepth.has_value();
             // This is relevant; look for things to update.
-            updateDIE(
-              DIE, yamlEntry, abbrevDecl, locationUpdater, compileUnitIndex);
+            bool isDeadScope = updateDIE(DIE,
+                                         yamlEntry,
+                                         abbrevDecl,
+                                         yaml,
+                                         yamlUnit.AddrSize,
+                                         locationUpdater,
+                                         compileUnitIndex,
+                                         inDeadScope,
+                                         cuRangesYaml,
+                                         cuNewLowPC,
+                                         liveSubprogramRanges);
+            if (isDeadScope && !deadScopeDepth) {
+              deadScopeDepth = depth;
+            }
           }
         });
+      if (cuRangesYaml && yamlUnit.AddrSize == AddressSize &&
+          !liveSubprogramRanges.empty() &&
+          !rangeListCoversSubprograms(yaml.Ranges,
+                                      cuRangesYaml->Value,
+                                      cuNewLowPC,
+                                      liveSubprogramRanges)) {
+        BinaryLocation newOffset = yaml.Ranges.size() * 2 * AddressSize;
+        yaml.Ranges.push_back({TOMBSTONE, 0, -1ULL});
+        for (const auto& [subLow, subHigh] : liveSubprogramRanges) {
+          yaml.Ranges.push_back({subLow, subHigh, -1ULL});
+        }
+        yaml.Ranges.push_back({0, 0, -1ULL});
+        cuRangesYaml->Value = newOffset;
+      }
       compileUnitIndex++;
     });
 }
@@ -940,42 +1128,41 @@ static void updateRanges(llvm::DWARFYAML::Data& yaml,
                          const LocationUpdater& locationUpdater) {
   // In each range section, try to update the start and end. If we no longer
   // have something to map them to, we must skip that part.
-  size_t skip = 0;
   for (size_t i = 0; i < yaml.Ranges.size(); i++) {
     auto& range = yaml.Ranges[i];
     BinaryLocation oldStart = range.Start, oldEnd = range.End, newStart = 0,
                    newEnd = 0;
-    // If this is an end marker (0, 0), or an invalid range (0, x) or (x, 0)
-    // then just emit it as it is - either to mark the end, or to mark an
-    // invalid entry.
-    if (isTombstone(oldStart) || isTombstone(oldEnd)) {
+    if (oldStart == 0 && oldEnd == 0) {
+      // End of list marker (0, 0).
+      newStart = 0;
+      newEnd = 0;
+    } else if (oldStart == TOMBSTONE && !isNonZeroTombstone(oldEnd)) {
+      // Base address selection entry (-1, base).
       newStart = oldStart;
       newEnd = oldEnd;
+    } else if (isTombstone(oldStart) || isTombstone(oldEnd)) {
+      // An invalid/tombstoned range entry (such as (0, x), (x, 0), or (-1, -1)).
+      // Emit an empty ignoreable range instead of (0, 0) or (0, x).
+      newStart = newEnd = IGNOREABLE_LOCATION;
     } else {
       // This was a valid entry; update it.
       newStart = locationUpdater.getNewStart(oldStart);
       newEnd = locationUpdater.getNewEnd(oldEnd);
-      if (isTombstone(newStart) || isTombstone(newEnd)) {
+      if (isTombstone(newStart) || isTombstone(newEnd) || newStart > newEnd) {
         // This part of the range no longer has a mapping, so we must skip it.
         // Don't use (0, 0) as that would be an end marker; emit something
         // invalid for the debugger to ignore.
-        newStart = 0;
-        newEnd = 1;
+        newStart = newEnd = IGNOREABLE_LOCATION;
       }
       // TODO even if range start and end markers have been preserved,
       // instructions in the middle may have moved around, making the range no
       // longer contiguous. We should check that, and possibly split/merge
       // the range. Or, we may need to have tracking in the IR for this.
     }
-    auto& writtenRange = yaml.Ranges[i - skip];
-    writtenRange.Start = newStart;
-    writtenRange.End = newEnd;
+    range.Start = newStart;
+    range.End = newEnd;
   }
 }
-
-// A location that is ignoreable, i.e., not a special value like 0 or -1 (which
-// would indicate an end or a base in .debug_loc).
-static const BinaryLocation IGNOREABLE_LOCATION = 1;
 
 static bool isNewBaseLoc(const llvm::DWARFYAML::Loc& loc) {
   return loc.Start == BinaryLocation(-1);
@@ -1094,10 +1281,10 @@ void writeDWARFSections(Module& wasm, const BinaryLocations& newLocations) {
 
   updateDebugLines(data, locationUpdater);
 
+  updateRanges(data, locationUpdater);
+
   bool is64 = wasm.memories.size() > 0 ? wasm.memories[0]->is64() : false;
   updateCompileUnits(info, data, locationUpdater, is64);
-
-  updateRanges(data, locationUpdater);
 
   updateLoc(data, locationUpdater);
 
