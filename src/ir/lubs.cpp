@@ -24,9 +24,6 @@ namespace wasm {
 namespace LUB {
 
 LUBFinder getResultsLUB(Function* func, Module& wasm) {
-  LUBFinder lub;
-
-
   // Before we do anything, we must refinalize the function, because otherwise
   // its body may contain a block with a forced type,
   //
@@ -36,6 +33,7 @@ LUBFinder getResultsLUB(Function* func, Module& wasm) {
   //  )
   ReFinalize().walkFunctionInModule(func, &wasm);
 
+  LUBFinder lub;
   lub.note(func->body->type);
   Type originalType = func->getResults();
   if (lub.getLUB() == originalType) {

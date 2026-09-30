@@ -751,12 +751,10 @@ private:
                          const std::vector<Call*>& calls,
                          Module* module) {
     auto lub = LUB::getResultsLUB(func, *module);
-std::cout << "refine return " << *func << "\n";
     Type newType, callType;
     if (lub.noted()) {
       newType = lub.getLUB();
       callType = newType;
-std::cout << "refine return1\n";
     } else {
       // No value can ever be returned: the function never returns normally
       // (it throws, traps, or loops forever), and neither do the functions it
@@ -765,9 +763,7 @@ std::cout << "refine return1\n";
       // unreachable, which is fixed up later).
       newType = Type::none;
       callType = Type::unreachable;
-std::cout << "refine return2\n";
     }
-std::cout << "  " << newType << " : " << callType << "\n";
     if (newType != func->getResults()) {
       func->setResults(newType);
       for (auto* call : calls) {
