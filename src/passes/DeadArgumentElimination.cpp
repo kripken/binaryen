@@ -66,6 +66,74 @@
 
 namespace wasm {
 
+namespace {
+
+// Handle calls we marked as unreachable because we know they do not return. The
+// marking of them as unreachable is temporary, and fixed up by this pass, which
+// adds an unreachable right after.
+struct HandleUnreachableCalls
+  : public WalkerPass<PostWalker<HandleUnreachableCalls>> {
+  bool isFunctionParallel() override { return true; }
+
+  // Re-running finalize() does not change the types of locals, so validation is
+  // preserved.
+  bool requiresNonNullableLocalFixups() override { return false; }
+
+  std::unique_ptr<Pass> create() override {
+    return std::make_unique<HandleUnreachableCalls>();
+  }
+
+  void visitCall(Call* curr) {
+    if (curr->type != Type::unreachable) {
+      return;
+    }
+
+    // If the call is unreachable because of an operand, then it was not marked
+    // as needing any special processing, i.e., this is a normal call.
+    for (auto* operand : curr->operands) {
+      if (operand->type == Type::unreachable) {
+        return;
+      }
+    }
+
+    // This is a call that never returns. It has no return value, and we can put
+    // an unreachable after it.
+    curr->type = Type::none;
+    Builder builder(*getModule());
+    replaceCurrent(
+      builder.makeSequence(curr, builder.makeUnreachable())
+    );
+  }
+};
+
+// Re-finalize a single node. This is slow, if you want to refinalize
+// an entire ast, use ReFinalize
+struct ReFinalizeNode : public OverriddenVisitor<ReFinalizeNode> {
+#define DELEGATE(CLASS_TO_VISIT)                                               \
+  void visit##CLASS_TO_VISIT(CLASS_TO_VISIT* curr) { curr->finalize(); }
+
+#include "wasm-delegations.def"
+
+  void visitExport(Export* curr) { WASM_UNREACHABLE("unimp"); }
+  void visitGlobal(Global* curr) { WASM_UNREACHABLE("unimp"); }
+  void visitTable(Table* curr) { WASM_UNREACHABLE("unimp"); }
+  void visitElementSegment(ElementSegment* curr) { WASM_UNREACHABLE("unimp"); }
+  void visitMemory(Memory* curr) { WASM_UNREACHABLE("unimp"); }
+  void visitDataSegment(DataSegment* curr) { WASM_UNREACHABLE("unimp"); }
+  void visitTag(Tag* curr) { WASM_UNREACHABLE("unimp"); }
+  void visitModule(Module* curr) { WASM_UNREACHABLE("unimp"); }
+
+  // given a stack of nested expressions, update them all from child to parent
+  static void updateStack(ExpressionStack& expressionStack) {
+    for (int i = int(expressionStack.size()) - 1; i >= 0; i--) {
+      auto* curr = expressionStack[i];
+      ReFinalizeNode().visit(curr);
+    }
+  }
+};
+
+} // anonymous namespace
+
 // Information for a function
 struct DAEFunctionInfo {
   // Whether this needs to be recomputed. This begins as true for the first
@@ -434,6 +502,7 @@ struct DAE : public Pass {
       PassUtils::FilteredPassRunner runner(
         module, refinedCallers, getPassRunner()->options);
       runner.setIsNested(true);
+      runner.add(std::make_unique<HandleUnreachableCalls>());
       runner.add(std::make_unique<ReFinalize>());
       runner.run();
     }
@@ -682,27 +751,28 @@ private:
                          const std::vector<Call*>& calls,
                          Module* module) {
     auto lub = LUB::getResultsLUB(func, *module);
-    Type newType;
+std::cout << "refine return " << *func << "\n";
+    Type newType, callType;
     if (lub.noted()) {
       newType = lub.getLUB();
+      callType = newType;
+std::cout << "refine return1\n";
     } else {
       // No value can ever be returned: the function never returns normally
       // (it throws, traps, or loops forever), and neither do the functions it
-      // tail-calls. If the result is a single reference, refine it to the
-      // uninhabitable bottom type of its hierarchy, so the callers can see that
-      // the call never returns. (Callers that tail-call this function will in
-      // turn note this type as their possible result.)
-      auto results = func->getResults();
-      if (!module->features.hasGC() || !results.isRef()) {
-        return false;
-      }
-      newType = Type(results.getHeapType().getBottom(), NonNullable);
+      // tail-calls. We can remove the return type, and put an unreachable after
+      // all the calls (we accomplish the latter by marking the calls as
+      // unreachable, which is fixed up later).
+      newType = Type::none;
+      callType = Type::unreachable;
+std::cout << "refine return2\n";
     }
+std::cout << "  " << newType << " : " << callType << "\n";
     if (newType != func->getResults()) {
       func->setResults(newType);
       for (auto* call : calls) {
         if (call->type != Type::unreachable) {
-          call->type = newType;
+          call->type = callType;
         }
       }
       return true;
