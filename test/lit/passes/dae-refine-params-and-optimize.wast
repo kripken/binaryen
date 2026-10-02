@@ -4,32 +4,16 @@
 
 ;; The br_on_cast_fail is optimized away thanks to the refined type. The output still has some unoptimized code (an additional --dce pass would get rid of the drop-return pattern here), but that is not directly relevant to this test.
 (module
- ;; CHECK:      (func $optimize-after-refinement (param $0 (ref array)) (result i32)
- ;; CHECK-NEXT: (call $len
- ;; CHECK-NEXT:  (local.get $0)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
+ ;; CHECK:      (type $0 (func (param (ref array)) (result i32)))
 
- ;; CHECK:      (func $optimize-after-refinement (param $0 (ref array)) (result i32)
- ;; CHECK-NEXT: (call $len
- ;; CHECK-NEXT:  (local.get $0)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $len (param $0 (ref array)) (result i32)
- ;; CHECK-NEXT: (drop
- ;; CHECK-NEXT:  (block $not_array (result (ref array))
+ ;; CHECK:      (func $len (type $0) (param $0 (ref array)) (result i32)
+ ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (return
  ;; CHECK-NEXT:    (array.len
- ;; CHECK-NEXT:     (br_on_cast_fail $not_array (ref array) (ref array)
- ;; CHECK-NEXT:      (local.get $0)
- ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:     (local.get $0)
  ;; CHECK-NEXT:    )
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (i32.const -1)
  ;; CHECK-NEXT: )
  (func $len (param (ref eq)) (result i32)
   (drop
@@ -45,99 +29,14 @@
   )
   (i32.const -1)
  )
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $len (param $0 (ref array)) (result i32)
- ;; CHECK-NEXT: (drop
- ;; CHECK-NEXT:  (block $not_array pre
- ;; CHECK-NEXT: ((func $resultoptimize-after-refinement  (param (ref array))$0
- ;; CHECK-NEXT:    (ref array()return) (result
- ;; CHECK-NEXT:     (i32array.len)
- ;; CHECK-EMPTY:
- ;; CHECK-NEXT:      (drop(
- ;; CHECK-NEXT:  br_on_cast_fail( $not_array (ref array) (ref arraycall )$len
- ;; CHECK-NEXT:   (local.get $0
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT:       (unreachable()
- ;; CHECK-NEXT: )
- ;; CHECK-EMPTY:
- ;; CHECK-NEXT: local.get $0)
- ;; CHECK-NEXT: post
- ;; CHECK-NEXT:     (func $optimize-after-refinement)
- ;; CHECK-NEXT:     (param )$
- ;; CHECK-NEXT: 0    (ref )array)) (result i32
- ;; CHECK-NEXT: )  )
- ;; CHECK-NEXT: )
- ;; CHECK-EMPTY:
- ;; CHECK-NEXT: ((dropi32
- ;; CHECK-NEXT: .const -1  )
- ;; CHECK-NEXT: )
- ;; CHECK-EMPTY:
- ;; CHECK-NEXT: (call $len
+ ;; CHECK:      (func $optimize-after-refinement (type $0) (param $0 (ref array)) (result i32)
+ ;; CHECK-NEXT:  (call $len
  ;; CHECK-NEXT:   (local.get $0)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (unreachable)
- ;; CHECK-NEXT: )
-
- ;; CHECK:          (func $optimize-after-refinement)
  (func $optimize-after-refinement (param (ref array)) (result i32)
   (call $len
    (local.get 0)
   )
  )
 )
-;; CHECK:      (@binaryen.noreturn)
-;; CHECK-NEXT: (func $len (param $0 (ref array))
-;; CHECK-NEXT: (drop
-;; CHECK-NEXT:  (block
-;; CHECK-NEXT:   (drop
-;; CHECK-NEXT:    (array.len
-;; CHECK-NEXT:     (local.get $0)
-;; CHECK-NEXT:    )
-;; CHECK-NEXT:   )
-;; CHECK-NEXT:   (return)
-;; CHECK-NEXT:  )
-;; CHECK-NEXT: )
-;; CHECK-NEXT: )
-
-;; CHECK:      (@binaryen.noreturn)
-;; CHECK-NEXT: (func $len (param $0 (ref array))
-;; CHECK-NEXT: (drop
-;; CHECK-NEXT:  (block
-;; CHECK-NEXT:   (drop
-;; CHECK-NEXT:    (array.len
-;; CHECK-NEXT:     (local.get $0)
-;; CHECK-NEXT:    )
-;; CHECK-NEXT:   )
-;; CHECK-NEXT:   (return)
-;; CHECK-NEXT:  )
-;; CHECK-NEXT: )
-;; CHECK-NEXT: )
-
-;; CHECK:      (@binaryen.noreturn)
-;; CHECK-NEXT: (func $len
-;; CHECK-NEXT: (local $0 (ref array))
-;; CHECK-NEXT: (nop)
-;; CHECK-NEXT: )
-
-;; CHECK:      (@binaryen.noreturn)
-;; CHECK-NEXT: (func $len
-;; CHECK-NEXT: (local $0 (ref array))
-;; CHECK-NEXT: (nop)
-;; CHECK-NEXT: )
-
-;; CHECK:      (type $0 (func))
-
-;; CHECK:      (type $1 (func (param (ref array)) (result i32)))
-
-;; CHECK:      (@binaryen.noreturn)
-;; CHECK-NEXT: (func $len (type $0)
-;; CHECK-NEXT:  (nop)
-;; CHECK-NEXT: )
-
-;; CHECK:      (func $optimize-after-refinement (type $1) (param $0 (ref array)) (result i32)
-;; CHECK-NEXT:  (call $len)
-;; CHECK-NEXT:  (unreachable)
-;; CHECK-NEXT: )

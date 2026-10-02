@@ -6,411 +6,50 @@
 (module
  (type $0 (func (param f32) (result f32)))
  (type $1 (func (param f64 f32 f32 f64 f32 i64 f64) (result i32)))
- ;; CHECK:      (func $2 (f64param .const $0 f64) (param $1 f32) (param $2 f32) (param $3 f64) (param $4 f32) (param $5 i32) (param $6 i32) (param $7 f64) (result i32)
- ;; CHECK-NEXT: (call $0)
- ;; CHECK-NEXT: )
+ ;; CHECK:      (type $3 (func (result i32)))
 
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $0 (result i32)
- ;; CHECK-NEXT: (local $0 i32)
- ;; CHECK-NEXT: (local $1 i32)
- ;; CHECK-NEXT: (local $2 f64)
- ;; CHECK-NEXT: (local $3 i64)
- ;; CHECK-NEXT: (local $4 f32)
- ;; CHECK-NEXT: (local $5 f64)
- ;; CHECK-NEXT: (local $6 f32)
- ;; CHECK-NEXT: (local $7 f32)
- ;; CHECK-NEXT: (local $8 f64)
- ;; CHECK-NEXT: (local.set $2
- ;; CHECK-NEXT:  (f64.const 1)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (block (result i32)
- ;; CHECK-NEXT:  (local.set $3
- ;; CHECK-NEXT:   (i64.const 1)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (block (result i32)
- ;; CHECK-NEXT:   (local.set $4
- ;; CHECK-NEXT:    (f32.const 1)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (block (result i32)
- ;; CHECK-NEXT:    (local.set $5
- ;; CHECK-NEXT:     (f64.const 1)
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (block (result i32)
- ;; CHECK-NEXT:     (local.set $6
- ;; CHECK-NEXT:      (f32.const 1)
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:     (block (result i32)
- ;; CHECK-NEXT:      (local.set $7
- ;; CHECK-NEXT:       (f32.const 1)
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:      (block (result i32)
- ;; CHECK-NEXT:       (local.set $8
- ;; CHECK-NEXT:        (f64.const 1)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (block (result i32)
- ;; CHECK-NEXT:        (if
- ;; CHECK-NEXT:         (local.tee $0
- ;; CHECK-NEXT:          (i32.const 33554432)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:         (then
- ;; CHECK-NEXT:          (drop
- ;; CHECK-NEXT:           (loop $label$2 (result f32)
- ;; CHECK-NEXT:            (if
- ;; CHECK-NEXT:             (global.get $global$0)
- ;; CHECK-NEXT:             (then
- ;; CHECK-NEXT:              (return
- ;; CHECK-NEXT:               (local.get $0)
- ;; CHECK-NEXT:              )
- ;; CHECK-NEXT:             )
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (local.set $1
- ;; CHECK-NEXT:             (block $label$4 (result i32)
- ;; CHECK-NEXT:              (drop
- ;; CHECK-NEXT:               (local.tee $0
- ;; CHECK-NEXT:                (local.get $1)
- ;; CHECK-NEXT:               )
- ;; CHECK-NEXT:              )
- ;; CHECK-NEXT:              (i32.const 0)
- ;; CHECK-NEXT:             )
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (br_if $label$2
- ;; CHECK-NEXT:             (local.get $0)
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (f32.const 1)
- ;; CHECK-NEXT:           )
- ;; CHECK-NEXT:          )
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:         (else
- ;; CHECK-NEXT:          (drop
- ;; CHECK-NEXT:           (call $1)
- ;; CHECK-NEXT:          )
- ;; CHECK-NEXT:          (unreachable)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:        (i32.const -11)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $1 (result f32)
- ;; CHECK-NEXT: (local $0 f32)
- ;; CHECK-NEXT: (local.set $0
- ;; CHECK-NEXT:  (f32.const 1)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (f32.const 0)
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $1 (result f32)
- ;; CHECK-NEXT: (local $0 f32)
- ;; CHECK-NEXT: (local.set $0
- ;; CHECK-NEXT:  (f32.const 1)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (f32.const 0)
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (func $2 (param $0 f64) (param $1 f32) (param $2 f32) (param $3 f64) (param $4 f32) (param $5 i32) (param $6 i32) (param $7 f64) (result i32)
- ;; CHECK-NEXT: (drop
- ;; CHECK-NEXT:  (call $0)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (unreachable)
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (func $2 (param $0 f64) (param $1 f32) (param $2 f32) (param $3 f64) (param $4 f32) (param $5 i32) (param $6 i32) (param $7 f64) (result i32)
- ;; CHECK-NEXT: (drop
- ;; CHECK-NEXT:  (call $0)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (unreachable)
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $0 (result i32)
- ;; CHECK-NEXT: (local $0 i32)
- ;; CHECK-NEXT: (local $1 i32)
- ;; CHECK-NEXT: (local $2 f64)
- ;; CHECK-NEXT: (local $3 i64)
- ;; CHECK-NEXT: (local $4 f32)
- ;; CHECK-NEXT: (local $5 f64)
- ;; CHECK-NEXT: (local $6 f32)
- ;; CHECK-NEXT: (local $7 f32)
- ;; CHECK-NEXT: (local $8 f64)
- ;; CHECK-NEXT: (local.set $2
- ;; CHECK-NEXT:  (f64.const 1)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (block (result i32)
- ;; CHECK-NEXT:  (local.set $3
- ;; CHECK-NEXT:   (i64.const 1)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (block (result i32)
- ;; CHECK-NEXT:   (local.set $4
- ;; CHECK-NEXT:    (f32.const 1)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (block (result i32)
- ;; CHECK-NEXT:    (local.set $5
- ;; CHECK-NEXT:     (f64.const 1)
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (block (result i32)
- ;; CHECK-NEXT:     (local.set $6
- ;; CHECK-NEXT:      (f32.const 1)
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:     (block (result i32)
- ;; CHECK-NEXT:      (local.set $7
- ;; CHECK-NEXT:       (f32.const 1)
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:      (block (result i32)
- ;; CHECK-NEXT:       (local.set $8
- ;; CHECK-NEXT:        (f64.const 1)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (block (result i32)
- ;; CHECK-NEXT:        (if
- ;; CHECK-NEXT:         (local.tee $0
- ;; CHECK-NEXT:          (i32.const 33554432)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:         (then
- ;; CHECK-NEXT:          (drop
- ;; CHECK-NEXT:           (loop $label$2 (result f32)
- ;; CHECK-NEXT:            (if
- ;; CHECK-NEXT:             (global.get $global$0)
- ;; CHECK-NEXT:             (then
- ;; CHECK-NEXT:              (return
- ;; CHECK-NEXT:               (local.get $0)
- ;; CHECK-NEXT:              )
- ;; CHECK-NEXT:             )
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (local.set $1
- ;; CHECK-NEXT:             (block $label$4 (result i32)
- ;; CHECK-NEXT:              (drop
- ;; CHECK-NEXT:               (local.tee $0
- ;; CHECK-NEXT:                (local.get $1)
- ;; CHECK-NEXT:               )
- ;; CHECK-NEXT:              )
- ;; CHECK-NEXT:              (i32.const 0)
- ;; CHECK-NEXT:             )
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (br_if $label$2
- ;; CHECK-NEXT:             (local.get $0)
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (f32.const 1)
- ;; CHECK-NEXT:           )
- ;; CHECK-NEXT:          )
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:         (else
- ;; CHECK-NEXT:          (drop
- ;; CHECK-NEXT:           (call $1)
- ;; CHECK-NEXT:          )
- ;; CHECK-NEXT:          (unreachable)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:        (i32.const -11)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $0 (result i32)
- ;; CHECK-NEXT: (local $0 i32)
- ;; CHECK-NEXT: (local $1 i32)
- ;; CHECK-NEXT: (local $2 f64)
- ;; CHECK-NEXT: (local $3 i64)
- ;; CHECK-NEXT: (local $4 f32)
- ;; CHECK-NEXT: (local $5 f64)
- ;; CHECK-NEXT: (local $6 f32)
- ;; CHECK-NEXT: (local $7 f32)
- ;; CHECK-NEXT: (local $8 f64)
- ;; CHECK-NEXT: (local.set $2
- ;; CHECK-NEXT:  (f64.const 1)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (block (result i32)
- ;; CHECK-NEXT:  (local.set $3
- ;; CHECK-NEXT:   (i64.const 1)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (block (result i32)
- ;; CHECK-NEXT:   (local.set $4
- ;; CHECK-NEXT:    (f32.const 1)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (block (result i32)
- ;; CHECK-NEXT:    (local.set $5
- ;; CHECK-NEXT:     (f64.const 1)
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (block (result i32)
- ;; CHECK-NEXT:     (local.set $6
- ;; CHECK-NEXT:      (f32.const 1)
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:     (block (result i32)
- ;; CHECK-NEXT:      (local.set $7
- ;; CHECK-NEXT:       (f32.const 1)
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:      (block (result i32)
- ;; CHECK-NEXT:       (local.set $8
- ;; CHECK-NEXT:        (f64.const 1)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (block (result i32)
- ;; CHECK-NEXT:        (if
- ;; CHECK-NEXT:         (local.tee $0
- ;; CHECK-NEXT:          (i32.const 33554432)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:         (then
- ;; CHECK-NEXT:          (drop
- ;; CHECK-NEXT:           (loop $label$2 (result f32)
- ;; CHECK-NEXT:            (if
- ;; CHECK-NEXT:             (global.get $global$0)
- ;; CHECK-NEXT:             (then
- ;; CHECK-NEXT:              (return
- ;; CHECK-NEXT:               (local.get $0)
- ;; CHECK-NEXT:              )
- ;; CHECK-NEXT:             )
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (local.set $1
- ;; CHECK-NEXT:             (block $label$4 (result i32)
- ;; CHECK-NEXT:              (drop
- ;; CHECK-NEXT:               (local.tee $0
- ;; CHECK-NEXT:                (local.get $1)
- ;; CHECK-NEXT:               )
- ;; CHECK-NEXT:              )
- ;; CHECK-NEXT:              (i32.const 0)
- ;; CHECK-NEXT:             )
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (br_if $label$2
- ;; CHECK-NEXT:             (local.get $0)
- ;; CHECK-NEXT:            )
- ;; CHECK-NEXT:            (f32.const 1)
- ;; CHECK-NEXT:           )
- ;; CHECK-NEXT:          )
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:         (else
- ;; CHECK-NEXT:          (drop
- ;; CHECK-NEXT:           (call $1)
- ;; CHECK-NEXT:          )
- ;; CHECK-NEXT:          (unreachable)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:        (i32.const -11)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $1
- ;; CHECK-NEXT: (nop)
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $1
- ;; CHECK-NEXT: (nop)
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $0
- ;; CHECK-NEXT: (local $0 i32)
- ;; CHECK-NEXT: (local $1 i32)
- ;; CHECK-NEXT: (drop
- ;; CHECK-NEXT:  (block (result i32)
- ;; CHECK-NEXT:   (if
- ;; CHECK-NEXT:    (local.tee $0
- ;; CHECK-NEXT:     (i32.const 33554432)
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (then
- ;; CHECK-NEXT:     (drop
- ;; CHECK-NEXT:      (loop $label$2 (result f32)
- ;; CHECK-NEXT:       (if
- ;; CHECK-NEXT:        (global.get $global$0)
- ;; CHECK-NEXT:        (then
- ;; CHECK-NEXT:         (drop
- ;; CHECK-NEXT:          (local.get $0)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:         (return)
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (local.set $0
- ;; CHECK-NEXT:        (i32.const 0)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (local.set $1
- ;; CHECK-NEXT:        (i32.const 0)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (nop)
- ;; CHECK-NEXT:       (f32.const 1)
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (else
- ;; CHECK-NEXT:     (call $1)
- ;; CHECK-NEXT:     (unreachable)
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (i32.const -11)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $0
- ;; CHECK-NEXT: (local $0 i32)
- ;; CHECK-NEXT: (local $1 i32)
- ;; CHECK-NEXT: (drop
- ;; CHECK-NEXT:  (block (result i32)
- ;; CHECK-NEXT:   (if
- ;; CHECK-NEXT:    (local.tee $0
- ;; CHECK-NEXT:     (i32.const 33554432)
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (then
- ;; CHECK-NEXT:     (drop
- ;; CHECK-NEXT:      (loop $label$2 (result f32)
- ;; CHECK-NEXT:       (if
- ;; CHECK-NEXT:        (global.get $global$0)
- ;; CHECK-NEXT:        (then
- ;; CHECK-NEXT:         (drop
- ;; CHECK-NEXT:          (local.get $0)
- ;; CHECK-NEXT:         )
- ;; CHECK-NEXT:         (return)
- ;; CHECK-NEXT:        )
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (local.set $0
- ;; CHECK-NEXT:        (i32.const 0)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (local.set $1
- ;; CHECK-NEXT:        (i32.const 0)
- ;; CHECK-NEXT:       )
- ;; CHECK-NEXT:       (nop)
- ;; CHECK-NEXT:       (f32.const 1)
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:     )
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (else
- ;; CHECK-NEXT:     (call $1)
- ;; CHECK-NEXT:     (unreachable)
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (i32.const -11)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (type $3 (func))
+ ;; CHECK:      (type $4 (func))
 
  ;; CHECK:      (type $2 (func (param f64 f32 f32 f64 f32 i32 i32 f64) (result i32)))
  (type $2 (func (param f64 f32 f32 f64 f32 i32 i32 f64) (result i32)))
  ;; CHECK:      (global $global$0 (mut i32) (i32.const 10))
  (global $global$0 (mut i32) (i32.const 10))
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $0 (type $3)
- ;; CHECK-NEXT:  (nop)
+ ;; CHECK:      (func $0 (type $3) (result i32)
+ ;; CHECK-NEXT:  (local $0 i32)
+ ;; CHECK-NEXT:  (local $1 i32)
+ ;; CHECK-NEXT:  (if
+ ;; CHECK-NEXT:   (local.tee $0
+ ;; CHECK-NEXT:    (i32.const 33554432)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (then
+ ;; CHECK-NEXT:    (drop
+ ;; CHECK-NEXT:     (loop $label$2 (result f32)
+ ;; CHECK-NEXT:      (if
+ ;; CHECK-NEXT:       (global.get $global$0)
+ ;; CHECK-NEXT:       (then
+ ;; CHECK-NEXT:        (return
+ ;; CHECK-NEXT:         (local.get $0)
+ ;; CHECK-NEXT:        )
+ ;; CHECK-NEXT:       )
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:      (local.set $0
+ ;; CHECK-NEXT:       (local.get $1)
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:      (local.set $1
+ ;; CHECK-NEXT:       (i32.const 0)
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:      (br_if $label$2
+ ;; CHECK-NEXT:       (local.get $0)
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:      (f32.const 1)
+ ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (else
+ ;; CHECK-NEXT:    (call $1)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (i32.const -11)
  ;; CHECK-NEXT: )
  (func $0 (; 0 ;) (type $1) (param $0 f64) (param $1 f32) (param $2 f32) (param $3 f64) (param $4 f32) (param $5 i64) (param $6 f64) (result i32)
   (local $7 i32)
@@ -457,8 +96,7 @@
   )
   (i32.const -11)
  )
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $1 (type $3)
+ ;; CHECK:      (func $1 (type $4)
  ;; CHECK-NEXT:  (nop)
  ;; CHECK-NEXT: )
  (func $1 (; 1 ;) (type $0) (param $0 f32) (result f32)
@@ -466,7 +104,6 @@
  )
  ;; CHECK:      (func $2 (type $2) (param $0 f64) (param $1 f32) (param $2 f32) (param $3 f64) (param $4 f32) (param $5 i32) (param $6 i32) (param $7 f64) (result i32)
  ;; CHECK-NEXT:  (call $0)
- ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $2 (; 2 ;) (type $2) (param $0 f64) (param $1 f32) (param $2 f32) (param $3 f64) (param $4 f32) (param $5 i32) (param $6 i32) (param $7 f64) (result i32)
   (call $0
@@ -485,102 +122,6 @@
 (module
   (func $import (import "" "") (result i32))
   (func $impossible (import "" "") (result (ref none)))
-  ;; CHECK:      (func $internal (result (ref none))
-  ;; CHECK-NEXT: (local $0 i32)
-  ;; CHECK-NEXT: (drop
-  ;; CHECK-NEXT:  (call $import)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (call $impossible)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $internal (result (ref none))
-  ;; CHECK-NEXT: (local $0 i32)
-  ;; CHECK-NEXT: (drop
-  ;; CHECK-NEXT:  (call $import)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (call $impossible)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $internal
-  ;; CHECK-NEXT: (drop
-  ;; CHECK-NEXT:  (block (result (ref none))
-  ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (call $import)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (call $impossible)
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $internal
-  ;; CHECK-NEXT: (drop
-  ;; CHECK-NEXT:  (block (result (ref none))
-  ;; CHECK-NEXT:   (drop
-  ;; CHECK-NEXT:    (call $import)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (call $impossible)
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $export (result i32)
-  ;; CHECK-NEXT: (block
-  ;; CHECK-NEXT:  (call $internal)
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (block
-  ;; CHECK-NEXT:  (call $internal)
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (i32.const 0)
-  ;; CHECK-NEXT: )
-  (func $export (export "export") (result i32)
-    (drop
-      ;; This should be optimized to an unreachable sequence.
-      (call $internal
-        (i32.const 0)
-      )
-    )
-    ;; Everything else should be removed by DCE.
-    (drop
-      (call $internal
-        (i32.const 1)
-      )
-    )
-    (i32.const 0)
-  )
-  ;; CHECK:      (func $export (result i32)
-  ;; CHECK-NEXT: (block
-  ;; CHECK-NEXT:  (call $internal)
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (block
-  ;; CHECK-NEXT:  (call $internal)
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (i32.const 0)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $export (result i32)
-  ;; CHECK-NEXT: (call $internal)
-  ;; CHECK-NEXT: (unreachable)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $export (result i32)
-  ;; CHECK-NEXT: (call $internal)
-  ;; CHECK-NEXT: (unreachable)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $export (result i32)
-  ;; CHECK-NEXT: (call $internal)
-  ;; CHECK-NEXT: (unreachable)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $export (result i32)
-  ;; CHECK-NEXT: (call $internal)
-  ;; CHECK-NEXT: (unreachable)
-  ;; CHECK-NEXT: )
-
   ;; CHECK:      (type $0 (func (result i32)))
 
   ;; CHECK:      (type $1 (func (result (ref none))))
@@ -597,9 +138,22 @@
   ;; CHECK-NEXT:  (call $internal)
   ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
-
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $internal (type $2)
+  (func $export (export "export") (result i32)
+    (drop
+      ;; This should be optimized to an unreachable sequence.
+      (call $internal
+        (i32.const 0)
+      )
+    )
+    ;; Everything else should be removed by DCE.
+    (drop
+      (call $internal
+        (i32.const 1)
+      )
+    )
+    (i32.const 0)
+  )
+  ;; CHECK:      (func $internal (type $2)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (call $import)
   ;; CHECK-NEXT:  )

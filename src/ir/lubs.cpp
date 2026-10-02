@@ -26,16 +26,6 @@ namespace LUB {
 LUBFinder getResultsLUB(Function* func, Module& wasm) {
   LUBFinder lub;
 
-  if (!wasm.features.hasGC()) {
-    return lub;
-  }
-
-  Type originalType = func->getResults();
-  if (!originalType.hasRef()) {
-    // Nothing to refine.
-    return lub;
-  }
-
   // Before we do anything, we must refinalize the function, because otherwise
   // its body may contain a block with a forced type,
   //
@@ -46,6 +36,7 @@ LUBFinder getResultsLUB(Function* func, Module& wasm) {
   ReFinalize().walkFunctionInModule(func, &wasm);
 
   lub.note(func->body->type);
+  Type originalType = func->getResults();
   if (lub.getLUB() == originalType) {
     return lub;
   }
@@ -57,7 +48,9 @@ LUBFinder getResultsLUB(Function* func, Module& wasm) {
 
     Finder(Module& wasm, LUBFinder& lub) : wasm(wasm), lub(lub) {}
 
-    void visitReturn(Return* curr) { lub.note(curr->value->type); }
+    void visitReturn(Return* curr) {
+      lub.note(curr->value ? curr->value->type : Type::none);
+    }
     void visitCall(Call* curr) {
       if (curr->isReturn) {
         lub.note(wasm.getFunction(curr->target)->getResults());

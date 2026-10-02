@@ -51,8 +51,7 @@
  )
  ;; A function that gets a non-nullable reference that is never used. We can
  ;; still create a non-nullable local for that parameter.
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $get-nonnull (type $0)
+ ;; CHECK:      (func $get-nonnull (type $0)
  ;; CHECK-NEXT:  (local $0 (ref $"{}"))
  ;; CHECK-NEXT:  (nop)
  ;; CHECK-NEXT: )
@@ -61,7 +60,6 @@
  )
  ;; CHECK:      (func $send-nonnull (type $0)
  ;; CHECK-NEXT:  (call $get-nonnull)
- ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $send-nonnull
   (call $get-nonnull
@@ -72,40 +70,7 @@
 
 ;; Test ref.func and ref.null optimization of constant parameter values.
 (module
- ;; CHECK:      (func $call-foo
- ;; CHECK-NEXT: (block
- ;; CHECK-NEXT:  (call $foo
- ;; CHECK-NEXT:   (ref.func $b)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (unreachable)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (block
- ;; CHECK-NEXT:  (call $foo
- ;; CHECK-NEXT:   (ref.func $c)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (unreachable)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (func $call-bar
- ;; CHECK-NEXT: (block
- ;; CHECK-NEXT:  (call $bar
- ;; CHECK-NEXT:   (ref.null none)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (unreachable)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: (block
- ;; CHECK-NEXT:  (call $bar
- ;; CHECK-NEXT:   (ref.i31
- ;; CHECK-NEXT:    (i32.const 0)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (unreachable)
- ;; CHECK-NEXT: )
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $foo (type $1) (param $0 (ref (exact $0)))
+ ;; CHECK:      (func $foo (type $1) (param $0 (ref (exact $0)))
  ;; CHECK-NEXT:  (local $1 (ref (exact $0)))
  ;; CHECK-NEXT:  (local.set $1
  ;; CHECK-NEXT:   (ref.func $a)
@@ -126,17 +91,11 @@
  )
 
  ;; CHECK:      (func $call-foo (type $0)
- ;; CHECK-NEXT:  (block
- ;; CHECK-NEXT:   (call $foo
- ;; CHECK-NEXT:    (ref.func $b)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  (call $foo
+ ;; CHECK-NEXT:   (ref.func $b)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (block
- ;; CHECK-NEXT:   (call $foo
- ;; CHECK-NEXT:    (ref.func $c)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  (call $foo
+ ;; CHECK-NEXT:   (ref.func $c)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $call-foo
@@ -152,8 +111,7 @@
   )
  )
 
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $bar (type $2) (param $0 i31ref)
+ ;; CHECK:      (func $bar (type $2) (param $0 i31ref)
  ;; CHECK-NEXT:  (local $1 nullref)
  ;; CHECK-NEXT:  (local.set $1
  ;; CHECK-NEXT:   (ref.null none)
@@ -174,19 +132,13 @@
  )
 
  ;; CHECK:      (func $call-bar (type $0)
- ;; CHECK-NEXT:  (block
- ;; CHECK-NEXT:   (call $bar
- ;; CHECK-NEXT:    (ref.null none)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  (call $bar
+ ;; CHECK-NEXT:   (ref.null none)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (block
- ;; CHECK-NEXT:   (call $bar
- ;; CHECK-NEXT:    (ref.i31
- ;; CHECK-NEXT:     (i32.const 0)
- ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:  (call $bar
+ ;; CHECK-NEXT:   (ref.i31
+ ;; CHECK-NEXT:    (i32.const 0)
  ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $call-bar
@@ -217,8 +169,8 @@
 
 ;; Test that string constants can be applied.
 (module
- ;; CHECK:      (func $0
- ;; CHECK-NEXT: (call $1)
+ ;; CHECK:      (func $0 (type $0)
+ ;; CHECK-NEXT:  (call $1)
  ;; CHECK-NEXT: )
  (func $0
   (call $1
@@ -226,17 +178,7 @@
    (string.const "929")
   )
  )
- ;; CHECK:      (func $0
- ;; CHECK-NEXT: (call $1)
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (func $0 (type $0)
- ;; CHECK-NEXT:  (call $1)
- ;; CHECK-NEXT:  (unreachable)
- ;; CHECK-NEXT: )
-
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $1 (type $0)
+ ;; CHECK:      (func $1 (type $0)
  ;; CHECK-NEXT:  (local $0 (ref string))
  ;; CHECK-NEXT:  (local $1 (ref string))
  ;; CHECK-NEXT:  (local.set $0

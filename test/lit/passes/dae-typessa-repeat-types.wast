@@ -2,14 +2,6 @@
 ;; RUN: wasm-opt %s -all --disable-custom-descriptors --dae --type-ssa -S -o - | filecheck %s
 
 (module
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (call $callee)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (call $callee)
-  ;; CHECK-NEXT: )
-
   ;; CHECK:      (type $struct (struct))
   (type $struct (struct))
 
@@ -38,7 +30,6 @@
 
   ;; CHECK:      (func $caller (type $2)
   ;; CHECK-NEXT:  (call $callee)
-  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $caller
     ;; Give DAE a constant null parameter to optimize.
@@ -49,8 +40,7 @@
     )
   )
 
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $callee (type $2)
+  ;; CHECK:      (func $callee (type $2)
   ;; CHECK-NEXT:  (local $0 anyref)
   ;; CHECK-NEXT:  (tuple.drop 2
   ;; CHECK-NEXT:   (block (type $3) (result i32 (ref (exact $struct)))

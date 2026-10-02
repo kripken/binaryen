@@ -3,36 +3,6 @@
 ;; RUN:  -S -o - | filecheck %s
 
 (module
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (call $unreferenced
-  ;; CHECK-NEXT:  (struct.new_default $struct.0)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (call $unreferenced
-  ;; CHECK-NEXT:  (ref.null none)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (drop
-  ;; CHECK-NEXT:  (ref.func $referenced)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (block
-  ;; CHECK-NEXT:  (call $unreferenced
-  ;; CHECK-NEXT:   (struct.new_default $struct.0)
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (block
-  ;; CHECK-NEXT:  (call $unreferenced
-  ;; CHECK-NEXT:   (ref.null none)
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: (drop
-  ;; CHECK-NEXT:  (ref.func $referenced)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: )
-
   ;; CHECK:      (type $struct (struct))
   (type $struct (struct))
 
@@ -64,17 +34,11 @@
   (export "func" (global $func))
 
   ;; CHECK:      (func $caller (type $1)
-  ;; CHECK-NEXT:  (block
-  ;; CHECK-NEXT:   (call $unreferenced
-  ;; CHECK-NEXT:    (struct.new_default $struct)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  (call $unreferenced
+  ;; CHECK-NEXT:   (struct.new_default $struct)
   ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (block
-  ;; CHECK-NEXT:   (call $unreferenced
-  ;; CHECK-NEXT:    (ref.null none)
-  ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  (call $unreferenced
+  ;; CHECK-NEXT:   (ref.null none)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (ref.func $referenced)
@@ -88,8 +52,7 @@
     (drop (ref.func $referenced))
   )
 
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $unreferenced (type $4) (param $struct (ref null (exact $struct)))
+  ;; CHECK:      (func $unreferenced (type $4) (param $struct (ref null (exact $struct)))
   ;; CHECK-NEXT:  (global.set $g
   ;; CHECK-NEXT:   (local.get $struct)
   ;; CHECK-NEXT:  )

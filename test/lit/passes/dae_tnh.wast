@@ -3,14 +3,6 @@
 ;; RUN: foreach %s %t wasm-opt --dae --all-features -tnh -S -o - | filecheck %s
 
 (module
-  ;; CHECK:      (func $caller (param $ref (ref null $struct.0))
-  ;; CHECK-NEXT: (call $target)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $caller (param $ref (ref null $struct.0))
-  ;; CHECK-NEXT: (call $target)
-  ;; CHECK-NEXT: )
-
   ;; CHECK:      (type $struct (sub (struct (field i32))))
   (type $struct (sub (struct (field i32))))
 
@@ -18,8 +10,7 @@
 
   ;; CHECK:      (type $2 (func (param (ref null $struct))))
 
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $target (type $1)
+  ;; CHECK:      (func $target (type $1)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (nop)
   ;; CHECK-NEXT: )
@@ -29,7 +20,6 @@
 
   ;; CHECK:      (func $caller (type $2) (param $ref (ref null $struct))
   ;; CHECK-NEXT:  (call $target)
-  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $caller (param $ref (ref null $struct))
     (call $target
@@ -44,8 +34,12 @@
 )
 
 (module
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (unreachable)
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (type $1 (func (param i32)))
+
+  ;; CHECK:      (func $caller (type $0)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $caller
     ;; Removing this parameter would make the type of the call change from
@@ -62,20 +56,7 @@
     )
   )
 
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (unreachable)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (type $0 (func))
-
-  ;; CHECK:      (type $1 (func (param i32)))
-
-  ;; CHECK:      (func $caller (type $0)
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $target (type $1) (param $0 i32)
+  ;; CHECK:      (func $target (type $1) (param $0 i32)
   ;; CHECK-NEXT: )
   (func $target (param i32)
   )
@@ -83,8 +64,12 @@
 
 ;; As above but the called target has a result.
 (module
-  ;; CHECK:      (func $caller (result i32)
-  ;; CHECK-NEXT: (unreachable)
+  ;; CHECK:      (type $0 (func (result i32)))
+
+  ;; CHECK:      (type $1 (func (param i32) (result i32)))
+
+  ;; CHECK:      (func $caller (type $0) (result i32)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $caller (result i32)
     ;; Again, the call is replaced by an unreachable.
@@ -93,20 +78,7 @@
     )
   )
 
-  ;; CHECK:      (func $caller (result i32)
-  ;; CHECK-NEXT: (unreachable)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (type $0 (func (result i32)))
-
-  ;; CHECK:      (type $1 (func (param i32) (result i32)))
-
-  ;; CHECK:      (func $caller (type $0) (result i32)
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $target (type $1) (param $0 i32) (result i32)
+  ;; CHECK:      (func $target (type $1) (param $0 i32) (result i32)
   ;; CHECK-NEXT:  (i32.const 42)
   ;; CHECK-NEXT: )
   (func $target (param i32) (result i32)
@@ -118,19 +90,6 @@
 ;; type unreachable anyhow, and the optimization would not change the type, so
 ;; it is even simpler).
 (module
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (unreachable)
-  ;; CHECK-NEXT: )
-  (func $caller
-    (return_call $target
-      (unreachable)
-    )
-  )
-
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (unreachable)
-  ;; CHECK-NEXT: )
-
   ;; CHECK:      (type $0 (func))
 
   ;; CHECK:      (type $1 (func (param i32)))
@@ -138,33 +97,24 @@
   ;; CHECK:      (func $caller (type $0)
   ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
+  (func $caller
+    (return_call $target
+      (unreachable)
+    )
+  )
 
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $target (type $1) (param $0 i32)
+  ;; CHECK:      (func $target (type $1) (param $0 i32)
   ;; CHECK-NEXT: )
   (func $target (param i32)
   )
 )
 
 (module
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (call $target
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: )
-
-  ;; CHECK:      (func $caller
-  ;; CHECK-NEXT: (call $target
-  ;; CHECK-NEXT:  (unreachable)
-  ;; CHECK-NEXT: )
-  ;; CHECK-NEXT: )
-
   ;; CHECK:      (type $0 (func (param i32)))
 
   ;; CHECK:      (type $1 (func))
 
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $target (type $0) (param $0 i32)
+  ;; CHECK:      (func $target (type $0) (param $0 i32)
   ;; CHECK-NEXT:  (local $1 f64)
   ;; CHECK-NEXT:  (local.set $1
   ;; CHECK-NEXT:   (f64.const 4.2)
