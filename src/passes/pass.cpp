@@ -671,8 +671,10 @@ void PassRunner::addDefaultFunctionOptimizationPasses() {
     addIfNoDWARFIssues("local-cse");
     // TODO: add rereloop etc. here
   }
-  // Add unreachables on noreturn calls before DCE, so DCE cleans them up.
-  addIfNoDWARFIssues("optimize-noreturn");
+  if (options.optimizeLevel >= 3 || options.shrinkLevel >= 1) {
+    // Add unreachables on noreturn calls before DCE, so DCE cleans them up.
+    addIfNoDWARFIssues("optimize-noreturn");
+  }
   addIfNoDWARFIssues("dce");
   addIfNoDWARFIssues("remove-unused-names");
   addIfNoDWARFIssues("remove-unused-brs");
