@@ -671,8 +671,11 @@ void PassRunner::addDefaultFunctionOptimizationPasses() {
     addIfNoDWARFIssues("local-cse");
     // TODO: add rereloop etc. here
   }
-  if (options.optimizeLevel >= 3 || options.shrinkLevel >= 1) {
+  if (options.optimizeLevel >= 2 || options.shrinkLevel >= 1) {
     // Add unreachables on noreturn calls before DCE, so DCE cleans them up.
+    // Note that this handles user-set noreturn annotations (the DAE pass uses
+    // them internally as well); as those annotations are rare, we don't do this
+    // in -O1 and below.
     addIfNoDWARFIssues("optimize-noreturn");
   }
   addIfNoDWARFIssues("dce");
