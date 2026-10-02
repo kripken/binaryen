@@ -20,7 +20,7 @@
  (table 1 1 funcref)
 
  ;; If nothing is actually returned, the function never returns normally, and
- ;; we refine the return type to the bottom type.
+ ;; we mark it as noreturn and add unreachables after calls to it.
  ;; CHECK:      (@binaryen.noreturn)
  ;; CHECK-NEXT: (func $refine-return-no-return (type $4)
  ;; CHECK-NEXT:  (local $temp anyref)
@@ -590,4 +590,16 @@
    (i32.const 0)
   )
  )
+
+ (func $mvp-noreturn (result i32)
+  ;; The i32 type is MVP and cannot be refined like GC types, but we can still
+  ;; infer this is noreturn.
+  (unreachable)
+ )
+
+ (func $call-mvp-noreturn
+  ;; An unreachable will appear after this call.
+  (call $mvp-noreturn)
+ )
+
 )
