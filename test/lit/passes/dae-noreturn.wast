@@ -10,42 +10,37 @@
 ;; RUN: foreach %s %t wasm-opt -O3                                -all -S -o - | filecheck %s --check-prefix=O3__
 
 (module
- ;; NORM:      (type $0 (func (result i32)))
-
- ;; NORM:      (type $1 (func))
-
- ;; NORM:      (export "i32-noreturn" (func $i32-noreturn))
+ ;; NORM:      (type $0 (func))
 
  ;; NORM:      (export "call-i32-noreturn" (func $call-i32-noreturn))
 
- ;; NORM:      (func $i32-noreturn (type $0) (result i32)
+ ;; NORM:      (func $i32-noreturn (type $0)
+ ;; NORM-NEXT:  (call $i32-noreturn)
  ;; NORM-NEXT:  (unreachable)
  ;; NORM-NEXT: )
- ;; KEEP:      (type $0 (func (result i32)))
-
- ;; KEEP:      (type $1 (func))
-
- ;; KEEP:      (export "i32-noreturn" (func $i32-noreturn))
+ ;; KEEP:      (type $0 (func))
 
  ;; KEEP:      (export "call-i32-noreturn" (func $call-i32-noreturn))
 
- ;; KEEP:      (func $i32-noreturn (type $0) (result i32)
+ ;; KEEP:      (@binaryen.noreturn)
+ ;; KEEP-NEXT: (func $i32-noreturn (type $0)
+ ;; KEEP-NEXT:  (call $i32-noreturn)
  ;; KEEP-NEXT:  (unreachable)
  ;; KEEP-NEXT: )
- ;; O3__:      (type $0 (func (result i32)))
+ ;; O3__:      (type $0 (func))
 
- ;; O3__:      (type $1 (func))
+ ;; O3__:      (export "call-i32-noreturn" (func $i32-noreturn))
 
- ;; O3__:      (export "i32-noreturn" (func $i32-noreturn))
-
- ;; O3__:      (export "call-i32-noreturn" (func $call-i32-noreturn))
-
- ;; O3__:      (func $i32-noreturn (type $0) (result i32)
+ ;; O3__:      (func $i32-noreturn (type $0)
+ ;; O3__-NEXT:  (call $i32-noreturn)
  ;; O3__-NEXT:  (unreachable)
  ;; O3__-NEXT: )
- (func $i32-noreturn (export "i32-noreturn") (result i32)
-  ;; The i32 type is MVP and cannot be refined like GC types, but we can still
-  ;; infer this is noreturn.
+ (func $i32-noreturn (result i32)
+  ;; We can infer this is noreturn, but only keep that annotation in KEEP.
+
+  ;; Recurse to avoid the function being optimized out in -O3.
+  (call $i32-noreturn)
+
   (unreachable)
  )
 
@@ -53,19 +48,14 @@
  ;; CHECK-NEXT:  (call $i32-noreturn)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
- ;; NORM:      (func $call-i32-noreturn (type $1)
- ;; NORM-NEXT:  (drop
- ;; NORM-NEXT:   (call $i32-noreturn)
- ;; NORM-NEXT:  )
+ ;; NORM:      (func $call-i32-noreturn (type $0)
+ ;; NORM-NEXT:  (call $i32-noreturn)
+ ;; NORM-NEXT:  (unreachable)
  ;; NORM-NEXT: )
- ;; KEEP:      (func $call-i32-noreturn (type $1)
- ;; KEEP-NEXT:  (drop
- ;; KEEP-NEXT:   (call $i32-noreturn)
- ;; KEEP-NEXT:  )
+ ;; KEEP:      (func $call-i32-noreturn (type $0)
+ ;; KEEP-NEXT:  (call $i32-noreturn)
+ ;; KEEP-NEXT:  (unreachable)
  ;; KEEP-NEXT: )
- ;; O3__:      (func $call-i32-noreturn (type $1)
- ;; O3__-NEXT:  (unreachable)
- ;; O3__-NEXT: )
  (func $call-i32-noreturn (export "call-i32-noreturn")
   ;; An unreachable will appear after this call.
   (drop

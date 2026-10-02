@@ -745,8 +745,11 @@ private:
   void cleanUp() {
     // For testing purposes, this can be disabled. That then shows us exactly
     // which things we inferred as noreturn.
+std::cout << "cleanup1\n";
     if (!hasArgument("dae-keep-noreturn")) {
+std::cout << "cleanup2\n";
       for (auto* func : allFuncsWithAddedNoReturns) {
+std::cout << "cleanup3\n";
         func->funcAnnotations.noReturn = false;
       }
     }
