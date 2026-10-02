@@ -45,27 +45,24 @@
   (func $b
     (call $a (i32.const 1)) ;; best case scenario
   )
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $a1 (type $0)
+  ;; CHECK:      (func $a1 (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (local.set $0
   ;; CHECK-NEXT:   (i32.const 2)
   ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $a1 (param $x i32)
-    (unreachable)
   )
   ;; CHECK:      (func $b1 (type $0)
   ;; CHECK-NEXT:  (call $a1)
-  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b1
     (call $a1 (i32.const 2)) ;; same value in both, so works
   )
   ;; CHECK:      (func $b11 (type $0)
   ;; CHECK-NEXT:  (call $a1)
-  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b11
     (call $a1 (i32.const 2))
@@ -301,10 +298,7 @@
   ;; CHECK-NEXT:  (call $c5
   ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (block
-  ;; CHECK-NEXT:   (call $c6)
-  ;; CHECK-NEXT:   (unreachable)
-  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call $c6)
   ;; CHECK-NEXT:  (call $c7)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (call $c8)
@@ -352,12 +346,13 @@
   (func $c5 (param $x i32) (result i32)
     (local.get $x)
   )
-  ;; CHECK:      (@binaryen.noreturn)
-  ;; CHECK-NEXT: (func $c6 (type $0)
-  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK:      (func $c6 (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 42)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $c6 (result i32)
-    (unreachable)
+    (i32.const 42)
   )
   ;; CHECK:      (func $c7 (type $0)
   ;; CHECK-NEXT:  (drop
@@ -745,7 +740,7 @@
   ;; on (other passes will turn this call into an unreachable). In particular
   ;; we should not be confused by the fact that this expression itself is
   ;; unreachable (as a return call). As the function never returns, its result
-  ;; is refined to the bottom type.
+  ;; is refined to the bottom type, and it is marked as noreturn.
   (return_call_ref $A
    (ref.null nofunc)
   )
@@ -812,22 +807,21 @@
  ;; CHECK:      (type $v128 (func (result v128)))
  (type $v128 (func (result v128)))
 
+ ;; CHECK:      (type $2 (func (result f32)))
+
  ;; CHECK:      (table $0 10 funcref)
  (table $0 10 funcref)
 
  ;; CHECK:      (func $caller-effects (type $0)
  ;; CHECK-NEXT:  (local $0 v128)
  ;; CHECK-NEXT:  (drop
- ;; CHECK-NEXT:   (block
+ ;; CHECK-NEXT:   (block (result f32)
  ;; CHECK-NEXT:    (local.set $0
  ;; CHECK-NEXT:     (call_indirect $0 (type $v128)
  ;; CHECK-NEXT:      (i32.const 0)
  ;; CHECK-NEXT:     )
  ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (block
- ;; CHECK-NEXT:     (call $target)
- ;; CHECK-NEXT:     (unreachable)
- ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (call $target)
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
@@ -845,24 +839,23 @@
   )
  )
 
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $target (type $0)
+ ;; CHECK:      (func $target (type $2) (result f32)
  ;; CHECK-NEXT:  (local $0 i64)
  ;; CHECK-NEXT:  (local $1 i64)
  ;; CHECK-NEXT:  (local $2 v128)
  ;; CHECK-NEXT:  (local.set $0
  ;; CHECK-NEXT:   (i64.const 0)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:  (block (result f32)
  ;; CHECK-NEXT:   (local.set $1
  ;; CHECK-NEXT:    (i64.const 0)
  ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:   (f32.const 3.141590118408203)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $target (param $0 i64) (param $1 v128) (param $2 i64) (result f32)
   ;; All parameters here should vanish.
-  (unreachable)
+  (f32.const 3.14159)
  )
 )
 
@@ -889,12 +882,9 @@
  ;; CHECK-NEXT:    (br $block)
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (block
- ;; CHECK-NEXT:   (call $target
- ;; CHECK-NEXT:    (local.get $y)
- ;; CHECK-NEXT:    (local.get $y)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  (call $target
+ ;; CHECK-NEXT:   (local.get $y)
+ ;; CHECK-NEXT:   (local.get $y)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $caller-later-br (param $x i32) (param $y i64)
@@ -933,16 +923,19 @@
   )
  )
 
- ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $target (type $1) (param $0 i64) (param $1 i64)
+ ;; CHECK:      (func $target (type $1) (param $0 i64) (param $1 i64)
  ;; CHECK-NEXT:  (local $2 i32)
  ;; CHECK-NEXT:  (drop
- ;; CHECK-NEXT:   (local.get $0)
+ ;; CHECK-NEXT:   (block (result f32)
+ ;; CHECK-NEXT:    (drop
+ ;; CHECK-NEXT:     (local.get $0)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (drop
+ ;; CHECK-NEXT:     (local.get $1)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (f32.const 2.718280076980591)
+ ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (drop
- ;; CHECK-NEXT:   (local.get $1)
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $target (param $0 i64) (param $1 i32) (param $2 i64) (result f32)
   ;; The i32 parameter should vanish.
@@ -952,7 +945,7 @@
   (drop
    (local.get $2)
   )
-  (unreachable)
+  (f32.const 2.71828)
  )
 )
 
@@ -971,7 +964,8 @@
  ;; CHECK-NEXT: )
  (func $target (param $0 i32)
   ;; The parameter here is unused: there is a get, but it is unreachable. We can
-  ;; remove the parameter here, and in the caller below.
+  ;; remove the parameter here, and in the caller below. We also mark the
+  ;; function as noreturn, and the call below gets an unreachable after it.
   (unreachable)
   (drop
    (local.get $0)
