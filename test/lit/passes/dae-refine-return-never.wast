@@ -6,10 +6,8 @@
 ;; RUN: foreach %s %t wasm-opt -all --dae-optimizing --pass-arg=dae-keep-noreturn -S -o - | filecheck %s
 
 ;; When a function never returns normally (it only throws, traps or loops
-;; forever), no value can flow out of it, and DAE refines its reference result
-;; to the non-nullable bottom type of its hierarchy. The callers then see that
-;; the call never returns, and functions that tail-call it can be refined
-;; further.
+;; forever), no value can flow out of it, and DAE marks it as noreturn, making
+;; calls to it get an unreachable after.
 (module
  ;; NOOPT:      (type $0 (func))
 
@@ -74,12 +72,8 @@
   )
  )
 
- ;; This function ends in an unreachable. With --dae-optimizing, it ends up
- ;; with no result at all: its result type is refined to (ref none), which lets
- ;; us optimize the caller $call-traps so that the call is dropped (see there),
- ;; and then the next iteration of DAE removes the result, as all calls to this
- ;; function are dropped. The same happens to $throws above and to $loops, $func
- ;; and $extern below.
+ ;; This function ends in an unreachable. It is marked as noreturn, as are
+ ;; the functions below that do not return for other reasons.
  ;; NOOPT:      (@binaryen.noreturn)
  ;; NOOPT-NEXT: (func $traps (type $0)
  ;; NOOPT-NEXT:  (drop
@@ -144,7 +138,7 @@
   (unreachable)
  )
 
- ;; Multivalue results are left alone.
+ ;; Multivalue is also handled.
  ;; NOOPT:      (@binaryen.noreturn)
  ;; NOOPT-NEXT: (func $tuple (type $0)
  ;; NOOPT-NEXT:  (unreachable)
@@ -235,8 +229,7 @@
  ;; CHECK-NEXT: )
  (func $call-traps (export "call-traps") (result i32)
   ;; With --dae-optimizing, as the call never returns, the ref.is_null is
-  ;; replaced with an unreachable, and the call is dropped. The same happens in
-  ;; the functions below, except $call-tuple.
+  ;; replaced with an unreachable, and the call is dropped.
   (ref.is_null
    (call $traps)
   )
@@ -320,8 +313,7 @@
 )
 
 ;; A chain of tail calls: $gV only throws, $e2 either returns an i31 or
-;; tail-calls $gV, and $kG either returns an i31 or tail-calls $e2. $gV is
-;; refined to (ref none), and then $e2 and $kG to (ref i31).
+;; tail-calls $gV, and $kG either returns an i31 or tail-calls $e2.
 (module
  ;; NOOPT:      (type $0 (func (result (ref eq))))
 
