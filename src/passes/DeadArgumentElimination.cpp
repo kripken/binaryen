@@ -690,9 +690,15 @@ private:
                          Module* module) {
     auto lub = LUB::getResultsLUB(func, *module);
     if (!lub.noted()) {
-      // No value can ever be returned, so mark it as noreturn.
-      func->funcAnnotations.noReturn = true;
-      return true;
+      // No value can ever be returned, so mark it as noreturn if it wasn't
+      // already.
+      if (!func->funcAnnotations.noReturn) {
+        func->funcAnnotations.noReturn = true;
+        return true;
+      }
+
+      // Otherwise we are changing nothing.
+      return false;
     }
 
     auto newType = lub.getLUB();
