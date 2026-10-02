@@ -285,6 +285,7 @@ struct DAE : public Pass {
 
   bool iteration(Module* module, DAEFunctionInfoMap& infoMap) {
     allDroppedCalls.clear();
+    addedNoReturn = false;
 
 #if DAE_DEBUG
     // Enable this path to mark all contents as stale at the start of each
@@ -438,9 +439,6 @@ struct DAE : public Pass {
       PassUtils::FilteredPassRunner runner(
         module, refinedCallers, getPassRunner()->options);
       runner.setIsNested(true);
-      // We may have added new noreturn-annotated functions, so optimize calls
-      // to them.
-      runner.add("optimize-noreturn");
       runner.add(std::make_unique<ReFinalize>());
       runner.run();
     }
@@ -552,6 +550,24 @@ struct DAE : public Pass {
           markStale(func->name);
         });
     }
+
+    if (addedNoReturn) {
+      // Callers to new noreturn functions can be optimized: we can add an
+      // unreachable after the calls.
+      // TODO: Atm we mark such calls in the set of refined callers (basically
+      //       we refine the result to unreachable), but we could save work here
+      //       if we kept separate sets. However, adding new noreturns is rare,
+      //       so it might not be worth the complexity.
+      assert(!refinedCallers.empty());
+      PassUtils::FilteredPassRunner runner(
+        module, refinedCallers, getPassRunner()->options);
+      runner.setIsNested(true);
+      // We may have added new noreturn-annotated functions, so optimize calls
+      // to them.
+      runner.add("optimize-noreturn");
+      runner.run();
+    }
+
     if (optimize) {
       // This happens after the ReFinalize above, so the callers of functions
       // with refined results see the new types.
@@ -568,6 +584,10 @@ struct DAE : public Pass {
 
 private:
   std::unordered_map<Call*, Expression**> allDroppedCalls;
+
+  // When we add a noreturn annotation, additional optimization opportunities
+  // appear later.
+  bool addedNoReturn = false;
 
   // Returns `true` if the caller should be optimized.
   bool
@@ -694,6 +714,7 @@ private:
       // already.
       if (!func->funcAnnotations.noReturn) {
         func->funcAnnotations.noReturn = true;
+        addedNoReturn = true;
         return true;
       }
 

@@ -99,6 +99,12 @@ struct OptimizeNoReturn
 
   bool refinalize = false;
 
+  void doWalkFunction(Function* curr) {
+    std::cout << "pre\n" << *curr << '\n';
+    Super::doWalkFunction(curr);
+    std::cout << "post\n" << *curr << '\n';
+  }
+
   void visitFunction(Function* curr) {
     // The walk ended, but perhaps it ended on something that needs an
     // unreachable.
