@@ -558,7 +558,6 @@ struct DAE : public Pass {
       //       we refine the result to unreachable), but we could save work here
       //       if we kept separate sets. However, adding new noreturns is rare,
       //       so it might not be worth the complexity.
-      assert(!refinedCallers.empty());
       PassUtils::FilteredPassRunner runner(
         module, refinedCallers, getPassRunner()->options);
       runner.setIsNested(true);
