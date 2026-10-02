@@ -714,22 +714,29 @@ private:
   bool refineReturnTypes(Function* func,
                          const std::vector<Call*>& calls,
                          Module* module) {
+    bool changed = false;
     auto lub = LUB::getResultsLUB(func, *module);
-    if (!lub.noted()) {
+    Type newType;
+    if (lub.noted()) {
+      newType = lub.getLUB();
+    } else {
       // No value can ever be returned, so mark it as noreturn if it wasn't
       // already.
       if (!func->funcAnnotations.noReturn) {
         func->funcAnnotations.noReturn = true;
         addedNoReturnInCycle = true;
         allFuncsWithAddedNoReturns.insert(func);
-        return true;
+        changed = true;
       }
 
-      // Otherwise we are changing nothing.
-      return false;
+      // Also refine the result to the bottom type, if relevant.
+      auto results = func->getResults();
+      if (!module->features.hasGC() || !results.isRef()) {
+        return changed;
+      }
+      newType = Type(results.getHeapType().getBottom(), NonNullable);
     }
 
-    auto newType = lub.getLUB();
     if (newType != func->getResults()) {
       func->setResults(newType);
       for (auto* call : calls) {
@@ -739,7 +746,7 @@ private:
       }
       return true;
     }
-    return false;
+    return changed;
   }
 
   void cleanUp() {
