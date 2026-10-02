@@ -24,7 +24,8 @@
 
  ;; If nothing is actually returned, the function never returns normally, and
  ;; we mark it as noreturn and add unreachables after calls to it.
- ;; CHECK:      (func $refine-return-no-return (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $refine-return-no-return (type $0)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local.set $temp
  ;; CHECK-NEXT:   (block
@@ -479,7 +480,8 @@
   )
   (return_call_ref $"return_{}" (local.get $"return_{}"))
  )
- ;; CHECK:      (func $tail-caller-call_ref-unreachable (type $3) (result anyref)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $tail-caller-call_ref-unreachable (type $3) (result anyref)
  ;; CHECK-NEXT:  (block ;; (replaces unreachable CallRef we can't emit)
  ;; CHECK-NEXT:   (drop
  ;; CHECK-NEXT:    (unreachable)
@@ -592,7 +594,8 @@
   )
  )
 
- ;; CHECK:      (func $i32-noreturn (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $i32-noreturn (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $i32-noreturn (result i32)
@@ -612,7 +615,8 @@
   )
  )
 
- ;; CHECK:      (func $none-noreturn (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $none-noreturn (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $none-noreturn

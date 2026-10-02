@@ -19,7 +19,8 @@
    )
   )
  )
- ;; CHECK:      (func $bar (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $bar (type $0)
  ;; CHECK-NEXT:  (local $0 i31ref)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.tee $0

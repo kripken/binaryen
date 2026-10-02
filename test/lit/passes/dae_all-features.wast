@@ -45,7 +45,8 @@
   (func $b
     (call $a (i32.const 1)) ;; best case scenario
   )
-  ;; CHECK:      (func $a1 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a1 (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (local.set $0
   ;; CHECK-NEXT:   (i32.const 2)
@@ -351,7 +352,8 @@
   (func $c5 (param $x i32) (result i32)
     (local.get $x)
   )
-  ;; CHECK:      (func $c6 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $c6 (type $0)
   ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $c6 (result i32)
@@ -728,7 +730,8 @@
 
  ;; CHECK:      (type $1 (func))
 
- ;; CHECK:      (func $no-caller (type $A) (result (ref $A))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $no-caller (type $A) (result (ref $A))
  ;; CHECK-NEXT:  (block ;; (replaces unreachable CallRef we can't emit)
  ;; CHECK-NEXT:   (drop
  ;; CHECK-NEXT:    (ref.null nofunc)
@@ -841,7 +844,8 @@
   )
  )
 
- ;; CHECK:      (func $target (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $target (type $0)
  ;; CHECK-NEXT:  (local $0 i64)
  ;; CHECK-NEXT:  (local $1 i64)
  ;; CHECK-NEXT:  (local $2 v128)
@@ -928,7 +932,8 @@
   )
  )
 
- ;; CHECK:      (func $target (type $1) (param $0 i64) (param $1 i64)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $target (type $1) (param $0 i64) (param $1 i64)
  ;; CHECK-NEXT:  (local $2 i32)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.get $0)
@@ -955,7 +960,8 @@
 
  ;; CHECK:      (type $1 (func (param i32)))
 
- ;; CHECK:      (func $target (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $target (type $0)
  ;; CHECK-NEXT:  (local $0 i32)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT:  (drop

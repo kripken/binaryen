@@ -2,7 +2,7 @@
 
 ;; Keep noreturn annotations for testing purposes, so we see which functions we
 ;; inferred as not returning.
-;; RUN: foreach %s %t wasm-opt -all --dae            --pass-arg=dae-keep-noreturn-S -o - | filecheck %s --check-prefix=NOOPT
+;; RUN: foreach %s %t wasm-opt -all --dae            --pass-arg=dae-keep-noreturn -S -o - | filecheck %s --check-prefix=NOOPT
 ;; RUN: foreach %s %t wasm-opt -all --dae-optimizing --pass-arg=dae-keep-noreturn -S -o - | filecheck %s
 
 ;; When a function never returns normally (it only throws, traps or loops
@@ -44,7 +44,8 @@
 
  ;; NOOPT:      (export "call-tuple" (func $call-tuple))
 
- ;; NOOPT:      (func $throws (type $2) (param $x i32)
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $throws (type $2) (param $x i32)
  ;; NOOPT-NEXT:  (throw $exn
  ;; NOOPT-NEXT:   (local.get $x)
  ;; NOOPT-NEXT:  )
@@ -61,7 +62,8 @@
 
  ;; CHECK:      (export "call-tuple" (func $call-tuple))
 
- ;; CHECK:      (func $throws (type $2) (param $0 i32)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $throws (type $2) (param $0 i32)
  ;; CHECK-NEXT:  (throw $exn
  ;; CHECK-NEXT:   (local.get $0)
  ;; CHECK-NEXT:  )
@@ -78,13 +80,15 @@
  ;; and then the next iteration of DAE removes the result, as all calls to this
  ;; function are dropped. The same happens to $throws above and to $loops, $func
  ;; and $extern below.
- ;; NOOPT:      (func $traps (type $0)
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $traps (type $0)
  ;; NOOPT-NEXT:  (drop
  ;; NOOPT-NEXT:   (i32.const 42)
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT:  (unreachable)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $traps (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $traps (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $traps (result (ref null any))
@@ -97,12 +101,14 @@
  )
 
  ;; This function loops forever.
- ;; NOOPT:      (func $loops (type $0)
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $loops (type $0)
  ;; NOOPT-NEXT:  (loop $l
  ;; NOOPT-NEXT:   (br $l)
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $loops (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $loops (type $0)
  ;; CHECK-NEXT:  (loop $l
  ;; CHECK-NEXT:   (br $l)
  ;; CHECK-NEXT:  )
@@ -114,20 +120,24 @@
  )
 
  ;; Other hierarchies.
- ;; NOOPT:      (func $func (type $0)
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $func (type $0)
  ;; NOOPT-NEXT:  (unreachable)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $func (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $func (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $func (result (ref null func))
   (unreachable)
  )
 
- ;; NOOPT:      (func $extern (type $0)
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $extern (type $0)
  ;; NOOPT-NEXT:  (unreachable)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $extern (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $extern (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $extern (result externref)
@@ -135,10 +145,12 @@
  )
 
  ;; Multivalue results are left alone.
- ;; NOOPT:      (func $tuple (type $0)
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $tuple (type $0)
  ;; NOOPT-NEXT:  (unreachable)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $tuple (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $tuple (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $tuple (result anyref anyref)
@@ -343,7 +355,8 @@
 
  ;; NOOPT:      (export "user" (func $user))
 
- ;; NOOPT:      (func $gV (type $0) (result (ref eq))
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $gV (type $0) (result (ref eq))
  ;; NOOPT-NEXT:  (local $0 (ref eq))
  ;; NOOPT-NEXT:  (local.set $0
  ;; NOOPT-NEXT:   (global.get $msg)
@@ -354,7 +367,8 @@
  ;; NOOPT-NEXT: )
  ;; CHECK:      (export "user" (func $user))
 
- ;; CHECK:      (func $gV (type $0) (result (ref eq))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $gV (type $0) (result (ref eq))
  ;; CHECK-NEXT:  (throw $exn
  ;; CHECK-NEXT:   (global.get $msg)
  ;; CHECK-NEXT:  )
