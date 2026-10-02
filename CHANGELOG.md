@@ -15,8 +15,10 @@ full changeset diff at the end of each section.
 Current Trunk
 -------------
 
- - Add a new wasm-embed tool for extracting Wasm modules embedded as byte arrays
-   in JS source files or replacing such modules in the JS source (#9127)
+- Binaryen now uses code annotations more heavily, adding `@binaryen.noreturn`
+  where XXX
+- Add a new wasm-embed tool for extracting Wasm modules embedded as byte arrays
+  in JS source files or replacing such modules in the JS source (#9127)
 
 v133
 ----
