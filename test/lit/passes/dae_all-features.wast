@@ -725,13 +725,14 @@
 )
 
 (module
- ;; CHECK:      (type $A (func (result (ref $A))))
  (type $A (func (result (ref $A))))
+
+ ;; CHECK:      (type $0 (func (result (ref nofunc))))
 
  ;; CHECK:      (type $1 (func))
 
  ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $no-caller (type $A) (result (ref $A))
+ ;; CHECK-NEXT: (func $no-caller (type $0) (result (ref nofunc))
  ;; CHECK-NEXT:  (block ;; (replaces unreachable CallRef we can't emit)
  ;; CHECK-NEXT:   (drop
  ;; CHECK-NEXT:    (ref.null nofunc)

@@ -29,7 +29,10 @@
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local.set $temp
  ;; CHECK-NEXT:   (block
- ;; CHECK-NEXT:    (call $refine-return-no-return)
+ ;; CHECK-NEXT:    (block
+ ;; CHECK-NEXT:     (call $refine-return-no-return)
+ ;; CHECK-NEXT:     (unreachable)
+ ;; CHECK-NEXT:    )
  ;; CHECK-NEXT:    (unreachable)
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
@@ -481,7 +484,7 @@
   (return_call_ref $"return_{}" (local.get $"return_{}"))
  )
  ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $tail-caller-call_ref-unreachable (type $3) (result anyref)
+ ;; CHECK-NEXT: (func $tail-caller-call_ref-unreachable (type $10) (result (ref none))
  ;; CHECK-NEXT:  (block ;; (replaces unreachable CallRef we can't emit)
  ;; CHECK-NEXT:   (drop
  ;; CHECK-NEXT:    (unreachable)
@@ -520,7 +523,7 @@
   )
  )
 
- ;; CHECK:      (func $update-null (type $10) (param $x i32) (param $y i32) (result (ref null $"{i32}"))
+ ;; CHECK:      (func $update-null (type $11) (param $x i32) (param $y i32) (result (ref null $"{i32}"))
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (local.get $x)
  ;; CHECK-NEXT:   (then

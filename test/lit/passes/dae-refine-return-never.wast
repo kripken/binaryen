@@ -163,8 +163,11 @@
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT:  (local.set $y
  ;; NOOPT-NEXT:   (block
- ;; NOOPT-NEXT:    (call $throws
- ;; NOOPT-NEXT:     (local.get $x)
+ ;; NOOPT-NEXT:    (block
+ ;; NOOPT-NEXT:     (call $throws
+ ;; NOOPT-NEXT:      (local.get $x)
+ ;; NOOPT-NEXT:     )
+ ;; NOOPT-NEXT:     (unreachable)
  ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:    (unreachable)
  ;; NOOPT-NEXT:   )
@@ -218,7 +221,10 @@
  ;; NOOPT:      (func $call-traps (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
  ;; NOOPT-NEXT:   (block
- ;; NOOPT-NEXT:    (call $traps)
+ ;; NOOPT-NEXT:    (block
+ ;; NOOPT-NEXT:     (call $traps)
+ ;; NOOPT-NEXT:     (unreachable)
+ ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:    (unreachable)
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
@@ -238,7 +244,10 @@
  ;; NOOPT:      (func $call-loops (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
  ;; NOOPT-NEXT:   (block
- ;; NOOPT-NEXT:    (call $loops)
+ ;; NOOPT-NEXT:    (block
+ ;; NOOPT-NEXT:     (call $loops)
+ ;; NOOPT-NEXT:     (unreachable)
+ ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:    (unreachable)
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
@@ -256,7 +265,10 @@
  ;; NOOPT:      (func $call-func (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
  ;; NOOPT-NEXT:   (block
- ;; NOOPT-NEXT:    (call $func)
+ ;; NOOPT-NEXT:    (block
+ ;; NOOPT-NEXT:     (call $func)
+ ;; NOOPT-NEXT:     (unreachable)
+ ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:    (unreachable)
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
@@ -274,7 +286,10 @@
  ;; NOOPT:      (func $call-extern (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
  ;; NOOPT-NEXT:   (block
- ;; NOOPT-NEXT:    (call $extern)
+ ;; NOOPT-NEXT:    (block
+ ;; NOOPT-NEXT:     (call $extern)
+ ;; NOOPT-NEXT:     (unreachable)
+ ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:    (unreachable)
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
@@ -315,9 +330,9 @@
 ;; A chain of tail calls: $gV only throws, $e2 either returns an i31 or
 ;; tail-calls $gV, and $kG either returns an i31 or tail-calls $e2.
 (module
- ;; NOOPT:      (type $0 (func (result (ref eq))))
+ ;; NOOPT:      (type $0 (func (result (ref none))))
 
- ;; NOOPT:      (type $1 (func (param i32) (result (ref eq))))
+ ;; NOOPT:      (type $1 (func (param i32) (result (ref i31))))
 
  ;; NOOPT:      (type $2 (func (param (ref eq))))
 
@@ -328,9 +343,9 @@
  ;; NOOPT-NEXT: ))
 
  ;; NOOPT:      (tag $exn (type $2) (param (ref eq)))
- ;; CHECK:      (type $0 (func (result (ref eq))))
+ ;; CHECK:      (type $0 (func (result (ref none))))
 
- ;; CHECK:      (type $1 (func (param i32) (result (ref eq))))
+ ;; CHECK:      (type $1 (func (param i32) (result (ref i31))))
 
  ;; CHECK:      (type $2 (func (param (ref eq))))
 
@@ -348,7 +363,7 @@
  ;; NOOPT:      (export "user" (func $user))
 
  ;; NOOPT:      (@binaryen.noreturn)
- ;; NOOPT-NEXT: (func $gV (type $0) (result (ref eq))
+ ;; NOOPT-NEXT: (func $gV (type $0) (result (ref none))
  ;; NOOPT-NEXT:  (local $0 (ref eq))
  ;; NOOPT-NEXT:  (local.set $0
  ;; NOOPT-NEXT:   (global.get $msg)
@@ -360,7 +375,7 @@
  ;; CHECK:      (export "user" (func $user))
 
  ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $gV (type $0) (result (ref eq))
+ ;; CHECK-NEXT: (func $gV (type $0) (result (ref none))
  ;; CHECK-NEXT:  (throw $exn
  ;; CHECK-NEXT:   (global.get $msg)
  ;; CHECK-NEXT:  )
@@ -371,7 +386,7 @@
   )
  )
 
- ;; NOOPT:      (func $e2 (type $1) (param $0 i32) (result (ref eq))
+ ;; NOOPT:      (func $e2 (type $1) (param $0 i32) (result (ref i31))
  ;; NOOPT-NEXT:  (if
  ;; NOOPT-NEXT:   (local.get $0)
  ;; NOOPT-NEXT:   (then
@@ -384,7 +399,7 @@
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT:  (return_call $gV)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $e2 (type $1) (param $0 i32) (result (ref eq))
+ ;; CHECK:      (func $e2 (type $1) (param $0 i32) (result (ref i31))
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (local.get $0)
  ;; CHECK-NEXT:   (then
@@ -413,7 +428,7 @@
   )
  )
 
- ;; NOOPT:      (func $kG (type $1) (param $0 i32) (result (ref eq))
+ ;; NOOPT:      (func $kG (type $1) (param $0 i32) (result (ref i31))
  ;; NOOPT-NEXT:  (if
  ;; NOOPT-NEXT:   (i32.eqz
  ;; NOOPT-NEXT:    (local.get $0)
@@ -430,7 +445,7 @@
  ;; NOOPT-NEXT:   (local.get $0)
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $kG (type $1) (param $0 i32) (result (ref eq))
+ ;; CHECK:      (func $kG (type $1) (param $0 i32) (result (ref i31))
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (i32.eqz
  ;; CHECK-NEXT:    (local.get $0)
@@ -466,10 +481,10 @@
  )
 
  ;; This function only tail-calls $gV, so it is refined to (ref none) as well.
- ;; NOOPT:      (func $only-tail (type $0) (result (ref eq))
+ ;; NOOPT:      (func $only-tail (type $0) (result (ref none))
  ;; NOOPT-NEXT:  (return_call $gV)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $only-tail (type $0) (result (ref eq))
+ ;; CHECK:      (func $only-tail (type $0) (result (ref none))
  ;; CHECK-NEXT:  (return_call $gV)
  ;; CHECK-NEXT: )
  (func $only-tail (result (ref eq))
@@ -490,7 +505,7 @@
  ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:   (i31.get_s
- ;; NOOPT-NEXT:    (ref.cast (ref i31)
+ ;; NOOPT-NEXT:    (ref.cast (ref none)
  ;; NOOPT-NEXT:     (call $only-tail)
  ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:   )
@@ -499,15 +514,16 @@
  ;; CHECK:      (func $user (type $3) (param $0 i32) (result i32)
  ;; CHECK-NEXT:  (i32.add
  ;; CHECK-NEXT:   (i31.get_s
- ;; CHECK-NEXT:    (ref.cast (ref i31)
- ;; CHECK-NEXT:     (call $kG
- ;; CHECK-NEXT:      (local.get $0)
- ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:    (call $kG
+ ;; CHECK-NEXT:     (local.get $0)
  ;; CHECK-NEXT:    )
  ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (i31.get_s
- ;; CHECK-NEXT:    (ref.cast (ref i31)
+ ;; CHECK-NEXT:   (block
+ ;; CHECK-NEXT:    (drop
  ;; CHECK-NEXT:     (call $only-tail)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (i31.get_s
+ ;; CHECK-NEXT:     (unreachable)
  ;; CHECK-NEXT:    )
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
