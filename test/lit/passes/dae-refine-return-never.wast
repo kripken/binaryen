@@ -9,32 +9,598 @@
 ;; the call never returns, and functions that tail-call it can be refined
 ;; further.
 (module
- ;; NOOPT:      (type $0 (func (result i32)))
+ ;; NOOPT:      (func $(func $callercall-funcfunc $ (param  call-trapspre
+ ;; NOOPT-NEXT: $x (result pre
+ ;; NOOPT-NEXT: (result (i32i32(func func i32)$$
+ ;; NOOPT-NEXT: )call-loops  ((call-externresult)result   i32
+ ;; NOOPT-NEXT: (result i32i32))
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:  ) func 
+ ;; NOOPT-NEXT: $call-tuple (local  $(result y i32)
+ ;; NOOPT-NEXT: (ref  (((eq(ref.is_null
+ ;; NOOPT-NEXT: ref.is_nullref.is_null  
+ ;; NOOPT-NEXT: (ref.is_null
+ ;; NOOPT-NEXT: call   )(
+ ;; NOOPT-NEXT: tuple.extract )$
+ ;; NOOPT-NEXT: (   ref.is_nulltraps
+ ;; NOOPT-NEXT: (  (call 2(  $loops)(
+ ;; NOOPT-NEXT: call $func)if
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:    0)call (local.get $x)
+ ;; NOOPT-NEXT:  (then
+ ;; NOOPT-NEXT: ) 
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: $)extern
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: ))
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:   (call 
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: $)tuple)
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: )   
+ ;; NOOPT-NEXT: (
+ ;; NOOPT-NEXT: return
+ ;; NOOPT-NEXT: )    
+ ;; NOOPT-NEXT: (
+ ;; NOOPT-NEXT: post
+ ;; NOOPT-NEXT: (func $call-traps (result i32)
+ ;; NOOPT-NEXT: (ref.is_null
+ ;; NOOPT-NEXT:  post
+ ;; NOOPT-NEXT: ((blocki32post
+ ;; NOOPT-NEXT: .const post
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: ((func $   func $call-extern (call-funcpost
+ ;; NOOPT-NEXT: func ((result$call-loops func  i32) 
+ ;; NOOPT-NEXT: (result i32)$
+ ;; NOOPT-NEXT: (call-tupleref.is_nulldrop 
+ ;; NOOPT-NEXT:  (block
+ ;; NOOPT-NEXT:   (drop
+ ;; NOOPT-NEXT:    (call $traps)
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: (result    ((    (call )ref.is_null
+ ;; NOOPT-NEXT:   (unreachable $
+ ;; NOOPT-NEXT:  )1extern
+ ;; NOOPT-NEXT: i32)
+ ;; NOOPT-NEXT: result)  )
+ ;; NOOPT-NEXT: )    
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: ( )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: i32
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: (ref.is_null
+ ;; NOOPT-NEXT: )  
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT:   ( ))block
+ ;; NOOPT-NEXT:   (drop
+ ;; NOOPT-NEXT:    (call $
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:   ( func)block unreachable(ref.is_null
+ ;; NOOPT-NEXT:  (tuple.extract 2 0
+ ;; NOOPT-NEXT: )(   
+ ;; NOOPT-NEXT: (block
+ ;; NOOPT-NEXT:    (tuple.drop   
+ ;; NOOPT-NEXT:   (local.set )$drop2y
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:     (call $tuple)
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:         ()
+ ;; NOOPT-NEXT: (call $loops)
+ ;; NOOPT-NEXT:   )
+ ;; NOOPT-NEXT: call    
+ ;; NOOPT-NEXT: $throws
+ ;; NOOPT-NEXT:   (unreachable)
+ ;; NOOPT-NEXT:     )(
+ ;; NOOPT-NEXT: local.get  )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: $x()unreachable
+ ;; NOOPT-NEXT: )  
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:    (i31.get_s
+ ;; NOOPT-NEXT:  )(
+ ;; NOOPT-NEXT:    ref.cast ((ref i31)
+ ;; NOOPT-NEXT:   (unreachablelocal.get )
+ ;; NOOPT-NEXT:   )
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: $y))
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: )
 
- ;; NOOPT:      (type $1 (func (result (ref none))))
+ ;; NOOPT:      (func $call-traps (result i32)
+ ;; NOOPT-NEXT: (ref.is_null
+ ;; NOOPT-NEXT:  post
+ ;; NOOPT-NEXT: ((blocki32post
+ ;; NOOPT-NEXT: .const post
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: ((func $   func $call-extern (call-funcpost
+ ;; NOOPT-NEXT: func ((result$call-loops func  i32) 
+ ;; NOOPT-NEXT: (result i32)$
+ ;; NOOPT-NEXT: (call-tupleref.is_nulldrop 
+ ;; NOOPT-NEXT:  (block
+ ;; NOOPT-NEXT:   (drop
+ ;; NOOPT-NEXT:    (call $traps)
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: (result    ((    (call )ref.is_null
+ ;; NOOPT-NEXT:   (unreachable $
+ ;; NOOPT-NEXT:  )1extern
+ ;; NOOPT-NEXT: i32)
+ ;; NOOPT-NEXT: result)  )
+ ;; NOOPT-NEXT: )    
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: ( )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: i32
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: (ref.is_null
+ ;; NOOPT-NEXT: )  
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT:   ( ))block
+ ;; NOOPT-NEXT:   (drop
+ ;; NOOPT-NEXT:    (call $
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:   ( func)block unreachable(ref.is_null
+ ;; NOOPT-NEXT:  (tuple.extract 2 0
+ ;; NOOPT-NEXT: )(   
+ ;; NOOPT-NEXT: (block
+ ;; NOOPT-NEXT:    (tuple.drop   
+ ;; NOOPT-NEXT:   (local.set )$drop2y
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:     (call $tuple)
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:         ()
+ ;; NOOPT-NEXT: (call $loops)
+ ;; NOOPT-NEXT:   )
+ ;; NOOPT-NEXT: call    
+ ;; NOOPT-NEXT: $throws
+ ;; NOOPT-NEXT:   (unreachable)
+ ;; NOOPT-NEXT:     )(
+ ;; NOOPT-NEXT: local.get  )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT: $x()unreachable
+ ;; NOOPT-NEXT: )  
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-EMPTY:
+ ;; NOOPT-NEXT:    (i31.get_s
+ ;; NOOPT-NEXT:  )(
+ ;; NOOPT-NEXT:    ref.cast ((ref i31)
+ ;; NOOPT-NEXT:   (unreachablelocal.get )
+ ;; NOOPT-NEXT:   )
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: $y)
+
+ ;; NOOPT:      (func $caller (param $x i32) (result i32)
+ ;; NOOPT-NEXT: (local $y (ref eq))
+ ;; NOOPT-NEXT: (if
+ ;; NOOPT-NEXT:  (local.get $x)
+ ;; NOOPT-NEXT:  (then
+ ;; NOOPT-NEXT:   (return
+ ;; NOOPT-NEXT:    (i32.const 1)
+ ;; NOOPT-NEXT:   )
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: (local.set $y
+ ;; NOOPT-NEXT:  (block
+ ;; NOOPT-NEXT:   (drop
+ ;; NOOPT-NEXT:    (call $throws
+ ;; NOOPT-NEXT:     (local.get $x)
+ ;; NOOPT-NEXT:    )
+ ;; NOOPT-NEXT:   )
+ ;; NOOPT-NEXT:   (unreachable)
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: (i31.get_s
+ ;; NOOPT-NEXT:  (ref.cast (ref i31)
+ ;; NOOPT-NEXT:   (local.get $y)
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: )
+
+ ;; NOOPT:      (type $0 (func))
+
+ ;; NOOPT:      (type $1 (func (result i32)))
 
  ;; NOOPT:      (type $2 (func (param i32)))
 
- ;; NOOPT:      (type $3 (func (param i32) (result (ref none))))
-
- ;; NOOPT:      (type $4 (func (result (ref nofunc))))
-
- ;; NOOPT:      (type $5 (func (result (ref noextern))))
-
- ;; NOOPT:      (type $6 (func (result anyref anyref)))
-
- ;; NOOPT:      (type $7 (func (param i32) (result i32)))
+ ;; NOOPT:      (type $3 (func (param i32) (result i32)))
 
  ;; NOOPT:      (tag $exn (type $2) (param i32))
- ;; CHECK:      (type $0 (func (result i32)))
+ ;; CHECK:      (func $(ref.is_nullcall-loopspost
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: 1 (func post
+ ;; CHECK-NEXT:  (resultpost
+ ;; CHECK-NEXT: $(func $call-traps  ()((block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (call $i32externfunc 
+ ;; CHECK-NEXT:   )))
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   $call-tuple
+ ;; CHECK-NEXT: result call-func  ( ref.is_null()i32)) 
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   (result  (block
+ ;; CHECK-NEXT:   ( i32)
+ ;; CHECK-NEXT: (unreachable(resultref.is_null
+ ;; CHECK-NEXT:   i32)
+ ;; CHECK-NEXT: (ref.is_null
+ ;; CHECK-NEXT: (tuple.extract )2
+ ;; CHECK-NEXT: 0
+ ;; CHECK-NEXT:    (block
+ ;; CHECK-NEXT:  ((  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: dropblock
+ ;; CHECK-NEXT: ref.is_null
+ ;; CHECK-NEXT:    (call $loops)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (
+ ;; CHECK-NEXT: drop
+ ;; CHECK-NEXT:    (  call     (($funcunreachable)block
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )     )
+ ;; CHECK-NEXT: )(
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: tuple.drop 2
+ ;; CHECK-NEXT:     (call $tuple)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    ((unreachable
+ ;; CHECK-NEXT: drop)
+ ;; CHECK-NEXT:        (call $traps)()
+ ;; CHECK-NEXT:   (unreachable
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT:  local.set 
+ ;; CHECK-NEXT:   ))
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: $y
+ ;; CHECK-NEXT:  (call 
+ ;; CHECK-NEXT: $)
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: throws
+ ;; CHECK-NEXT:      )
 
- ;; CHECK:      (type $1 (func))
+ ;; CHECK:      (func $caller (param $x i32) (result i32)
+ ;; CHECK-NEXT: (local $y (ref eq))
+ ;; CHECK-NEXT: (if
+ ;; CHECK-NEXT:  (local.get $x)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:   (return
+ ;; CHECK-NEXT:    (i32.const 1)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (local.set $y
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (call $throws
+ ;; CHECK-NEXT:     (local.get $x)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (i31.get_s
+ ;; CHECK-NEXT:  (ref.cast (ref i31)
+ ;; CHECK-NEXT:   (local.get $y)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $call-loops (result i32)
+ ;; CHECK-NEXT: pre
+ ;; CHECK-NEXT: pre
+ ;; CHECK-NEXT: ((ref.is_nullpre
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:  (func block
+ ;; CHECK-NEXT:   pre
+ ;; CHECK-NEXT: ((drop
+ ;; CHECK-NEXT: $func $call-func    call-tuple(call   ((resultresult  i32(i32)
+ ;; CHECK-NEXT: pre
+ ;; CHECK-NEXT: $loops(()
+ ;; CHECK-NEXT: func (ref.is_null)
+ ;; CHECK-NEXT: $
+ ;; CHECK-NEXT:   func call-traps ((   $ref.is_nullresult
+ ;; CHECK-NEXT: func ()i32
+ ;; CHECK-NEXT: )call-externtuple.extract  $(result   2(
+ ;; CHECK-NEXT: unreachablecaller   ) i32
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: (0)(param   
+ ;; CHECK-NEXT: ref.is_null 
+ ;; CHECK-NEXT:  ((block
+ ;; CHECK-NEXT: $   ref.is_null(x
+ ;; CHECK-NEXT: (   drop 
+ ;; CHECK-NEXT: ()block    i32block(
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   (
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT: drop)
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:    call     post
+ ;; CHECK-NEXT: $(
+ ;; CHECK-NEXT: (call traps(   call (block
+ ;; CHECK-NEXT:    ()$$extern)
+ ;; CHECK-NEXT:   func functuple.drop ))$call-loops (result i32)
+ ;; CHECK-NEXT: (ref.is_null
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (call $loops)
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (result i32)
+ ;; CHECK-NEXT: (local )$   
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: 2   )
+ ;; CHECK-NEXT:   y   
+ ;; CHECK-NEXT: ((ref eq))
+ ;; CHECK-NEXT: (if
+ ;; CHECK-NEXT:  (local.get $x)unreachable   )(
+ ;; CHECK-NEXT: )  unreachable
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )    (unreachable)
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )post
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: ()
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )func $call-extern
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (post
+ ;; CHECK-NEXT: result (i32func $post
+ ;; CHECK-NEXT: call-func) 
+ ;; CHECK-NEXT:  (then(
+ ;; CHECK-NEXT: func (   (returnref.is_null(
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (  result i32)
+ ;; CHECK-NEXT: $(call-traps (result (ref.is_nulli32block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (call 
+ ;; CHECK-NEXT: $extern)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  )(
+ ;; CHECK-NEXT: block  ()ref.is_null
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (   (drop
+ ;; CHECK-NEXT:    (call $func)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT: drop  )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:      (call )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: $
+ ;; CHECK-NEXT: traps)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  )i32
+ ;; CHECK-NEXT: .const  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: 1)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (local.set $y
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (call $throws
+ ;; CHECK-NEXT:     (local.get $x)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (i31.get_s
+ ;; CHECK-NEXT:  (ref.cast (ref i31)
+ ;; CHECK-NEXT:   (local.get $y)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: post
+ ;; CHECK-NEXT: (func $caller (param $x i32) (result i32)
+ ;; CHECK-NEXT: (local $y (ref eq))
+ ;; CHECK-NEXT: (if
+ ;; CHECK-NEXT:  (local.get $x)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:   (return
+ ;; CHECK-NEXT:    (i32.const 1)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (local.set $y
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (call $throws
+ ;; CHECK-NEXT:     (local.get $x)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (i31.get_s
+ ;; CHECK-NEXT:  (ref.cast (ref i31)
+ ;; CHECK-NEXT:   (local.get $y)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:     (call $tuple)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (unreachable)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $caller (param $x i32) (result i32)
+ ;; CHECK-NEXT: (local $y (ref eq))
+ ;; CHECK-NEXT: (if
+ ;; CHECK-NEXT:  (local.get $x)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:   (return
+ ;; CHECK-NEXT:    (i32.const 1)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (local.set $y
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (call $throws
+ ;; CHECK-NEXT:     (local.get $x)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (i31.get_s
+ ;; CHECK-NEXT:  (ref.cast (ref i31)
+ ;; CHECK-NEXT:   (local.get $y)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $call-tuple (result i32)
+ ;; CHECK-NEXT: (ref.is_null
+ ;; CHECK-NEXT:  (tuple.extract 2 0
+ ;; CHECK-NEXT:   (block
+ ;; CHECK-NEXT:    (tuple.drop 2
+ ;; CHECK-NEXT:     (call $tuple)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (unreachable)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $throws (param $x i32)
+ ;; CHECK-NEXT: (throw $exn
+ ;; CHECK-NEXT:  (local.get $x)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $throws (param $x i32pre
+ ;; CHECK-NEXT: )(@binaryen.noreturn)
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: ((func throw $loops$
+ ;; CHECK-NEXT: exn 
+ ;; CHECK-NEXT:  (local.get $x)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (loop $l
+ ;; CHECK-NEXT:  (br $l)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $loopspre
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (@binaryen.noreturn )
+ ;; CHECK-NEXT: (loop $l
+ ;; CHECK-NEXT:  (br $(lfunc )
+ ;; CHECK-NEXT: )$func
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (unreachable)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $func
+ ;; CHECK-NEXT: (unreachable)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $extern
+ ;; CHECK-NEXT: pre
+ ;; CHECK-NEXT: (@binaryen.noreturn)
+ ;; CHECK-NEXT: ((func $trapsunreachable
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )(nop)
+ ;; CHECK-NEXT: (unreachable)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $traps
+ ;; CHECK-NEXT: (nop)
+ ;; CHECK-NEXT: (unreachable)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $extern
+ ;; CHECK-NEXT: (unreachable)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $tuple
+ ;; CHECK-NEXT: (unreachable)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $tuple
+ ;; CHECK-NEXT: (unreachable)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (type $0 (func))
+
+ ;; CHECK:      (type $1 (func (result i32)))
 
  ;; CHECK:      (type $2 (func (param i32)))
 
- ;; CHECK:      (type $3 (func (result anyref anyref)))
-
- ;; CHECK:      (type $4 (func (param i32) (result i32)))
+ ;; CHECK:      (type $3 (func (param i32) (result i32)))
 
  ;; CHECK:      (tag $exn (type $2) (param i32))
  (tag $exn (param i32))
@@ -52,7 +618,8 @@
 
  ;; NOOPT:      (export "call-tuple" (func $call-tuple))
 
- ;; NOOPT:      (func $throws (type $3) (param $x i32) (result (ref none))
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $throws (type $2) (param $x i32)
  ;; NOOPT-NEXT:  (throw $exn
  ;; NOOPT-NEXT:   (local.get $x)
  ;; NOOPT-NEXT:  )
@@ -69,7 +636,8 @@
 
  ;; CHECK:      (export "call-tuple" (func $call-tuple))
 
- ;; CHECK:      (func $throws (type $2) (param $0 i32)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $throws (type $2) (param $0 i32)
  ;; CHECK-NEXT:  (throw $exn
  ;; CHECK-NEXT:   (local.get $0)
  ;; CHECK-NEXT:  )
@@ -86,13 +654,15 @@
  ;; and then the next iteration of DAE removes the result, as all calls to this
  ;; function are dropped. The same happens to $throws above and to $loops, $func
  ;; and $extern below.
- ;; NOOPT:      (func $traps (type $1) (result (ref none))
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $traps (type $0)
  ;; NOOPT-NEXT:  (drop
  ;; NOOPT-NEXT:   (i32.const 42)
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT:  (unreachable)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $traps (type $1)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $traps (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $traps (result (ref null any))
@@ -105,12 +675,14 @@
  )
 
  ;; This function loops forever.
- ;; NOOPT:      (func $loops (type $1) (result (ref none))
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $loops (type $0)
  ;; NOOPT-NEXT:  (loop $l
  ;; NOOPT-NEXT:   (br $l)
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $loops (type $1)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $loops (type $0)
  ;; CHECK-NEXT:  (loop $l
  ;; CHECK-NEXT:   (br $l)
  ;; CHECK-NEXT:  )
@@ -122,20 +694,24 @@
  )
 
  ;; Other hierarchies.
- ;; NOOPT:      (func $func (type $4) (result (ref nofunc))
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $func (type $0)
  ;; NOOPT-NEXT:  (unreachable)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $func (type $1)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $func (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $func (result (ref null func))
   (unreachable)
  )
 
- ;; NOOPT:      (func $extern (type $5) (result (ref noextern))
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $extern (type $0)
  ;; NOOPT-NEXT:  (unreachable)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $extern (type $1)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $extern (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $extern (result externref)
@@ -143,17 +719,19 @@
  )
 
  ;; Multivalue results are left alone.
- ;; NOOPT:      (func $tuple (type $6) (result anyref anyref)
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $tuple (type $0)
  ;; NOOPT-NEXT:  (unreachable)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $tuple (type $3) (result anyref anyref)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $tuple (type $0)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $tuple (result anyref anyref)
   (unreachable)
  )
 
- ;; NOOPT:      (func $caller (type $7) (param $x i32) (result i32)
+ ;; NOOPT:      (func $caller (type $3) (param $x i32) (result i32)
  ;; NOOPT-NEXT:  (local $y (ref eq))
  ;; NOOPT-NEXT:  (if
  ;; NOOPT-NEXT:   (local.get $x)
@@ -164,8 +742,11 @@
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT:  (local.set $y
- ;; NOOPT-NEXT:   (call $throws
- ;; NOOPT-NEXT:    (local.get $x)
+ ;; NOOPT-NEXT:   (block
+ ;; NOOPT-NEXT:    (call $throws
+ ;; NOOPT-NEXT:     (local.get $x)
+ ;; NOOPT-NEXT:    )
+ ;; NOOPT-NEXT:    (unreachable)
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT:  (i31.get_s
@@ -174,7 +755,7 @@
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $caller (type $4) (param $0 i32) (result i32)
+ ;; CHECK:      (func $caller (type $3) (param $0 i32) (result i32)
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (local.get $0)
  ;; CHECK-NEXT:   (then
@@ -214,12 +795,15 @@
  )
 
  ;; Each of the other functions is called from a separate function.
- ;; NOOPT:      (func $call-traps (type $0) (result i32)
+ ;; NOOPT:      (func $call-traps (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
- ;; NOOPT-NEXT:   (call $traps)
+ ;; NOOPT-NEXT:   (block
+ ;; NOOPT-NEXT:    (call $traps)
+ ;; NOOPT-NEXT:    (unreachable)
+ ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $call-traps (type $0) (result i32)
+ ;; CHECK:      (func $call-traps (type $1) (result i32)
  ;; CHECK-NEXT:  (call $traps)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
@@ -232,12 +816,15 @@
   )
  )
 
- ;; NOOPT:      (func $call-loops (type $0) (result i32)
+ ;; NOOPT:      (func $call-loops (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
- ;; NOOPT-NEXT:   (call $loops)
+ ;; NOOPT-NEXT:   (block
+ ;; NOOPT-NEXT:    (call $loops)
+ ;; NOOPT-NEXT:    (unreachable)
+ ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $call-loops (type $0) (result i32)
+ ;; CHECK:      (func $call-loops (type $1) (result i32)
  ;; CHECK-NEXT:  (call $loops)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
@@ -247,12 +834,15 @@
   )
  )
 
- ;; NOOPT:      (func $call-func (type $0) (result i32)
+ ;; NOOPT:      (func $call-func (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
- ;; NOOPT-NEXT:   (call $func)
+ ;; NOOPT-NEXT:   (block
+ ;; NOOPT-NEXT:    (call $func)
+ ;; NOOPT-NEXT:    (unreachable)
+ ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $call-func (type $0) (result i32)
+ ;; CHECK:      (func $call-func (type $1) (result i32)
  ;; CHECK-NEXT:  (call $func)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
@@ -262,12 +852,15 @@
   )
  )
 
- ;; NOOPT:      (func $call-extern (type $0) (result i32)
+ ;; NOOPT:      (func $call-extern (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
- ;; NOOPT-NEXT:   (call $extern)
+ ;; NOOPT-NEXT:   (block
+ ;; NOOPT-NEXT:    (call $extern)
+ ;; NOOPT-NEXT:    (unreachable)
+ ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $call-extern (type $0) (result i32)
+ ;; CHECK:      (func $call-extern (type $1) (result i32)
  ;; CHECK-NEXT:  (call $extern)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
@@ -277,19 +870,19 @@
   )
  )
 
- ;; NOOPT:      (func $call-tuple (type $0) (result i32)
+ ;; NOOPT:      (func $call-tuple (type $1) (result i32)
  ;; NOOPT-NEXT:  (ref.is_null
  ;; NOOPT-NEXT:   (tuple.extract 2 0
- ;; NOOPT-NEXT:    (call $tuple)
+ ;; NOOPT-NEXT:    (block
+ ;; NOOPT-NEXT:     (call $tuple)
+ ;; NOOPT-NEXT:     (unreachable)
+ ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $call-tuple (type $0) (result i32)
- ;; CHECK-NEXT:  (ref.is_null
- ;; CHECK-NEXT:   (tuple.extract 2 0
- ;; CHECK-NEXT:    (call $tuple)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:  )
+ ;; CHECK:      (func $call-tuple (type $1) (result i32)
+ ;; CHECK-NEXT:  (call $tuple)
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $call-tuple (export "call-tuple") (result i32)
   (ref.is_null
@@ -304,9 +897,23 @@
 ;; tail-calls $gV, and $kG either returns an i31 or tail-calls $e2. $gV is
 ;; refined to (ref none), and then $e2 and $kG to (ref i31).
 (module
- ;; NOOPT:      (type $0 (func (result (ref none))))
+ ;; NOOPT:      (func $e2 (param $0 i32) (result (ref eq))
+ ;; NOOPT-NEXT: (if
+ ;; NOOPT-NEXT:  (local.get $0)
+ ;; NOOPT-NEXT:  (then
+ ;; NOOPT-NEXT:   (return
+ ;; NOOPT-NEXT:    (ref.i31
+ ;; NOOPT-NEXT:     (i32.const 0)
+ ;; NOOPT-NEXT:    )
+ ;; NOOPT-NEXT:   )
+ ;; NOOPT-NEXT:  )
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: (return_call $gV)
+ ;; NOOPT-NEXT: )
 
- ;; NOOPT:      (type $1 (func (param i32) (result (ref i31))))
+ ;; NOOPT:      (type $0 (func (result (ref eq))))
+
+ ;; NOOPT:      (type $1 (func (param i32) (result (ref eq))))
 
  ;; NOOPT:      (type $2 (func (param (ref eq))))
 
@@ -317,9 +924,85 @@
  ;; NOOPT-NEXT: ))
 
  ;; NOOPT:      (tag $exn (type $2) (param (ref eq)))
- ;; CHECK:      (type $0 (func (result (ref none))))
+ ;; CHECK:      (func $only-tail (result (ref eq))
+ ;; CHECK-NEXT: i32(.const return_call $gV)
+ ;; CHECK-NEXT: )
 
- ;; CHECK:      (type $1 (func (param i32) (result (ref i31))))
+ ;; CHECK:      (func $e2 (param $0 i32) (result (ref eq))
+ ;; CHECK-NEXT: (if
+ ;; CHECK-NEXT:  (local.get $0)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:   (return
+ ;; CHECK-NEXT:    (ref.i31
+ ;; CHECK-NEXT:     (i32.const 0)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (return_call $gV)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $only-tail (result (ref eq))
+ ;; CHECK-NEXT: (return_call $gV)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $only-tail (result (ref eq))
+ ;; CHECK-NEXT: (return_call $gV)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $e2 (param $0 i32) (result (ref eq))
+ ;; CHECK-NEXT: (if
+ ;; CHECK-NEXT:  (local.get $0)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:   (return
+ ;; CHECK-NEXT:    (ref.i31
+ ;; CHECK-NEXT:     (i32.const 0)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (return_call $gV)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $e2 (param $0 i32) (result (ref eq))
+ ;; CHECK-NEXT: (if
+ ;; CHECK-NEXT:  (local.get $0)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:   (return
+ ;; CHECK-NEXT:    (ref.i31
+ ;; CHECK-NEXT:     (i32.const 0)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (return_call $gV)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $gV (result (ref eq))
+ ;; CHECK-NEXT: (local $0 (ref eq))
+ ;; CHECK-NEXT: (local.set $0
+ ;; CHECK-NEXT:  (global.get $msg)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (throw $exn
+ ;; CHECK-NEXT:  (local.get $0)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $gV (result (ref eq))
+ ;; CHECK-NEXT: (local $0 (ref eq))
+ ;; CHECK-NEXT: (local.set $0
+ ;; CHECK-NEXT:  (global.get $msg)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (throw $exn
+ ;; CHECK-NEXT:  (local.get $0)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (type $0 (func (result (ref eq))))
+
+ ;; CHECK:      (type $1 (func (param i32) (result (ref eq))))
 
  ;; CHECK:      (type $2 (func (param (ref eq))))
 
@@ -336,7 +1019,8 @@
 
  ;; NOOPT:      (export "user" (func $user))
 
- ;; NOOPT:      (func $gV (type $0) (result (ref none))
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $gV (type $0) (result (ref eq))
  ;; NOOPT-NEXT:  (local $0 (ref eq))
  ;; NOOPT-NEXT:  (local.set $0
  ;; NOOPT-NEXT:   (global.get $msg)
@@ -347,7 +1031,8 @@
  ;; NOOPT-NEXT: )
  ;; CHECK:      (export "user" (func $user))
 
- ;; CHECK:      (func $gV (type $0) (result (ref none))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $gV (type $0) (result (ref eq))
  ;; CHECK-NEXT:  (throw $exn
  ;; CHECK-NEXT:   (global.get $msg)
  ;; CHECK-NEXT:  )
@@ -358,7 +1043,7 @@
   )
  )
 
- ;; NOOPT:      (func $e2 (type $1) (param $0 i32) (result (ref i31))
+ ;; NOOPT:      (func $e2 (type $1) (param $0 i32) (result (ref eq))
  ;; NOOPT-NEXT:  (if
  ;; NOOPT-NEXT:   (local.get $0)
  ;; NOOPT-NEXT:   (then
@@ -371,7 +1056,7 @@
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT:  (return_call $gV)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $e2 (type $1) (param $0 i32) (result (ref i31))
+ ;; CHECK:      (func $e2 (type $1) (param $0 i32) (result (ref eq))
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (local.get $0)
  ;; CHECK-NEXT:   (then
@@ -400,7 +1085,7 @@
   )
  )
 
- ;; NOOPT:      (func $kG (type $1) (param $0 i32) (result (ref i31))
+ ;; NOOPT:      (func $kG (type $1) (param $0 i32) (result (ref eq))
  ;; NOOPT-NEXT:  (if
  ;; NOOPT-NEXT:   (i32.eqz
  ;; NOOPT-NEXT:    (local.get $0)
@@ -417,7 +1102,7 @@
  ;; NOOPT-NEXT:   (local.get $0)
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $kG (type $1) (param $0 i32) (result (ref i31))
+ ;; CHECK:      (func $kG (type $1) (param $0 i32) (result (ref eq))
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (i32.eqz
  ;; CHECK-NEXT:    (local.get $0)
@@ -453,10 +1138,10 @@
  )
 
  ;; This function only tail-calls $gV, so it is refined to (ref none) as well.
- ;; NOOPT:      (func $only-tail (type $0) (result (ref none))
+ ;; NOOPT:      (func $only-tail (type $0) (result (ref eq))
  ;; NOOPT-NEXT:  (return_call $gV)
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $only-tail (type $0) (result (ref none))
+ ;; CHECK:      (func $only-tail (type $0) (result (ref eq))
  ;; CHECK-NEXT:  (return_call $gV)
  ;; CHECK-NEXT: )
  (func $only-tail (result (ref eq))
@@ -477,7 +1162,7 @@
  ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:   )
  ;; NOOPT-NEXT:   (i31.get_s
- ;; NOOPT-NEXT:    (ref.cast (ref none)
+ ;; NOOPT-NEXT:    (ref.cast (ref i31)
  ;; NOOPT-NEXT:     (call $only-tail)
  ;; NOOPT-NEXT:    )
  ;; NOOPT-NEXT:   )
@@ -486,16 +1171,15 @@
  ;; CHECK:      (func $user (type $3) (param $0 i32) (result i32)
  ;; CHECK-NEXT:  (i32.add
  ;; CHECK-NEXT:   (i31.get_s
- ;; CHECK-NEXT:    (call $kG
- ;; CHECK-NEXT:     (local.get $0)
+ ;; CHECK-NEXT:    (ref.cast (ref i31)
+ ;; CHECK-NEXT:     (call $kG
+ ;; CHECK-NEXT:      (local.get $0)
+ ;; CHECK-NEXT:     )
  ;; CHECK-NEXT:    )
  ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (block
- ;; CHECK-NEXT:    (drop
+ ;; CHECK-NEXT:   (i31.get_s
+ ;; CHECK-NEXT:    (ref.cast (ref i31)
  ;; CHECK-NEXT:     (call $only-tail)
- ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (i31.get_s
- ;; CHECK-NEXT:     (unreachable)
  ;; CHECK-NEXT:    )
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )

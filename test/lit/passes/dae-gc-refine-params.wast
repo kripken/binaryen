@@ -2,6 +2,30 @@
 ;; RUN: wasm-opt %s -all --dae -S -o - | filecheck %s
 
 (module
+ ;; CHECK:      (func $call-various-params-no
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: call (   $struct.0))
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $various-params-set
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   (   (i32(param local.tee $x
+ ;; CHECK-NEXT:    (call $$"x (ref null   
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: ($call       .const struct.0)$
+ ;; CHECK-NEXT: 0)
+ ;; CHECK-NEXT: )g(   e(t_call )n$ uref.as_non_nulll
+ ;; CHECK-NEXT: l    various-params-no(param $y (ref null $struct.0
+ ;; CHECK-NEXT: ))
+ ;; CHECK-NEXT:    ((local "ref.null _$noneg)
+ ;; CHECK-NEXT: e2 {t_null_{i32}")
+ ;; CHECK-NEXT:      i(ref (call $"get_nulnull 32_i64}"l)$struct.1)_){
+ ;; CHECK-NEXT: ()i32}")
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: ())call    )
+ ;; CHECK-NEXT: local.set   $"get_{i32}")
+
  ;; CHECK:      (type $"{}" (sub (struct)))
  (type $"{}" (sub (struct)))
 
@@ -20,13 +44,19 @@
  (type $"{i32_f32}" (sub $"{i32}" (struct (field i32) (field f32))))
 
  ;; CHECK:      (func $call-various-params-no (type $2)
- ;; CHECK-NEXT:  (call $various-params-no
- ;; CHECK-NEXT:   (call $"get_{}")
- ;; CHECK-NEXT:   (call $"get_{i32}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-no
+ ;; CHECK-NEXT:    (call $"get_{}")
+ ;; CHECK-NEXT:    (call $"get_{i32}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $various-params-no
- ;; CHECK-NEXT:   (call $"get_{i32}")
- ;; CHECK-NEXT:   (call $"get_{f64}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-no
+ ;; CHECK-NEXT:    (call $"get_{i32}")
+ ;; CHECK-NEXT:    (call $"get_{f64}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $call-various-params-no
@@ -45,7 +75,8 @@
  )
  ;; This function is called in ways that do not allow us to alter the types of
  ;; its parameters (see last function).
- ;; CHECK:      (func $various-params-no (type $8) (param $x (ref null $"{}")) (param $y (ref null $"{}"))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $various-params-no (type $8) (param $x (ref null $"{}")) (param $y (ref null $"{}"))
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.get $x)
  ;; CHECK-NEXT:  )
@@ -81,15 +112,21 @@
  )
 
  ;; CHECK:      (func $call-various-params-yes (type $2)
- ;; CHECK-NEXT:  (call $various-params-yes
- ;; CHECK-NEXT:   (call $"get_null_{i32}")
- ;; CHECK-NEXT:   (i32.const 0)
- ;; CHECK-NEXT:   (call $"get_null_{i32}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-yes
+ ;; CHECK-NEXT:    (call $"get_null_{i32}")
+ ;; CHECK-NEXT:    (i32.const 0)
+ ;; CHECK-NEXT:    (call $"get_null_{i32}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $various-params-yes
- ;; CHECK-NEXT:   (call $"get_null_{i32}")
- ;; CHECK-NEXT:   (i32.const 1)
- ;; CHECK-NEXT:   (call $"get_null_{i32_i64}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-yes
+ ;; CHECK-NEXT:    (call $"get_null_{i32}")
+ ;; CHECK-NEXT:    (i32.const 1)
+ ;; CHECK-NEXT:    (call $"get_null_{i32_i64}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $call-various-params-yes
@@ -109,7 +146,8 @@
  )
  ;; This function is called in ways that *do* allow us to alter the types of
  ;; its parameters (see last function).
- ;; CHECK:      (func $various-params-yes (type $11) (param $x (ref null $"{i32}")) (param $i i32) (param $y (ref null $"{i32}"))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $various-params-yes (type $11) (param $x (ref null $"{i32}")) (param $i i32) (param $y (ref null $"{i32}"))
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.get $x)
  ;; CHECK-NEXT:  )
@@ -128,13 +166,19 @@
  )
 
  ;; CHECK:      (func $call-various-params-set (type $2)
- ;; CHECK-NEXT:  (call $various-params-set
- ;; CHECK-NEXT:   (call $"get_null_{i32}")
- ;; CHECK-NEXT:   (call $"get_null_{i32}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-set
+ ;; CHECK-NEXT:    (call $"get_null_{i32}")
+ ;; CHECK-NEXT:    (call $"get_null_{i32}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $various-params-set
- ;; CHECK-NEXT:   (call $"get_null_{i32}")
- ;; CHECK-NEXT:   (call $"get_null_{i32_i64}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-set
+ ;; CHECK-NEXT:    (call $"get_null_{i32}")
+ ;; CHECK-NEXT:    (call $"get_null_{i32_i64}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $call-various-params-set
@@ -152,7 +196,8 @@
  ;; This function is called in ways that *do* allow us to alter the types of
  ;; its parameters (see last function), however, we reuse the parameters by
  ;; writing to them, which causes problems in one case.
- ;; CHECK:      (func $various-params-set (type $12) (param $x (ref null $"{i32}")) (param $y (ref null $"{i32}"))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $various-params-set (type $12) (param $x (ref null $"{i32}")) (param $y (ref null $"{i32}"))
  ;; CHECK-NEXT:  (local $2 (ref null $"{}"))
  ;; CHECK-NEXT:  (local.set $2
  ;; CHECK-NEXT:   (local.get $x)
@@ -202,6 +247,7 @@
  ;; CHECK-NEXT:  (call $various-params-tee
  ;; CHECK-NEXT:   (call $"get_null_{i32}")
  ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $call-various-params-tee
   ;; The argument gets {i32}, which allows us to refine.
@@ -209,7 +255,8 @@
    (call $"get_null_{i32}")
   )
  )
- ;; CHECK:      (func $various-params-tee (type $6) (param $x (ref null $"{i32}"))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $various-params-tee (type $6) (param $x (ref null $"{i32}"))
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.get $x)
  ;; CHECK-NEXT:  )
@@ -235,19 +282,25 @@
  )
 
  ;; CHECK:      (func $call-various-params-null (type $2)
- ;; CHECK-NEXT:  (call $various-params-null
- ;; CHECK-NEXT:   (ref.as_non_null
- ;; CHECK-NEXT:    (ref.null none)
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-null
+ ;; CHECK-NEXT:    (ref.as_non_null
+ ;; CHECK-NEXT:     (ref.null none)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (call $"get_null_{i32}")
  ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (call $"get_null_{i32}")
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $various-params-null
- ;; CHECK-NEXT:   (ref.as_non_null
- ;; CHECK-NEXT:    (ref.null none)
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-null
+ ;; CHECK-NEXT:    (ref.as_non_null
+ ;; CHECK-NEXT:     (ref.null none)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (ref.as_non_null
+ ;; CHECK-NEXT:     (ref.null none)
+ ;; CHECK-NEXT:    )
  ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (ref.as_non_null
- ;; CHECK-NEXT:    (ref.null none)
- ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $call-various-params-null
@@ -264,7 +317,8 @@
  )
  ;; This function is called in ways that allow us to make the first parameter
  ;; non-nullable.
- ;; CHECK:      (func $various-params-null (type $13) (param $x (ref none)) (param $y (ref null $"{i32}"))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $various-params-null (type $13) (param $x (ref none)) (param $y (ref null $"{i32}"))
  ;; CHECK-NEXT:  (local $temp i32)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.get $x)
@@ -289,11 +343,17 @@
  )
 
  ;; CHECK:      (func $call-various-params-middle (type $2)
- ;; CHECK-NEXT:  (call $various-params-middle
- ;; CHECK-NEXT:   (call $"get_null_{i32_i64}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-middle
+ ;; CHECK-NEXT:    (call $"get_null_{i32_i64}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $various-params-middle
- ;; CHECK-NEXT:   (call $"get_null_{i32_f32}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $various-params-middle
+ ;; CHECK-NEXT:    (call $"get_null_{i32_f32}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $call-various-params-middle
@@ -306,7 +366,8 @@
    (call $"get_null_{i32_f32}")
   )
  )
- ;; CHECK:      (func $various-params-middle (type $6) (param $x (ref null $"{i32}"))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $various-params-middle (type $6) (param $x (ref null $"{i32}"))
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.get $x)
  ;; CHECK-NEXT:  )
@@ -316,7 +377,8 @@
   (drop (local.get $x))
  )
 
- ;; CHECK:      (func $unused-and-refinable (type $2)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $unused-and-refinable (type $2)
  ;; CHECK-NEXT:  (local $0 structref)
  ;; CHECK-NEXT: )
  (func $unused-and-refinable (param $0 structref)
@@ -333,6 +395,7 @@
 
  ;; CHECK:      (func $call-unused-and-refinable (type $2)
  ;; CHECK-NEXT:  (call $unused-and-refinable)
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $call-unused-and-refinable
   (call $unused-and-refinable
@@ -340,7 +403,8 @@
   )
  )
 
- ;; CHECK:      (func $non-nullable-fixup (type $14) (param $0 (ref (exact $"{}")))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $non-nullable-fixup (type $14) (param $0 (ref (exact $"{}")))
  ;; CHECK-NEXT:  (local $1 structref)
  ;; CHECK-NEXT:  (local.set $1
  ;; CHECK-NEXT:   (local.get $0)
@@ -362,6 +426,7 @@
  ;; CHECK-NEXT:  (call $non-nullable-fixup
  ;; CHECK-NEXT:   (struct.new_default $"{}")
  ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $call-non-nullable-fixup
   (call $non-nullable-fixup
@@ -370,11 +435,17 @@
  )
 
  ;; CHECK:      (func $call-update-null (type $2)
- ;; CHECK-NEXT:  (call $update-null
- ;; CHECK-NEXT:   (ref.null none)
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $update-null
+ ;; CHECK-NEXT:    (ref.null none)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $update-null
- ;; CHECK-NEXT:   (struct.new_default $"{}")
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $update-null
+ ;; CHECK-NEXT:    (struct.new_default $"{}")
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $call-update-null
@@ -388,7 +459,8 @@
   )
  )
 
- ;; CHECK:      (func $update-null (type $15) (param $x (ref null (exact $"{}")))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $update-null (type $15) (param $x (ref null (exact $"{}")))
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.get $x)
  ;; CHECK-NEXT:  )

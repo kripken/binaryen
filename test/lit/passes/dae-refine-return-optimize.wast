@@ -8,6 +8,10 @@
 ;; optimized and those casts are removed. With --dae, they are left alone.
 (module
  ;; NOOPT:      (type $A (struct))
+ ;; CHECK:      (func $tee (result (ref eq))
+ ;; CHECK-NEXT: (local $x (ref eq
+ ;; CHECK-NEXT: )  ))
+
  ;; CHECK:      (type $0 (func (result (ref eq))))
 
  ;; CHECK:      (type $A (struct))
@@ -148,7 +152,79 @@
 ;; $make, whose result is refined, and $drop-param, whose parameter is removed.
 ;; The cast is removed after both changes.
 (module
+ ;; NOOPT:      (func $caller (result (ref eq))
+ ;; NOOPT-NEXT: (call $drop-param)
+ ;; NOOPT-NEXT: (ref.cast (ref (exact $struct.0))
+ ;; NOOPT-NEXT:  (call $make)
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: )
+
+ ;; NOOPT:      (func $caller (result (ref eq))
+ ;; NOOPT-NEXT: (block
+ ;; NOOPT-NEXT:  (call $drop-param)
+ ;; NOOPT-NEXT:  (unreachable)
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: (ref.cast (ref (exact $struct.0))
+ ;; NOOPT-NEXT:  (call $make)
+ ;; NOOPT-NEXT: )
+ ;; NOOPT-NEXT: )
+
  ;; NOOPT:      (type $A (struct))
+ ;; CHECK:      (func $caller (result (ref eq))
+ ;; CHECK-NEXT: (call $drop-param)
+ ;; CHECK-NEXT: (ref.cast (ref (exact $struct.0))
+ ;; CHECK-NEXT:  (call $make)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $caller (result (ref eq))
+ ;; CHECK-NEXT: (block
+ ;; CHECK-NEXT:  (call $drop-param)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (ref.cast (ref (exact $struct.0))
+ ;; CHECK-NEXT:  (call $make)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $drop-param
+ ;; CHECK-NEXT: (local $0 i32)
+ ;; CHECK-NEXT: (local.set $0
+ ;; CHECK-NEXT:  (i32.const 42)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (nop)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $drop-param
+ ;; CHECK-NEXT: (local $0 i32)
+ ;; CHECK-NEXT: (local.set $0
+ ;; CHECK-NEXT:  (i32.const 42)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (nop)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $caller (result (ref eq))
+ ;; CHECK-NEXT: (block
+ ;; CHECK-NEXT:  (call $drop-param)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (ref.cast (ref (exact $struct.0))
+ ;; CHECK-NEXT:  (call $make)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $caller (result (ref eq))
+ ;; CHECK-NEXT: (block
+ ;; CHECK-NEXT:  (call $drop-param)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (ref.cast (ref (exact $struct.0))
+ ;; CHECK-NEXT:  (call $make)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
  ;; CHECK:      (type $A (struct))
  (type $A (struct))
 
@@ -178,7 +254,8 @@
   (struct.new $A)
  )
 
- ;; NOOPT:      (func $drop-param (type $2)
+ ;; NOOPT:      (@binaryen.noreturn)
+ ;; NOOPT-NEXT: (func $drop-param (type $2)
  ;; NOOPT-NEXT:  (local $0 i32)
  ;; NOOPT-NEXT:  (local.set $0
  ;; NOOPT-NEXT:   (i32.const 42)
@@ -186,21 +263,25 @@
  ;; NOOPT-NEXT:  (block
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
- ;; CHECK:      (func $drop-param (type $2)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $drop-param (type $2)
  ;; CHECK-NEXT:  (nop)
  ;; CHECK-NEXT: )
  (func $drop-param (param $unused i32)
  )
 
  ;; NOOPT:      (func $caller (type $3) (result (ref eq))
- ;; NOOPT-NEXT:  (call $drop-param)
+ ;; NOOPT-NEXT:  (block
+ ;; NOOPT-NEXT:   (call $drop-param)
+ ;; NOOPT-NEXT:   (unreachable)
+ ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT:  (ref.cast (ref (exact $A))
  ;; NOOPT-NEXT:   (call $make)
  ;; NOOPT-NEXT:  )
  ;; NOOPT-NEXT: )
  ;; CHECK:      (func $caller (type $3) (result (ref eq))
  ;; CHECK-NEXT:  (call $drop-param)
- ;; CHECK-NEXT:  (call $make)
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $caller (export "caller") (result (ref eq))
   (call $drop-param
@@ -219,6 +300,24 @@
 ;; its cast.
 (module
  ;; NOOPT:      (type $A (struct))
+ ;; CHECK:      (func $middle (result (ref $struct.0))
+ ;; CHECK-NEXT: (local $x (ref eq))
+ ;; CHECK-NEXT: (local.set $x
+ ;; CHECK-NEXT:  (call $inner)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (ref.cast (ref $struct.0)
+ ;; CHECK-NEXT:  (local.get $x)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $outer (result (ref eq))
+ ;; CHECK-NEXT: (call $middle)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $outer (result (ref eq))
+ ;; CHECK-NEXT: (call $middle)
+ ;; CHECK-NEXT: )
+
  ;; CHECK:      (type $A (struct))
  (type $A (struct))
 

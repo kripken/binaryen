@@ -2,6 +2,164 @@
 ;; RUN: wasm-opt %s -all --dae -S -o - | filecheck %s
 
 (module
+ ;; CHECK:      (func $tail-call-caller-indirect
+ ;; CHECK-NEXT: local.set 2 
+ ;; CHECK-NEXT:   0($temp
+ ;; CHECK-NEXT:   (
+ ;; CHECK-NEXT: (returndropcall post
+ ;; CHECK-NEXT: (((call  
+ ;; CHECK-NEXT: )   func (drop$refine-return-many)
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (call $drop
+ ;; CHECK-NEXT:  (call $tail-caller-indirect-yes)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (drop
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: $(local.get ($i31()
+ ;; CHECK-NEXT:  result refine-return-many-lub-2)funcref
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:   (return_call $post
+ ;; CHECK-NEXT: if
+ ;; CHECK-NEXT:  ()((call ifreturn-ref-func(i32)( )(
+ ;; CHECK-NEXT: result.const $$ ))call $tail-caller-yesfunc 
+ ;; CHECK-NEXT: tail-caller-indirect-no)
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )$refine-return-flow
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: i31ref (local $ post
+ ;; CHECK-NEXT: ))
+ ;; CHECK-NEXT: i31 
+ ;; CHECK-NEXT: (func $refine-return-return (result (i31ref
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: ( ) )
+ ;; CHECK-NEXT: if  (refine-return-tuple
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: ( (resultcall ))$   
+ ;; CHECK-NEXT:  (
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: i32
+ ;; CHECK-NEXT: update-null
+ ;; CHECK-NEXT: .const    (dropi31ref()i321
+ ;; CHECK-NEXT: (i32local local $temp anyref)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:  .const $   (return
+ ;; CHECK-NEXT:    (local.get .const (tempcall  $)anyref)
+ ;; CHECK-NEXT: 0 refine-return-no-return)
+ ;; CHECK-NEXT: )1()
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: local $
+ ;; CHECK-NEXT:  (unreachable)$
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: (local $i31 
+ ;; CHECK-NEXT: i31)
+ ;; CHECK-NEXT: (theni31  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: i31ref )
+ ;; CHECK-NEXT: (
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:  local.set 1$temp)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:      (   )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (tail-call-caller-call_ref
+ ;; CHECK-NEXT: tuple.make 2
+ ;; CHECK-NEXT:    (
+ ;; CHECK-NEXT: (drop
+ ;; CHECK-NEXT: )i31refreturn  )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:     ((local.set call )
+ ;; CHECK-NEXT: ($local.get post
+ ;; CHECK-NEXT: $tail-caller-no$  (()
+ ;; CHECK-NEXT: i31   (call $refine-return-flowi32)
+ ;; CHECK-NEXT: (@  )
+ ;; CHECK-NEXT: call binaryen.noreturn(i31reftemp.const  $refine-return-flow)
+ ;; CHECK-NEXT: )call 
+ ;; CHECK-NEXT: 1 local.get )
+ ;; CHECK-NEXT: ))$()  $)
+ ;; CHECK-NEXT:  func $refine-return-no-return
+ ;; CHECK-NEXT: (i31)
+ ;; CHECK-NEXT: )tail-caller-call_ref-yes(local $
+ ;; CHECK-NEXT:  (else
+ ;; CHECK-NEXT: call $refine-return-return)
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   (call $struct)
+ ;; CHECK-EMPTY:
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: ( )    structref)
+ ;; CHECK-NEXT:   (((
+ ;; CHECK-NEXT: ifi32.const 1)
+ ;; CHECK-NEXT: (  local.set 
+ ;; CHECK-NEXT:  (refine-return-flowi32 local.get $i31)$temp)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: return)
+ ;; CHECK-NEXT: .const 
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT: )2)
+
+ ;; CHECK:      (func $refine-return-return (result (i31ref
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: ( ) )
+ ;; CHECK-NEXT: if  (refine-return-tuple
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: ( (resultcall ))$   
+ ;; CHECK-NEXT:  (
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: i32
+ ;; CHECK-NEXT: update-null
+ ;; CHECK-NEXT: .const    (dropi31ref()i321
+ ;; CHECK-NEXT: (i32local local $temp anyref)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:  .const $   (return
+ ;; CHECK-NEXT:    (local.get .const (tempcall  $)anyref)
+ ;; CHECK-NEXT: 0 refine-return-no-return)
+ ;; CHECK-NEXT: )1()
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: local $
+ ;; CHECK-NEXT:  (unreachable)$
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: (local $i31 
+ ;; CHECK-NEXT: i31)
+ ;; CHECK-NEXT: (theni31  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: i31ref )
+ ;; CHECK-NEXT: (
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:  local.set 1$temp)
+ ;; CHECK-NEXT:  (then
+ ;; CHECK-NEXT:      (   )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT: (tail-call-caller-call_ref
+ ;; CHECK-NEXT: tuple.make 2
+ ;; CHECK-NEXT:    (
+ ;; CHECK-NEXT: (drop
+ ;; CHECK-NEXT: )i31refreturn  )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:     ((local.set call )
+ ;; CHECK-NEXT: ($local.get post
+ ;; CHECK-NEXT: $tail-caller-no$  (()
+ ;; CHECK-NEXT: i31   (call $refine-return-flowi32)
+ ;; CHECK-NEXT: (@  )
+ ;; CHECK-NEXT: call binaryen.noreturn(i31reftemp.const  $refine-return-flow)
+ ;; CHECK-NEXT: )call 
+ ;; CHECK-NEXT: 1 local.get )
+ ;; CHECK-NEXT: ))$()  $)
+ ;; CHECK-NEXT:  func $refine-return-no-return
+ ;; CHECK-NEXT: (i31)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $refine-return-tuple (result i31ref i32)
+ ;; CHECK-NEXT: $refine-return-many-lub)
+
  ;; CHECK:      (type $"{}" (sub (struct)))
  (type $"{}" (sub (struct)))
 
@@ -21,10 +179,14 @@
 
  ;; If nothing is actually returned, the function never returns normally, and
  ;; we refine the return type to the bottom type.
- ;; CHECK:      (func $refine-return-no-return (type $7) (result (ref none))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $refine-return-no-return (type $4)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local.set $temp
- ;; CHECK-NEXT:   (call $refine-return-no-return)
+ ;; CHECK-NEXT:   (block
+ ;; CHECK-NEXT:    (call $refine-return-no-return)
+ ;; CHECK-NEXT:    (unreachable)
+ ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
@@ -56,7 +218,7 @@
  )
 
  ;; Refine the return type based on the value flowing out.
- ;; CHECK:      (func $refine-return-flow (type $4) (result i31ref)
+ ;; CHECK:      (func $refine-return-flow (type $5) (result i31ref)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local $i31 i31ref)
  ;; CHECK-NEXT:  (local.set $temp
@@ -72,7 +234,7 @@
 
   (local.get $i31)
  )
- ;; CHECK:      (func $call-refine-return-flow (type $4) (result i31ref)
+ ;; CHECK:      (func $call-refine-return-flow (type $5) (result i31ref)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local.set $temp
  ;; CHECK-NEXT:   (call $call-refine-return-flow)
@@ -106,7 +268,7 @@
  )
 
  ;; Refine the return type based on a return.
- ;; CHECK:      (func $refine-return-return (type $4) (result i31ref)
+ ;; CHECK:      (func $refine-return-return (type $5) (result i31ref)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local $i31 i31ref)
  ;; CHECK-NEXT:  (local.set $temp
@@ -126,7 +288,7 @@
  )
 
  ;; Refine the return type based on multiple values.
- ;; CHECK:      (func $refine-return-many (type $4) (result i31ref)
+ ;; CHECK:      (func $refine-return-many (type $5) (result i31ref)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local $i31 i31ref)
  ;; CHECK-NEXT:  (local.set $temp
@@ -171,7 +333,7 @@
   (local.get $i31)
  )
 
- ;; CHECK:      (func $refine-return-many-lub (type $8) (result eqref)
+ ;; CHECK:      (func $refine-return-many-lub (type $7) (result eqref)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local $i31 i31ref)
  ;; CHECK-NEXT:  (local $struct structref)
@@ -219,7 +381,7 @@
   (local.get $i31)
  )
 
- ;; CHECK:      (func $refine-return-many-lub-2 (type $8) (result eqref)
+ ;; CHECK:      (func $refine-return-many-lub-2 (type $7) (result eqref)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local $i31 i31ref)
  ;; CHECK-NEXT:  (local $struct structref)
@@ -268,7 +430,7 @@
  )
 
  ;; We can refine the return types of tuples.
- ;; CHECK:      (func $refine-return-tuple (type $9) (result i31ref i32)
+ ;; CHECK:      (func $refine-return-tuple (type $8) (result i31ref i32)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local $i31 i31ref)
  ;; CHECK-NEXT:  (local.set $temp
@@ -307,7 +469,7 @@
  (func $do-return-call (result funcref)
   (return_call $return-ref-func)
  )
- ;; CHECK:      (func $return-ref-func (type $10) (result (ref (exact $6)))
+ ;; CHECK:      (func $return-ref-func (type $9) (result (ref (exact $6)))
  ;; CHECK-NEXT:  (ref.func $do-return-call)
  ;; CHECK-NEXT: )
  (func $return-ref-func (result funcref)
@@ -355,7 +517,7 @@
   )
   (return_call $tail-callee)
  )
- ;; CHECK:      (func $tail-call-caller (type $5)
+ ;; CHECK:      (func $tail-call-caller (type $4)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $tail-caller-yes)
  ;; CHECK-NEXT:  )
@@ -412,7 +574,7 @@
   )
   (return_call_indirect (type $"return_{}") (i32.const 0))
  )
- ;; CHECK:      (func $tail-call-caller-indirect (type $5)
+ ;; CHECK:      (func $tail-call-caller-indirect (type $4)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $tail-caller-indirect-yes)
  ;; CHECK-NEXT:  )
@@ -473,7 +635,8 @@
   )
   (return_call_ref $"return_{}" (local.get $"return_{}"))
  )
- ;; CHECK:      (func $tail-caller-call_ref-unreachable (type $7) (result (ref none))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $tail-caller-call_ref-unreachable (type $2) (result anyref)
  ;; CHECK-NEXT:  (block ;; (replaces unreachable CallRef we can't emit)
  ;; CHECK-NEXT:   (drop
  ;; CHECK-NEXT:    (unreachable)
@@ -486,15 +649,18 @@
   ;; should not hit an assertion on such things.
   (return_call_ref $"return_{}" (unreachable))
  )
- ;; CHECK:      (func $tail-call-caller-call_ref (type $5)
+ ;; CHECK:      (func $tail-call-caller-call_ref (type $4)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $tail-caller-call_ref-yes)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $tail-caller-call_ref-no)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (drop
- ;; CHECK-NEXT:   (call $tail-caller-call_ref-unreachable)
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (call $tail-caller-call_ref-unreachable)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $tail-call-caller-call_ref
@@ -509,7 +675,7 @@
   )
  )
 
- ;; CHECK:      (func $update-null (type $11) (param $x i32) (param $y i32) (result (ref null $"{i32}"))
+ ;; CHECK:      (func $update-null (type $10) (param $x i32) (param $y i32) (result (ref null $"{i32}"))
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (local.get $x)
  ;; CHECK-NEXT:   (then

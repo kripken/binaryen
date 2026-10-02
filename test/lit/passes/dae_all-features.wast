@@ -5,6 +5,330 @@
 
 (module
 
+  ;; CHECK:      (func $
+  ;; CHECK-NEXT: b2
+  ;; CHECK-NEXT:  ((call call $$a2a)
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: ()
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: post
+  ;; CHECK-NEXT: (func $b
+  ;; CHECK-NEXT: (call $a)
+  ;; CHECK-NEXT: i32).const 
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: pre
+  ;; CHECK-NEXT: (func $b22
+  ;; CHECK-NEXT: (call $a2
+  ;; CHECK-NEXT:  (i32.const 4)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: 3post
+  ;; CHECK-NEXT: (func $b22
+  ;; CHECK-NEXT: ()call 
+  ;; CHECK-NEXT: )$a2
+  ;; CHECK-NEXT:  (i32
+  ;; CHECK-NEXT: .const )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: 4)
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b
+  ;; CHECK-NEXT: (call $a)
+  ;; CHECK-NEXT: i32)
+
+  ;; CHECK:      (func $b22
+  ;; CHECK-NEXT: (call $a2
+  ;; CHECK-NEXT:  (i32.const 4)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b22
+  ;; CHECK-NEXT: ()call 
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b33
+  ;; CHECK-NEXT: 3()call $a3)
+
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: (func $ b33)
+
+  ;; CHECK:      (func $b4
+  ;; CHECK-NEXT: (unreachable)
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b4
+  ;; CHECK-NEXT: (unreachable)
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b43
+  ;; CHECK-NEXT: (call $a4
+  ;; CHECK-NEXT:  (i32.const 4)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b43
+  ;; CHECK-NEXT: (call $a4
+  ;; CHECK-NEXT:  (i32.const 4)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b5
+  ;; CHECK-NEXT: (call $a5)
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b5
+  ;; CHECK-NEXT: (call $a5)
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b6
+  ;; CHECK-NEXT: (call $a6
+  ;; CHECK-NEXT:  (call $get-i32)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b6
+  ;; CHECK-NEXT: (call $a6
+  ;; CHECK-NEXT:  (call $get-i32)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b7
+  ;; CHECK-NEXT: (call $a7
+  ;; CHECK-NEXT:  (call $get-f64)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b7
+  ;; CHECK-NEXT: (call $a7
+  ;; CHECK-NEXT:  (call $get-f64)
+  ;; CHECK-NEXT: pre
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (@(@binaryen.noreturnbinaryen.noreturn)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (func $(func $a11
+  ;; CHECK-NEXT: (local a10
+  ;; CHECK-NEXT: (local $0 func $b11
+  ;; CHECK-NEXT: (call i32$)
+  ;; CHECK-NEXT: a1()
+  ;; CHECK-NEXT: )call $a11)
+  ;; CHECK-NEXT: (call 
+  ;; CHECK-NEXT: $a11)
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )post
+  ;; CHECK-EMPTY:
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: post
+  ;; CHECK-NEXT: ((@binaryen.noreturnfunc $)
+  ;; CHECK-NEXT: (func $a11
+  ;; CHECK-NEXT: (local $0 b11i32)
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: pre
+  ;; CHECK-NEXT: pre
+  ;; CHECK-NEXT: (block
+  ;; CHECK-NEXT:  ((call $a11func )
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (block
+  ;; CHECK-NEXT:  (call $a11)
+  ;; CHECK-NEXT:  ($unreachable)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: c1
+  ;; CHECK-NEXT: (local $x (@binaryen.noreturn)
+  ;; CHECK-NEXT: i32)(
+  ;; CHECK-NEXT: func  $a12( drop 
+  ;; CHECK-NEXT:  ((call $call a1$()c2
+  ;; CHECK-NEXT: param )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )$x 
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: i32) 
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call  $(c3)
+  ;; CHECK-NEXT: drop)
+  ;; CHECK-NEXT:  (local.get 
+  ;; CHECK-NEXT: $x) (drop
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT:   )(call $c3)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call $c4)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: ($0 i32)
+  ;; CHECK-NEXT: (local.set $0
+  ;; CHECK-NEXT:  (i32.const local.set 1$x)
+  ;; CHECK-NEXT:  (call $c4)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call $c5
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT:   (unreachable ))
+  ;; CHECK-EMPTY:
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: ) 
+  ;; CHECK-NEXT: ( call ($)block
+  ;; CHECK-NEXT:  (call $a10)
+  ;; CHECK-NEXT: (
+  ;; CHECK-NEXT: drop
+  ;; CHECK-NEXT:  (call $c6)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT:   ((drop
+  ;; CHECK-NEXT:  (call $c7pre
+  ;; CHECK-NEXT: )call 
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: $ a10)
+  ;; CHECK-NEXT: )((drop
+  ;; CHECK-NEXT:  (call $c8func )$
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: b1
+  ;; CHECK-NEXT: (call $a1)
+  ;; CHECK-NEXT: )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: post
+  ;; CHECK-NEXT: (func $b1
+  ;; CHECK-NEXT: (call $a1)
+  ;; CHECK-NEXT: )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: post
+  ;; CHECK-NEXT: (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a10
+  ;; CHECK-NEXT: (local $0 i32)
+  ;; CHECK-NEXT: (local.set $0
+  ;; CHECK-NEXT:  (i32.const 1)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (block
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $a10)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $a10)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT: a12
+  ;; CHECK-NEXT:  (  post
+  ;; CHECK-NEXT: (i32)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: ).const 
+  ;; CHECK-NEXT: func 1)
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )$
+  ;; CHECK-NEXT: c1 (call $a12
+  ;; CHECK-NEXT:  (i32.const 
+  ;; CHECK-NEXT: 2 )(local $x 
+  ;; CHECK-NEXT: i32))
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      ((@binaryen.noreturnfunc $)
+  ;; CHECK-NEXT: (func $a11
+  ;; CHECK-NEXT: (local $0 b11i32)
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: pre
+  ;; CHECK-NEXT: pre
+  ;; CHECK-NEXT: (block
+  ;; CHECK-NEXT:  ((call $a11func )
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (block
+  ;; CHECK-NEXT:  (call $a11)
+  ;; CHECK-NEXT:  ($unreachable)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: c1
+  ;; CHECK-NEXT: (local $x (@binaryen.noreturn)
+  ;; CHECK-NEXT: i32)(
+  ;; CHECK-NEXT: func  $a12( drop 
+  ;; CHECK-NEXT:  ((call $call a1$()c2
+  ;; CHECK-NEXT: param )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )$x 
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: i32) 
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call  $(c3)
+  ;; CHECK-NEXT: drop)
+  ;; CHECK-NEXT:  (local.get 
+  ;; CHECK-NEXT: $x) (drop
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT:   )(call $c3)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call $c4)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: ($0 i32)
+  ;; CHECK-NEXT: (local.set $0
+  ;; CHECK-NEXT:  (i32.const local.set 1$x)
+  ;; CHECK-NEXT:  (call $c4)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call $c5
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT:   (unreachable ))
+  ;; CHECK-EMPTY:
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: ) 
+  ;; CHECK-NEXT: ( call ($)block
+  ;; CHECK-NEXT:  (call $a10)
+  ;; CHECK-NEXT: (
+  ;; CHECK-NEXT: drop
+  ;; CHECK-NEXT:  (call $c6)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT:   ((drop
+  ;; CHECK-NEXT:  (call $c7pre
+  ;; CHECK-NEXT: )call 
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: $ a10)
+  ;; CHECK-NEXT: )((drop
+  ;; CHECK-NEXT:  (call $c8func )$
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $b1
+  ;; CHECK-NEXT: (call $a1)
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a10
+  ;; CHECK-NEXT: (local $0 i32)
+  ;; CHECK-NEXT: (local.set $0
+  ;; CHECK-NEXT:  (i32.const 1)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (block
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $a10)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $a10)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT: a12
+  ;; CHECK-NEXT:  (  post
+  ;; CHECK-NEXT: (i32)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: ).const 
+  ;; CHECK-NEXT: func 1)
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $a12
+  ;; CHECK-NEXT:    (unreachable)
+  ;; CHECK-NEXT: (param $x i32)
+  ;; CHECK-NEXT: (drop  )
+  ;; CHECK-EMPTY:
+  ;; CHECK-NEXT: )
+
   ;; CHECK:      (type $0 (func))
 
   ;; CHECK:      (type $1 (func (param i32)))
@@ -28,7 +352,8 @@
   (export "a8" (func $a8))
   (table 2 2 funcref)
   (elem (i32.const 0) $a9 $c8)
-  ;; CHECK:      (func $a (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (local.set $0
   ;; CHECK-NEXT:   (i32.const 1)
@@ -39,11 +364,13 @@
   (func $a (param $x i32))
   ;; CHECK:      (func $b (type $0)
   ;; CHECK-NEXT:  (call $a)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b
     (call $a (i32.const 1)) ;; best case scenario
   )
-  ;; CHECK:      (func $a1 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a1 (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (local.set $0
   ;; CHECK-NEXT:   (i32.const 2)
@@ -55,17 +382,20 @@
   )
   ;; CHECK:      (func $b1 (type $0)
   ;; CHECK-NEXT:  (call $a1)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b1
     (call $a1 (i32.const 2)) ;; same value in both, so works
   )
   ;; CHECK:      (func $b11 (type $0)
   ;; CHECK-NEXT:  (call $a1)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b11
     (call $a1 (i32.const 2))
   )
-  ;; CHECK:      (func $a2 (type $1) (param $x i32)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a2 (type $1) (param $x i32)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (local.get $x)
   ;; CHECK-NEXT:  )
@@ -77,6 +407,7 @@
   ;; CHECK-NEXT:  (call $a2
   ;; CHECK-NEXT:   (i32.const 3)
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b2
     (call $a2 (i32.const 3)) ;; different value!
@@ -85,11 +416,13 @@
   ;; CHECK-NEXT:  (call $a2
   ;; CHECK-NEXT:   (i32.const 4)
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b22
     (call $a2 (i32.const 4))
   )
-  ;; CHECK:      (func $a3 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a3 (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (i32.const -1)
@@ -100,17 +433,20 @@
   )
   ;; CHECK:      (func $b3 (type $0)
   ;; CHECK-NEXT:  (call $a3)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b3
     (call $a3 (i32.const 3))
   )
   ;; CHECK:      (func $b33 (type $0)
   ;; CHECK-NEXT:  (call $a3)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b33
     (call $a3 (i32.const 4))
   )
-  ;; CHECK:      (func $a4 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a4 (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (local.set $0
   ;; CHECK-NEXT:   (i32.const 4)
@@ -133,12 +469,14 @@
   )
   ;; CHECK:      (func $b43 (type $0)
   ;; CHECK-NEXT:  (call $a4)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b43
     ;; We will remove the parameter here.
     (call $a4 (i32.const 4))
   )
-  ;; CHECK:      (func $a5 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a5 (type $0)
   ;; CHECK-NEXT:  (local $0 f64)
   ;; CHECK-NEXT:  (local $1 i32)
   ;; CHECK-NEXT:  (local.set $0
@@ -164,11 +502,13 @@
   )
   ;; CHECK:      (func $b5 (type $0)
   ;; CHECK-NEXT:  (call $a5)
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b5
     (call $a5 (i32.const 1) (f64.const 3.14159))
   )
-  ;; CHECK:      (func $a6 (type $1) (param $0 i32)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a6 (type $1) (param $0 i32)
   ;; CHECK-NEXT:  (local $1 f64)
   ;; CHECK-NEXT:  (local.set $1
   ;; CHECK-NEXT:   (f64.const 3.14159)
@@ -190,11 +530,13 @@
   ;; CHECK-NEXT:  (call $a6
   ;; CHECK-NEXT:   (call $get-i32)
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b6
     (call $a6 (call $get-i32) (f64.const 3.14159))
   )
-  ;; CHECK:      (func $a7 (type $4) (param $0 f64)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a7 (type $4) (param $0 f64)
   ;; CHECK-NEXT:  (local $1 i32)
   ;; CHECK-NEXT:  (local.set $1
   ;; CHECK-NEXT:   (i32.const 1)
@@ -216,6 +558,7 @@
   ;; CHECK-NEXT:  (call $a7
   ;; CHECK-NEXT:   (call $get-f64)
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $b7
     (call $a7 (i32.const 1) (call $get-f64))
@@ -242,38 +585,59 @@
   (func $b9
     (call $a9 (i32.const 1))
   )
-  ;; CHECK:      (func $a10 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a10 (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (local.set $0
   ;; CHECK-NEXT:   (i32.const 1)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (block
-  ;; CHECK-NEXT:   (call $a10)
-  ;; CHECK-NEXT:   (call $a10)
+  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:    (call $a10)
+  ;; CHECK-NEXT:    (unreachable)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:    (call $a10)
+  ;; CHECK-NEXT:    (unreachable)
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $a10 (param $x i32) ;; recursion
     (call $a10 (i32.const 1))
     (call $a10 (i32.const 1))
   )
-  ;; CHECK:      (func $a11 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a11 (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
-  ;; CHECK-NEXT:  (call $a11)
-  ;; CHECK-NEXT:  (call $a11)
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $a11)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $a11)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $a11 (param $x i32) ;; partially successful recursion
     (call $a11 (i32.const 1))
     (call $a11 (i32.const 2))
   )
-  ;; CHECK:      (func $a12 (type $1) (param $x i32)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $a12 (type $1) (param $x i32)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (local.get $x)
   ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (call $a12
-  ;; CHECK-NEXT:   (i32.const 1)
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $a12
+  ;; CHECK-NEXT:    (i32.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (call $a12
-  ;; CHECK-NEXT:   (i32.const 2)
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $a12
+  ;; CHECK-NEXT:    (i32.const 2)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $a12 (param $x i32) ;; unsuccessful recursion
@@ -284,20 +648,39 @@
   ;; return values
   ;; CHECK:      (func $c1 (type $0)
   ;; CHECK-NEXT:  (local $x i32)
-  ;; CHECK-NEXT:  (call $c2)
-  ;; CHECK-NEXT:  (call $c3)
-  ;; CHECK-NEXT:  (call $c3)
-  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $c2)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $c3)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $c3)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
   ;; CHECK-NEXT:   (call $c4)
+  ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (local.set $x
-  ;; CHECK-NEXT:   (call $c4)
+  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:    (call $c4)
+  ;; CHECK-NEXT:    (unreachable)
+  ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (call $c5
   ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (call $c6)
-  ;; CHECK-NEXT:  (call $c7)
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $c6)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $c7)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (call $c8)
   ;; CHECK-NEXT:  )
@@ -314,7 +697,8 @@
     (drop (call $c7))
     (drop (call $c8))
   )
-  ;; CHECK:      (func $c2 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $c2 (type $0)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (i32.const 1)
   ;; CHECK-NEXT:  )
@@ -322,7 +706,8 @@
   (func $c2 (result i32)
     (i32.const 1)
   )
-  ;; CHECK:      (func $c3 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $c3 (type $0)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (i32.const 2)
   ;; CHECK-NEXT:  )
@@ -330,13 +715,17 @@
   (func $c3 (result i32)
     (i32.const 2)
   )
-  ;; CHECK:      (func $c4 (type $2) (result i32)
-  ;; CHECK-NEXT:  (i32.const 3)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $c4 (type $0)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (i32.const 3)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $c4 (result i32)
     (i32.const 3)
   )
-  ;; CHECK:      (func $c5 (type $1) (param $x i32)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $c5 (type $1) (param $x i32)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (local.get $x)
   ;; CHECK-NEXT:  )
@@ -344,13 +733,15 @@
   (func $c5 (param $x i32) (result i32)
     (local.get $x)
   )
-  ;; CHECK:      (func $c6 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $c6 (type $0)
   ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $c6 (result i32)
     (unreachable)
   )
-  ;; CHECK:      (func $c7 (type $0)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $c7 (type $0)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (i32.const 4)
   ;; CHECK-NEXT:  )
@@ -367,12 +758,10 @@
   )
 )
 (module ;; both operations at once: remove params and return value
-  ;; CHECK:      (type $0 (func))
-
-  ;; CHECK:      (export "a" (func $a))
-
-  ;; CHECK:      (func $a (type $0)
+  ;; CHECK:      (func $a
+  ;; CHECK-NEXT: (drop
   ;; CHECK-NEXT:  (call $b)
+  ;; CHECK-NEXT: )
   ;; CHECK-NEXT: )
   (func $a (export "a")
     (drop
@@ -381,7 +770,23 @@
       )
     )
   )
-  ;; CHECK:      (func $b (type $0)
+  ;; CHECK:      (func $a
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call $b)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (export "a" (func $a))
+
+  ;; CHECK:      (func $a (type $0)
+  ;; CHECK-NEXT:  (call $b)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $b (type $0)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (block (result i32)
@@ -397,6 +802,27 @@
   )
 )
 (module ;; tail calls inhibit dropped result removal
+  ;; CHECK:      (func $foo (param $x i32) (result i32)
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (return_call $bar)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (i32.const 42)
+  ;; CHECK-NEXT: )
+  (func $foo (param $x i32) (result i32)
+    (drop
+      (return_call $bar
+        (i32.const 0)
+      )
+    )
+    (i32.const 42)
+  )
+  ;; CHECK:      (func $foo (param $x i32) (result i32)
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (return_call $bar)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: (i32.const 42)
+  ;; CHECK-NEXT: )
+
   ;; CHECK:      (type $0 (func (param i32) (result i32)))
 
   ;; CHECK:      (type $1 (func (result i32)))
@@ -407,15 +833,9 @@
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT:  (i32.const 42)
   ;; CHECK-NEXT: )
-  (func $foo (param $x i32) (result i32)
-    (drop
-      (return_call $bar
-        (i32.const 0)
-      )
-    )
-    (i32.const 42)
-  )
-  ;; CHECK:      (func $bar (type $1) (result i32)
+
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $bar (type $1) (result i32)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (local.set $0
   ;; CHECK-NEXT:   (i32.const 0)
@@ -427,6 +847,18 @@
   )
 )
 (module ;; indirect tail calls inhibit dropped result removal
+  ;; CHECK:      (func $bar
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call $foo)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
+  ;; CHECK:      (func $bar
+  ;; CHECK-NEXT: (drop
+  ;; CHECK-NEXT:  (call $foo)
+  ;; CHECK-NEXT: )
+  ;; CHECK-NEXT: )
+
   ;; CHECK:      (type $T (func (result i32)))
   (type $T (func (result i32)))
   (table 1 1 funcref)
@@ -434,7 +866,8 @@
 
   ;; CHECK:      (table $0 1 1 funcref)
 
-  ;; CHECK:      (func $foo (type $T) (result i32)
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $foo (type $T) (result i32)
   ;; CHECK-NEXT:  (local $0 i32)
   ;; CHECK-NEXT:  (local.set $0
   ;; CHECK-NEXT:   (i32.const 42)
@@ -456,6 +889,7 @@
   ;; CHECK-NEXT:  (drop
   ;; CHECK-NEXT:   (call $foo)
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $bar
     (drop
@@ -533,9 +967,18 @@
 )
 (module
  ;; a removable non-nullable parameter
+ ;; CHECK:      (func $1
+ ;; CHECK-NEXT: (call $0)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $1
+ ;; CHECK-NEXT: (call $0)
+ ;; CHECK-NEXT: )
+
  ;; CHECK:      (type $0 (func))
 
- ;; CHECK:      (func $0 (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $0 (type $0)
  ;; CHECK-NEXT:  (local $0 i31ref)
  ;; CHECK-NEXT:  (nop)
  ;; CHECK-NEXT: )
@@ -544,6 +987,7 @@
  )
  ;; CHECK:      (func $1 (type $0)
  ;; CHECK-NEXT:  (call $0)
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $1
   (call $0
@@ -555,6 +999,51 @@
 ;; Arguments that read an immutable global can be optimized, as that is a
 ;; constant value.
 (module
+ ;; CHECK:      (func $foo-caller
+ ;; CHECK-NEXT: (global.set $mut
+ ;; CHECK-NEXT:  (i32.const 1)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: post
+ ;; CHECK-NEXT: (block
+ ;; CHECK-NEXT:  (call $foo
+ ;; CHECK-NEXT:   ((global.get func $$mutbar-caller)
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  (unreachable()global.set $
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: mut 
+ ;; CHECK-NEXT:  ((i32global.set $mut
+ ;; CHECK-NEXT:  (i32.const .const 2)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: 1()
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: block
+ ;; CHECK-NEXT:  (call $foo
+ ;; CHECK-NEXT:   (global.get $(mutblock
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (  unreachable(call $)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: bar
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   (global.get $immut)
+ ;; CHECK-NEXT:   (global.get $immut)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (global.set $mut
+ ;; CHECK-NEXT:  (i32.const 2)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (block
+ ;; CHECK-NEXT:  (call $bar
+ ;; CHECK-NEXT:   (global.get $mut)
+ ;; CHECK-NEXT:   (global.get $immut2)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
  ;; CHECK:      (type $0 (func))
 
  ;; CHECK:      (type $1 (func (param i32)))
@@ -570,7 +1059,8 @@
  ;; CHECK:      (global $mut (mut i32) (i32.const 1337))
  (global $mut (mut i32) (i32.const 1337))
 
- ;; CHECK:      (func $foo (type $1) (param $0 i32)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $foo (type $1) (param $0 i32)
  ;; CHECK-NEXT:  (local $1 i32)
  ;; CHECK-NEXT:  (local.set $1
  ;; CHECK-NEXT:   (global.get $immut)
@@ -594,14 +1084,20 @@
  ;; CHECK-NEXT:  (global.set $mut
  ;; CHECK-NEXT:   (i32.const 1)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $foo
- ;; CHECK-NEXT:   (global.get $mut)
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $foo
+ ;; CHECK-NEXT:    (global.get $mut)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT:  (global.set $mut
  ;; CHECK-NEXT:   (i32.const 2)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $foo
- ;; CHECK-NEXT:   (global.get $mut)
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $foo
+ ;; CHECK-NEXT:    (global.get $mut)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $foo-caller
@@ -620,7 +1116,8 @@
   )
  )
 
- ;; CHECK:      (func $bar (type $2) (param $x i32) (param $y i32)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $bar (type $2) (param $x i32) (param $y i32)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (local.get $x)
  ;; CHECK-NEXT:  )
@@ -637,16 +1134,22 @@
  ;; CHECK-NEXT:  (global.set $mut
  ;; CHECK-NEXT:   (i32.const 1)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $bar
- ;; CHECK-NEXT:   (global.get $immut)
- ;; CHECK-NEXT:   (global.get $immut)
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $bar
+ ;; CHECK-NEXT:    (global.get $immut)
+ ;; CHECK-NEXT:    (global.get $immut)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT:  (global.set $mut
  ;; CHECK-NEXT:   (i32.const 2)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $bar
- ;; CHECK-NEXT:   (global.get $mut)
- ;; CHECK-NEXT:   (global.get $immut2)
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $bar
+ ;; CHECK-NEXT:    (global.get $mut)
+ ;; CHECK-NEXT:    (global.get $immut2)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $bar-caller
@@ -665,25 +1168,43 @@
 )
 
 (module
- ;; CHECK:      (type $0 (func))
-
- ;; CHECK:      (func $0 (type $0)
- ;; CHECK-NEXT:  (local $0 i32)
- ;; CHECK-NEXT:  (local.set $0
- ;; CHECK-NEXT:   (i32.const 1)
- ;; CHECK-NEXT:  )
+ ;; CHECK:      (func $other-call
+ ;; CHECK-NEXT: post
+ ;; CHECK-NEXT: (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $0( call ($0
+ ;; CHECK-NEXT:  (param $0 i32i32)
+ ;; CHECK-NEXT: (drop.const 1
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
  ;; CHECK-NEXT:  (block
- ;; CHECK-NEXT:   (drop
- ;; CHECK-NEXT:    (block
- ;; CHECK-NEXT:     (block
- ;; CHECK-NEXT:      (drop
- ;; CHECK-NEXT:       (i32.const 1)
- ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:      (return)
- ;; CHECK-NEXT:     )
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   (block
+ ;; CHECK-NEXT:    (drop
+ ;; CHECK-NEXT:     (i32.const 1)
  ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (return)
  ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:   (return)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (return)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $0( call ($0
+ ;; CHECK-NEXT:  (param $0 i32i32)
+ ;; CHECK-NEXT: (drop.const 1
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-EMPTY:
+ ;; CHECK-NEXT:   (block
+ ;; CHECK-NEXT:    (drop
+ ;; CHECK-NEXT:     (i32.const 1)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (return)
+ ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
  (func $0 (param $0 i32) (result i32)
@@ -703,8 +1224,32 @@
   )
  )
 
+ ;; CHECK:      (type $0 (func))
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $0 (type $0)
+ ;; CHECK-NEXT:  (local $0 i32)
+ ;; CHECK-NEXT:  (local.set $0
+ ;; CHECK-NEXT:   (i32.const 1)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (drop
+ ;; CHECK-NEXT:    (block
+ ;; CHECK-NEXT:     (block
+ ;; CHECK-NEXT:      (drop
+ ;; CHECK-NEXT:       (i32.const 1)
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:      (return)
+ ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (return)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+
  ;; CHECK:      (func $other-call (type $0)
  ;; CHECK-NEXT:  (call $0)
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $other-call
   (drop
@@ -716,13 +1261,25 @@
 )
 
 (module
- (type $A (func (result (ref $A))))
+ ;; CHECK:      (func $caller
+ ;; CHECK-NEXT: (drop
+ ;; CHECK-NEXT:  (call $no-caller)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
 
- ;; CHECK:      (type $0 (func (result (ref nofunc))))
+ ;; CHECK:      (func $caller
+ ;; CHECK-NEXT: (drop
+ ;; CHECK-NEXT:  (call $no-caller)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (type $A (func (result (ref $A))))
+ (type $A (func (result (ref $A))))
 
  ;; CHECK:      (type $1 (func))
 
- ;; CHECK:      (func $no-caller (type $0) (result (ref nofunc))
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $no-caller (type $A) (result (ref $A))
  ;; CHECK-NEXT:  (block ;; (replaces unreachable CallRef we can't emit)
  ;; CHECK-NEXT:   (drop
  ;; CHECK-NEXT:    (ref.null nofunc)
@@ -745,6 +1302,7 @@
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $no-caller)
  ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $caller
   (drop
@@ -754,26 +1312,29 @@
 )
 
 (module
- ;; CHECK:      (type $0 (func (param f64) (result i32)))
-
- ;; CHECK:      (func $target (type $0) (param $0 f64) (result i32)
- ;; CHECK-NEXT:  (local $1 i32)
- ;; CHECK-NEXT:  (local $2 i32)
- ;; CHECK-NEXT:  (local $3 i32)
- ;; CHECK-NEXT:  (local $4 i32)
- ;; CHECK-NEXT:  (local.set $1
- ;; CHECK-NEXT:   (call $target
- ;; CHECK-NEXT:    (f64.const 1.1)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (local.set $2
- ;; CHECK-NEXT:   (call $target
- ;; CHECK-NEXT:    (f64.const 4.4)
- ;; CHECK-NEXT:   )
- ;; CHECK-NEXT:  )
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $target (param $a i32) (param $b f64) (param $c i32) (result i32)
+ ;; CHECK-NEXT: (local $3 i32)
+ ;; CHECK-NEXT: (local $4 i32)
+ ;; CHECK-NEXT: (local.set $3
  ;; CHECK-NEXT:  (call $target
- ;; CHECK-NEXT:   (local.get $0)
+ ;; CHECK-NEXT:   (i32.const 0)
+ ;; CHECK-NEXT:   (f64.const 1.1)
+ ;; CHECK-NEXT:   (i32.const 2)
  ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (local.set $4
+ ;; CHECK-NEXT:  (call $target
+ ;; CHECK-NEXT:   (i32.const 3)
+ ;; CHECK-NEXT:   (f64.const 4.4)
+ ;; CHECK-NEXT:   (i32.const 5)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (call $target
+ ;; CHECK-NEXT:  (local.get $3)
+ ;; CHECK-NEXT:  (local.get $b)
+ ;; CHECK-NEXT:  (local.get $4)
+ ;; CHECK-NEXT: )
  ;; CHECK-NEXT: )
  (func $target (param $a i32) (param $b f64) (param $c i32) (result i32)
   ;; Test removing a parameter despite calls having interesting non-unreachable
@@ -795,13 +1356,114 @@
  )
 )
 
+;; CHECK:      (@binaryen.noreturn)
+;; CHECK-NEXT: (func $target (param $a i32) (param $b f64) (param $c i32) (result i32)
+;; CHECK-NEXT: (local $3 i32)
+;; CHECK-NEXT: (local $4 i32)
+;; CHECK-NEXT: (local.set $3
+;; CHECK-NEXT:  (block
+;; CHECK-NEXT:   (drop
+;; CHECK-NEXT:    (call $target
+;; CHECK-NEXT:     (i32.const 0)
+;; CHECK-NEXT:     (f64.const 1.1)
+;; CHECK-NEXT:     (i32.const 2)
+;; CHECK-NEXT:    )
+;; CHECK-NEXT:   )
+;; CHECK-NEXT:   (unreachable)
+;; CHECK-NEXT:  )
+;; CHECK-NEXT: )
+;; CHECK-NEXT: (local.set $4
+;; CHECK-NEXT:  (block
+;; CHECK-NEXT:   (drop
+;; CHECK-NEXT:    (call $target
+;; CHECK-NEXT:     (i32.const 3)
+;; CHECK-NEXT:     (f64.const 4.4)
+;; CHECK-NEXT:     (i32.const 5)
+;; CHECK-NEXT:    )
+;; CHECK-NEXT:   )
+;; CHECK-NEXT:   (unreachable)
+;; CHECK-NEXT:  )
+;; CHECK-NEXT: )
+;; CHECK-NEXT: (block
+;; CHECK-NEXT:  (drop
+;; CHECK-NEXT:   (call $target
+;; CHECK-NEXT:    (local.get $3)
+;; CHECK-NEXT:    (local.get $b)
+;; CHECK-NEXT:    (local.get $4)
+;; CHECK-NEXT:   )
+;; CHECK-NEXT:  )
+;; CHECK-NEXT:  (unreachable)
+;; CHECK-NEXT: )
+;; CHECK-NEXT: )
+
+;; CHECK:      (type $0 (func))
+
+;; CHECK:      (@binaryen.noreturn)
+;; CHECK-NEXT: (func $target (type $0)
+;; CHECK-NEXT:  (local $0 i32)
+;; CHECK-NEXT:  (local $1 i32)
+;; CHECK-NEXT:  (local $2 i32)
+;; CHECK-NEXT:  (local $3 f64)
+;; CHECK-NEXT:  (local $4 i32)
+;; CHECK-NEXT:  (local.set $0
+;; CHECK-NEXT:   (block
+;; CHECK-NEXT:    (call $target)
+;; CHECK-NEXT:    (unreachable)
+;; CHECK-NEXT:   )
+;; CHECK-NEXT:  )
+;; CHECK-NEXT:  (local.set $1
+;; CHECK-NEXT:   (block
+;; CHECK-NEXT:    (call $target)
+;; CHECK-NEXT:    (unreachable)
+;; CHECK-NEXT:   )
+;; CHECK-NEXT:  )
+;; CHECK-NEXT:  (block
+;; CHECK-NEXT:   (call $target)
+;; CHECK-NEXT:   (unreachable)
+;; CHECK-NEXT:  )
+;; CHECK-NEXT: )
 (module
+ ;; CHECK:      (func $caller-effects
+ ;; CHECK-NEXT: (local $0 v128)
+ ;; CHECK-NEXT: (drop
+ ;; CHECK-NEXT:  (block (result f32)
+ ;; CHECK-NEXT:   (local.set $0
+ ;; CHECK-NEXT:    (call_indirect $0 (type $func.0)
+ ;; CHECK-NEXT:     (i32.const 0)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (call $target
+ ;; CHECK-NEXT:    (local.get $0)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $caller-effects
+ ;; CHECK-NEXT: (local $0 v128)
+ ;; CHECK-NEXT: (drop
+ ;; CHECK-NEXT:  (block (result f32)
+ ;; CHECK-NEXT:   (local.set $0
+ ;; CHECK-NEXT:    (call_indirect $0 (type $func.0)
+ ;; CHECK-NEXT:     (i32.const 0)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (block
+ ;; CHECK-NEXT:    (drop
+ ;; CHECK-NEXT:     (call $target
+ ;; CHECK-NEXT:      (local.get $0)
+ ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (unreachable)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
  ;; CHECK:      (type $0 (func))
 
  ;; CHECK:      (type $v128 (func (result v128)))
  (type $v128 (func (result v128)))
-
- ;; CHECK:      (type $2 (func (result f32)))
 
  ;; CHECK:      (table $0 10 funcref)
  (table $0 10 funcref)
@@ -809,13 +1471,16 @@
  ;; CHECK:      (func $caller-effects (type $0)
  ;; CHECK-NEXT:  (local $0 v128)
  ;; CHECK-NEXT:  (drop
- ;; CHECK-NEXT:   (block (result f32)
+ ;; CHECK-NEXT:   (block
  ;; CHECK-NEXT:    (local.set $0
  ;; CHECK-NEXT:     (call_indirect $0 (type $v128)
  ;; CHECK-NEXT:      (i32.const 0)
  ;; CHECK-NEXT:     )
  ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (call $target)
+ ;; CHECK-NEXT:    (block
+ ;; CHECK-NEXT:     (call $target)
+ ;; CHECK-NEXT:     (unreachable)
+ ;; CHECK-NEXT:    )
  ;; CHECK-NEXT:   )
  ;; CHECK-NEXT:  )
  ;; CHECK-NEXT: )
@@ -833,7 +1498,8 @@
   )
  )
 
- ;; CHECK:      (func $target (type $2) (result f32)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $target (type $0)
  ;; CHECK-NEXT:  (local $0 i64)
  ;; CHECK-NEXT:  (local $1 i64)
  ;; CHECK-NEXT:  (local $2 v128)
@@ -854,32 +1520,29 @@
 )
 
 (module
- ;; CHECK:      (type $0 (func (param i32 i64)))
-
- ;; CHECK:      (type $1 (func (param i64 i64)))
-
- ;; CHECK:      (func $caller-later-br (type $0) (param $x i32) (param $y i64)
- ;; CHECK-NEXT:  (local $2 i32)
- ;; CHECK-NEXT:  (block $block
- ;; CHECK-NEXT:   (block
- ;; CHECK-NEXT:    (local.set $2
- ;; CHECK-NEXT:     (block (result i32)
- ;; CHECK-NEXT:      (if
- ;; CHECK-NEXT:       (local.get $x)
- ;; CHECK-NEXT:       (then
- ;; CHECK-NEXT:        (return)
- ;; CHECK-NEXT:       )
+ ;; CHECK:      (func $caller-later-br (param $x i32) (param $y i64)
+ ;; CHECK-NEXT: (local $2 i32)
+ ;; CHECK-NEXT: (block $block
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (local.set $2
+ ;; CHECK-NEXT:    (block (result i32)
+ ;; CHECK-NEXT:     (if
+ ;; CHECK-NEXT:      (local.get $x)
+ ;; CHECK-NEXT:      (then
+ ;; CHECK-NEXT:       (return)
  ;; CHECK-NEXT:      )
- ;; CHECK-NEXT:      (i32.const 42)
  ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:     (i32.const 42)
  ;; CHECK-NEXT:    )
- ;; CHECK-NEXT:    (br $block)
  ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (br $block)
  ;; CHECK-NEXT:  )
- ;; CHECK-NEXT:  (call $target
- ;; CHECK-NEXT:   (local.get $y)
- ;; CHECK-NEXT:   (local.get $y)
- ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (call $target
+ ;; CHECK-NEXT:  (local.get $y)
+ ;; CHECK-NEXT:  (local.get $x)
+ ;; CHECK-NEXT:  (local.get $y)
+ ;; CHECK-NEXT: )
  ;; CHECK-NEXT: )
  (func $caller-later-br (param $x i32) (param $y i64)
   (block $block
@@ -917,7 +1580,67 @@
   )
  )
 
- ;; CHECK:      (func $target (type $1) (param $0 i64) (param $1 i64)
+ ;; CHECK:      (func $caller-later-br (param $x i32) (param $y i64)
+ ;; CHECK-NEXT: (local $2 i32)
+ ;; CHECK-NEXT: (block $block
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (local.set $2
+ ;; CHECK-NEXT:    (block (result i32)
+ ;; CHECK-NEXT:     (if
+ ;; CHECK-NEXT:      (local.get $x)
+ ;; CHECK-NEXT:      (then
+ ;; CHECK-NEXT:       (return)
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:     (i32.const 42)
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (br $block)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: (block
+ ;; CHECK-NEXT:  (call $target
+ ;; CHECK-NEXT:   (local.get $y)
+ ;; CHECK-NEXT:   (local.get $x)
+ ;; CHECK-NEXT:   (local.get $y)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (type $0 (func (param i32 i64)))
+
+ ;; CHECK:      (type $1 (func (param i64 i64)))
+
+ ;; CHECK:      (func $caller-later-br (type $0) (param $x i32) (param $y i64)
+ ;; CHECK-NEXT:  (local $2 i32)
+ ;; CHECK-NEXT:  (block $block
+ ;; CHECK-NEXT:   (block
+ ;; CHECK-NEXT:    (local.set $2
+ ;; CHECK-NEXT:     (block (result i32)
+ ;; CHECK-NEXT:      (if
+ ;; CHECK-NEXT:       (local.get $x)
+ ;; CHECK-NEXT:       (then
+ ;; CHECK-NEXT:        (return)
+ ;; CHECK-NEXT:       )
+ ;; CHECK-NEXT:      )
+ ;; CHECK-NEXT:      (i32.const 42)
+ ;; CHECK-NEXT:     )
+ ;; CHECK-NEXT:    )
+ ;; CHECK-NEXT:    (br $block)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (block
+ ;; CHECK-NEXT:   (call $target
+ ;; CHECK-NEXT:    (local.get $y)
+ ;; CHECK-NEXT:    (local.get $y)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:   (unreachable)
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $target (type $1) (param $0 i64) (param $1 i64)
  ;; CHECK-NEXT:  (local $2 i32)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (block (result f32)
@@ -944,11 +1667,20 @@
 )
 
 (module
+ ;; CHECK:      (func $caller (param $x i32)
+ ;; CHECK-NEXT: (call $target)
+ ;; CHECK-NEXT: )
+
+ ;; CHECK:      (func $caller (param $x i32)
+ ;; CHECK-NEXT: (call $target)
+ ;; CHECK-NEXT: )
+
  ;; CHECK:      (type $0 (func))
 
  ;; CHECK:      (type $1 (func (param i32)))
 
- ;; CHECK:      (func $target (type $0)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $target (type $0)
  ;; CHECK-NEXT:  (local $0 i32)
  ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT:  (drop
@@ -966,6 +1698,7 @@
 
  ;; CHECK:      (func $caller (type $1) (param $x i32)
  ;; CHECK-NEXT:  (call $target)
+ ;; CHECK-NEXT:  (unreachable)
  ;; CHECK-NEXT: )
  (func $caller (param $x i32)
   (call $target
