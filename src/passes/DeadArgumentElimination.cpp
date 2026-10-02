@@ -25,9 +25,13 @@
 //    If so, we can avoid even sending and receiving it. (Note how if
 //    the previous point was true for an argument, then the second
 //    must as well.)
-//  * Find return values ("return arguments" ;) that are never used.
 //  * Refine the types of arguments, that is make the argument type more
 //    specific if all the passed values allow that.
+//  * Find return values ("return arguments" ;) that are never used.
+//  * Refine return values.
+//  * Add @binaryen.noreturn on functions that never return: this basically
+//    "refines" a return value to unreachable (we compute this information
+//    anyhow during return value refining).
 //
 // This pass does not depend on flattening, but it may be more effective,
 // as then call arguments never have side effects (which we need to
@@ -434,6 +438,9 @@ struct DAE : public Pass {
       PassUtils::FilteredPassRunner runner(
         module, refinedCallers, getPassRunner()->options);
       runner.setIsNested(true);
+      // We may have added new noreturn-annotated functions, so optimize calls
+      // to them.
+      runner.add("optimize-noreturn");
       runner.add(std::make_unique<ReFinalize>());
       runner.run();
     }
@@ -682,22 +689,13 @@ private:
                          const std::vector<Call*>& calls,
                          Module* module) {
     auto lub = LUB::getResultsLUB(func, *module);
-    Type newType;
-    if (lub.noted()) {
-      newType = lub.getLUB();
-    } else {
-      // No value can ever be returned: the function never returns normally
-      // (it throws, traps, or loops forever), and neither do the functions it
-      // tail-calls. If the result is a single reference, refine it to the
-      // uninhabitable bottom type of its hierarchy, so the callers can see that
-      // the call never returns. (Callers that tail-call this function will in
-      // turn note this type as their possible result.)
-      auto results = func->getResults();
-      if (!module->features.hasGC() || !results.isRef()) {
-        return false;
-      }
-      newType = Type(results.getHeapType().getBottom(), NonNullable);
+    if (!lub.noted()) {
+      // No value can ever be returned, so mark it as noreturn.
+      func->funcAnnotations.noReturn = true;
+      return true;
     }
+
+    auto newType = lub.getLUB();
     if (newType != func->getResults()) {
       func->setResults(newType);
       for (auto* call : calls) {
