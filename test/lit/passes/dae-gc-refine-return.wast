@@ -22,7 +22,7 @@
  ;; If nothing is actually returned, the function never returns normally, and
  ;; we mark it as noreturn and add unreachables after calls to it.
  ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $refine-return-no-return (type $4)
+ ;; CHECK-NEXT: (func $refine-return-no-return (type $0)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local.set $temp
  ;; CHECK-NEXT:   (block
@@ -42,7 +42,7 @@
  )
 
  ;; We cannot refine the return type if it is already the best it can be.
- ;; CHECK:      (func $refine-return-no-refining (type $2) (result anyref)
+ ;; CHECK:      (func $refine-return-no-refining (type $3) (result anyref)
  ;; CHECK-NEXT:  (local $temp anyref)
  ;; CHECK-NEXT:  (local $any anyref)
  ;; CHECK-NEXT:  (local.set $temp
@@ -335,7 +335,7 @@
   ;; target's return type is more specific than anyref.
   (return_call $tail-callee)
  )
- ;; CHECK:      (func $tail-caller-no (type $2) (result anyref)
+ ;; CHECK:      (func $tail-caller-no (type $3) (result anyref)
  ;; CHECK-NEXT:  (local $any anyref)
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (i32.const 1)
@@ -359,7 +359,7 @@
   )
   (return_call $tail-callee)
  )
- ;; CHECK:      (func $tail-call-caller (type $4)
+ ;; CHECK:      (func $tail-call-caller (type $0)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $tail-caller-yes)
  ;; CHECK-NEXT:  )
@@ -392,7 +392,7 @@
  (func $tail-caller-indirect-yes (result anyref)
   (return_call_indirect (type $"return_{}") (i32.const 0))
  )
- ;; CHECK:      (func $tail-caller-indirect-no (type $2) (result anyref)
+ ;; CHECK:      (func $tail-caller-indirect-no (type $3) (result anyref)
  ;; CHECK-NEXT:  (local $any anyref)
  ;; CHECK-NEXT:  (if
  ;; CHECK-NEXT:   (i32.const 1)
@@ -416,7 +416,7 @@
   )
   (return_call_indirect (type $"return_{}") (i32.const 0))
  )
- ;; CHECK:      (func $tail-call-caller-indirect (type $4)
+ ;; CHECK:      (func $tail-call-caller-indirect (type $0)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $tail-caller-indirect-yes)
  ;; CHECK-NEXT:  )
@@ -451,7 +451,7 @@
 
   (return_call_ref $"return_{}" (local.get $"return_{}"))
  )
- ;; CHECK:      (func $tail-caller-call_ref-no (type $2) (result anyref)
+ ;; CHECK:      (func $tail-caller-call_ref-no (type $3) (result anyref)
  ;; CHECK-NEXT:  (local $any anyref)
  ;; CHECK-NEXT:  (local $"return_{}" (ref null $"return_{}"))
  ;; CHECK-NEXT:  (if
@@ -478,7 +478,7 @@
   (return_call_ref $"return_{}" (local.get $"return_{}"))
  )
  ;; CHECK:      (@binaryen.noreturn)
- ;; CHECK-NEXT: (func $tail-caller-call_ref-unreachable (type $2) (result anyref)
+ ;; CHECK-NEXT: (func $tail-caller-call_ref-unreachable (type $3) (result anyref)
  ;; CHECK-NEXT:  (block ;; (replaces unreachable CallRef we can't emit)
  ;; CHECK-NEXT:   (drop
  ;; CHECK-NEXT:    (unreachable)
@@ -491,7 +491,7 @@
   ;; should not hit an assertion on such things.
   (return_call_ref $"return_{}" (unreachable))
  )
- ;; CHECK:      (func $tail-call-caller-call_ref (type $4)
+ ;; CHECK:      (func $tail-call-caller-call_ref (type $0)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $tail-caller-call_ref-yes)
  ;; CHECK-NEXT:  )
@@ -564,7 +564,7 @@
   )
  )
 
- ;; CHECK:      (func $call-update-null (type $2) (result anyref)
+ ;; CHECK:      (func $call-update-null (type $3) (result anyref)
  ;; CHECK-NEXT:  (drop
  ;; CHECK-NEXT:   (call $update-null
  ;; CHECK-NEXT:    (i32.const 0)
@@ -591,15 +591,42 @@
   )
  )
 
- (func $mvp-noreturn (result i32)
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $i32-noreturn (type $0)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ (func $i32-noreturn (result i32)
   ;; The i32 type is MVP and cannot be refined like GC types, but we can still
   ;; infer this is noreturn.
   (unreachable)
  )
 
- (func $call-mvp-noreturn
+ ;; CHECK:      (func $call-i32-noreturn (type $0)
+ ;; CHECK-NEXT:  (call $i32-noreturn)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ (func $call-i32-noreturn
   ;; An unreachable will appear after this call.
-  (call $mvp-noreturn)
+  (drop
+   (call $i32-noreturn)
+  )
  )
 
+ ;; CHECK:      (@binaryen.noreturn)
+ ;; CHECK-NEXT: (func $none-noreturn (type $0)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ (func $none-noreturn
+  ;; As above, with none.
+  (unreachable)
+ )
+
+ ;; CHECK:      (func $call-none-noreturn (type $0)
+ ;; CHECK-NEXT:  (call $none-noreturn)
+ ;; CHECK-NEXT:  (unreachable)
+ ;; CHECK-NEXT: )
+ (func $call-none-noreturn
+  ;; An unreachable will appear after this call.
+  (call $none-noreturn)
+ )
 )
