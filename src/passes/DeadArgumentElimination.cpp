@@ -28,10 +28,8 @@
 //  * Refine the types of arguments, that is make the argument type more
 //    specific if all the passed values allow that.
 //  * Find return values ("return arguments" ;) that are never used.
-//  * Refine return values.
-//  * Add @binaryen.noreturn on functions that never return: this basically
-//    "refines" a return value to unreachable (we compute this information
-//    anyhow during return value refining).
+//  * Refine return values (including the case where functions do not return,
+//    which is logically the same as refining them to unreachable).
 //
 // This pass does not depend on flattening, but it may be more effective,
 // as then call arguments never have side effects (which we need to
@@ -241,6 +239,8 @@ struct DAE : public Pass {
       }
     }
 
+    cleanUp();
+
 #if DAE_STATS
     Index endParams = 0, endResults = 0;
     for (auto& func : module->functions) {
@@ -285,7 +285,7 @@ struct DAE : public Pass {
 
   bool iteration(Module* module, DAEFunctionInfoMap& infoMap) {
     allDroppedCalls.clear();
-    addedNoReturn = false;
+    addedNoReturnInCycle = false;
 
 #if DAE_DEBUG
     // Enable this path to mark all contents as stale at the start of each
@@ -551,7 +551,7 @@ struct DAE : public Pass {
         });
     }
 
-    if (addedNoReturn) {
+    if (addedNoReturnInCycle) {
       // Callers to new noreturn functions can be optimized: we can add an
       // unreachable after the calls.
       // TODO: Atm we mark such calls in the set of refined callers (basically
@@ -586,8 +586,14 @@ private:
   std::unordered_map<Call*, Expression**> allDroppedCalls;
 
   // When we add a noreturn annotation, additional optimization opportunities
-  // appear later.
-  bool addedNoReturn = false;
+  // appear later in that cycle.
+  bool addedNoReturnInCycle = false;
+
+  // All the NoReturn annotations we added, over all cycles. We remove the
+  // annotations at the end, as we do not want them to persist for later (that
+  // would require the user to strip the annotations, to avoid them bloating the
+  // output).
+  std::unordered_set<Function*> allFuncsWithAddedNoReturns;
 
   // Returns `true` if the caller should be optimized.
   bool
@@ -714,7 +720,8 @@ private:
       // already.
       if (!func->funcAnnotations.noReturn) {
         func->funcAnnotations.noReturn = true;
-        addedNoReturn = true;
+        addedNoReturnInCycle = true;
+        allFuncsWithAddedNoReturns.insert(func);
         return true;
       }
 
@@ -733,6 +740,16 @@ private:
       return true;
     }
     return false;
+  }
+
+  void cleanUp() {
+    // For testing purposes, this can be disabled. That then shows us exactly
+    // which things we inferred as noreturn.
+    if (!hasArgument("dae-keep-noreturn")) {
+      for (auto* func : allFuncsWithAddedNoReturns) {
+        func->funcAnnotations.noReturn = false;
+      }
+    }
   }
 };
 
