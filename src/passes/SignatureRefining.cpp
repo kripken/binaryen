@@ -51,6 +51,12 @@ struct SignatureRefining : public Pass {
   // will not appear in this map.
   std::unordered_map<HeapType, Signature> newSignatures;
 
+  // All the NoReturn annotations we added, over all cycles. We remove the
+  // annotations at the end, as we do not want them to persist for later (that
+  // would require the user to strip the annotations, to avoid them bloating the
+  // output).
+  std::unordered_set<Function*> funcsWithAddedNoReturns;
+
   void run(Module* module) override {
     if (!module->features.hasGC()) {
       return;
@@ -111,6 +117,15 @@ struct SignatureRefining : public Pass {
         info.calls = std::move(FindAll<Call>(func->body).list);
         info.callRefs = std::move(FindAll<CallRef>(func->body).list);
         info.resultsLUB = LUB::getResultsLUB(func, *module);
+
+        if (!info.resultsLUB.noted()) {
+          // No value can ever be returned, so mark it as noreturn if it wasn't
+          // already.
+          if (!func->funcAnnotations.noReturn) {
+            func->funcAnnotations.noReturn = true;
+            funcsWithAddedNoReturns.insert(func);
+          }
+        }
       });
 
     // A map of types to all the information combined over all the functions
@@ -295,6 +310,7 @@ struct SignatureRefining : public Pass {
 
     if (newSignatures.empty()) {
       // We found nothing to optimize.
+      finish(module);
       return;
     }
 
@@ -346,6 +362,27 @@ struct SignatureRefining : public Pass {
 
     // TODO: we could do this only in relevant functions perhaps
     ReFinalize().run(getPassRunner(), module);
+
+    finish(module);
+  }
+
+  void finish(Module* module) {
+    if (funcsWithAddedNoReturns.empty()) {
+      return;
+    }
+
+    // We added noreturn annotations, so optimize using them before we clean
+    // them up.
+    // TODO: we could do this only in relevant functions perhaps (similar to the
+    // above TODO on the refinalize)
+    PassRunner runner(module, getPassRunner()->options);
+    runner.setIsNested(true);
+    runner.add("optimize-noreturn");
+    runner.run();
+
+    for (auto* func : funcsWithAddedNoReturns) {
+      func->funcAnnotations.noReturn = false;
+    }
   }
 
   template<typename HeapInfoMap>
