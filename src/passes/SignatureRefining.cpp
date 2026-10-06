@@ -227,7 +227,8 @@ struct SignatureRefining : public Pass {
 
     // For now, do not optimize types that have subtypes. When we modify such a
     // type we need to modify subtypes as well, similar to the analysis in
-    // TypeRefining, and perhaps we can unify this pass with that. TODO
+    // TypeRefining, and perhaps we can unify this pass with that. TODO, and
+    // add subtyping support for noReturnSignatures, below, if we do this.
     SubTypes subTypes(*module);
     for (auto& [type, info] : allInfo) {
       if (!subTypes.getImmediateSubTypes(type).empty()) {
@@ -332,9 +333,12 @@ struct SignatureRefining : public Pass {
       }
     }
 
-    // Check if we found signatures that never return.
+    // Check if we found signatures that never return. (Note we do not need to
+    // handle subtypes, as we do not optimize types with subtypes yet, see the
+    // TODO above; types with subtypes, and other tricky situations, all set
+    // canModify=false, so we check that here.)
     for (auto& [type, info] : allInfo) {
-      if (!info.returns) {
+      if (!info.returns && info.canModify) {
         noReturnSignatures.insert(type);
       }
     }

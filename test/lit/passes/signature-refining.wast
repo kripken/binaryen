@@ -1286,9 +1286,14 @@
     (type $B (func))
     ;; CHECK:       (type $C (func))
     (type $C (func))
+    ;; CHECK:       (type $D (sub (func)))
+    (type $D (sub (func)))
+
+    ;; CHECK:       (type $D-child (sub $D (func)))
+    (type $D-child (sub $D (func)))
   )
 
-  ;; CHECK:      (type $3 (func (param (ref $A) (ref $B) (ref $C))))
+  ;; CHECK:      (type $5 (func (param (ref $A) (ref $B) (ref $C) (ref $D))))
 
   ;; CHECK:      (func $trap-A (type $A)
   ;; CHECK-NEXT:  (unreachable)
@@ -1314,7 +1319,14 @@
   (func $nop-C (type $C)
   )
 
-  ;; CHECK:      (func $caller (type $3) (param $A (ref $A)) (param $B (ref $B)) (param $C (ref $C))
+  ;; CHECK:      (func $trap-D (type $D)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  (func $trap-D (type $D)
+    (unreachable)
+  )
+
+  ;; CHECK:      (func $caller (type $5) (param $A (ref $A)) (param $B (ref $B)) (param $C (ref $C)) (param $D (ref $D))
   ;; CHECK-NEXT:  (call_ref $A
   ;; CHECK-NEXT:   (local.get $A)
   ;; CHECK-NEXT:  )
@@ -1327,8 +1339,11 @@
   ;; CHECK-NEXT:  (call_ref $C
   ;; CHECK-NEXT:   (local.get $C)
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call_ref $D
+  ;; CHECK-NEXT:   (local.get $D)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  (func $caller (param $A (ref $A)) (param $B (ref $B)) (param $C (ref $C))
+  (func $caller (param $A (ref $A)) (param $B (ref $B)) (param $C (ref $C)) (param $D (ref $D))
     ;; $A has both a trap and a nop, so we do nothing.
     (call_ref $A (local.get $A))
 
@@ -1337,6 +1352,9 @@
 
     ;; $C has only a trap, so we do nothing. add an unreachable.
     (call_ref $C (local.get $C))
+
+    ;; $D has only a trap, but it has a subtype, so we do not optimize atm TODO
+    (call_ref $D (local.get $D))
   )
 )
 
