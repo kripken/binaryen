@@ -101,6 +101,10 @@ struct SignatureRefining : public Pass {
       // refine params (as calls might start to fail, with insufficiently-
       // refined inputs).
       bool canModifyParams = true;
+
+      // Whether we added the noreturn annotation (see funcsWithAddedNoReturns,
+      // above).
+      bool addedNoReturn = false;
     };
 
     // This analysis also modifies the wasm as it goes, as the getResultsLUB()
@@ -123,7 +127,7 @@ struct SignatureRefining : public Pass {
           // already.
           if (!func->funcAnnotations.noReturn) {
             func->funcAnnotations.noReturn = true;
-            funcsWithAddedNoReturns.insert(func);
+            info.addedNoReturn = true;
           }
         }
       });
@@ -167,6 +171,10 @@ struct SignatureRefining : public Pass {
       // If one function cannot be modified, that entire type cannot be.
       if (!info.canModify) {
         allInfo[func->type.getHeapType()].canModify = false;
+      }
+
+      if (info.addedNoReturn) {
+        funcsWithAddedNoReturns.insert(func);
       }
     }
 
