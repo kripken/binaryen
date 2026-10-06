@@ -1249,13 +1249,29 @@
     (unreachable)
   )
 
+  ;; This does not trap, but is annotated as trapping by the user. We also
+  ;; optimize calls to this.
+  ;; CHECK:      (@binaryen.noreturn)
+  ;; CHECK-NEXT: (func $annotated (type $0)
+  ;; CHECK-NEXT: )
+  (@binaryen.noreturn)
+  (func $annotated
+  )
+
   ;; CHECK:      (func $caller (type $0)
-  ;; CHECK-NEXT:  (call $trap)
-  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $trap)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call $annotated)
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $caller
-    ;; An unreachable will be added after the call.
+    ;; An unreachable will be added after these calls.
     (call $trap)
+    (call $annotated)
   )
 )
 
