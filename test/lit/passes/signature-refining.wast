@@ -1239,8 +1239,6 @@
 ;; Test noReturn optimizations: when a function does not return, we can refine
 ;; calls to it to unreachable (by adding an unreachable right after them).
 (module
-  (type $parent (sub (func (param anyref))))
-
   ;; CHECK:      (type $0 (func))
 
   ;; CHECK:      (func $trap (type $0)
@@ -1273,6 +1271,92 @@
     ;; An unreachable will be added after these calls.
     (call $trap)
     (call $annotated)
+  )
+)
+
+(module
+  ;; CHECK:      (type $0 (func (param i32)))
+
+  ;; CHECK:      (type $1 (func))
+
+  ;; CHECK:      (type $2 (func (result i32)))
+
+  ;; CHECK:      (tag $e (type $0) (param i32))
+  (tag $e (param i32))
+
+  ;; CHECK:      (func $param (type $0) (param $0 i32)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  (func $param (param i32)
+    (unreachable)
+  )
+
+  ;; CHECK:      (func $result (type $2) (result i32)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  (func $result (result i32)
+    (unreachable)
+  )
+
+  ;; CHECK:      (func $refinalize (type $1)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:    (block
+  ;; CHECK-NEXT:     (drop
+  ;; CHECK-NEXT:      (call $result)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (unreachable)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $refinalize
+    ;; After adding an unreachable, we refinalize, which is noticeable in the
+    ;; block type here.
+    (drop
+      (block (result i32) ;; this will vanish after the code becomes unreachable
+        (call $result)
+      )
+    )
+  )
+
+  ;; CHECK:      (func $pop (type $1)
+  ;; CHECK-NEXT:  (local $0 i32)
+  ;; CHECK-NEXT:  (try
+  ;; CHECK-NEXT:   (do
+  ;; CHECK-NEXT:    (throw $e
+  ;; CHECK-NEXT:     (i32.const 1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (catch $e
+  ;; CHECK-NEXT:    (local.set $0
+  ;; CHECK-NEXT:     (pop i32)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (block
+  ;; CHECK-NEXT:     (block
+  ;; CHECK-NEXT:      (call $param
+  ;; CHECK-NEXT:       (local.get $0)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (unreachable)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (nop)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $pop
+    ;; After adding a block with an unreachable, the pop will need handling.
+    (try
+      (do
+        (throw $e (i32.const 1))
+      )
+      (catch $e
+        (call $param
+          (pop i32)
+        )
+        (nop) ;; make sure we have a full block here, so a fixup is needed
+      )
+    )
   )
 )
 
