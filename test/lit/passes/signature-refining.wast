@@ -713,26 +713,16 @@
 )
 
 (module
-  ;; CHECK:      (type $"{}" (struct))
   (type $"{}" (struct))
 
-  ;; CHECK:      (type $1 (func (param (ref $"{}") i32)))
+  ;; CHECK:      (type $0 (func (param eqref i32)))
 
-  ;; CHECK:      (func $foo (type $1) (param $ref (ref $"{}")) (param $i32 i32)
-  ;; CHECK-NEXT:  (local $2 eqref)
-  ;; CHECK-NEXT:  (local.set $2
-  ;; CHECK-NEXT:   (local.get $ref)
-  ;; CHECK-NEXT:  )
-  ;; CHECK-NEXT:  (block
-  ;; CHECK-NEXT:   (call $foo
-  ;; CHECK-NEXT:    (block
-  ;; CHECK-NEXT:     (unreachable)
-  ;; CHECK-NEXT:    )
-  ;; CHECK-NEXT:    (i32.const 0)
+  ;; CHECK:      (func $foo (type $0) (param $ref eqref) (param $i32 i32)
+  ;; CHECK-NEXT:  (call $foo
+  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:    (unreachable)
   ;; CHECK-NEXT:   )
-  ;; CHECK-NEXT:   (local.set $2
-  ;; CHECK-NEXT:    (ref.null none)
-  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (i32.const 0)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
   (func $foo (param $ref eqref) (param $i32 i32)
@@ -744,16 +734,6 @@
         (unreachable)
       )
       (i32.const 0)
-    )
-    ;; Write something of type eqref into $ref. When we refine the type of the
-    ;; parameter from eqref to $"{}" we must do something here, as we can no
-    ;; longer just write this (ref.null eq) into a parameter of the more
-    ;; refined type. While doing so, we must not be confused by the fact that
-    ;; the only mention of $"{}" in the original module gets removed during our
-    ;; processing, as mentioned in the earlier comment. This is a regression
-    ;; test for a crash because of that.
-    (local.set $ref
-      (ref.null eq)
     )
   )
 )
@@ -818,10 +798,8 @@
   ;; CHECK:      (type $2 (func))
 
   ;; CHECK:      (func $func (type $child) (param $0 anyref)
-  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $func (type $child) (param anyref)
-    (unreachable)
   )
 
   ;; CHECK:      (func $caller (type $2)
