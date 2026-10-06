@@ -56,7 +56,6 @@ struct SignatureRefining : public Pass {
   // noReturn.
   std::unordered_set<HeapType> noReturnSignatures;
 
-
   // All the NoReturn annotations we added, over all cycles. We remove the
   // annotations at the end, as we do not want them to persist for later (that
   // would require the user to strip the annotations, to avoid them bloating the
@@ -379,22 +378,16 @@ struct SignatureRefining : public Pass {
       void handleCall(Expression* call, HeapType type) {
         if (parent.noReturnSignatures.contains(type)) {
           Builder builder(wasm);
-          replaceCurrent(
-            builder.makeSequence(
-              call,
-              builder.makeUnreachable()
-            )
-          );
+          replaceCurrent(builder.makeSequence(call, builder.makeUnreachable()));
           refinalize = true;
         }
       }
 
-      // If we optimize in the presence of Trys, we may need to run fixups later.
+      // If we optimize in the presence of Trys, we may need to run fixups
+      // later.
       bool hasTry = false;
 
-      void visitTry(Try* curr) {
-        hasTry = true;
-      }
+      void visitTry(Try* curr) { hasTry = true; }
 
       void visitFunction(Function* func) {
         auto iter = parent.newSignatures.find(func->type.getHeapType());
