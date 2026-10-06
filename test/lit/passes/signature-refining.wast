@@ -1234,3 +1234,28 @@
     )
   )
 )
+
+;; Test noReturn optimizations: when a function does not return, we can refine
+;; calls to it to unreachable (by adding an unreachable right after them).
+(module
+  (type $parent (sub (func (param anyref))))
+
+  ;; CHECK:      (type $0 (func))
+
+  ;; CHECK:      (func $trap (type $0)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  (func $trap
+    (unreachable)
+  )
+
+  ;; CHECK:      (func $caller (type $0)
+  ;; CHECK-NEXT:  (call $trap)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  (func $caller
+    ;; An unreachable will be added after the call.
+    (call $trap)
+  )
+)
+
