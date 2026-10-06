@@ -26,6 +26,7 @@
 // type, and all call_refs using it).
 //
 
+#include "ir/eh-utils.h"
 #include "ir/find_all.h"
 #include "ir/lubs.h"
 #include "ir/module-utils.h"
@@ -50,6 +51,11 @@ struct SignatureRefining : public Pass {
   // an update of the types. If a type has no improvement that we can find, it
   // will not appear in this map.
   std::unordered_map<HeapType, Signature> newSignatures;
+
+  // Contains heap types which do not return, that is, all functions in them are
+  // noReturn.
+  std::unordered_set<HeapType> noReturnSignatures;
+
 
   // All the NoReturn annotations we added, over all cycles. We remove the
   // annotations at the end, as we do not want them to persist for later (that
@@ -103,8 +109,12 @@ struct SignatureRefining : public Pass {
       bool canModifyParams = true;
 
       // Whether we added the noreturn annotation (see funcsWithAddedNoReturns,
-      // above).
+      // above). If we added it, we will remove it at the end.
       bool addedNoReturn = false;
+
+      // Whether any function with this signature returns. (If even one does, we
+      // cannot assume calls to that signature do not return.)
+      bool returns = false;
     };
 
     // This analysis also modifies the wasm as it goes, as the getResultsLUB()
@@ -171,6 +181,12 @@ struct SignatureRefining : public Pass {
       // If one function cannot be modified, that entire type cannot be.
       if (!info.canModify) {
         allInfo[func->type.getHeapType()].canModify = false;
+      }
+
+      // If we did not add noReturn ourselves, and the user did not annotate it
+      // beforehand, then we can assume this signature has a returning function.
+      if (!func->funcAnnotations.noReturn) {
+        allInfo[func->type.getHeapType()].returns = true;
       }
 
       if (info.addedNoReturn) {
@@ -316,7 +332,14 @@ struct SignatureRefining : public Pass {
       }
     }
 
-    if (newSignatures.empty()) {
+    // Check if we found signatures that never return.
+    for (auto& [type, info] : allInfo) {
+      if (!info.returns) {
+        noReturnSignatures.insert(type);
+      }
+    }
+
+    if (newSignatures.empty() && noReturnSignatures.empty()) {
       // We found nothing to optimize.
       finish(module);
       return;
@@ -340,7 +363,36 @@ struct SignatureRefining : public Pass {
         return std::make_unique<CodeUpdater>(parent, wasm);
       }
 
-      void doWalkFunction(Function* func) {
+      // TODO: handle CallIndirect (see comment on Tables, above)
+      void visitCallRef(CallRef* curr) {
+        if (curr->target->type.isRef()) {
+          handleCall(curr, curr->target->type.getHeapType());
+        }
+      }
+
+      bool refinalize = false;
+
+      void handleCall(Expression* call, HeapType type) {
+        if (parent.noReturnSignatures.contains(type)) {
+          Builder builder(wasm);
+          replaceCurrent(
+            builder.makeSequence(
+              call,
+              builder.makeUnreachable()
+            )
+          );
+          refinalize = true;
+        }
+      }
+
+      // If we optimize in the presence of Trys, we may need to run fixups later.
+      bool hasTry = false;
+
+      void visitTry(Try* curr) {
+        hasTry = true;
+      }
+
+      void visitFunction(Function* func) {
         auto iter = parent.newSignatures.find(func->type.getHeapType());
         if (iter != parent.newSignatures.end()) {
           std::vector<Type> newParamsTypes;
@@ -356,6 +408,13 @@ struct SignatureRefining : public Pass {
             newParamsTypes,
             wasm,
             TypeUpdating::LocalUpdatingMode::DoNotUpdate);
+        }
+
+        if (refinalize) {
+          ReFinalize().walkFunctionInModule(func, &wasm);
+          if (hasTry) {
+            EHUtils::handleBlockNestedPops(func, wasm);
+          }
         }
       }
     };

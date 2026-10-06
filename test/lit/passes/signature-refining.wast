@@ -825,6 +825,7 @@
   ;; CHECK-NEXT:   )
   ;; CHECK-NEXT:   (unreachable)
   ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (unreachable)
   ;; CHECK-NEXT: )
   (func $func
     ;; We should not error on a call_ref to a bottom type.
@@ -1272,6 +1273,70 @@
     ;; An unreachable will be added after these calls.
     (call $trap)
     (call $annotated)
+  )
+)
+
+;; Test noreturn by type.
+(module
+  (rec
+    ;; CHECK:      (rec
+    ;; CHECK-NEXT:  (type $A (func))
+    (type $A (func))
+    ;; CHECK:       (type $B (func))
+    (type $B (func))
+    ;; CHECK:       (type $C (func))
+    (type $C (func))
+  )
+
+  ;; CHECK:      (type $3 (func (param (ref $A) (ref $B) (ref $C))))
+
+  ;; CHECK:      (func $trap-A (type $A)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  (func $trap-A (type $A)
+    (unreachable)
+  )
+
+  ;; CHECK:      (func $nop-A (type $A)
+  ;; CHECK-NEXT: )
+  (func $nop-A (type $A)
+  )
+
+  ;; CHECK:      (func $trap-B (type $B)
+  ;; CHECK-NEXT:  (unreachable)
+  ;; CHECK-NEXT: )
+  (func $trap-B (type $B)
+    (unreachable)
+  )
+
+  ;; CHECK:      (func $nop-C (type $C)
+  ;; CHECK-NEXT: )
+  (func $nop-C (type $C)
+  )
+
+  ;; CHECK:      (func $caller (type $3) (param $A (ref $A)) (param $B (ref $B)) (param $C (ref $C))
+  ;; CHECK-NEXT:  (call_ref $A
+  ;; CHECK-NEXT:   (local.get $A)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block
+  ;; CHECK-NEXT:   (call_ref $B
+  ;; CHECK-NEXT:    (local.get $B)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (unreachable)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (call_ref $C
+  ;; CHECK-NEXT:   (local.get $C)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $caller (param $A (ref $A)) (param $B (ref $B)) (param $C (ref $C))
+    ;; $A has both a trap and a nop, so we do nothing.
+    (call_ref $A (local.get $A))
+
+    ;; $B has only a trap, so we add an unreachable.
+    (call_ref $B (local.get $B))
+
+    ;; $C has only a trap, so we do nothing. add an unreachable.
+    (call_ref $C (local.get $C))
   )
 )
 
