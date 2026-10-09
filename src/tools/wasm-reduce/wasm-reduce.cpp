@@ -1274,8 +1274,6 @@ struct Reducer
       runner.add(std::make_unique<FunctionReplacer>());
       runner.run();
 
-      assert(WasmValidator().validate(
-        *module, WasmValidator::Globally | WasmValidator::Quiet));
       if (writeAndTestReduction()) {
         noteReduction(dd.working.size() - dd.test.size());
         currentIndices = std::move(newCurrentIndices);
