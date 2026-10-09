@@ -532,6 +532,12 @@ struct Reducer
   }
 
   bool writeAndTestReduction(ProgramResult& out) {
+    // First, see if the changes made broke validation. If they did, we can
+    // immediately report that this does not make progress in the reduction.
+    if (!WasmValidator().validate(
+          *getModule(), WasmValidator::Globally | WasmValidator::Quiet)) {
+      return false;
+    }
     // write the module out
     ModuleWriter writer(toolOptions.passOptions);
     writer.setBinary(binary);
