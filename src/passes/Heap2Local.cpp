@@ -227,6 +227,23 @@ struct EscapeAnalyzer {
   // exclusivity.
   std::unordered_set<LocalSet*> sets;
 
+  // All the allocations in the group being analyzed. Usually this is a single
+  // allocation, but may also be a group of StructNews that overlap via shared
+  // locals. Such overlap still allows us to optimize the group as a whole, if
+  // we only need a single set of locals for all of them. For example:
+  //
+  //   struct Foo { int value; };
+  //
+  //   if (..) {
+  //     x = new Foo(10);
+  //   } else {
+  //     x = new Foo(20);
+  //   }
+  //   return x.value;
+  //
+  // We cam replace both allocations with a single local for the value.
+  SmallSet<Expression*, 1> allocations;
+
   // A map of every expression we reached during the flow analysis (which is
   // exactly all the places where our allocation is used) to the interaction of
   // the allocation there. If we optimize, anything in this map will be fixed up
@@ -238,8 +255,11 @@ struct EscapeAnalyzer {
   // implicitly).
   std::unordered_map<Expression*, ParentChildInteraction> reachedInteractions;
 
-  // Analyze an allocation to see if it escapes or not.
+  // Analyze an allocation (and any other allocations it overlaps with via
+  // locals) to see if it escapes or not.
   bool escapes(Expression* allocation) {
+    allocations.insert(allocation);
+
     // A queue of flows from children to parents. When something is in the queue
     // here then it assumed that it is ok for the allocation to be at the child
     // (that is, we have already checked the child before placing it in the
@@ -252,61 +272,82 @@ struct EscapeAnalyzer {
     // Start the flow from the allocation itself to its parent.
     flows.push({allocation, parents.getParent(allocation)});
 
-    // Keep flowing while we can.
-    while (!flows.empty()) {
-      auto flow = flows.pop();
-      auto* child = flow.first;
-      auto* parent = flow.second;
+    while (1) {
+      // Keep flowing while we can.
+      while (!flows.empty()) {
+        auto flow = flows.pop();
+        auto* child = flow.first;
+        auto* parent = flow.second;
 
-      auto interaction = getParentChildInteraction(allocation, parent, child);
-      if (interaction == ParentChildInteraction::Escapes ||
-          interaction == ParentChildInteraction::Mixes) {
-        // If the parent may let us escape, or the parent mixes other values
-        // up with us, give up.
+        auto interaction = getParentChildInteraction(allocation, parent, child);
+        if (interaction == ParentChildInteraction::Escapes ||
+            interaction == ParentChildInteraction::Mixes) {
+          // If the parent may let us escape, or the parent mixes other values
+          // up with us, give up.
+          return true;
+        }
+
+        // The parent either fully consumes us, or flows us onwards; either way,
+        // we can proceed here, hopefully.
+        assert(interaction == ParentChildInteraction::FullyConsumes ||
+               interaction == ParentChildInteraction::Flows);
+
+        // We can proceed, as the parent interacts with us properly, and we are
+        // the only allocation to get here.
+
+        if (interaction == ParentChildInteraction::Flows) {
+          // The value flows through the parent; we need to look further at the
+          // grandparent.
+          flows.push({parent, parents.getParent(parent)});
+        }
+
+        if (auto* set = parent->dynCast<LocalSet>()) {
+          // This is one of the sets we are written to, and so we must check for
+          // exclusive use of our allocation by all the gets that read the
+          // value. Note the set, and we will check the gets at the end once we
+          // know all of our sets.
+          sets.insert(set);
+          for (auto* get : localGraph.getSetInfluences(set)) {
+            flows.push({get, parents.getParent(get)});
+          }
+        }
+
+        // If the parent may send us on a branch, we will need to look at the
+        // flow to the branch target(s).
+        for (auto name : branchesSentByParent(child, parent)) {
+          flows.push({child, branchTargets.getTarget(name)});
+        }
+
+        // If we got to here, then we can continue to hope that we can optimize
+        // this allocation. Mark the parent and child as reached by it, and
+        // continue. The child flows the value to the parent, and the parent's
+        // behavior was computed before.
+        reachedInteractions[child] = ParentChildInteraction::Flows;
+        reachedInteractions[parent] = interaction;
+      }
+
+      // We finished the loop over the flows. Check whether all gets influenced
+      // by our sets are exclusive to our sets. If any get can also read from
+      // another set, see if that set comes from another compatible StructNew
+      // allocation that we can include in our group.
+      std::vector<StructNew*> newAllocations;
+      if (!findExclusiveSetsOrNewAllocations(allocation, newAllocations)) {
         return true;
       }
-
-      // The parent either fully consumes us, or flows us onwards; either way,
-      // we can proceed here, hopefully.
-      assert(interaction == ParentChildInteraction::FullyConsumes ||
-             interaction == ParentChildInteraction::Flows);
-
-      // We can proceed, as the parent interacts with us properly, and we are
-      // the only allocation to get here.
-
-      if (interaction == ParentChildInteraction::Flows) {
-        // The value flows through the parent; we need to look further at the
-        // grandparent.
-        flows.push({parent, parents.getParent(parent)});
+      if (newAllocations.empty()) {
+        break;
       }
-
-      if (auto* set = parent->dynCast<LocalSet>()) {
-        // This is one of the sets we are written to, and so we must check for
-        // exclusive use of our allocation by all the gets that read the
-        // value. Note the set, and we will check the gets at the end once we
-        // know all of our sets.
-        sets.insert(set);
-        for (auto* get : localGraph.getSetInfluences(set)) {
-          flows.push({get, parents.getParent(get)});
+      for (auto* newAlloc : newAllocations) {
+        if (!allocations.contains(newAlloc)) {
+          allocations.insert(newAlloc);
+          flows.push({newAlloc, parents.getParent(newAlloc)});
         }
       }
-
-      // If the parent may send us on a branch, we will need to look at the flow
-      // to the branch target(s).
-      for (auto name : branchesSentByParent(child, parent)) {
-        flows.push({child, branchTargets.getTarget(name)});
-      }
-
-      // If we got to here, then we can continue to hope that we can optimize
-      // this allocation. Mark the parent and child as reached by it, and
-      // continue. The child flows the value to the parent, and the parent's
-      // behavior was computed before.
-      reachedInteractions[child] = ParentChildInteraction::Flows;
-      reachedInteractions[parent] = interaction;
     }
 
-    // We finished the loop over the flows. Do the final checks.
-    if (!getsAreExclusiveToSets()) {
+    // If we grouped multiple allocations together, verify that they do not
+    // conflict with each other.
+    if (allocations.size() > 1 && hasMultiAllocationConflict()) {
       return true;
     }
 
@@ -520,7 +561,7 @@ struct EscapeAnalyzer {
   }
 
   const BranchUtils::NameSet branchesSentByParent(Expression* child,
-                                                  Expression* parent) {
+                                                  Expression* parent) const {
     BranchUtils::NameSet names;
     BranchUtils::operateOnScopeNameUsesAndSentValues(
       parent, [&](Name name, Expression* value) {
@@ -531,12 +572,91 @@ struct EscapeAnalyzer {
     return names;
   }
 
-  // Verify exclusivity of all the gets for a bunch of sets. That is, assuming
-  // the sets are exclusive (they all write exactly our allocation, and nothing
-  // else), we need to check whether all the gets that read that value cannot
-  // read anything else (which would be the case if another set writes to that
-  // local, in the right live range).
-  bool getsAreExclusiveToSets() {
+  // Check if a candidate allocation is compatible with a first allocation, that
+  // is, whether they can be considered and potentially optimized as a group.
+  bool isCompatibleAllocation(StructNew* candidate,
+                              StructNew* firstAlloc) const {
+    if (candidate->type != firstAlloc->type) {
+      return false;
+    }
+    if (bool(candidate->desc) != bool(firstAlloc->desc)) {
+      return false;
+    }
+    if (firstAlloc->desc && candidate->desc->type.with(NonNullable) !=
+                              firstAlloc->desc->type.with(NonNullable)) {
+      return false;
+    }
+    return true;
+  }
+
+  // Given a LocalSet that is not yet in |sets|, walk backwards through the
+  // value flowing into it (and any intermediate LocalGets/LocalSets) to find
+  // candidate StructNew allocations that feed it. Returns false if the set can
+  // be fed by anything other than compatible StructNew allocations.
+  bool findAllocationsForSet(LocalSet* startSet,
+                             StructNew* firstAlloc,
+                             std::vector<StructNew*>& newAllocations) {
+    UniqueDeferredQueue<LocalSet*> setWork;
+    setWork.push(startSet);
+
+    while (!setWork.empty()) {
+      auto* set = setWork.pop();
+      Expression* curr = set->value;
+
+      // Unwrap expressions that flow their child value through, matching the
+      // forward flow in getParentChildInteraction.
+      while (1) {
+        auto* next =
+          Properties::getImmediateFallthrough(curr, passOptions, wasm);
+        if (next != curr) {
+          curr = next;
+          continue;
+        }
+        auto branches =
+          branchTargets.getBranches(BranchUtils::getDefinedName(curr));
+        if (branches.size() == 1) {
+          if (auto* block = curr->dynCast<Block>()) {
+            if (block->list.back()->type == Type::unreachable) {
+              if (auto* sent = BranchUtils::getSentValue(*branches.begin())) {
+                curr = sent;
+                continue;
+              }
+            }
+          }
+        }
+        break;
+      }
+
+      if (auto* get = curr->dynCast<LocalGet>()) {
+        for (auto* nextSet : localGraph.getSets(get)) {
+          if (!nextSet) {
+            return false;
+          }
+          if (!sets.contains(nextSet)) {
+            setWork.push(nextSet);
+          }
+        }
+      } else if (auto* structNew = curr->dynCast<StructNew>()) {
+        if (!isCompatibleAllocation(structNew, firstAlloc)) {
+          return false;
+        }
+        if (!allocations.contains(structNew)) {
+          newAllocations.push_back(structNew);
+        }
+      } else {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // Verify exclusivity of all the gets for our sets. If a get can read from a
+  // set not in |sets|, try to find compatible StructNew allocations that feed
+  // that set so we can expand the allocation group.
+  bool
+  findExclusiveSetsOrNewAllocations(Expression* initialAllocation,
+                                    std::vector<StructNew*>& newAllocations) {
     // Find all the relevant gets (which may overlap between the sets).
     std::unordered_set<LocalGet*> gets;
     for (auto* set : sets) {
@@ -545,16 +665,138 @@ struct EscapeAnalyzer {
       }
     }
 
-    // Check that the gets can only read from the specific known sets.
+    auto* firstStructAlloc = initialAllocation->dynCast<StructNew>();
+    bool foundMissingSet = false;
+
+    // Check that the gets can only read from the specific known sets, or find
+    // other StructNew allocations that feed the missing sets.
     for (auto* get : gets) {
       for (auto* set : localGraph.getSets(get)) {
         if (!sets.contains(set)) {
-          return false;
+          if (!set || !firstStructAlloc) {
+            return false;
+          }
+          foundMissingSet = true;
+          if (!findAllocationsForSet(set, firstStructAlloc, newAllocations)) {
+            return false;
+          }
         }
       }
     }
 
+    if (foundMissingSet && newAllocations.empty()) {
+      return false;
+    }
+
     return true;
+  }
+
+  // Check whether a LocalGet can flow (directly or through other locals) to an
+  // expression that accesses the lowered field/descriptor locals in
+  // Struct2Local.
+  bool reachesLocalIndexesUser(LocalGet* startGet) const {
+    UniqueDeferredQueue<Expression*> work;
+    work.push(startGet);
+    while (!work.empty()) {
+      auto* curr = work.pop();
+      auto* parent = parents.getParent(curr);
+      if (!parent) {
+        continue;
+      }
+      if (parent->is<StructGet>() || parent->is<StructSet>() ||
+          parent->is<StructRMW>() || parent->is<RefGetDesc>()) {
+        return true;
+      }
+      if (auto* cmpxchg = parent->dynCast<StructCmpxchg>()) {
+        if (curr == cmpxchg->ref) {
+          return true;
+        }
+      }
+      if (auto* refCast = parent->dynCast<RefCast>()) {
+        if (refCast->desc && curr == refCast->ref) {
+          return true;
+        }
+      }
+      if (getInteraction(parent) == ParentChildInteraction::Flows) {
+        work.push(parent);
+      }
+      if (auto* set = parent->dynCast<LocalSet>()) {
+        for (auto* get : localGraph.getSetInfluences(set)) {
+          work.push(get);
+        }
+      }
+      for (auto name : branchesSentByParent(curr, parent)) {
+        work.push(branchTargets.getTarget(name));
+      }
+    }
+    return false;
+  }
+
+  // When lowering multiple allocations to the same set of locals, verify that:
+  // 1. Two allocations cannot both flow into a single expression that compares
+  //    or combines two references (e.g. ref.eq, which would otherwise fold to 1
+  //    as if comparing a single allocation to itself).
+  // 2. No allocation in the group executes while another allocation in the
+  //    group is live (either on the value stack or in a local).
+  bool hasMultiAllocationConflict() const {
+    for (auto& [expr, _] : reachedInteractions) {
+      if (auto* refEq = expr->dynCast<RefEq>()) {
+        if (getInteraction(refEq->left) == ParentChildInteraction::Flows &&
+            getInteraction(refEq->right) == ParentChildInteraction::Flows) {
+          return true;
+        }
+      } else if (auto* refCast = expr->dynCast<RefCast>()) {
+        if (refCast->desc &&
+            getInteraction(refCast->ref) == ParentChildInteraction::Flows &&
+            getInteraction(refCast->desc) == ParentChildInteraction::Flows) {
+          return true;
+        }
+      } else if (auto* cmpxchg = expr->dynCast<StructCmpxchg>()) {
+        if (getInteraction(cmpxchg->ref) == ParentChildInteraction::Flows &&
+            getInteraction(cmpxchg->expected) ==
+              ParentChildInteraction::Flows) {
+          return true;
+        }
+      }
+    }
+
+    // Check that no allocation in the group executes while another reference in
+    // the group is live on the value stack (as an earlier sibling child of an
+    // ancestor expression).
+    for (auto* alloc : allocations) {
+      Expression* curr = alloc;
+      while (Expression* parent = parents.getParent(curr)) {
+        if (!parent->is<Block>()) {
+          for (auto* child : ChildIterator(parent)) {
+            if (child == curr) {
+              break;
+            }
+            if (getInteraction(child) == ParentChildInteraction::Flows) {
+              return true;
+            }
+          }
+        }
+        curr = parent;
+      }
+    }
+
+    // Check that no allocation in the group executes while a local holding a
+    // reference from the group is live on a path to a LocalGet that uses the
+    // lowered locals.
+    std::unordered_set<LocalGet*> gets;
+    for (auto* set : sets) {
+      for (auto* get : localGraph.getSetInfluences(set)) {
+        gets.insert(get);
+      }
+    }
+    for (auto* get : gets) {
+      if (localGraph.canGetReachTarget(get, allocations) &&
+          reachesLocalIndexesUser(get)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   // Helper function for Struct2Local and Array2Struct. Given an old expression
@@ -578,7 +820,7 @@ struct EscapeAnalyzer {
   }
 
   // Get the interaction of an expression.
-  ParentChildInteraction getInteraction(Expression* curr) {
+  ParentChildInteraction getInteraction(Expression* curr) const {
     auto iter = reachedInteractions.find(curr);
     if (iter == reachedInteractions.end()) {
       // This is not interacted with.
@@ -728,7 +970,7 @@ struct Struct2Local : PostWalker<Struct2Local> {
   }
 
   void visitStructNew(StructNew* curr) {
-    if (curr != allocation) {
+    if (curr != allocation && !analyzer.allocations.contains(curr)) {
       return;
     }
 
@@ -1555,7 +1797,8 @@ struct Heap2Local {
 
   Heap2Local(Function* func, Module& wasm, const PassOptions& passOptions)
     : func(func), wasm(wasm), passOptions(passOptions),
-      localGraph(std::make_unique<LazyLocalGraph>(func, &wasm)),
+      localGraph(
+        std::make_unique<LazyLocalGraph>(func, &wasm, StructNew::SpecificId)),
       parents(std::make_unique<Parents>(func->body)),
       branchTargets(std::make_unique<BranchUtils::BranchTargets>(func->body)) {
 
@@ -1636,9 +1879,11 @@ struct Heap2Local {
     }
 
     // Next, process all structNews.
+    std::unordered_set<Expression*> optimizedAllocations;
     for (auto* allocation : finder.structNews) {
-      if (allocation->type == Type::unreachable) {
-        // Leave this for DCE.
+      if (allocation->type == Type::unreachable ||
+          optimizedAllocations.contains(allocation)) {
+        // Leave this for DCE, or we already optimized it as part of a group.
         continue;
       }
       // Check for escaping, noting relevant information as we go. If this does
@@ -1646,6 +1891,9 @@ struct Heap2Local {
       EscapeAnalyzer analyzer(
         *localGraph, *parents, *branchTargets, passOptions, wasm);
       if (!analyzer.escapes(allocation)) {
+        for (auto* alloc : analyzer.allocations) {
+          optimizedAllocations.insert(alloc);
+        }
         Struct2Local(allocation, analyzer, func, wasm);
         optimized = true;
         resetAnalysisData();
@@ -1664,7 +1912,8 @@ struct Heap2Local {
     // Optimizations may add new locals and parent-child relationships. Rather
     // than trying to keep these data structures up-to-date, just clear and
     // recompute them after each optimization.
-    localGraph = std::make_unique<LazyLocalGraph>(func, &wasm);
+    localGraph =
+      std::make_unique<LazyLocalGraph>(func, &wasm, StructNew::SpecificId);
     parents = std::make_unique<Parents>(func->body);
     branchTargets = std::make_unique<BranchUtils::BranchTargets>(func->body);
   }

@@ -262,6 +262,14 @@ struct LazyLocalGraph : public LocalGraphBase {
   // behaves regarding them.)
   SetInfluences canMoveSet(LocalSet* set, Expression* to);
 
+  // Query whether any of the given |targets| (which must be of class
+  // |queryClass|) can be reached when flowing backwards from |get| before
+  // hitting a LocalSet for |get|'s index. In other words, this checks whether
+  // any target expression can execute while |get|'s local is live on a path to
+  // |get|.
+  bool canGetReachTarget(LocalGet* get,
+                         const SmallSet<Expression*, 1>& targets) const;
+
 private:
   std::optional<Expression::Id> queryClass;
 

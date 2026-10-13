@@ -521,6 +521,51 @@ struct LocalGraphFlower
 
     return ret;
   }
+
+  bool canGetReachTarget(LocalGet* get,
+                         const SmallSet<Expression*, 1>& targets) const {
+    auto iter = getLocations.find(get);
+    if (iter == getLocations.end()) {
+      // We did not find location info for this get, which means it is
+      // unreachable.
+      return false;
+    }
+    auto [block, index] = iter->second;
+/*
+    if (!block) {
+      return false;
+    }
+*/
+
+    UniqueNonrepeatingDeferredQueue<BlockLocation> work;
+    work.push(BlockLocation{block, index});
+    while (!work.empty()) {
+      auto [block, index] = work.pop();
+
+      // Scan backwards through this block.
+      while (1) {
+        if (index == 0) {
+          for (auto* pred : block->in) {
+            work.push(BlockLocation{pred, Index(pred->actions.size())});
+          }
+          break;
+        }
+
+        index--;
+        auto* action = block->actions[index];
+        if (auto* otherSet = action->dynCast<LocalSet>()) {
+          if (otherSet->index == get->index) {
+            // A set of the same index halts the flow along this path.
+            break;
+          }
+        } else if (targets.contains(action)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
 };
 
 // LocalGraph implementation
@@ -795,6 +840,24 @@ LocalGraphBase::SetInfluences LazyLocalGraph::canMoveSet(LocalSet* set,
   // is only partial (shared with whatever value is present in x before the if).
   // (But moving the set to b() does alter the set's influence on a(x)).
   return flower->getSetInfluencesGivenObstacle(set, originalGets, to);
+}
+
+bool LazyLocalGraph::canGetReachTarget(
+  LocalGet* get, const SmallSet<Expression*, 1>& targets) const {
+
+  // We must have been initialized with the proper query class, so that we
+  // prepared the flower (if it was computed before) with that class in the
+  // graph.
+  assert(queryClass);
+  for ([[maybe_unused]] auto* target : targets) {
+    assert(target->_id == *queryClass);
+  }
+
+  if (!flower) {
+    makeFlower();
+  }
+
+  return flower->canGetReachTarget(get, targets);
 }
 
 } // namespace wasm

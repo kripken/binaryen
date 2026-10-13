@@ -4864,3 +4864,785 @@
   )
 )
 
+;; Multiple allocations overlapping via locals.
+(module
+  ;; CHECK:      (type $struct (sub (struct (field (mut i32)) (field (mut f64)))))
+  (type $struct (sub (struct (field (mut i32)) (field (mut f64)))))
+  ;; CHECK:      (type $1 (func (param i32) (result i32)))
+
+  ;; CHECK:      (type $2 (func (param (ref null $struct))))
+
+  ;; CHECK:      (type $3 (func (param i32 i32) (result i32)))
+
+  ;; CHECK:      (type $4 (func (param i32 eqref) (result i32)))
+
+  ;; CHECK:      (type $substruct (sub $struct (struct (field (mut i32)) (field (mut f64)))))
+  (type $substruct (sub $struct (struct (field (mut i32)) (field (mut f64)))))
+
+  ;; CHECK:      (import "env" "escape" (func $escape (type $2) (param (ref null $struct))))
+  (import "env" "escape" (func $escape (param (ref null $struct))))
+
+  ;; CHECK:      (func $multiple-allocs-shared-tee (type $3) (param $cond1 i32) (param $cond2 i32) (result i32)
+  ;; CHECK-NEXT:  (local $1 (ref null $struct))
+  ;; CHECK-NEXT:  (local $4 (ref null $struct))
+  ;; CHECK-NEXT:  (local $4 i32)
+  ;; CHECK-NEXT:  (local $5 f64)
+  ;; CHECK-NEXT:  (local $6 i32)
+  ;; CHECK-NEXT:  (local $7 f64)
+  ;; CHECK-NEXT:  (local $8 i32)
+  ;; CHECK-NEXT:  (local $9 f64)
+  ;; CHECK-NEXT:  (local $10 i32)
+  ;; CHECK-NEXT:  (local $11 f64)
+  ;; CHECK-NEXT:  (block $done
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (block (result nullref)
+  ;; CHECK-NEXT:     (local.set $6
+  ;; CHECK-NEXT:      (i32.const 10)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $7
+  ;; CHECK-NEXT:      (f64.const 1)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $4
+  ;; CHECK-NEXT:      (local.get $6)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $5
+  ;; CHECK-NEXT:      (local.get $7)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (ref.null none)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (ref.null none)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (i32.add
+  ;; CHECK-NEXT:      (block (result i32)
+  ;; CHECK-NEXT:       (drop
+  ;; CHECK-NEXT:        (ref.null none)
+  ;; CHECK-NEXT:       )
+  ;; CHECK-NEXT:       (local.get $4)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (i32.const 1)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (br_if $done
+  ;; CHECK-NEXT:    (local.get $cond1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (block (result nullref)
+  ;; CHECK-NEXT:     (local.set $8
+  ;; CHECK-NEXT:      (i32.const 20)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $9
+  ;; CHECK-NEXT:      (f64.const 2)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $4
+  ;; CHECK-NEXT:      (local.get $8)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $5
+  ;; CHECK-NEXT:      (local.get $9)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (ref.null none)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (block
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (ref.null none)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (i32.add
+  ;; CHECK-NEXT:      (block (result i32)
+  ;; CHECK-NEXT:       (drop
+  ;; CHECK-NEXT:        (ref.null none)
+  ;; CHECK-NEXT:       )
+  ;; CHECK-NEXT:       (local.get $4)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (i32.const 2)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (br_if $done
+  ;; CHECK-NEXT:    (local.get $cond2)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (block (result nullref)
+  ;; CHECK-NEXT:     (local.set $10
+  ;; CHECK-NEXT:      (i32.const 30)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $11
+  ;; CHECK-NEXT:      (f64.const 3)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $4
+  ;; CHECK-NEXT:      (local.get $10)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (local.set $5
+  ;; CHECK-NEXT:      (local.get $11)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:     (ref.null none)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (ref.null none)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block (result i32)
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (ref.null none)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.get $4)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-shared-tee (param $cond1 i32) (param $cond2 i32) (result i32)
+    (local $1 (ref null $struct))
+    (local $4 (ref null $struct))
+    ;; Three allocations reuse $1 and each tee $1 into $4 before branching to a
+    ;; shared block at the end that reads $4 once. All three allocations can be
+    ;; optimized together as a group.
+    (block $done
+      (local.set $1
+        (struct.new $struct
+          (i32.const 10)
+          (f64.const 1.0)
+        )
+      )
+      (struct.set $struct 0
+        (local.get $1)
+        (i32.add
+          (struct.get $struct 0
+            (local.tee $4
+              (local.get $1)
+            )
+          )
+          (i32.const 1)
+        )
+      )
+      (br_if $done
+        (local.get $cond1)
+      )
+
+      (local.set $1
+        (struct.new $struct
+          (i32.const 20)
+          (f64.const 2.0)
+        )
+      )
+      (struct.set $struct 0
+        (local.get $1)
+        (i32.add
+          (struct.get $struct 0
+            (local.tee $4
+              (local.get $1)
+            )
+          )
+          (i32.const 2)
+        )
+      )
+      (br_if $done
+        (local.get $cond2)
+      )
+
+      (local.set $1
+        (struct.new $struct
+          (i32.const 30)
+          (f64.const 3.0)
+        )
+      )
+      (drop
+        (local.tee $4
+          (local.get $1)
+        )
+      )
+    )
+    (struct.get $struct 0
+      (local.get $4)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-if-else (type $1) (param $cond i32) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (local $2 i32)
+  ;; CHECK-NEXT:  (local $3 f64)
+  ;; CHECK-NEXT:  (local $4 i32)
+  ;; CHECK-NEXT:  (local $5 f64)
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $cond)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (block (result nullref)
+  ;; CHECK-NEXT:      (local.set $4
+  ;; CHECK-NEXT:       (i32.const 10)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $5
+  ;; CHECK-NEXT:       (f64.const 1)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $2
+  ;; CHECK-NEXT:       (local.get $4)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $3
+  ;; CHECK-NEXT:       (local.get $5)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (ref.null none)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (else
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (block (result nullref)
+  ;; CHECK-NEXT:      (local.set $2
+  ;; CHECK-NEXT:       (i32.const 0)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $3
+  ;; CHECK-NEXT:       (f64.const 0)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (ref.null none)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block (result i32)
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (ref.null none)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.get $2)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-if-else (param $cond i32) (result i32)
+    (local $ref (ref null $struct))
+    (if
+      (local.get $cond)
+      (then
+        (local.set $ref
+          (struct.new $struct
+            (i32.const 10)
+            (f64.const 1.0)
+          )
+        )
+      )
+      (else
+        (local.set $ref
+          (struct.new_default $struct)
+        )
+      )
+    )
+    (struct.get $struct 0
+      (local.get $ref)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-sequential-overwrite (type $1) (param $cond i32) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (local $2 i32)
+  ;; CHECK-NEXT:  (local $3 f64)
+  ;; CHECK-NEXT:  (local $4 i32)
+  ;; CHECK-NEXT:  (local $5 f64)
+  ;; CHECK-NEXT:  (local $6 i32)
+  ;; CHECK-NEXT:  (local $7 f64)
+  ;; CHECK-NEXT:  (drop
+  ;; CHECK-NEXT:   (block (result nullref)
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (i32.const 10)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (local.set $5
+  ;; CHECK-NEXT:     (f64.const 1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (local.set $2
+  ;; CHECK-NEXT:     (local.get $4)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (local.set $3
+  ;; CHECK-NEXT:     (local.get $5)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (ref.null none)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $cond)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (block (result nullref)
+  ;; CHECK-NEXT:      (local.set $6
+  ;; CHECK-NEXT:       (i32.const 20)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $7
+  ;; CHECK-NEXT:       (f64.const 2)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $2
+  ;; CHECK-NEXT:       (local.get $6)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $3
+  ;; CHECK-NEXT:       (local.get $7)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (ref.null none)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block (result i32)
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (ref.null none)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (local.get $2)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-sequential-overwrite (param $cond i32) (result i32)
+    (local $ref (ref null $struct))
+    (local.set $ref
+      (struct.new $struct
+        (i32.const 10)
+        (f64.const 1.0)
+      )
+    )
+    (if
+      (local.get $cond)
+      (then
+        ;; Overwrites $ref, so the first allocation is no longer live when this
+        ;; second allocation executes.
+        (local.set $ref
+          (struct.new $struct
+            (i32.const 20)
+            (f64.const 2.0)
+          )
+        )
+      )
+    )
+    (struct.get $struct 0
+      (local.get $ref)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-overlapping-live-ranges (type $1) (param $cond i32) (result i32)
+  ;; CHECK-NEXT:  (local $1 (ref null $struct))
+  ;; CHECK-NEXT:  (local $4 (ref null $struct))
+  ;; CHECK-NEXT:  (local.set $1
+  ;; CHECK-NEXT:   (struct.new $struct
+  ;; CHECK-NEXT:    (i32.const 10)
+  ;; CHECK-NEXT:    (f64.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $4
+  ;; CHECK-NEXT:   (local.get $1)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $1
+  ;; CHECK-NEXT:   (struct.new $struct
+  ;; CHECK-NEXT:    (i32.const 20)
+  ;; CHECK-NEXT:    (f64.const 2)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $cond)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (local.get $1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $4)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-overlapping-live-ranges (param $cond i32) (result i32)
+    (local $1 (ref null $struct))
+    (local $4 (ref null $struct))
+    (local.set $1
+      (struct.new $struct
+        (i32.const 10)
+        (f64.const 1.0)
+      )
+    )
+    (local.set $4
+      (local.get $1)
+    )
+    ;; This second allocation executes unconditionally while the first
+    ;; allocation in $4 is still live (if $cond is 0). We must not optimize.
+    (local.set $1
+      (struct.new $struct
+        (i32.const 20)
+        (f64.const 2.0)
+      )
+    )
+    (if
+      (local.get $cond)
+      (then
+        (local.set $4
+          (local.get $1)
+        )
+      )
+    )
+    (struct.get $struct 0
+      (local.get $4)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-both-live (type $1) (param $cond i32) (result i32)
+  ;; CHECK-NEXT:  (local $1 (ref null $struct))
+  ;; CHECK-NEXT:  (local $2 (ref null $struct))
+  ;; CHECK-NEXT:  (local $4 (ref null $struct))
+  ;; CHECK-NEXT:  (local.set $1
+  ;; CHECK-NEXT:   (struct.new $struct
+  ;; CHECK-NEXT:    (i32.const 10)
+  ;; CHECK-NEXT:    (f64.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $2
+  ;; CHECK-NEXT:   (struct.new $struct
+  ;; CHECK-NEXT:    (i32.const 20)
+  ;; CHECK-NEXT:    (f64.const 2)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $cond)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (local.get $1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (else
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (local.get $2)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $4)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-both-live (param $cond i32) (result i32)
+    (local $1 (ref null $struct))
+    (local $2 (ref null $struct))
+    (local $4 (ref null $struct))
+    (local.set $1
+      (struct.new $struct
+        (i32.const 10)
+        (f64.const 1.0)
+      )
+    )
+    ;; $1 is still live when $2 is allocated, so we cannot share locals.
+    (local.set $2
+      (struct.new $struct
+        (i32.const 20)
+        (f64.const 2.0)
+      )
+    )
+    (if
+      (local.get $cond)
+      (then
+        (local.set $4
+          (local.get $1)
+        )
+      )
+      (else
+        (local.set $4
+          (local.get $2)
+        )
+      )
+    )
+    (struct.get $struct 0
+      (local.get $4)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-value-stack-overlap (type $1) (param $cond i32) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (local.set $ref
+  ;; CHECK-NEXT:   (struct.new $struct
+  ;; CHECK-NEXT:    (i32.const 10)
+  ;; CHECK-NEXT:    (f64.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.set $struct 0
+  ;; CHECK-NEXT:   (local.get $ref)
+  ;; CHECK-NEXT:   (block (result i32)
+  ;; CHECK-NEXT:    (if
+  ;; CHECK-NEXT:     (local.get $cond)
+  ;; CHECK-NEXT:     (then
+  ;; CHECK-NEXT:      (local.set $ref
+  ;; CHECK-NEXT:       (struct.new $struct
+  ;; CHECK-NEXT:        (i32.const 20)
+  ;; CHECK-NEXT:        (f64.const 2)
+  ;; CHECK-NEXT:       )
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (struct.get $struct 0
+  ;; CHECK-NEXT:     (local.get $ref)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $ref)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-value-stack-overlap (param $cond i32) (result i32)
+    (local $ref (ref null $struct))
+    (local.set $ref
+      (struct.new $struct
+        (i32.const 10)
+        (f64.const 1.0)
+      )
+    )
+    ;; The first allocation is on the value stack (as the target of struct.set)
+    ;; when the second allocation executes inside the value operand. Both
+    ;; allocations can reach the final (local.get $ref). We must not optimize.
+    (struct.set $struct 0
+      (local.get $ref)
+      (block (result i32)
+        (if
+          (local.get $cond)
+          (then
+            (local.set $ref
+              (struct.new $struct
+                (i32.const 20)
+                (f64.const 2.0)
+              )
+            )
+          )
+        )
+        (struct.get $struct 0
+          (local.get $ref)
+        )
+      )
+    )
+    (struct.get $struct 0
+      (local.get $ref)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-ref-eq-both (type $1) (param $cond i32) (result i32)
+  ;; CHECK-NEXT:  (local $1 (ref null $struct))
+  ;; CHECK-NEXT:  (local $4 (ref null $struct))
+  ;; CHECK-NEXT:  (local.set $1
+  ;; CHECK-NEXT:   (struct.new $struct
+  ;; CHECK-NEXT:    (i32.const 10)
+  ;; CHECK-NEXT:    (f64.const 1)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $4
+  ;; CHECK-NEXT:   (local.get $1)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $cond)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (i32.const 20)
+  ;; CHECK-NEXT:      (f64.const 2)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (ref.eq
+  ;; CHECK-NEXT:   (local.get $1)
+  ;; CHECK-NEXT:   (local.get $4)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-ref-eq-both (param $cond i32) (result i32)
+    (local $1 (ref null $struct))
+    (local $4 (ref null $struct))
+    (local.set $1
+      (struct.new $struct
+        (i32.const 10)
+        (f64.const 1.0)
+      )
+    )
+    (local.set $4
+      (local.get $1)
+    )
+    (if
+      (local.get $cond)
+      (then
+        (local.set $4
+          (struct.new $struct
+            (i32.const 20)
+            (f64.const 2.0)
+          )
+        )
+      )
+    )
+    ;; Both operands of ref.eq come from the group, so we cannot fold ref.eq to
+    ;; 1 and must not optimize.
+    (ref.eq
+      (local.get $1)
+      (local.get $4)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-ref-eq-one (type $4) (param $cond i32) (param $other eqref) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (local $3 i32)
+  ;; CHECK-NEXT:  (local $4 f64)
+  ;; CHECK-NEXT:  (local $5 i32)
+  ;; CHECK-NEXT:  (local $6 f64)
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $cond)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (block (result nullref)
+  ;; CHECK-NEXT:      (local.set $5
+  ;; CHECK-NEXT:       (i32.const 10)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $6
+  ;; CHECK-NEXT:       (f64.const 1)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $3
+  ;; CHECK-NEXT:       (local.get $5)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $4
+  ;; CHECK-NEXT:       (local.get $6)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (ref.null none)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (else
+  ;; CHECK-NEXT:    (drop
+  ;; CHECK-NEXT:     (block (result nullref)
+  ;; CHECK-NEXT:      (local.set $3
+  ;; CHECK-NEXT:       (i32.const 0)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (local.set $4
+  ;; CHECK-NEXT:       (f64.const 0)
+  ;; CHECK-NEXT:      )
+  ;; CHECK-NEXT:      (ref.null none)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (block (result i32)
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (ref.null none)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (drop
+  ;; CHECK-NEXT:    (local.get $other)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (i32.const 0)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-ref-eq-one (param $cond i32) (param $other eqref) (result i32)
+    (local $ref (ref null $struct))
+    (if
+      (local.get $cond)
+      (then
+        (local.set $ref
+          (struct.new $struct
+            (i32.const 10)
+            (f64.const 1.0)
+          )
+        )
+      )
+      (else
+        (local.set $ref
+          (struct.new_default $struct)
+        )
+      )
+    )
+    ;; Only one operand of ref.eq comes from the group, so the result is still
+    ;; guaranteed to be 0 and we can optimize.
+    (ref.eq
+      (local.get $ref)
+      (local.get $other)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-one-escapes (type $1) (param $cond i32) (result i32)
+  ;; CHECK-NEXT:  (local $1 (ref null $struct))
+  ;; CHECK-NEXT:  (local $4 (ref null $struct))
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $cond)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $1
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (i32.const 10)
+  ;; CHECK-NEXT:      (f64.const 1)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (call $escape
+  ;; CHECK-NEXT:     (local.get $1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (local.get $1)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (else
+  ;; CHECK-NEXT:    (local.set $4
+  ;; CHECK-NEXT:     (struct.new_default $struct)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $4)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-one-escapes (param $cond i32) (result i32)
+    (local $1 (ref null $struct))
+    (local $4 (ref null $struct))
+    (if
+      (local.get $cond)
+      (then
+        (local.set $1
+          (struct.new $struct
+            (i32.const 10)
+            (f64.const 1.0)
+          )
+        )
+        (call $escape
+          (local.get $1)
+        )
+        (local.set $4
+          (local.get $1)
+        )
+      )
+      (else
+        (local.set $4
+          (struct.new_default $struct)
+        )
+      )
+    )
+    ;; One of the allocations escapes, so the group cannot be optimized.
+    (struct.get $struct 0
+      (local.get $4)
+    )
+  )
+
+  ;; CHECK:      (func $multiple-allocs-different-types (type $1) (param $cond i32) (result i32)
+  ;; CHECK-NEXT:  (local $ref (ref null $struct))
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $cond)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new_default $struct)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:   (else
+  ;; CHECK-NEXT:    (local.set $ref
+  ;; CHECK-NEXT:     (struct.new_default $substruct)
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $ref)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  (func $multiple-allocs-different-types (param $cond i32) (result i32)
+    (local $ref (ref null $struct))
+    (if
+      (local.get $cond)
+      (then
+        (local.set $ref
+          (struct.new_default $struct)
+        )
+      )
+      (else
+        (local.set $ref
+          (struct.new_default $substruct)
+        )
+      )
+    )
+    ;; The allocations have different types, so we do not group them.
+    (struct.get $struct 0
+      (local.get $ref)
+    )
+  )
+)
+
+
