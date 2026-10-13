@@ -576,9 +576,12 @@ struct EscapeAnalyzer {
   // is, whether they can be considered and potentially optimized as a group.
   bool isCompatibleAllocation(StructNew* candidate,
                               StructNew* firstAlloc) const {
+    // To optimize them together, they must have the same type, so they can fit
+    // in the same set of locals.
     if (candidate->type != firstAlloc->type) {
       return false;
     }
+    // TODO: needed from here, i doubt it?
     if (bool(candidate->desc) != bool(firstAlloc->desc)) {
       return false;
     }
@@ -591,8 +594,8 @@ struct EscapeAnalyzer {
 
   // Given a LocalSet that is not yet in |sets|, walk backwards through the
   // value flowing into it (and any intermediate LocalGets/LocalSets) to find
-  // candidate StructNew allocations that feed it. Returns false if the set can
-  // be fed by anything other than compatible StructNew allocations.
+  // candidate StructNew allocations that feed it. Returns true if we can
+  // continue to optimize (with new allocations).
   bool findAllocationsForSet(LocalSet* startSet,
                              StructNew* firstAlloc,
                              std::vector<StructNew*>& newAllocations) {
@@ -612,6 +615,8 @@ struct EscapeAnalyzer {
           curr = next;
           continue;
         }
+
+        // Follow simple branches. TODO: general control flow.
         auto branches =
           branchTargets.getBranches(BranchUtils::getDefinedName(curr));
         if (branches.size() == 1) {
@@ -654,6 +659,8 @@ struct EscapeAnalyzer {
   // Verify exclusivity of all the gets for our sets. If a get can read from a
   // set not in |sets|, try to find compatible StructNew allocations that feed
   // that set so we can expand the allocation group.
+  //
+  // Return true if we can proceed to optimize (perhaps with new allocations).
   bool
   findExclusiveSetsOrNewAllocations(Expression* initialAllocation,
                                     std::vector<StructNew*>& newAllocations) {
@@ -666,6 +673,7 @@ struct EscapeAnalyzer {
     }
 
     auto* firstStructAlloc = initialAllocation->dynCast<StructNew>();
+    assert(firstStructAlloc);
     bool foundMissingSet = false;
 
     // Check that the gets can only read from the specific known sets, or find
@@ -673,9 +681,13 @@ struct EscapeAnalyzer {
     for (auto* get : gets) {
       for (auto* set : localGraph.getSets(get)) {
         if (!sets.contains(set)) {
-          if (!set || !firstStructAlloc) {
+          if (!set || !firstStructAlloc) { // remove secord part?
+            // This reaches a null initial value at the entry block, so it might
+            // trap. We do not optimize such overlaps for now.
             return false;
           }
+
+          // We found a new set. Find new allocations that reach it.
           foundMissingSet = true;
           if (!findAllocationsForSet(set, firstStructAlloc, newAllocations)) {
             return false;
@@ -685,7 +697,7 @@ struct EscapeAnalyzer {
     }
 
     if (foundMissingSet && newAllocations.empty()) {
-      return false;
+      return false; // XXX needed?
     }
 
     return true;
