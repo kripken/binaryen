@@ -392,13 +392,13 @@ struct Generalizer
   }
 };
 
-struct TypeGeneralizing : WalkerPass<PostWalker<TypeGeneralizing>> {
+struct LocalGeneralizing : WalkerPass<PostWalker<LocalGeneralizing>> {
   std::vector<Type> localTypes;
   bool refinalize = false;
 
   bool isFunctionParallel() override { return true; }
   std::unique_ptr<Pass> create() override {
-    return std::make_unique<TypeGeneralizing>();
+    return std::make_unique<LocalGeneralizing>();
   }
 
   void runOnFunction(Module* wasm, Function* func) override {
@@ -459,6 +459,6 @@ struct TypeGeneralizing : WalkerPass<PostWalker<TypeGeneralizing>> {
 
 } // anonymous namespace
 
-Pass* createTypeGeneralizingPass() { return new TypeGeneralizing; }
+Pass* createLocalGeneralizingPass() { return new LocalGeneralizing; }
 
 } // namespace wasm

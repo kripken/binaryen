@@ -64,6 +64,7 @@ set(passes_SOURCES
   LimitSegments.cpp
   LLVMMemoryCopyFillLowering.cpp
   LocalCSE.cpp
+  LocalGeneralizing.cpp
   LocalSubtyping.cpp
   LogExecution.cpp
   LoopInvariantCodeMotion.cpp
@@ -129,7 +130,6 @@ set(passes_SOURCES
   ReorderLocals.cpp
   ReorderTypes.cpp
   ReReloop.cpp
-  TypeGeneralizing.cpp
   TypeRefining.cpp
   TypeMerging.cpp
   TypeSSA.cpp

@@ -2723,6 +2723,7 @@ opt_choices = [
     ("--heap-store-optimization",),
     ("--generate-stack-ir",),
     ("--licm",),
+    ("--local-generalizing",),
     ("--local-subtyping",),
     ("--mark-noreturn",),
     ("--memory-packing",),

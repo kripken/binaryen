@@ -630,9 +630,9 @@ void PassRegistry::registerPasses() {
   registerTestPass("delete-branch-hints",
                    "delete branch hints using a list of instrumented IDs",
                    createDeleteBranchHintsPass);
-  registerTestPass("experimental-type-generalizing",
-                   "generalize types (not yet sound)",
-                   createTypeGeneralizingPass);
+  registerTestPass("local-generalizing",
+                   "generalize local types",
+                   createLocalGeneralizingPass);
   registerTestPass("randomize-branch-hints",
                    "randomize branch hints (for fuzzing)",
                    createRandomizeBranchHintsPass);
@@ -745,6 +745,12 @@ void PassRunner::addDefaultFunctionOptimizationPasses() {
   addIfNoDWARFIssues("simplify-locals");
   addIfNoDWARFIssues("vacuum");
   addIfNoDWARFIssues("reorder-locals");
+  if (options.lastOpts && wasm->features.hasGC()) {
+    // Generalize local types in the last optimization cycle, right before the
+    // last coalesce-locals (generalizing local types may allow more
+    // coalescing).
+    addIfNoDWARFIssues("local-generalizing");
+  }
   addIfNoDWARFIssues("coalesce-locals");
   addIfNoDWARFIssues("reorder-locals");
   addIfNoDWARFIssues("vacuum");
