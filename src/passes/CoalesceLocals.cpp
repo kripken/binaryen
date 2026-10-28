@@ -132,8 +132,24 @@ void CoalesceLocals::doWalkFunction(Function* func) {
     // Non-nullability differences require types to be updated. TODO: only when needed
     struct LocalUpdater : public PostWalker<LocalUpdater> {
       void visitLocalGet(LocalGet* curr) { curr->type = getFunction()->getLocalType(curr->index); }
-      void visitLocalSet(LocalSet* curr) { if (curr->type.isConcrete()) { curr->type = getFunction()->getLocalType(curr->index); } }
+      void visitLocalSet(LocalSet* curr) {
+        if (curr->type == Type::unreachable) {
+          return;
+        }
+        // Fix the type written to the local: if we merged a nullable and non-
+        // nullable local, some writes may need to be refined.
+        auto localType = getFunction()->getLocalType(curr->index);
+//        if (localType.isNonNullableRef() && !curr->value->type.isNonNullableRef()) {
+  //        curr->value = Builder(*getModule()).makeRefAs(RefAsNonNull, curr->value);
+    //    }
+
+        // Fix the tee output type.
+        if (curr->type.isConcrete()) {
+          curr->type = localType;
+        }
+      }
     } localUpdater;
+    localUpdater.setModule(getModule());
     localUpdater.walkFunction(func);
 
     ReFinalize().walkFunctionInModule(func, getModule());
@@ -466,10 +482,9 @@ void CoalesceLocals::pickIndicesFromOrder(std::vector<Index>& order,
     } else {
       removedCopies += foundCopies;
       if (actualType != types[found]) {
-        // We allow differences in nullability, refining to non-nullable if any
-        // of the merged locals is non-nullable (non-nullable fixups will
-        // handle any ranges that need changes).
-        types[found] = actualType.with(NonNullable);
+        // We allow differences in nullability, relaxing to nullable.
+        // TODO: do this in TNH, where unneeded non-nullable casts are easy to remove?
+        types[found] = actualType.with(Nullable);
         refinalize = true;
       }
     }

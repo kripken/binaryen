@@ -106,5 +106,21 @@
    (local.get $x)
   )
  )
+
+ (func $merge-nn-differences-2 (param $param anyref)
+  (local $x (ref null $struct))
+  (local $y (ref $struct))
+  ;; Ditto, in reverse order: now $x is nullable. We can still merge.
+  (local.set $x
+   (ref.cast (ref null $struct)
+    (local.get $param)
+   )
+  )
+  (local.set $y
+   (ref.as_non_null
+    (local.get $x)
+   )
+  )
+ )
 )
 
