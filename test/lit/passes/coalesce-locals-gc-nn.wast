@@ -2,9 +2,10 @@
 ;; RUN: wasm-opt %s --coalesce-locals -all -S -o - | filecheck %s
 
 (module
+ ;; CHECK:      (type $struct (struct))
  (type $struct (struct))
 
- ;; CHECK:      (func $nn-locals (type $0) (param $0 (ref any))
+ ;; CHECK:      (func $nn-locals (type $1) (param $0 (ref any))
  ;; CHECK-NEXT:  (local $1 (tuple (ref any) (ref any)))
  ;; CHECK-NEXT:  (local $2 (tuple (ref any) (ref any)))
  ;; CHECK-NEXT:  (local.set $1
@@ -83,6 +84,15 @@
   )
  )
 
+ ;; CHECK:      (func $merge-nn-differences (type $2) (param $0 anyref)
+ ;; CHECK-NEXT:  (local $1 (ref null $struct))
+ ;; CHECK-NEXT:  (local.set $1
+ ;; CHECK-NEXT:   (ref.cast (ref $struct)
+ ;; CHECK-NEXT:    (local.get $0)
+ ;; CHECK-NEXT:   )
+ ;; CHECK-NEXT:  )
+ ;; CHECK-NEXT:  (nop)
+ ;; CHECK-NEXT: )
  (func $merge-nn-differences (param $param anyref)
   (local $x (ref $struct))
   (local $y (ref null $struct))

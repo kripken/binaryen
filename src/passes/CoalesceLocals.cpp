@@ -132,7 +132,7 @@ void CoalesceLocals::doWalkFunction(Function* func) {
     // Non-nullability differences require types to be updated. TODO: only when needed
     struct LocalUpdater : public PostWalker<LocalUpdater> {
       void visitLocalGet(LocalGet* curr) { curr->type = getFunction()->getLocalType(curr->index); }
-      void visitLocalSet(LocalSet* curr) { if (curr->type != Type::unreachable) { curr->type = getFunction()->getLocalType(curr->index); } }
+      void visitLocalSet(LocalSet* curr) { if (curr->type.isConcrete()) { curr->type = getFunction()->getLocalType(curr->index); } }
     } localUpdater;
     localUpdater.walkFunction(func);
 
