@@ -129,6 +129,13 @@ void CoalesceLocals::doWalkFunction(Function* func) {
   applyIndices(indices, func->body);
 
   if (refinalize) {
+    // Non-nullability differences require types to be updated. TODO: only when needed
+    struct LocalUpdater : public PostWalker<LocalUpdater> {
+      void visitLocalGet(LocalGet* curr) { curr->type = getFunction()->getLocalType(curr->index); }
+      void visitLocalSet(LocalSet* curr) { if (curr->type != Type::unreachable) { curr->type = getFunction()->getLocalType(curr->index); } }
+    } localUpdater;
+    localUpdater.walkFunction(func);
+
     ReFinalize().walkFunctionInModule(func, getModule());
   }
 }
@@ -354,6 +361,17 @@ void CoalesceLocals::pickIndicesFromOrder(std::vector<Index>& order,
   pickIndicesFromOrder(order, indices, removedCopies);
 }
 
+// We can coalesce locals that differ in nullability: we will use the more
+// refined of the types we see, and non-nullability fixups with handle any
+// issues. Note that we cannot do this if either one is a param: param types
+// are absolutely fixed.
+static bool areCompatibleTypes(Type a, Type b, bool isEitherParam) {
+  if (!isEitherParam && a.isRef() && b.isRef()) {
+    return a.with(NonNullable) == b.with(NonNullable);
+  }
+  return a == b;
+}
+
 void CoalesceLocals::pickIndicesFromOrder(std::vector<Index>& order,
                                           std::vector<Index>& indices,
                                           Index& removedCopies) {
@@ -423,11 +441,12 @@ void CoalesceLocals::pickIndicesFromOrder(std::vector<Index>& order,
   }
   for (; i < numLocals; i++) {
     Index actual = order[i];
+    auto actualType = getFunction()->getLocalType(actual);
     Index found = -1;
     uint8_t foundCopies = -1;
     for (Index j = 0; j < nextFree; j++) {
       if (!newInterferences.get(j, actual) &&
-          getFunction()->getLocalType(actual) == types[j]) {
+          areCompatibleTypes(actualType, types[j], getFunction()->isParam(j))) {
         // this does not interfere, so it might be what we want. but pick the
         // one eliminating the most copies (we could stop looking forward when
         // there are no more items that have copies anyhow, but it doesn't seem
@@ -441,11 +460,18 @@ void CoalesceLocals::pickIndicesFromOrder(std::vector<Index>& order,
     }
     if (found == Index(-1)) {
       indices[actual] = found = nextFree;
-      types[found] = getFunction()->getLocalType(actual);
+      types[found] = actualType;
       nextFree++;
       removedCopies += getCopies(found, actual);
     } else {
       removedCopies += foundCopies;
+      if (actualType != types[found]) {
+        // We allow differences in nullability, refining to non-nullable if any
+        // of the merged locals is non-nullable (non-nullable fixups will
+        // handle any ranges that need changes).
+        types[found] = actualType.with(NonNullable);
+        refinalize = true;
+      }
     }
 #if CFG_DEBUG
     std::cerr << "set local $" << actual << " to $" << found << '\n';

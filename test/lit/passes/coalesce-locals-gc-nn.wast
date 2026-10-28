@@ -2,6 +2,8 @@
 ;; RUN: wasm-opt %s --coalesce-locals -all -S -o - | filecheck %s
 
 (module
+ (type $struct (struct))
+
  ;; CHECK:      (func $nn-locals (type $0) (param $0 (ref any))
  ;; CHECK-NEXT:  (local $1 (tuple (ref any) (ref any)))
  ;; CHECK-NEXT:  (local $2 (tuple (ref any) (ref any)))
@@ -80,4 +82,19 @@
    )
   )
  )
+
+ (func $merge-nn-differences (param $param anyref)
+  (local $x (ref $struct))
+  (local $y (ref null $struct))
+  ;; We can merge $x and $y, even though they differ in nullability.
+  (local.set $x
+   (ref.cast (ref $struct)
+    (local.get $param)
+   )
+  )
+  (local.set $y
+   (local.get $x)
+  )
+ )
 )
+
