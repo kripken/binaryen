@@ -818,12 +818,7 @@
   ;; TNH-NEXT:  )
   ;; TNH-NEXT:  (drop
   ;; TNH-NEXT:   (ref.test (ref $Super)
-  ;; TNH-NEXT:    (block ;; (replaces unreachable RefCast we can't emit)
-  ;; TNH-NEXT:     (drop
-  ;; TNH-NEXT:      (unreachable)
-  ;; TNH-NEXT:     )
-  ;; TNH-NEXT:     (unreachable)
-  ;; TNH-NEXT:    )
+  ;; TNH-NEXT:    (unreachable)
   ;; TNH-NEXT:   )
   ;; TNH-NEXT:  )
   ;; TNH-NEXT: )
