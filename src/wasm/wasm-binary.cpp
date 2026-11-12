@@ -1523,6 +1523,92 @@ void WasmBinaryWriter::writeSourceMapProlog() {
 
     // Replace the old symbol names with the new, pruned list.
     wasm->debugInfoSymbolNames = std::move(newSymbolNames);
+
+    // Synthesize OriginalScopes for any scoped DebugLocations that have a
+    // symbolNameIndex in a source file without pre-existing debugInfoScopes,
+    // so caller and callee function names are preserved across source map
+    // roundtrips.
+    std::map<std::pair<BinaryLocation, BinaryLocation>,
+             std::pair<BinaryLocation, BinaryLocation>>
+      synthesizedMinPos;
+    auto collectSynthesized = [&](const Function::DebugLocations& locations) {
+      for (const auto& dl : locations) {
+        if (dl.scope && !dl.scope->scopeIndex && dl.hasPosition() &&
+            dl.symbolNameIndex &&
+            dl.fileIndex < wasm->debugInfoFileNames.size() &&
+            (dl.fileIndex >= wasm->debugInfoScopes.size() ||
+             !wasm->debugInfoScopes[dl.fileIndex])) {
+          std::pair<BinaryLocation, BinaryLocation> key{dl.fileIndex,
+                                                        *dl.symbolNameIndex};
+          std::pair<BinaryLocation, BinaryLocation> pos{dl.lineNumber,
+                                                        dl.columnNumber};
+          auto it = synthesizedMinPos.find(key);
+          if (it == synthesizedMinPos.end() || pos < it->second) {
+            synthesizedMinPos[key] = pos;
+          }
+        }
+      }
+    };
+    for (auto& func : wasm->functions) {
+      for (auto& [_, location] : func->debugLocations) {
+        collectSynthesized(location);
+      }
+      collectSynthesized(func->prologLocation);
+      collectSynthesized(func->epilogLocation);
+    }
+    if (!synthesizedMinPos.empty()) {
+      if (wasm->debugInfoScopes.size() < wasm->debugInfoFileNames.size()) {
+        wasm->debugInfoScopes.resize(wasm->debugInfoFileNames.size());
+      }
+      std::map<BinaryLocation, std::vector<Module::OriginalScope>>
+        perFileScopes;
+      for (const auto& [key, pos] : synthesizedMinPos) {
+        Module::OriginalScope scope;
+        scope.startLine = pos.first;
+        scope.startColumn = pos.second;
+        scope.endLine = pos.first;
+        scope.endColumn = pos.second;
+        scope.nameIndex = key.second;
+        scope.isStackFrame = true;
+        perFileScopes[key.first].push_back(std::move(scope));
+      }
+      std::map<std::pair<BinaryLocation, BinaryLocation>, BinaryLocation>
+        synthesizedScopeIndices;
+      for (auto& [fileIdx, scopes] : perFileScopes) {
+        std::sort(
+          scopes.begin(),
+          scopes.end(),
+          [](const Module::OriginalScope& a, const Module::OriginalScope& b) {
+            return std::tie(a.startLine, a.startColumn, a.nameIndex) <
+                   std::tie(b.startLine, b.startColumn, b.nameIndex);
+          });
+        for (size_t i = 0; i < scopes.size(); ++i) {
+          synthesizedScopeIndices[{fileIdx, *scopes[i].nameIndex}] =
+            BinaryLocation(i);
+        }
+        wasm->debugInfoScopes[fileIdx] = std::move(scopes);
+      }
+      auto applySynthesized = [&](Function::DebugLocations& locations) {
+        for (auto& dl : locations) {
+          if (dl.scope && !dl.scope->scopeIndex && dl.hasPosition() &&
+              dl.symbolNameIndex) {
+            auto it =
+              synthesizedScopeIndices.find({dl.fileIndex, *dl.symbolNameIndex});
+            if (it != synthesizedScopeIndices.end()) {
+              dl.scope->fileIndex = dl.fileIndex;
+              dl.scope->scopeIndex = it->second;
+            }
+          }
+        }
+      };
+      for (auto& func : wasm->functions) {
+        for (auto& [_, location] : func->debugLocations) {
+          applySynthesized(location);
+        }
+        applySynthesized(func->prologLocation);
+        applySynthesized(func->epilogLocation);
+      }
+    }
   }
 
   auto writeOptionalString = [&](const char* name, const std::string& str) {

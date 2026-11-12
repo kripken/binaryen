@@ -713,6 +713,10 @@ TEST_F(SourceMapTest, InliningCreatesCallStackScopes) {
   ASSERT_EQ(locs2.size(), 2u);
   EXPECT_EQ(locs2[0].lineNumber, 50u);
   EXPECT_EQ(locs2[0].columnNumber, 4u);
+  ASSERT_TRUE(locs2[0].symbolNameIndex.has_value());
+  EXPECT_EQ(m2.debugInfoSymbolNames[*locs2[0].symbolNameIndex], "callerFunc");
   EXPECT_EQ(locs2[1].lineNumber, 10u);
   EXPECT_EQ(locs2[1].columnNumber, 2u);
+  ASSERT_TRUE(locs2[1].symbolNameIndex.has_value());
+  EXPECT_EQ(m2.debugInfoSymbolNames[*locs2[1].symbolNameIndex], "calleeFunc");
 }

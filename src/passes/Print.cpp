@@ -137,7 +137,7 @@ struct PrintSExpression : public UnifiedExpressionVisitor<PrintSExpression> {
   // not yet printed any debug location, or that we last printed an
   // annotation indicating that the expression had no associated
   // debug location.
-  std::optional<Function::DebugLocation> lastPrintedLocation;
+  Function::DebugLocations lastPrintedLocation;
   bool debugInfo;
 
   // Used to print delegate's depth argument when it throws to the caller
@@ -267,8 +267,7 @@ struct PrintSExpression : public UnifiedExpressionVisitor<PrintSExpression> {
     return o;
   }
 
-  void
-  printDebugLocation(const std::optional<Function::DebugLocation>& location);
+  void printDebugLocation(const Function::DebugLocations& locations);
 
   // Prints debug info for a delimiter in an expression.
   void printDebugDelimiterLocation(Expression* curr, Index i);
@@ -2750,33 +2749,47 @@ std::ostream& PrintSExpression::printPrefixedTypes(const char* prefix,
 }
 
 void PrintSExpression::printDebugLocation(
-  const std::optional<Function::DebugLocation>& location) {
+  const Function::DebugLocations& locations) {
   if (minify) {
     return;
   }
+  Function::DebugLocations printable;
+  if (!locations.empty() && locations.back().hasPosition()) {
+    for (const auto& loc : locations) {
+      if (loc.hasPosition()) {
+        printable.push_back(Function::DebugLocation{loc.fileIndex,
+                                                    loc.lineNumber,
+                                                    loc.columnNumber,
+                                                    loc.symbolNameIndex});
+      }
+    }
+  }
   // Do not skip repeated debug info in full mode, for less-confusing debugging:
   // full mode prints out everything in the most verbose manner.
-  if (lastPrintedLocation == location && indent > lastPrintIndent && !full) {
+  if (lastPrintedLocation == printable && indent > lastPrintIndent && !full) {
     return;
   }
-  lastPrintedLocation = location;
+  lastPrintedLocation = printable;
   lastPrintIndent = indent;
-  if (!location) {
+  if (printable.empty()) {
     o << ";;@\n";
+    doIndent(o, indent);
   } else {
-    auto fileName = currModule->debugInfoFileNames[location->fileIndex];
-    o << ";;@ " << fileName << ":" << location->lineNumber << ":"
-      << location->columnNumber;
+    for (const auto& loc : printable) {
+      auto fileName = currModule->debugInfoFileNames[loc.fileIndex];
+      o << ";;@ " << fileName << ":" << loc.lineNumber << ":"
+        << loc.columnNumber;
 
-    if (location->symbolNameIndex) {
-      auto symbolName =
-        currModule->debugInfoSymbolNames[*(location->symbolNameIndex)];
-      o << ":" << symbolName;
+      if (loc.symbolNameIndex) {
+        auto symbolName =
+          currModule->debugInfoSymbolNames[*(loc.symbolNameIndex)];
+        o << ":" << symbolName;
+      }
+
+      o << '\n';
+      doIndent(o, indent);
     }
-
-    o << '\n';
   }
-  doIndent(o, indent);
 }
 
 void PrintSExpression::printMetadata(Expression* curr) {
@@ -2785,9 +2798,9 @@ void PrintSExpression::printMetadata(Expression* curr) {
     if (auto iter = currFunction->debugLocations.find(curr);
         iter != currFunction->debugLocations.end() && !iter->second.empty() &&
         iter->second.back().hasPosition()) {
-      printDebugLocation(iter->second.back());
+      printDebugLocation(iter->second);
     } else {
-      printDebugLocation(std::nullopt);
+      printDebugLocation({});
     }
 
     // Show a binary position, if there is one.
@@ -3322,7 +3335,7 @@ void PrintSExpression::visitFunction(Function* curr) {
 void PrintSExpression::visitImportedFunction(Function* curr) {
   doIndent(o, indent);
   currFunction = curr;
-  lastPrintedLocation = std::nullopt;
+  lastPrintedLocation.clear();
   o << '(';
   emitImportHeader(curr);
   printCodeAnnotations(curr->funcAnnotations);
@@ -3334,11 +3347,11 @@ void PrintSExpression::visitImportedFunction(Function* curr) {
 void PrintSExpression::visitDefinedFunction(Function* curr) {
   doIndent(o, indent);
   currFunction = curr;
-  lastPrintedLocation = std::nullopt;
+  lastPrintedLocation.clear();
   lastPrintIndent = 0;
   if (!currFunction->prologLocation.empty() &&
       currFunction->prologLocation.back().hasPosition()) {
-    printDebugLocation(currFunction->prologLocation.back());
+    printDebugLocation(currFunction->prologLocation);
   }
   printCodeAnnotations(curr->funcAnnotations);
   handleSignature(curr, true);
@@ -3381,7 +3394,7 @@ void PrintSExpression::visitDefinedFunction(Function* curr) {
     if (!minify) {
       indent--;
     }
-    printDebugLocation(currFunction->epilogLocation.back());
+    printDebugLocation(currFunction->epilogLocation);
     o << ')';
   } else {
     decIndent();

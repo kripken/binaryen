@@ -69,6 +69,7 @@ class SourceMapReader {
     size_t endOffset = 0;
     std::optional<BinaryLocation> defFileIndex;
     std::optional<BinaryLocation> defScopeIndex;
+    std::optional<BinaryLocation> defNameIndex;
     bool isStackFrame = false;
     bool isHidden = false;
     std::optional<CallSitePos> callSite;

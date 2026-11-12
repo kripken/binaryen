@@ -332,6 +332,8 @@ void SourceMapReader::parse(Module& wasm) {
                   flattenedScopes[defSourceIndex].size()) {
               r.defFileIndex = BinaryLocation(defSourceIndex);
               r.defScopeIndex = BinaryLocation(defScopeIndex);
+              r.defNameIndex =
+                flattenedScopes[defSourceIndex][defScopeIndex]->nameIndex;
             }
           }
           while (p < rangeStr.size() && rangeStr[p] != ',') {
@@ -606,6 +608,7 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
         posFile = cs.fileIndex;
         posLine = cs.lineNumber;
         posCol = cs.columnNumber;
+        posSym = r->defNameIndex;
       }
     } else if (hasInfo) {
       posFile = file;
