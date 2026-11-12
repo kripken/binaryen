@@ -2114,7 +2114,9 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
     if (locs.size() > 1) {
       for (size_t i = 0; i < locs.size(); ++i) {
         Function::ScopeInfo scope;
-        scope.isStackFrame = (i == 0);
+        scope.stackFrameType = (i == 0)
+                                 ? Function::ScopeInfo::StackFrameType::Original
+                                 : Function::ScopeInfo::StackFrameType::None;
         locs[i].scope = scope;
       }
     }

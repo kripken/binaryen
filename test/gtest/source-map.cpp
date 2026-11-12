@@ -408,7 +408,8 @@ TEST_F(SourceMapTest, ScopesAndRangesParsing) {
   ASSERT_TRUE(loc10[0].scope.has_value());
   EXPECT_EQ(loc10[0].scope->fileIndex, std::optional<BinaryLocation>(0));
   EXPECT_EQ(loc10[0].scope->scopeIndex, std::optional<BinaryLocation>(0));
-  EXPECT_TRUE(loc10[0].scope->isStackFrame);
+  EXPECT_EQ(loc10[0].scope->stackFrameType,
+            Function::ScopeInfo::StackFrameType::Original);
   ASSERT_EQ(loc10[0].scope->bindings.size(), 2u);
   EXPECT_EQ(loc10[0].scope->bindings[0], std::optional<BinaryLocation>(6));
   EXPECT_EQ(loc10[0].scope->bindings[1], std::nullopt);
@@ -429,7 +430,8 @@ TEST_F(SourceMapTest, ScopesAndRangesParsing) {
   ASSERT_TRUE(loc20[1].scope.has_value());
   EXPECT_EQ(loc20[1].scope->fileIndex, std::optional<BinaryLocation>(0));
   EXPECT_EQ(loc20[1].scope->scopeIndex, std::optional<BinaryLocation>(1));
-  EXPECT_FALSE(loc20[1].scope->isStackFrame);
+  EXPECT_EQ(loc20[1].scope->stackFrameType,
+            Function::ScopeInfo::StackFrameType::None);
   ASSERT_EQ(loc20[1].scope->bindings.size(), 1u);
   EXPECT_EQ(loc20[1].scope->bindings[0], std::optional<BinaryLocation>(8));
 
@@ -532,7 +534,7 @@ TEST_F(SourceMapTest, ScopesAndRangesBinaryRoundTrip) {
   Function::ScopeInfo outerScope1;
   outerScope1.fileIndex = 0;
   outerScope1.scopeIndex = 0;
-  outerScope1.isStackFrame = true;
+  outerScope1.stackFrameType = Function::ScopeInfo::StackFrameType::Original;
   outerScope1.bindings = {std::nullopt};
 
   Function::ScopeInfo outerScope2 = outerScope1;
@@ -541,7 +543,7 @@ TEST_F(SourceMapTest, ScopesAndRangesBinaryRoundTrip) {
   Function::ScopeInfo innerScope;
   innerScope.fileIndex = 0;
   innerScope.scopeIndex = 1;
-  innerScope.isStackFrame = false;
+  innerScope.stackFrameType = Function::ScopeInfo::StackFrameType::None;
 
   // nop1: in outerScope1 at app.dart:12:4
   func->debugLocations[nop1] = {
@@ -624,7 +626,7 @@ TEST(SourceMapCopyTest, RemapScopeFileAndBindings) {
   Function::ScopeInfo scope;
   scope.fileIndex = 0;
   scope.scopeIndex = 2;
-  scope.isStackFrame = true;
+  scope.stackFrameType = Function::ScopeInfo::StackFrameType::Original;
   scope.bindings = {std::optional<BinaryLocation>(0),
                     std::nullopt,
                     std::optional<BinaryLocation>(1)};
@@ -682,12 +684,14 @@ TEST_F(SourceMapTest, InliningCreatesCallStackScopes) {
   EXPECT_EQ(locs1[0].lineNumber, 50u);
   EXPECT_EQ(locs1[0].columnNumber, 4u);
   ASSERT_TRUE(locs1[0].scope.has_value());
-  EXPECT_TRUE(locs1[0].scope->isStackFrame);
+  EXPECT_EQ(locs1[0].scope->stackFrameType,
+            Function::ScopeInfo::StackFrameType::Original);
   // Inner frame is the inlined instruction in calleeFunc.
   EXPECT_EQ(locs1[1].lineNumber, 10u);
   EXPECT_EQ(locs1[1].columnNumber, 2u);
   ASSERT_TRUE(locs1[1].scope.has_value());
-  EXPECT_FALSE(locs1[1].scope->isStackFrame);
+  EXPECT_EQ(locs1[1].scope->stackFrameType,
+            Function::ScopeInfo::StackFrameType::None);
 
   // Write binary + source map and read back to verify synthesized scopes/ranges
   // preserve the full inlined call stack.
