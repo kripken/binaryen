@@ -53,25 +53,30 @@ class SourceMapReader {
   bool hasInfo = false;
   bool hasSymbol = false;
 
+  // The source position of a call site that was inlined to produce a
+  // GeneratedRange.
   struct CallSitePos {
-    BinaryLocation fileIndex = 0;
-    BinaryLocation lineNumber = 1;
-    BinaryLocation columnNumber = 0;
+    uint32_t file = 0;
+    uint32_t line = 1;
+    uint32_t col = 0;
   };
 
+  // A point in a GeneratedRange where a scope variable's binding expression
+  // changes (or becomes unavailable if `symbol` is nullopt).
   struct BindingTransition {
     size_t fromOffset = 0;
-    std::optional<BinaryLocation> symbolNameIndex;
+    std::optional<uint32_t> symbol;
   };
 
+  // A decoded GeneratedRange entry from the source map's "ranges" field.
   struct DecodedRange {
     size_t startOffset = 0;
     size_t endOffset = 0;
-    std::optional<BinaryLocation> defFileIndex;
-    std::optional<BinaryLocation> defScopeIndex;
-    std::optional<BinaryLocation> defNameIndex;
-    bool isStackFrame = false;
-    bool isHidden = false;
+    std::optional<uint32_t> defFile;
+    std::optional<uint32_t> defScope;
+    std::optional<uint32_t> defSymbol;
+    Function::ScopeInfo::StackFrameType stackFrameType =
+      Function::ScopeInfo::StackFrameType::None;
     std::optional<CallSitePos> callSite;
     std::vector<std::vector<BindingTransition>> bindings;
     std::vector<DecodedRange> children;

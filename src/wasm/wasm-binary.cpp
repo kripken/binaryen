@@ -1821,6 +1821,7 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
     }
     *sourceMap << "]";
 
+    // The caller source position for an inlined GeneratedRange.
     struct CallSite {
       BinaryLocation fileIndex = 0;
       BinaryLocation lineNumber = 1;
@@ -1828,10 +1829,14 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
       bool operator==(const CallSite& other) const = default;
       bool operator!=(const CallSite& other) const = default;
     };
+    // A byte offset at which a scope variable's binding changes within an
+    // emitted GeneratedRange.
     struct BindingTransition {
       size_t fromOffset = 0;
       std::optional<BinaryLocation> symbolNameIndex;
     };
+    // A GeneratedRange node constructed from DebugLocations to be serialized to
+    // the source map's "ranges" field.
     struct OutRange {
       size_t startOffset = 0;
       size_t endOffset = 0;
@@ -1844,8 +1849,7 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
                         const std::optional<CallSite>& otherCallSite) const {
         return scope.fileIndex == otherScope.fileIndex &&
                scope.scopeIndex == otherScope.scopeIndex &&
-               scope.isStackFrame == otherScope.isStackFrame &&
-               scope.isHidden == otherScope.isHidden &&
+               scope.stackFrameType == otherScope.stackFrameType &&
                scope.bindings.size() == otherScope.bindings.size() &&
                callSite == otherCallSite;
       }
@@ -1941,11 +1945,12 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
       if (r.scope.hasDefinition()) {
         flags |= 0x2;
       }
-      if (r.scope.isStackFrame) {
+      if (r.scope.stackFrameType ==
+          Function::ScopeInfo::StackFrameType::Original) {
         flags |= 0x4;
-        if (r.scope.isHidden) {
-          flags |= 0x8;
-        }
+      } else if (r.scope.stackFrameType ==
+                 Function::ScopeInfo::StackFrameType::Hidden) {
+        flags |= 0x4 | 0x8;
       }
       writeBase64VLQUnsigned(*sourceMap, flags);
       writeBase64VLQUnsigned(*sourceMap,

@@ -689,7 +689,8 @@ static void doCodeInlining(Module* module,
         Function::DebugLocations combined = callLocs;
         if (!combined[0].scope && callLocs.back().hasPosition()) {
           Function::ScopeInfo callerScope;
-          callerScope.isStackFrame = true;
+          callerScope.stackFrameType =
+            Function::ScopeInfo::StackFrameType::Original;
           combined[0].scope = callerScope;
         }
         bool clearedFirstScopeFrame = false;
@@ -697,8 +698,8 @@ static void doCodeInlining(Module* module,
           if (!clearedFirstScopeFrame && loc.scope) {
             clearedFirstScopeFrame = true;
             if (callLocs.back().hasPosition()) {
-              loc.scope->isStackFrame = false;
-              loc.scope->isHidden = false;
+              loc.scope->stackFrameType =
+                Function::ScopeInfo::StackFrameType::None;
             }
           }
           combined.push_back(std::move(loc));

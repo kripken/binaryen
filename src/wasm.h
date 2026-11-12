@@ -2467,11 +2467,20 @@ public:
   // Source maps debugging info: map expression nodes to their file, line, col,
   // symbol name, and optional scope/range info (ordered from outermost to
   // innermost inlined frame).
+  //
+  // ScopeInfo describes the GeneratedRange associated with a frame in a
+  // DebugLocations stack, including its reference to an OriginalScope
+  // definition (fileIndex, scopeIndex) and active variable bindings.
   struct ScopeInfo {
+    enum class StackFrameType : uint8_t {
+      None,
+      Original,
+      Hidden,
+    };
+
     std::optional<BinaryLocation> fileIndex = std::nullopt;
     std::optional<BinaryLocation> scopeIndex = std::nullopt;
-    bool isStackFrame = false;
-    bool isHidden = false;
+    StackFrameType stackFrameType = StackFrameType::None;
     std::vector<std::optional<BinaryLocation>> bindings = {};
 
     bool hasDefinition() const {
@@ -2486,11 +2495,8 @@ public:
       if (scopeIndex != other.scopeIndex) {
         return scopeIndex < other.scopeIndex;
       }
-      if (isStackFrame != other.isStackFrame) {
-        return isStackFrame < other.isStackFrame;
-      }
-      if (isHidden != other.isHidden) {
-        return isHidden < other.isHidden;
+      if (stackFrameType != other.stackFrameType) {
+        return stackFrameType < other.stackFrameType;
       }
       return bindings < other.bindings;
     }
@@ -2528,11 +2534,10 @@ public:
         } else {
           std::cerr << "undef";
         }
-        if (scope->isStackFrame) {
+        if (scope->stackFrameType == ScopeInfo::StackFrameType::Original) {
           std::cerr << " frame";
-        }
-        if (scope->isHidden) {
-          std::cerr << " hidden";
+        } else if (scope->stackFrameType == ScopeInfo::StackFrameType::Hidden) {
+          std::cerr << " frame hidden";
         }
         std::cerr << "]";
       }
@@ -2817,6 +2822,8 @@ public:
   std::string debugInfoFile;
   std::vector<std::string> debugInfoSourcesContent;
 
+  // A lexical scope in an original source file, as encoded in the source map's
+  // "scopes" field.
   struct OriginalScope {
     BinaryLocation startLine = 1;
     BinaryLocation startColumn = 0;

@@ -306,9 +306,10 @@ void SourceMapReader::parse(Module& wasm) {
           DecodedRange r;
           r.startOffset = rangeCol;
           r.endOffset = rangeCol;
-          if (flags & 0x4) {
-            r.isStackFrame = true;
-            r.isHidden = (flags & 0x8) != 0;
+          if ((flags & 0xc) == 0xc) {
+            r.stackFrameType = Function::ScopeInfo::StackFrameType::Hidden;
+          } else if (flags & 0x4) {
+            r.stackFrameType = Function::ScopeInfo::StackFrameType::Original;
           }
           if (flags & 0x2) {
             int32_t srcOffset = readBase64VLQSigned(rangeStr, p);
@@ -330,9 +331,9 @@ void SourceMapReader::parse(Module& wasm) {
             if (size_t(defSourceIndex) < flattenedScopes.size() &&
                 size_t(defScopeIndex) <
                   flattenedScopes[defSourceIndex].size()) {
-              r.defFileIndex = BinaryLocation(defSourceIndex);
-              r.defScopeIndex = BinaryLocation(defScopeIndex);
-              r.defNameIndex =
+              r.defFile = uint32_t(defSourceIndex);
+              r.defScope = uint32_t(defScopeIndex);
+              r.defSymbol =
                 flattenedScopes[defSourceIndex][defScopeIndex]->nameIndex;
             }
           }
@@ -424,7 +425,7 @@ void SourceMapReader::parse(Module& wasm) {
             const DecodedRange* parentDefRange = nullptr;
             uint32_t seenDefs = 0;
             for (int i = int(stack.size()) - 2; i >= 0; --i) {
-              if (stack[i].defFileIndex && stack[i].defScopeIndex) {
+              if (stack[i].defFile && stack[i].defScope) {
                 if (seenDefs == parentIdx) {
                   parentDefRange = &stack[i];
                   break;
@@ -434,11 +435,11 @@ void SourceMapReader::parse(Module& wasm) {
             }
             if (parentDefRange) {
               const auto* parentScope =
-                flattenedScopes[*parentDefRange->defFileIndex]
-                               [*parentDefRange->defScopeIndex];
-              BinaryLocation csFile = *parentDefRange->defFileIndex;
-              BinaryLocation csLine = parentScope->startLine;
-              BinaryLocation csCol = parentScope->startColumn;
+                flattenedScopes[*parentDefRange->defFile]
+                               [*parentDefRange->defScope];
+              uint32_t csFile = *parentDefRange->defFile;
+              uint32_t csLine = parentScope->startLine;
+              uint32_t csCol = parentScope->startColumn;
               if (vals.size() == 3) {
                 csLine += vals[1];
                 csCol = vals[2];
@@ -571,26 +572,22 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
   // first with no ScopeInfo.
   if (activeRanges[0]->callSite) {
     const auto& cs = *activeRanges[0]->callSite;
-    result.push_back(Function::DebugLocation{cs.fileIndex,
-                                             cs.lineNumber,
-                                             cs.columnNumber,
-                                             std::nullopt,
-                                             std::nullopt});
+    result.push_back(Function::DebugLocation{
+      cs.file, cs.line, cs.col, std::nullopt, std::nullopt});
   }
 
   for (size_t i = 0; i < activeRanges.size(); ++i) {
     const auto* r = activeRanges[i];
     Function::ScopeInfo scopeInfo;
-    scopeInfo.fileIndex = r->defFileIndex;
-    scopeInfo.scopeIndex = r->defScopeIndex;
-    scopeInfo.isStackFrame = r->isStackFrame;
-    scopeInfo.isHidden = r->isHidden;
+    scopeInfo.fileIndex = r->defFile;
+    scopeInfo.scopeIndex = r->defScope;
+    scopeInfo.stackFrameType = r->stackFrameType;
     scopeInfo.bindings.reserve(r->bindings.size());
     for (const auto& varTransitions : r->bindings) {
       std::optional<BinaryLocation> activeBinding;
       for (const auto& tr : varTransitions) {
         if (tr.fromOffset <= currLocation) {
-          activeBinding = tr.symbolNameIndex;
+          activeBinding = tr.symbol;
         } else {
           break;
         }
@@ -605,10 +602,10 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
     if (i + 1 < activeRanges.size()) {
       if (activeRanges[i + 1]->callSite) {
         const auto& cs = *activeRanges[i + 1]->callSite;
-        posFile = cs.fileIndex;
-        posLine = cs.lineNumber;
-        posCol = cs.columnNumber;
-        posSym = r->defNameIndex;
+        posFile = cs.file;
+        posLine = cs.line;
+        posCol = cs.col;
+        posSym = r->defSymbol;
       }
     } else if (hasInfo) {
       posFile = file;
