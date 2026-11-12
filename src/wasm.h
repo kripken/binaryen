@@ -41,6 +41,7 @@
 #include "support/index.h"
 #include "support/mixed_arena.h"
 #include "support/name.h"
+#include "support/small_vector.h"
 #include "wasm-features.h"
 #include "wasm-type.h"
 
@@ -2464,14 +2465,45 @@ public:
   std::unordered_set<Name> explicitLabelNames;
 
   // Source maps debugging info: map expression nodes to their file, line, col,
-  // symbol name.
+  // symbol name, and optional scope/range info (ordered from outermost to
+  // innermost inlined frame).
+  struct ScopeInfo {
+    std::optional<BinaryLocation> fileIndex = std::nullopt;
+    std::optional<BinaryLocation> scopeIndex = std::nullopt;
+    bool isStackFrame = false;
+    bool isHidden = false;
+    std::vector<std::optional<BinaryLocation>> bindings = {};
+
+    bool hasDefinition() const {
+      return fileIndex.has_value() && scopeIndex.has_value();
+    }
+    bool operator==(const ScopeInfo& other) const = default;
+    bool operator!=(const ScopeInfo& other) const = default;
+    bool operator<(const ScopeInfo& other) const {
+      if (fileIndex != other.fileIndex) {
+        return fileIndex < other.fileIndex;
+      }
+      if (scopeIndex != other.scopeIndex) {
+        return scopeIndex < other.scopeIndex;
+      }
+      if (isStackFrame != other.isStackFrame) {
+        return isStackFrame < other.isStackFrame;
+      }
+      if (isHidden != other.isHidden) {
+        return isHidden < other.isHidden;
+      }
+      return bindings < other.bindings;
+    }
+  };
   struct DebugLocation {
     BinaryLocation fileIndex = -1, lineNumber = -1, columnNumber = -1;
-    std::optional<BinaryLocation> symbolNameIndex;
+    std::optional<BinaryLocation> symbolNameIndex = std::nullopt;
+    std::optional<ScopeInfo> scope = std::nullopt;
+    bool hasPosition() const { return fileIndex != BinaryLocation(-1); }
     bool operator==(const DebugLocation& other) const {
       return fileIndex == other.fileIndex && lineNumber == other.lineNumber &&
              columnNumber == other.columnNumber &&
-             symbolNameIndex == other.symbolNameIndex;
+             symbolNameIndex == other.symbolNameIndex && scope == other.scope;
     }
     bool operator!=(const DebugLocation& other) const {
       return !(*this == other);
@@ -2481,19 +2513,38 @@ public:
              : lineNumber != other.lineNumber ? lineNumber < other.lineNumber
              : columnNumber != other.columnNumber
                ? columnNumber < other.columnNumber
-               : symbolNameIndex < other.symbolNameIndex;
+             : symbolNameIndex != other.symbolNameIndex
+               ? symbolNameIndex < other.symbolNameIndex
+               : scope < other.scope;
     }
     void dump() const {
-      std::cerr << (symbolNameIndex ? symbolNameIndex.value() : -1) << " @ "
-                << fileIndex << ":" << lineNumber << ":" << columnNumber
-                << "\n";
+      std::cerr << (symbolNameIndex ? int(symbolNameIndex.value()) : -1)
+                << " @ " << int(fileIndex) << ":" << int(lineNumber) << ":"
+                << int(columnNumber);
+      if (scope) {
+        std::cerr << " [scope ";
+        if (scope->hasDefinition()) {
+          std::cerr << *scope->fileIndex << ":" << *scope->scopeIndex;
+        } else {
+          std::cerr << "undef";
+        }
+        if (scope->isStackFrame) {
+          std::cerr << " frame";
+        }
+        if (scope->isHidden) {
+          std::cerr << " hidden";
+        }
+        std::cerr << "]";
+      }
+      std::cerr << "\n";
     }
   };
-  // One can explicitly set the debug location of an expression to
-  // nullopt to stop the propagation of debug locations.
-  std::unordered_map<Expression*, std::optional<DebugLocation>> debugLocations;
-  std::optional<DebugLocation> prologLocation;
-  std::optional<DebugLocation> epilogLocation;
+  using DebugLocations = SmallVector<DebugLocation, 1>;
+  // One can explicitly set the debug location of an expression to an empty
+  // DebugLocations vector to stop the propagation of debug locations.
+  std::unordered_map<Expression*, DebugLocations> debugLocations;
+  DebugLocations prologLocation;
+  DebugLocations epilogLocation;
 
   // General debugging info support: track instructions and the function itself.
   std::unordered_map<Expression*, BinaryLocations::Span> expressionLocations;
@@ -2765,6 +2816,23 @@ public:
   std::string debugInfoSourceRoot;
   std::string debugInfoFile;
   std::vector<std::string> debugInfoSourcesContent;
+
+  struct OriginalScope {
+    BinaryLocation startLine = 1;
+    BinaryLocation startColumn = 0;
+    BinaryLocation endLine = 1;
+    BinaryLocation endColumn = 0;
+    std::optional<BinaryLocation> nameIndex;
+    std::optional<BinaryLocation> kindIndex;
+    bool isStackFrame = false;
+    std::vector<std::optional<BinaryLocation>> variables;
+    std::vector<OriginalScope> children;
+    bool operator==(const OriginalScope& other) const = default;
+    bool operator!=(const OriginalScope& other) const = default;
+  };
+  // Per-source list of root OriginalScopes (or nullopt if the source has a
+  // null entry in "scopes"). Empty if the source map has no "scopes" field.
+  std::vector<std::optional<std::vector<OriginalScope>>> debugInfoScopes;
 
   // `features` are the features allowed to be used in this module and should be
   // respected regardless of the value of`hasFeaturesSection`.

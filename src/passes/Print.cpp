@@ -2783,8 +2783,9 @@ void PrintSExpression::printMetadata(Expression* curr) {
   if (currFunction) {
     // Show a debug location, if there is one.
     if (auto iter = currFunction->debugLocations.find(curr);
-        iter != currFunction->debugLocations.end()) {
-      printDebugLocation(iter->second);
+        iter != currFunction->debugLocations.end() && !iter->second.empty() &&
+        iter->second.back().hasPosition()) {
+      printDebugLocation(iter->second.back());
     } else {
       printDebugLocation(std::nullopt);
     }
@@ -3335,8 +3336,9 @@ void PrintSExpression::visitDefinedFunction(Function* curr) {
   currFunction = curr;
   lastPrintedLocation = std::nullopt;
   lastPrintIndent = 0;
-  if (currFunction->prologLocation) {
-    printDebugLocation(*currFunction->prologLocation);
+  if (!currFunction->prologLocation.empty() &&
+      currFunction->prologLocation.back().hasPosition()) {
+    printDebugLocation(currFunction->prologLocation.back());
   }
   printCodeAnnotations(curr->funcAnnotations);
   handleSignature(curr, true);
@@ -3371,14 +3373,15 @@ void PrintSExpression::visitDefinedFunction(Function* curr) {
     }
     assert(controlFlowDepth == 0);
   }
-  if (currFunction->epilogLocation) {
+  if (!currFunction->epilogLocation.empty() &&
+      currFunction->epilogLocation.back().hasPosition()) {
     // Print last debug location: mix of decIndent and printDebugLocation
     // logic.
     doIndent(o, indent);
     if (!minify) {
       indent--;
     }
-    printDebugLocation(*currFunction->epilogLocation);
+    printDebugLocation(currFunction->epilogLocation.back());
     o << ')';
   } else {
     decIndent();

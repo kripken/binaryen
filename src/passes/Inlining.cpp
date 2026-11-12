@@ -641,9 +641,77 @@ static void doCodeInlining(Module* module,
   }
 
   // Generate and update the inlined contents
+  std::optional<Function::DebugLocations> callLocs;
+  if (auto it = into->debugLocations.find(call);
+      it != into->debugLocations.end() && !it->second.empty()) {
+    callLocs = it->second;
+  }
   auto* contents = ExpressionManipulator::copy(from->body, *module);
   metadata::copyBetweenFunctions(from->body, contents, from, into);
   updater.walk(contents);
+  if (callLocs) {
+    into->debugLocations[block] = *callLocs;
+    for (auto* initExpr : block->list) {
+      into->debugLocations[initExpr] = *callLocs;
+    }
+    struct InlinedDebugUpdater
+      : public PostWalker<InlinedDebugUpdater,
+                          UnifiedExpressionVisitor<InlinedDebugUpdater>> {
+      Function* into;
+      const Function::DebugLocations& callLocs;
+      InlinedDebugUpdater(Function* into,
+                          const Function::DebugLocations& callLocs)
+        : into(into), callLocs(callLocs) {}
+      void visitExpression(Expression* curr) {
+        auto it = into->debugLocations.find(curr);
+        if (it == into->debugLocations.end() || it->second.empty()) {
+          // If the caller has active scopes, preserve them on unmapped
+          // instructions in the inlined body so the caller's range does not get
+          // split.
+          bool callerHasScope = false;
+          for (const auto& loc : callLocs) {
+            if (loc.scope) {
+              callerHasScope = true;
+              break;
+            }
+          }
+          if (callerHasScope && it == into->debugLocations.end()) {
+            auto callerScopesOnly = callLocs;
+            callerScopesOnly.back().fileIndex = -1;
+            callerScopesOnly.back().lineNumber = -1;
+            callerScopesOnly.back().columnNumber = -1;
+            callerScopesOnly.back().symbolNameIndex.reset();
+            into->debugLocations[curr] = std::move(callerScopesOnly);
+          }
+          return;
+        }
+        auto inlinedLocs = std::move(it->second);
+        Function::DebugLocations combined = callLocs;
+        if (!combined[0].scope && callLocs.back().hasPosition()) {
+          Function::ScopeInfo callerScope;
+          callerScope.isStackFrame = true;
+          combined[0].scope = callerScope;
+        }
+        bool clearedFirstScopeFrame = false;
+        for (auto& loc : inlinedLocs) {
+          if (!clearedFirstScopeFrame && loc.scope) {
+            clearedFirstScopeFrame = true;
+            if (callLocs.back().hasPosition()) {
+              loc.scope->isStackFrame = false;
+              loc.scope->isHidden = false;
+            }
+          }
+          combined.push_back(std::move(loc));
+        }
+        if (!clearedFirstScopeFrame && !inlinedLocs.empty() &&
+            callLocs.back().hasPosition()) {
+          combined[callLocs.size()].scope.emplace();
+        }
+        it->second = std::move(combined);
+      }
+    };
+    InlinedDebugUpdater(into, *callLocs).walk(contents);
+  }
   block->list.push_back(contents);
   block->type = retType;
 

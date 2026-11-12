@@ -1770,8 +1770,8 @@ void Function::clearNames() {
 void Function::clearDebugInfo() {
   localIndices.clear();
   debugLocations.clear();
-  prologLocation.reset();
-  epilogLocation.reset();
+  prologLocation.clear();
+  epilogLocation.clear();
 }
 
 Export* Module::getExport(Name name) const {
@@ -2109,6 +2109,7 @@ void Module::updateMaps() {
 void Module::clearDebugInfo() {
   debugInfoFileNames.clear();
   debugInfoSymbolNames.clear();
+  debugInfoScopes.clear();
 }
 
 } // namespace wasm

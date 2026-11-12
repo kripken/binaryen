@@ -99,6 +99,48 @@ Result<> requireNaturalAtomicAlign(Address align, Address natural) {
   return Ok{};
 }
 
+const Function::DebugLocations* getEndDebugLoc(Expression* expr,
+                                               Function* func) {
+  if (!func) {
+    return nullptr;
+  }
+  const Function::DebugLocations* fallback = nullptr;
+  while (expr) {
+    if (auto it = func->debugLocations.find(expr);
+        it != func->debugLocations.end() && !it->second.empty()) {
+      if (!Properties::isControlFlowStructure(expr)) {
+        return &it->second;
+      }
+      fallback = &it->second;
+    }
+    if (auto* block = expr->dynCast<Block>()) {
+      if (!block->list.empty()) {
+        expr = block->list.back();
+        continue;
+      }
+    } else if (auto* iff = expr->dynCast<If>()) {
+      expr = iff->ifFalse ? iff->ifFalse : iff->ifTrue;
+      continue;
+    } else if (auto* loop = expr->dynCast<Loop>()) {
+      expr = loop->body;
+      continue;
+    } else if (auto* tryy = expr->dynCast<Try>()) {
+      expr = tryy->catchBodies.empty() ? tryy->body : tryy->catchBodies.back();
+      continue;
+    } else if (auto* trytable = expr->dynCast<TryTable>()) {
+      expr = trytable->body;
+      continue;
+    } else if (auto* tm = expr->dynCast<TupleMake>()) {
+      if (!tm->operands.empty()) {
+        expr = tm->operands.back();
+        continue;
+      }
+    }
+    break;
+  }
+  return fallback;
+}
+
 } // anonymous namespace
 
 Result<Index> IRBuilder::addScratchLocal(Type type) {
@@ -149,8 +191,22 @@ MaybeResult<IRBuilder::HoistedVal> IRBuilder::hoistLastValue(bool greedy) {
   auto type = expr->type.asWrittenGivenFeatures(wasm.features);
   auto scratchIdx = addScratchLocal(type);
   CHECK_ERR(scratchIdx);
-  expr = builder.makeLocalSet(*scratchIdx, expr);
+  auto* orig = expr;
+  auto* lastExpr = stack.back();
+  expr = builder.makeLocalSet(*scratchIdx, orig);
   auto* get = builder.makeLocalGet(*scratchIdx, type);
+  if (func) {
+    const auto* origLoc = getEndDebugLoc(orig, func);
+    const auto* endLoc = getEndDebugLoc(lastExpr, func);
+    if (origLoc) {
+      func->debugLocations[expr] = *origLoc;
+    }
+    if (endLoc) {
+      func->debugLocations[get] = *endLoc;
+    } else if (origLoc) {
+      func->debugLocations[get] = *origLoc;
+    }
+  }
   pushSynthetic(get);
   return HoistedVal{Index(hoistIndex), get};
 }
@@ -191,22 +247,43 @@ Result<> IRBuilder::packageHoistedValue(const HoistedVal& hoisted,
   // setting the tuple to a local and returning its first element, then push
   // additional gets of each of its subsequent elements. Reuse the scratch local
   // we used for hoisting, if it exists.
+  Expression* orig = scope.exprStack.back();
+  const Function::DebugLocations* origDebugLoc = nullptr;
+  Function::DebugLocations savedDebugLoc;
+  if (const auto* loc = getEndDebugLoc(orig, func)) {
+    savedDebugLoc = *loc;
+    origDebugLoc = &savedDebugLoc;
+  }
   Index scratchIdx;
   if (hoisted.get) {
     // Update the get on top of the stack to just return the first element.
-    scope.exprStack.back() = builder.makeTupleExtract(hoisted.get, 0);
+    auto* extract0 = builder.makeTupleExtract(hoisted.get, 0);
+    if (origDebugLoc) {
+      func->debugLocations[extract0] = *origDebugLoc;
+    }
+    scope.exprStack.back() = extract0;
     packageAsBlock(type[0]);
     scratchIdx = hoisted.get->index;
   } else {
     auto scratch = addScratchLocal(type);
     CHECK_ERR(scratch);
-    scope.exprStack.back() = builder.makeTupleExtract(
-      builder.makeLocalTee(*scratch, scope.exprStack.back(), type), 0);
+    auto* tee = builder.makeLocalTee(*scratch, scope.exprStack.back(), type);
+    auto* extract0 = builder.makeTupleExtract(tee, 0);
+    if (origDebugLoc) {
+      func->debugLocations[tee] = *origDebugLoc;
+      func->debugLocations[extract0] = *origDebugLoc;
+    }
+    scope.exprStack.back() = extract0;
     scratchIdx = *scratch;
   }
   for (Index i = 1, size = type.size(); i < size; ++i) {
-    pushSynthetic(
-      builder.makeTupleExtract(builder.makeLocalGet(scratchIdx, type), i));
+    auto* get = builder.makeLocalGet(scratchIdx, type);
+    auto* extract = builder.makeTupleExtract(get, i);
+    if (origDebugLoc) {
+      func->debugLocations[get] = *origDebugLoc;
+      func->debugLocations[extract] = *origDebugLoc;
+    }
+    pushSynthetic(extract);
   }
   return Ok{};
 }
@@ -259,16 +336,16 @@ Result<Expression*> IRBuilder::build() {
   return expr;
 }
 
-void IRBuilder::setDebugLocation(
-  const std::optional<Function::DebugLocation>& loc) {
-  if (loc) {
-    DBG(std::cerr << "setting debugloc " << loc->fileIndex << ":"
-                  << loc->lineNumber << ":" << loc->columnNumber << "\n";);
+void IRBuilder::setDebugLocation(const Function::DebugLocations& loc) {
+  if (!loc.empty()) {
+    DBG(std::cerr << "setting debugloc " << loc.back().fileIndex << ":"
+                  << loc.back().lineNumber << ":" << loc.back().columnNumber
+                  << "\n";);
   } else {
     DBG(std::cerr << "setting debugloc to none\n";);
   }
-  if (loc) {
-    debugLoc = *loc;
+  if (!loc.empty()) {
+    debugLoc = loc;
   } else {
     debugLoc = NoDebug();
   }
@@ -277,16 +354,17 @@ void IRBuilder::setDebugLocation(
 void IRBuilder::applyDebugLoc(Expression* expr) {
   if (!std::get_if<CanReceiveDebug>(&debugLoc)) {
     if (func) {
-      if (auto* loc = std::get_if<Function::DebugLocation>(&debugLoc)) {
-        DBG(std::cerr << "applying debugloc " << loc->fileIndex << ":"
-                      << loc->lineNumber << ":" << loc->columnNumber
-                      << " to expression " << ShallowExpression{expr} << "\n");
+      if (auto* loc = std::get_if<Function::DebugLocations>(&debugLoc)) {
+        DBG(std::cerr << "applying debugloc " << loc->back().fileIndex << ":"
+                      << loc->back().lineNumber << ":"
+                      << loc->back().columnNumber << " to expression "
+                      << ShallowExpression{expr} << "\n");
         func->debugLocations[expr] = *loc;
       } else {
         assert(std::get_if<NoDebug>(&debugLoc));
         DBG(std::cerr << "applying debugloc to expression "
                       << ShallowExpression{expr} << "\n");
-        func->debugLocations[expr] = std::nullopt;
+        func->debugLocations[expr] = Function::DebugLocations{};
       }
     }
     debugLoc = CanReceiveDebug();
@@ -847,7 +925,7 @@ Result<> IRBuilder::visitFunctionStart(Function* func) {
   if (!scopeStack.empty()) {
     return Err{"unexpected start of function"};
   }
-  if (auto* loc = std::get_if<Function::DebugLocation>(&debugLoc)) {
+  if (auto* loc = std::get_if<Function::DebugLocations>(&debugLoc)) {
     func->prologLocation = *loc;
   }
   debugLoc = CanReceiveDebug();
@@ -910,15 +988,36 @@ Result<> IRBuilder::pushScope(ScopeCtx&& scope) {
       auto scratch = addScratchLocal(scope.inputType[i]);
       CHECK_ERR(scratch);
       scope.inputLocals.push_back(*scratch);
-      pushSynthetic(builder.makeLocalSet(*scratch, (*inputs)[i]));
+      auto* set = builder.makeLocalSet(*scratch, (*inputs)[i]);
+      if (func) {
+        if (auto it = func->debugLocations.find((*inputs)[i]);
+            it != func->debugLocations.end()) {
+          func->debugLocations[set] = it->second;
+        }
+      }
+      pushSynthetic(set);
     }
   }
   scopeStack.emplace_back(std::move(scope));
   if (hasInput) {
     auto& newScope = getScope();
+    Expression* scopeExpr =
+      newScope.getBlock()  ? static_cast<Expression*>(newScope.getBlock())
+      : newScope.getIf()   ? static_cast<Expression*>(newScope.getIf())
+      : newScope.getElse() ? static_cast<Expression*>(newScope.getElse())
+      : newScope.getLoop() ? static_cast<Expression*>(newScope.getLoop())
+      : newScope.getTry()  ? static_cast<Expression*>(newScope.getTry())
+                           : static_cast<Expression*>(newScope.getTryTable());
     for (size_t i = 0; i < newScope.inputLocals.size(); ++i) {
-      pushSynthetic(
-        builder.makeLocalGet(newScope.inputLocals[i], newScope.inputType[i]));
+      auto* get =
+        builder.makeLocalGet(newScope.inputLocals[i], newScope.inputType[i]);
+      if (func && scopeExpr) {
+        if (auto it = func->debugLocations.find(scopeExpr);
+            it != func->debugLocations.end()) {
+          func->debugLocations[get] = it->second;
+        }
+      }
+      pushSynthetic(get);
     }
   }
   return Ok{};
@@ -926,9 +1025,10 @@ Result<> IRBuilder::pushScope(ScopeCtx&& scope) {
 
 Result<Expression*> IRBuilder::finishScope(Block* block) {
 #if IR_BUILDER_DEBUG
-  if (auto* loc = std::get_if<Function::DebugLocation>(&debugLoc)) {
-    std::cerr << "discarding debugloc " << loc->fileIndex << ":"
-              << loc->lineNumber << ":" << loc->columnNumber << "\n";
+  if (auto* loc = std::get_if<Function::DebugLocations>(&debugLoc)) {
+    std::cerr << "discarding debugloc " << loc->back().fileIndex << ":"
+              << loc->back().lineNumber << ":" << loc->back().columnNumber
+              << "\n";
   }
 #endif
   debugLoc = CanReceiveDebug();
@@ -1067,6 +1167,7 @@ Result<> IRBuilder::visitCatch(Name tag) {
     return Err{"unexpected catch"};
   }
   auto index = scope.getIndex();
+  auto catchDebugLoc = debugLoc;
   auto expr = finishScope();
   CHECK_ERR(expr);
   if (wasTry) {
@@ -1095,7 +1196,16 @@ Result<> IRBuilder::visitCatch(Name tag) {
     // Note that we have a pop to help determine later whether we need to run
     // the fixup for pops within blocks.
     scopeStack[0].notePop();
-    pushSynthetic(builder.makePop(params));
+    auto* pop = builder.makePop(params);
+    if (func) {
+      if (auto* loc = std::get_if<Function::DebugLocations>(&catchDebugLoc)) {
+        func->debugLocations[pop] = *loc;
+      } else if (auto it = func->debugLocations.find(tryy);
+                 it != func->debugLocations.end()) {
+        func->debugLocations[pop] = it->second;
+      }
+    }
+    pushSynthetic(pop);
   }
 
   return Ok{};
@@ -1169,7 +1279,7 @@ Result<> IRBuilder::visitEnd() {
     return Err{"unexpected end"};
   }
   if (auto* func = scope.getFunction()) {
-    if (auto* loc = std::get_if<Function::DebugLocation>(&debugLoc)) {
+    if (auto* loc = std::get_if<Function::DebugLocations>(&debugLoc)) {
       func->epilogLocation = *loc;
     }
   }
@@ -1203,6 +1313,11 @@ Result<> IRBuilder::visitEnd() {
       [[maybe_unused]] auto [_, inserted] =
         func->expressionLocations.insert({wrapper, span});
       assert(inserted);
+    }
+    if (auto it = func->debugLocations.find(original);
+        it != func->debugLocations.end() &&
+        !func->debugLocations.contains(wrapper)) {
+      func->debugLocations[wrapper] = it->second;
     }
   };
 
@@ -2414,6 +2529,7 @@ Result<> IRBuilder::makeBrOn(Index label,
 
   auto testLocal = addScratchLocal(testType);
   CHECK_ERR(testLocal);
+  auto savedDebugLoc = debugLoc;
 
   // Put the value under test back on the stack and stash it.
   getScope().exprStack.push_back(curr.ref);
@@ -2423,9 +2539,11 @@ Result<> IRBuilder::makeBrOn(Index label,
   auto info = getExtraOutputLocalAndLabel(label, extraArity);
   CHECK_ERR(info);
   auto [extraLocal, extraLabel] = *info;
+  debugLoc = savedDebugLoc;
   CHECK_ERR(makeScratchLocalSet(extraLocal));
 
   // Restore the test value.
+  debugLoc = savedDebugLoc;
   CHECK_ERR(makeScratchLocalGet(*testLocal));
 
   // Perform the branch.
@@ -2433,6 +2551,7 @@ Result<> IRBuilder::makeBrOn(Index label,
   auto* br =
     builder.makeBrOn(op, extraLabel, curr.ref, curr.castType, curr.desc);
   applyAnnotations(br, annotations);
+  debugLoc = savedDebugLoc;
   push(br);
 
   // If the branch wasn't taken, we need to leave the extra values on the
@@ -2440,6 +2559,7 @@ Result<> IRBuilder::makeBrOn(Index label,
   // to be under the result value. br_on_non_null does not have a result
   // value, so it is simpler.
   if (op == BrOnNonNull) {
+    debugLoc = savedDebugLoc;
     CHECK_ERR(makeScratchLocalGet(extraLocal));
     return Ok{};
   }
@@ -2472,8 +2592,11 @@ Result<> IRBuilder::makeBrOn(Index label,
   auto resultLocal = addScratchLocal(resultType);
   CHECK_ERR(resultLocal);
 
+  debugLoc = savedDebugLoc;
   CHECK_ERR(makeScratchLocalSet(*resultLocal));
+  debugLoc = savedDebugLoc;
   CHECK_ERR(makeScratchLocalGet(extraLocal));
+  debugLoc = savedDebugLoc;
   CHECK_ERR(makeScratchLocalGet(*resultLocal));
   return Ok{};
 }

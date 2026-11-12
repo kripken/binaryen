@@ -615,6 +615,7 @@ void WasmBinaryWriter::writeFunctions() {
                 << "number of locals in function " << func->name << ".\n";
     }
   });
+  lastFunctionEndOffset = o.size();
   finishSection(sectionStart);
 
   // Code annotations must come before the code section (see comment on
@@ -638,6 +639,7 @@ void WasmBinaryWriter::writeFunctions() {
       for (auto& location : sourceMapLocations) {
         location.first += annotationsSectionSize;
       }
+      lastFunctionEndOffset += annotationsSectionSize;
     }
   }
 }
@@ -1392,9 +1394,7 @@ void WasmBinaryWriter::writeSymbolMap() {
   file.close();
 }
 
-void WasmBinaryWriter::initializeDebugInfo() {
-  lastDebugLocation = {0, /* lineNumber = */ 1, 0, std::nullopt};
-}
+void WasmBinaryWriter::initializeDebugInfo() { lastDebugLocation.clear(); }
 
 void WasmBinaryWriter::writeSourceMapProlog() {
   *sourceMap << "{\"version\":3,";
@@ -1421,26 +1421,54 @@ void WasmBinaryWriter::writeSourceMapProlog() {
     }
   }
 
-  // Remove unused function names from 'names' field.
+  // Remove unused function/scope names from 'names' field.
   if (!wasm->debugInfoSymbolNames.empty()) {
     std::vector<std::string> newSymbolNames;
     std::map<Index, Index> oldToNewIndex;
 
-    // Collect all used symbol name indexes.
-    auto prepareIndexMap =
-      [&](const std::optional<Function::DebugLocation>& location) {
-        if (location && location->symbolNameIndex) {
-          uint32_t oldIndex = *location->symbolNameIndex;
-          assert(oldIndex < wasm->debugInfoSymbolNames.size());
-          oldToNewIndex[oldIndex] = 0; // placeholder
+    auto markUsed = [&](const std::optional<BinaryLocation>& symIdx) {
+      if (symIdx) {
+        uint32_t oldIndex = *symIdx;
+        assert(oldIndex < wasm->debugInfoSymbolNames.size());
+        oldToNewIndex[oldIndex] = 0; // placeholder
+      }
+    };
+
+    // Collect all used symbol name indexes from debugLocations and scopes.
+    auto prepareIndexMap = [&](const Function::DebugLocations& locations) {
+      for (const auto& loc : locations) {
+        markUsed(loc.symbolNameIndex);
+        if (loc.scope) {
+          for (const auto& binding : loc.scope->bindings) {
+            markUsed(binding);
+          }
         }
-      };
+      }
+    };
     for (auto& func : wasm->functions) {
       for (auto& [_, location] : func->debugLocations) {
         prepareIndexMap(location);
       }
       prepareIndexMap(func->prologLocation);
       prepareIndexMap(func->epilogLocation);
+    }
+    auto prepareScopeIndexMap = [&](const Module::OriginalScope& scope,
+                                    auto& self) -> void {
+      markUsed(scope.nameIndex);
+      markUsed(scope.kindIndex);
+      for (const auto& varIdx : scope.variables) {
+        markUsed(varIdx);
+      }
+      for (const auto& child : scope.children) {
+        self(child, self);
+      }
+    };
+    for (const auto& sourceScopes : wasm->debugInfoScopes) {
+      if (sourceScopes) {
+        for (const auto& scope : *sourceScopes) {
+          prepareScopeIndexMap(scope, prepareScopeIndexMap);
+        }
+      }
     }
 
     // Create the new list of names and the mapping from old to new indices.
@@ -1450,11 +1478,21 @@ void WasmBinaryWriter::writeSourceMapProlog() {
       newIndex = index++;
     }
 
-    // Update all debug locations to point to the new indices.
-    auto updateIndex = [&](std::optional<Function::DebugLocation>& location) {
-      if (location && location->symbolNameIndex) {
-        uint32_t oldIndex = *location->symbolNameIndex;
-        location->symbolNameIndex = oldToNewIndex[oldIndex];
+    auto remapSym = [&](std::optional<BinaryLocation>& symIdx) {
+      if (symIdx) {
+        symIdx = oldToNewIndex[*symIdx];
+      }
+    };
+
+    // Update all debug locations and scopes to point to the new indices.
+    auto updateIndex = [&](Function::DebugLocations& locations) {
+      for (auto& loc : locations) {
+        remapSym(loc.symbolNameIndex);
+        if (loc.scope) {
+          for (auto& binding : loc.scope->bindings) {
+            remapSym(binding);
+          }
+        }
       }
     };
     for (auto& func : wasm->functions) {
@@ -1463,6 +1501,24 @@ void WasmBinaryWriter::writeSourceMapProlog() {
       }
       updateIndex(func->prologLocation);
       updateIndex(func->epilogLocation);
+    }
+    auto updateScopeIndex = [&](Module::OriginalScope& scope,
+                                auto& self) -> void {
+      remapSym(scope.nameIndex);
+      remapSym(scope.kindIndex);
+      for (auto& varIdx : scope.variables) {
+        remapSym(varIdx);
+      }
+      for (auto& child : scope.children) {
+        self(child, self);
+      }
+    };
+    for (auto& sourceScopes : wasm->debugInfoScopes) {
+      if (sourceScopes) {
+        for (auto& scope : *sourceScopes) {
+          updateScopeIndex(scope, updateScopeIndex);
+        }
+      }
     }
 
     // Replace the old symbol names with the new, pruned list.
@@ -1501,8 +1557,7 @@ void WasmBinaryWriter::writeSourceMapProlog() {
   *sourceMap << "\"mappings\":\"";
 }
 
-static void writeBase64VLQ(std::ostream& out, int32_t n) {
-  uint32_t value = n >= 0 ? n << 1 : ((-n) << 1) | 1;
+static void writeBase64VLQUnsigned(std::ostream& out, uint32_t value) {
   while (1) {
     uint32_t digit = value & 0x1F;
     value >>= 5;
@@ -1511,13 +1566,18 @@ static void writeBase64VLQ(std::ostream& out, int32_t n) {
       out << char(digit < 26 ? 'A' + digit : 'a' + digit - 26);
       break;
     }
-    // more VLG digit will follow -- add continuation bit (0x20),
+    // more VLQ digit will follow -- add continuation bit (0x20),
     // base64 codes 'g'..'z', '0'..'9', '+', '/'
     out << char(digit < 20    ? 'g' + digit
                 : digit < 30  ? '0' + digit - 20
                 : digit == 30 ? '+'
                               : '/');
   }
+}
+
+static void writeBase64VLQ(std::ostream& out, int32_t n) {
+  uint32_t value = n >= 0 ? uint32_t(n) << 1 : (uint32_t(-n) << 1) | 1;
+  writeBase64VLQUnsigned(out, value);
 }
 
 void WasmBinaryWriter::writeSourceMapEpilog() {
@@ -1527,13 +1587,29 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
   BinaryLocation lastLineNumber = 1;
   BinaryLocation lastColumnNumber = 0;
   BinaryLocation lastSymbolNameIndex = 0;
-  for (const auto& [offset, loc] : sourceMapLocations) {
-    if (lastOffset > 0) {
-      *sourceMap << ",";
-    }
-    writeBase64VLQ(*sourceMap, int32_t(offset - lastOffset));
-    lastOffset = offset;
+  std::optional<Function::DebugLocation> activeMapping;
+  auto sameMappingPos = [](const Function::DebugLocation& a,
+                           const Function::DebugLocation& b) {
+    return a.fileIndex == b.fileIndex && a.lineNumber == b.lineNumber &&
+           a.columnNumber == b.columnNumber &&
+           a.symbolNameIndex == b.symbolNameIndex;
+  };
+  bool firstMapping = true;
+  for (const auto& [offset, locs] : sourceMapLocations) {
+    const Function::DebugLocation* loc =
+      (locs && !locs->empty() && locs->back().hasPosition()) ? &locs->back()
+                                                             : nullptr;
     if (loc) {
+      if (activeMapping && sameMappingPos(*loc, *activeMapping)) {
+        continue;
+      }
+      if (!firstMapping) {
+        *sourceMap << ",";
+      }
+      firstMapping = false;
+      writeBase64VLQ(*sourceMap, int32_t(offset - lastOffset));
+      lastOffset = offset;
+
       writeBase64VLQ(*sourceMap, int32_t(loc->fileIndex - lastFileIndex));
       lastFileIndex = loc->fileIndex;
 
@@ -1548,9 +1624,302 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
                        int32_t(*loc->symbolNameIndex - lastSymbolNameIndex));
         lastSymbolNameIndex = *loc->symbolNameIndex;
       }
+      activeMapping = *loc;
+    } else if (activeMapping) {
+      if (!firstMapping) {
+        *sourceMap << ",";
+      }
+      firstMapping = false;
+      writeBase64VLQ(*sourceMap, int32_t(offset - lastOffset));
+      lastOffset = offset;
+      activeMapping.reset();
     }
   }
-  *sourceMap << "\"}";
+  *sourceMap << "\"";
+
+  bool hasAnyScopes = !wasm->debugInfoScopes.empty();
+  if (!hasAnyScopes) {
+    for (const auto& [_, locs] : sourceMapLocations) {
+      if (locs) {
+        for (const auto& dl : *locs) {
+          if (dl.scope) {
+            hasAnyScopes = true;
+            break;
+          }
+        }
+      }
+      if (hasAnyScopes) {
+        break;
+      }
+    }
+  }
+
+  if (hasAnyScopes) {
+    size_t numScopeSources =
+      std::max(wasm->debugInfoScopes.size(), wasm->debugInfoFileNames.size());
+    *sourceMap << ",\"scopes\":[";
+    for (size_t i = 0; i < numScopeSources; ++i) {
+      if (i > 0) {
+        *sourceMap << ",";
+      }
+      if (i >= wasm->debugInfoScopes.size() || !wasm->debugInfoScopes[i]) {
+        *sourceMap << "null";
+        continue;
+      }
+      *sourceMap << "\"";
+      uint32_t lastLine = 0;
+      uint32_t lastCol = 0;
+      int32_t lastNameIdx = 0;
+      int32_t lastKindIdx = 0;
+      int32_t lastVarIdx = 0;
+      bool firstItem = true;
+      auto emitScopeTree = [&](const Module::OriginalScope& scope,
+                               auto& self) -> void {
+        if (!firstItem) {
+          *sourceMap << ",";
+        }
+        firstItem = false;
+        *sourceMap << 'B';
+        uint32_t flags = 0;
+        if (scope.nameIndex) {
+          flags |= 0x1;
+        }
+        if (scope.kindIndex) {
+          flags |= 0x2;
+        }
+        if (scope.isStackFrame) {
+          flags |= 0x4;
+        }
+        writeBase64VLQUnsigned(*sourceMap, flags);
+        uint32_t startLine0 = scope.startLine > 0 ? scope.startLine - 1 : 0;
+        uint32_t lineDiff = startLine0 - lastLine;
+        uint32_t colDiff =
+          (lineDiff == 0) ? (scope.startColumn - lastCol) : scope.startColumn;
+        lastLine = startLine0;
+        lastCol = scope.startColumn;
+        writeBase64VLQUnsigned(*sourceMap, lineDiff);
+        writeBase64VLQUnsigned(*sourceMap, colDiff);
+        if (scope.nameIndex) {
+          writeBase64VLQ(*sourceMap, int32_t(*scope.nameIndex) - lastNameIdx);
+          lastNameIdx = int32_t(*scope.nameIndex);
+        }
+        if (scope.kindIndex) {
+          writeBase64VLQ(*sourceMap, int32_t(*scope.kindIndex) - lastKindIdx);
+          lastKindIdx = int32_t(*scope.kindIndex);
+        }
+        if (!scope.variables.empty()) {
+          *sourceMap << ",D";
+          for (const auto& varIdx : scope.variables) {
+            int32_t idx = varIdx ? int32_t(*varIdx) : 0;
+            writeBase64VLQ(*sourceMap, idx - lastVarIdx);
+            lastVarIdx = idx;
+          }
+        }
+        for (const auto& child : scope.children) {
+          self(child, self);
+        }
+        *sourceMap << ",C";
+        uint32_t endLine0 = scope.endLine > 0 ? scope.endLine - 1 : 0;
+        uint32_t endLineDiff = endLine0 - lastLine;
+        uint32_t endColDiff =
+          (endLineDiff == 0) ? (scope.endColumn - lastCol) : scope.endColumn;
+        lastLine = endLine0;
+        lastCol = scope.endColumn;
+        writeBase64VLQUnsigned(*sourceMap, endLineDiff);
+        writeBase64VLQUnsigned(*sourceMap, endColDiff);
+      };
+      for (const auto& scope : *wasm->debugInfoScopes[i]) {
+        emitScopeTree(scope, emitScopeTree);
+      }
+      *sourceMap << "\"";
+    }
+    *sourceMap << "]";
+
+    struct CallSite {
+      BinaryLocation fileIndex = 0;
+      BinaryLocation lineNumber = 1;
+      BinaryLocation columnNumber = 0;
+      bool operator==(const CallSite& other) const = default;
+      bool operator!=(const CallSite& other) const = default;
+    };
+    struct BindingTransition {
+      size_t fromOffset = 0;
+      std::optional<BinaryLocation> symbolNameIndex;
+    };
+    struct OutRange {
+      size_t startOffset = 0;
+      size_t endOffset = 0;
+      Function::ScopeInfo scope;
+      std::optional<CallSite> callSite;
+      std::vector<std::vector<BindingTransition>> subRangeBindings;
+      std::vector<OutRange> children;
+
+      bool sameIdentity(const Function::ScopeInfo& otherScope,
+                        const std::optional<CallSite>& otherCallSite) const {
+        return scope.fileIndex == otherScope.fileIndex &&
+               scope.scopeIndex == otherScope.scopeIndex &&
+               scope.isStackFrame == otherScope.isStackFrame &&
+               scope.isHidden == otherScope.isHidden &&
+               scope.bindings.size() == otherScope.bindings.size() &&
+               callSite == otherCallSite;
+      }
+    };
+
+    std::vector<OutRange> rootRanges;
+    std::vector<OutRange> openStack;
+    auto closeTopRange = [&](size_t endOff) {
+      auto finished = std::move(openStack.back());
+      openStack.pop_back();
+      finished.endOffset = endOff;
+      if (finished.endOffset > finished.startOffset) {
+        if (openStack.empty()) {
+          rootRanges.push_back(std::move(finished));
+        } else {
+          openStack.back().children.push_back(std::move(finished));
+        }
+      }
+    };
+
+    for (const auto& [offset, locs] : sourceMapLocations) {
+      SmallVector<
+        std::pair<const Function::ScopeInfo*, std::optional<CallSite>>,
+        4>
+        targetRanges;
+      if (locs) {
+        for (size_t j = 0; j < locs->size(); ++j) {
+          const auto& dl = (*locs)[j];
+          if (dl.scope) {
+            std::optional<CallSite> cs;
+            if (j > 0 && (*locs)[j - 1].hasPosition()) {
+              cs = CallSite{(*locs)[j - 1].fileIndex,
+                            (*locs)[j - 1].lineNumber,
+                            (*locs)[j - 1].columnNumber};
+            }
+            targetRanges.push_back({&*dl.scope, cs});
+          }
+        }
+      }
+      size_t common = 0;
+      while (common < openStack.size() && common < targetRanges.size() &&
+             openStack[common].sameIdentity(*targetRanges[common].first,
+                                            targetRanges[common].second)) {
+        ++common;
+      }
+      while (openStack.size() > common) {
+        closeTopRange(offset);
+      }
+      for (size_t d = 0; d < common; ++d) {
+        auto& open = openStack[d];
+        const auto& newBindings = targetRanges[d].first->bindings;
+        for (size_t v = 0; v < newBindings.size(); ++v) {
+          std::optional<BinaryLocation> curVal =
+            open.subRangeBindings[v].empty()
+              ? open.scope.bindings[v]
+              : open.subRangeBindings[v].back().symbolNameIndex;
+          if (newBindings[v] != curVal) {
+            if (offset == open.startOffset &&
+                open.subRangeBindings[v].empty()) {
+              open.scope.bindings[v] = newBindings[v];
+            } else {
+              open.subRangeBindings[v].push_back({offset, newBindings[v]});
+            }
+          }
+        }
+      }
+      for (size_t d = common; d < targetRanges.size(); ++d) {
+        OutRange r;
+        r.startOffset = offset;
+        r.endOffset = offset;
+        r.scope = *targetRanges[d].first;
+        r.callSite = targetRanges[d].second;
+        r.subRangeBindings.resize(r.scope.bindings.size());
+        openStack.push_back(std::move(r));
+      }
+    }
+    while (!openStack.empty()) {
+      closeTopRange(lastFunctionEndOffset);
+    }
+
+    *sourceMap << ",\"ranges\":[\"";
+    size_t lastRangeCol = 0;
+    int32_t lastDefSource = 0;
+    int32_t lastDefScope = 0;
+    bool firstRangeItem = true;
+    auto emitRangeTree = [&](const OutRange& r, auto& self) -> void {
+      if (!firstRangeItem) {
+        *sourceMap << ",";
+      }
+      firstRangeItem = false;
+      *sourceMap << 'E';
+      uint32_t flags = 0;
+      if (r.scope.hasDefinition()) {
+        flags |= 0x2;
+      }
+      if (r.scope.isStackFrame) {
+        flags |= 0x4;
+        if (r.scope.isHidden) {
+          flags |= 0x8;
+        }
+      }
+      writeBase64VLQUnsigned(*sourceMap, flags);
+      writeBase64VLQUnsigned(*sourceMap,
+                             uint32_t(r.startOffset - lastRangeCol));
+      lastRangeCol = r.startOffset;
+      if (r.scope.hasDefinition()) {
+        int32_t srcDiff = int32_t(*r.scope.fileIndex) - lastDefSource;
+        lastDefSource = int32_t(*r.scope.fileIndex);
+        writeBase64VLQ(*sourceMap, srcDiff);
+        if (srcDiff == 0) {
+          int32_t scpDiff = int32_t(*r.scope.scopeIndex) - lastDefScope;
+          writeBase64VLQ(*sourceMap, scpDiff);
+        } else {
+          writeBase64VLQUnsigned(*sourceMap, *r.scope.scopeIndex);
+        }
+        lastDefScope = int32_t(*r.scope.scopeIndex);
+      }
+      if (!r.scope.bindings.empty()) {
+        *sourceMap << ",G";
+        for (const auto& b : r.scope.bindings) {
+          writeBase64VLQUnsigned(*sourceMap, b ? (*b + 1) : 0);
+        }
+      }
+      if (r.callSite) {
+        *sourceMap << ",I";
+        writeBase64VLQUnsigned(*sourceMap, r.callSite->fileIndex);
+        uint32_t csLine0 =
+          r.callSite->lineNumber > 0 ? r.callSite->lineNumber - 1 : 0;
+        writeBase64VLQUnsigned(*sourceMap, csLine0);
+        writeBase64VLQUnsigned(*sourceMap, r.callSite->columnNumber);
+      }
+      for (size_t v = 0; v < r.subRangeBindings.size(); ++v) {
+        if (!r.subRangeBindings[v].empty()) {
+          *sourceMap << ",H";
+          writeBase64VLQUnsigned(*sourceMap, uint32_t(v));
+          size_t lastFromCol = r.startOffset;
+          for (const auto& tr : r.subRangeBindings[v]) {
+            writeBase64VLQUnsigned(*sourceMap, 0);
+            writeBase64VLQUnsigned(*sourceMap,
+                                   uint32_t(tr.fromOffset - lastFromCol));
+            lastFromCol = tr.fromOffset;
+            writeBase64VLQUnsigned(
+              *sourceMap, tr.symbolNameIndex ? (*tr.symbolNameIndex + 1) : 0);
+          }
+        }
+      }
+      for (const auto& child : r.children) {
+        self(child, self);
+      }
+      *sourceMap << ",F";
+      writeBase64VLQUnsigned(*sourceMap, uint32_t(r.endOffset - lastRangeCol));
+      lastRangeCol = r.endOffset;
+    };
+    for (const auto& r : rootRanges) {
+      emitRangeTree(r, emitRangeTree);
+    }
+    *sourceMap << "\"]";
+  }
+
+  *sourceMap << "}";
 }
 
 void WasmBinaryWriter::writeLateCustomSections() {
@@ -1720,11 +2089,23 @@ void WasmBinaryWriter::writeDylinkSection() {
   finishSection(start);
 }
 
-void WasmBinaryWriter::writeDebugLocation(const Function::DebugLocation& loc) {
-  if (loc == lastDebugLocation) {
+void WasmBinaryWriter::writeDebugLocation(const Function::DebugLocations& loc) {
+  if (loc.empty()) {
     return;
   }
   auto offset = o.size();
+  if (!sourceMapLocations.empty() &&
+      sourceMapLocations.back().first == offset) {
+    sourceMapLocations.pop_back();
+  }
+  if (!sourceMapLocations.empty() && sourceMapLocations.back().second &&
+      *sourceMapLocations.back().second == loc) {
+    lastDebugLocation = loc;
+    return;
+  }
+  if (loc == lastDebugLocation) {
+    return;
+  }
   sourceMapLocations.emplace_back(offset, &loc);
   lastDebugLocation = loc;
 }
@@ -1738,17 +2119,18 @@ void WasmBinaryWriter::writeNoDebugLocation() {
   // single one is enough to make it clear that the debug information
   // before us is valid no longer. We also don't need to write one if
   // there is nothing before us.
+  auto offset = o.size();
+  if (!sourceMapLocations.empty() &&
+      sourceMapLocations.back().first == offset) {
+    sourceMapLocations.pop_back();
+  }
   if (!sourceMapLocations.empty() &&
       sourceMapLocations.back().second != nullptr) {
-    sourceMapLocations.emplace_back(o.size(), nullptr);
-
-    // Initialize the state of debug info to indicate there is no current
-    // debug info relevant. This sets |lastDebugLocation| to a dummy value,
-    // so that later places with debug info can see that they differ from
-    // it (without this, if we had some debug info, then a nullptr for none,
-    // and then the same debug info, we could get confused).
-    initializeDebugInfo();
+    sourceMapLocations.emplace_back(offset, nullptr);
   }
+  // Initialize the state of debug info to indicate there is no current
+  // debug info relevant.
+  initializeDebugInfo();
 }
 
 void WasmBinaryWriter::writeSourceMapLocation(Expression* curr,
@@ -1757,10 +2139,16 @@ void WasmBinaryWriter::writeSourceMapLocation(Expression* curr,
 
   auto& debugLocations = func->debugLocations;
   auto iter = debugLocations.find(curr);
-  if (iter != debugLocations.end() && iter->second) {
+  if (iter != debugLocations.end() && !iter->second.empty()) {
     // There is debug information here, write it out.
-    writeDebugLocation(*(iter->second));
+    writeDebugLocation(iter->second);
   } else {
+    if (auto* block = curr->dynCast<Block>(); block && !block->name.is()) {
+      return;
+    }
+    if (curr->is<Pop>() || curr->is<TupleMake>()) {
+      return;
+    }
     // This expression has no debug location.
     writeNoDebugLocation();
   }
@@ -3626,7 +4014,7 @@ Result<> WasmBinaryReader::readStore(unsigned bytes, Type type) {
 }
 
 Result<> WasmBinaryReader::readInst() {
-  if (auto loc = sourceMapReader.readDebugLocationAt(pos)) {
+  if (auto loc = sourceMapReader.readDebugLocationAt(pos); !loc.empty()) {
     builder.setDebugLocation(loc);
   }
   uint8_t code = getInt8();

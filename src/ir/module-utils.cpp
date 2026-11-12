@@ -29,19 +29,51 @@ namespace wasm::ModuleUtils {
 
 // Update the file name indices when moving a set of debug locations from one
 // module to another.
-static void updateLocation(std::optional<Function::DebugLocation>& location,
-                           std::vector<Index>& fileIndexMap) {
-  if (location) {
-    location->fileIndex = fileIndexMap[location->fileIndex];
+static void updateLocation(Function::DebugLocations& locations,
+                           const std::vector<Index>& fileIndexMap) {
+  for (auto& loc : locations) {
+    if (loc.hasPosition()) {
+      loc.fileIndex = fileIndexMap[loc.fileIndex];
+    }
+    if (loc.scope && loc.scope->fileIndex) {
+      loc.scope->fileIndex = fileIndexMap[*loc.scope->fileIndex];
+    }
   }
 }
 
 // Update the symbol name indices when moving a set of debug locations from one
 // module to another.
-static void updateSymbol(std::optional<Function::DebugLocation>& location,
-                         std::vector<Index>& symbolIndexMap) {
-  if (location && location->symbolNameIndex) {
-    location->symbolNameIndex = symbolIndexMap[*location->symbolNameIndex];
+static void updateSymbol(Function::DebugLocations& locations,
+                         const std::vector<Index>& symbolIndexMap) {
+  for (auto& loc : locations) {
+    if (loc.symbolNameIndex) {
+      loc.symbolNameIndex = symbolIndexMap[*loc.symbolNameIndex];
+    }
+    if (loc.scope) {
+      for (auto& binding : loc.scope->bindings) {
+        if (binding) {
+          binding = symbolIndexMap[*binding];
+        }
+      }
+    }
+  }
+}
+
+static void updateScopeSymbols(Module::OriginalScope& scope,
+                               const std::vector<Index>& symbolIndexMap) {
+  if (scope.nameIndex) {
+    scope.nameIndex = symbolIndexMap[*scope.nameIndex];
+  }
+  if (scope.kindIndex) {
+    scope.kindIndex = symbolIndexMap[*scope.kindIndex];
+  }
+  for (auto& varIdx : scope.variables) {
+    if (varIdx) {
+      varIdx = symbolIndexMap[*varIdx];
+    }
+  }
+  for (auto& child : scope.children) {
+    updateScopeSymbols(child, symbolIndexMap);
   }
 }
 
@@ -83,21 +115,14 @@ copyFunctionWithoutAdd(Function* func,
   // Update file indices if needed
   if (fileIndexMap) {
     for (auto& iter : ret->debugLocations) {
-      if (iter.second) {
-        iter.second->fileIndex = (*fileIndexMap)[iter.second->fileIndex];
-      }
+      updateLocation(iter.second, *fileIndexMap);
     }
     updateLocation(ret->prologLocation, *fileIndexMap);
     updateLocation(ret->epilogLocation, *fileIndexMap);
   }
   if (symbolNameIndexMap) {
     for (auto& iter : ret->debugLocations) {
-      if (iter.second) {
-        if (iter.second->symbolNameIndex.has_value()) {
-          iter.second->symbolNameIndex =
-            (*symbolNameIndexMap)[*(iter.second->symbolNameIndex)];
-        }
-      }
+      updateSymbol(iter.second, *symbolNameIndexMap);
     }
     updateSymbol(ret->prologLocation, *symbolNameIndexMap);
     updateSymbol(ret->epilogLocation, *symbolNameIndexMap);
@@ -248,6 +273,31 @@ void copyModuleItems(const Module& in, Module& out) {
     }
   }
 
+  if (!in.debugInfoScopes.empty()) {
+    if (out.debugInfoScopes.size() < out.debugInfoFileNames.size()) {
+      out.debugInfoScopes.resize(out.debugInfoFileNames.size());
+    }
+    for (Index i = 0; i < in.debugInfoScopes.size(); i++) {
+      if (!in.debugInfoScopes[i]) {
+        continue;
+      }
+      Index dstFile =
+        (fileIndexMap && i < fileIndexMap->size()) ? (*fileIndexMap)[i] : i;
+      if (dstFile >= out.debugInfoScopes.size()) {
+        out.debugInfoScopes.resize(dstFile + 1);
+      }
+      if (!out.debugInfoScopes[dstFile]) {
+        auto scopesCopy = *in.debugInfoScopes[i];
+        if (symbolNameIndexMap) {
+          for (auto& scope : scopesCopy) {
+            updateScopeSymbols(scope, *symbolNameIndexMap);
+          }
+        }
+        out.debugInfoScopes[dstFile] = std::move(scopesCopy);
+      }
+    }
+  }
+
   for (auto& curr : in.functions) {
     copyFunction(curr.get(), out, Name(), fileIndexMap, symbolNameIndexMap);
   }
@@ -291,6 +341,7 @@ void copyModule(const Module& in, Module& out) {
   out.customSections = in.customSections;
   out.debugInfoFileNames = in.debugInfoFileNames;
   out.debugInfoSymbolNames = in.debugInfoSymbolNames;
+  out.debugInfoScopes = in.debugInfoScopes;
   out.features = in.features;
 }
 

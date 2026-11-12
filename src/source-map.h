@@ -53,13 +53,37 @@ class SourceMapReader {
   bool hasInfo = false;
   bool hasSymbol = false;
 
+  struct CallSitePos {
+    BinaryLocation fileIndex = 0;
+    BinaryLocation lineNumber = 1;
+    BinaryLocation columnNumber = 0;
+  };
+
+  struct BindingTransition {
+    size_t fromOffset = 0;
+    std::optional<BinaryLocation> symbolNameIndex;
+  };
+
+  struct DecodedRange {
+    size_t startOffset = 0;
+    size_t endOffset = 0;
+    std::optional<BinaryLocation> defFileIndex;
+    std::optional<BinaryLocation> defScopeIndex;
+    bool isStackFrame = false;
+    bool isHidden = false;
+    std::optional<CallSitePos> callSite;
+    std::vector<std::vector<BindingTransition>> bindings;
+    std::vector<DecodedRange> children;
+  };
+
+  std::vector<DecodedRange> rootRanges;
+
 public:
   SourceMapReader(std::vector<char>& buffer) : buffer(buffer) {}
 
   void parse(Module& wasm);
 
-  std::optional<Function::DebugLocation>
-  readDebugLocationAt(size_t currLocation);
+  Function::DebugLocations readDebugLocationAt(size_t currLocation);
 
   // Do not reuse debug info across function boundaries.
   void finishFunction() { hasInfo = false; }
@@ -81,6 +105,8 @@ private:
   }
 
   int32_t readBase64VLQ();
+  static uint32_t readBase64VLQUnsigned(std::string_view str, size_t& p);
+  static int32_t readBase64VLQSigned(std::string_view str, size_t& p);
 };
 
 } // namespace wasm
