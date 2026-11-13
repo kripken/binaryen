@@ -263,6 +263,15 @@ struct Generalizer : public ChildTyper<Generalizer> {
     }
   }
 
+  std::optional<Type> getSingleValidConstraintType(Type type, VarType constraint) {
+    auto ret = getSingleConstraintType(type, constraint);
+    if (ret && ret->isRef() && ret->getExactness() != type.getExactness() &&
+        !wasm.features.hasCustomDescriptors()) {
+      ret = type;
+    }
+    return ret;
+  }
+
   void note(Expression** childp, Constraints constraints) {
     auto* child = *childp;
     if (!child->type.hasRef()) {
@@ -273,7 +282,7 @@ struct Generalizer : public ChildTyper<Generalizer> {
     Tuple elems(constraints.size());
     bool hasConstraint = false;
     for (size_t i = 0; i < constraints.size(); ++i) {
-      if (auto type = getSingleConstraintType(child->type[i], constraints[i])) {
+      if (auto type = getSingleValidConstraintType(child->type[i], constraints[i])) {
         elems[i] = *type;
         if (child->type[i].isRef()) {
           hasConstraint = true;
