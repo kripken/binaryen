@@ -61,13 +61,6 @@ class SourceMapReader {
     uint32_t col = 0;
   };
 
-  // A point in a GeneratedRange where a scope variable's binding expression
-  // changes (or becomes unavailable if `symbol` is nullopt).
-  struct BindingTransition {
-    size_t fromOffset = 0;
-    std::optional<uint32_t> symbol;
-  };
-
   // A decoded GeneratedRange entry from the source map's "ranges" field.
   struct DecodedRange {
     size_t startOffset = 0;
@@ -78,7 +71,6 @@ class SourceMapReader {
     Function::ScopeInfo::StackFrameType stackFrameType =
       Function::ScopeInfo::StackFrameType::None;
     std::optional<CallSitePos> callSite;
-    std::vector<std::vector<BindingTransition>> bindings;
     std::vector<DecodedRange> children;
   };
 

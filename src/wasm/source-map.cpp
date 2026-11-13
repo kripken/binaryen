@@ -177,7 +177,6 @@ void SourceMapReader::parse(Module& wasm) {
       uint32_t scopeCol = 0;
       int64_t scopeNameIndex = 0;
       int64_t scopeKindIndex = 0;
-      int64_t scopeVariableIndex = 0;
       size_t p = 0;
       while (p < scopeStr.size()) {
         if (scopeStr[p] == ',') {
@@ -229,18 +228,9 @@ void SourceMapReader::parse(Module& wasm) {
           } else {
             stack.back().children.push_back(std::move(finished));
           }
-        } else if (tag == 3) { // 'D': OriginalScopeVariables
-          if (stack.empty()) {
-            throw MapParseException(
-              "Unexpected OriginalScopeVariables outside scope");
-          }
-          while (p < scopeStr.size() && scopeStr[p] != ',') {
-            int32_t relVar = readBase64VLQSigned(scopeStr, p);
-            stack.back().variables.push_back(accumulateIndex(
-              scopeVariableIndex, relVar, wasm.debugInfoSymbolNames.size()));
-          }
         } else {
-          // VendorExtensionItem ('V' = 21) or InvalidScopeItem: ignore.
+          // OriginalScopeVariables ('D' = 3), VendorExtensionItem ('V' = 21),
+          // or InvalidScopeItem: ignore.
           while (p < scopeStr.size() && scopeStr[p] != ',') {
             readBase64VLQUnsigned(scopeStr, p);
           }
@@ -362,42 +352,6 @@ void SourceMapReader::parse(Module& wasm) {
             rootRanges.push_back(std::move(finished));
           } else {
             stack.back().children.push_back(std::move(finished));
-          }
-        } else if (tag == 6) { // 'G': GeneratedRangeBindings
-          if (stack.empty()) {
-            throw MapParseException(
-              "Unexpected GeneratedRangeBindings outside range");
-          }
-          auto& curr = stack.back();
-          while (p < rangeStr.size() && rangeStr[p] != ',') {
-            uint32_t u = readBase64VLQUnsigned(rangeStr, p);
-            std::optional<BinaryLocation> sym;
-            if (u > 0 && u - 1 < wasm.debugInfoSymbolNames.size()) {
-              sym = BinaryLocation(u - 1);
-            }
-            curr.bindings.push_back({BindingTransition{curr.startOffset, sym}});
-          }
-        } else if (tag == 7) { // 'H': GeneratedSubRangeBinding
-          if (stack.empty()) {
-            throw MapParseException(
-              "Unexpected GeneratedSubRangeBinding outside range");
-          }
-          auto& curr = stack.back();
-          uint32_t varIdx = readBase64VLQUnsigned(rangeStr, p);
-          uint32_t fromLine = 0;
-          uint32_t fromCol = curr.startOffset;
-          while (p < rangeStr.size() && rangeStr[p] != ',') {
-            uint32_t relLine = readBase64VLQUnsigned(rangeStr, p);
-            uint32_t relCol = readBase64VLQUnsigned(rangeStr, p);
-            accumulatePosition(fromLine, fromCol, relLine, relCol);
-            uint32_t u = readBase64VLQUnsigned(rangeStr, p);
-            std::optional<BinaryLocation> sym;
-            if (u > 0 && u - 1 < wasm.debugInfoSymbolNames.size()) {
-              sym = BinaryLocation(u - 1);
-            }
-            if (varIdx < curr.bindings.size()) {
-              curr.bindings[varIdx].push_back(BindingTransition{fromCol, sym});
-            }
           }
         } else if (tag == 8) { // 'I': GeneratedRangeCallSite
           if (stack.empty()) {
@@ -562,7 +516,8 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
   Function::DebugLocations result;
   if (activeRanges.empty()) {
     if (hasInfo) {
-      result.push_back(Function::DebugLocation{file, line, col, sym});
+      result.push_back(
+        Function::DebugLocation{file, line, col, sym, std::nullopt});
     }
     return result;
   }
@@ -582,18 +537,6 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
     scopeInfo.fileIndex = r->defFile;
     scopeInfo.scopeIndex = r->defScope;
     scopeInfo.stackFrameType = r->stackFrameType;
-    scopeInfo.bindings.reserve(r->bindings.size());
-    for (const auto& varTransitions : r->bindings) {
-      std::optional<BinaryLocation> activeBinding;
-      for (const auto& tr : varTransitions) {
-        if (tr.fromOffset <= currLocation) {
-          activeBinding = tr.symbol;
-        } else {
-          break;
-        }
-      }
-      scopeInfo.bindings.push_back(activeBinding);
-    }
 
     BinaryLocation posFile = -1;
     BinaryLocation posLine = -1;

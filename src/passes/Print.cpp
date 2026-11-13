@@ -2760,7 +2760,8 @@ void PrintSExpression::printDebugLocation(
         printable.push_back(Function::DebugLocation{loc.fileIndex,
                                                     loc.lineNumber,
                                                     loc.columnNumber,
-                                                    loc.symbolNameIndex});
+                                                    loc.symbolNameIndex,
+                                                    std::nullopt});
       }
     }
   }

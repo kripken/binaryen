@@ -49,13 +49,6 @@ static void updateSymbol(Function::DebugLocations& locations,
     if (loc.symbolNameIndex) {
       loc.symbolNameIndex = symbolIndexMap[*loc.symbolNameIndex];
     }
-    if (loc.scope) {
-      for (auto& binding : loc.scope->bindings) {
-        if (binding) {
-          binding = symbolIndexMap[*binding];
-        }
-      }
-    }
   }
 }
 
@@ -66,11 +59,6 @@ static void updateScopeSymbols(Module::OriginalScope& scope,
   }
   if (scope.kindIndex) {
     scope.kindIndex = symbolIndexMap[*scope.kindIndex];
-  }
-  for (auto& varIdx : scope.variables) {
-    if (varIdx) {
-      varIdx = symbolIndexMap[*varIdx];
-    }
   }
   for (auto& child : scope.children) {
     updateScopeSymbols(child, symbolIndexMap);

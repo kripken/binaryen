@@ -1438,11 +1438,6 @@ void WasmBinaryWriter::writeSourceMapProlog() {
     auto prepareIndexMap = [&](const Function::DebugLocations& locations) {
       for (const auto& loc : locations) {
         markUsed(loc.symbolNameIndex);
-        if (loc.scope) {
-          for (const auto& binding : loc.scope->bindings) {
-            markUsed(binding);
-          }
-        }
       }
     };
     for (auto& func : wasm->functions) {
@@ -1456,9 +1451,6 @@ void WasmBinaryWriter::writeSourceMapProlog() {
                                     auto& self) -> void {
       markUsed(scope.nameIndex);
       markUsed(scope.kindIndex);
-      for (const auto& varIdx : scope.variables) {
-        markUsed(varIdx);
-      }
       for (const auto& child : scope.children) {
         self(child, self);
       }
@@ -1488,11 +1480,6 @@ void WasmBinaryWriter::writeSourceMapProlog() {
     auto updateIndex = [&](Function::DebugLocations& locations) {
       for (auto& loc : locations) {
         remapSym(loc.symbolNameIndex);
-        if (loc.scope) {
-          for (auto& binding : loc.scope->bindings) {
-            remapSym(binding);
-          }
-        }
       }
     };
     for (auto& func : wasm->functions) {
@@ -1506,9 +1493,6 @@ void WasmBinaryWriter::writeSourceMapProlog() {
                                 auto& self) -> void {
       remapSym(scope.nameIndex);
       remapSym(scope.kindIndex);
-      for (auto& varIdx : scope.variables) {
-        remapSym(varIdx);
-      }
       for (auto& child : scope.children) {
         self(child, self);
       }
@@ -1757,7 +1741,6 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
       uint32_t lastCol = 0;
       int32_t lastNameIdx = 0;
       int32_t lastKindIdx = 0;
-      int32_t lastVarIdx = 0;
       bool firstItem = true;
       auto emitScopeTree = [&](const Module::OriginalScope& scope,
                                auto& self) -> void {
@@ -1793,14 +1776,6 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
           writeBase64VLQ(*sourceMap, int32_t(*scope.kindIndex) - lastKindIdx);
           lastKindIdx = int32_t(*scope.kindIndex);
         }
-        if (!scope.variables.empty()) {
-          *sourceMap << ",D";
-          for (const auto& varIdx : scope.variables) {
-            int32_t idx = varIdx ? int32_t(*varIdx) : 0;
-            writeBase64VLQ(*sourceMap, idx - lastVarIdx);
-            lastVarIdx = idx;
-          }
-        }
         for (const auto& child : scope.children) {
           self(child, self);
         }
@@ -1829,12 +1804,6 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
       bool operator==(const CallSite& other) const = default;
       bool operator!=(const CallSite& other) const = default;
     };
-    // A byte offset at which a scope variable's binding changes within an
-    // emitted GeneratedRange.
-    struct BindingTransition {
-      size_t fromOffset = 0;
-      std::optional<BinaryLocation> symbolNameIndex;
-    };
     // A GeneratedRange node constructed from DebugLocations to be serialized to
     // the source map's "ranges" field.
     struct OutRange {
@@ -1842,17 +1811,7 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
       size_t endOffset = 0;
       Function::ScopeInfo scope;
       std::optional<CallSite> callSite;
-      std::vector<std::vector<BindingTransition>> subRangeBindings;
       std::vector<OutRange> children;
-
-      bool sameIdentity(const Function::ScopeInfo& otherScope,
-                        const std::optional<CallSite>& otherCallSite) const {
-        return scope.fileIndex == otherScope.fileIndex &&
-               scope.scopeIndex == otherScope.scopeIndex &&
-               scope.stackFrameType == otherScope.stackFrameType &&
-               scope.bindings.size() == otherScope.bindings.size() &&
-               callSite == otherCallSite;
-      }
     };
 
     std::vector<OutRange> rootRanges;
@@ -1891,30 +1850,12 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
       }
       size_t common = 0;
       while (common < openStack.size() && common < targetRanges.size() &&
-             openStack[common].sameIdentity(*targetRanges[common].first,
-                                            targetRanges[common].second)) {
+             openStack[common].scope == *targetRanges[common].first &&
+             openStack[common].callSite == targetRanges[common].second) {
         ++common;
       }
       while (openStack.size() > common) {
         closeTopRange(offset);
-      }
-      for (size_t d = 0; d < common; ++d) {
-        auto& open = openStack[d];
-        const auto& newBindings = targetRanges[d].first->bindings;
-        for (size_t v = 0; v < newBindings.size(); ++v) {
-          std::optional<BinaryLocation> curVal =
-            open.subRangeBindings[v].empty()
-              ? open.scope.bindings[v]
-              : open.subRangeBindings[v].back().symbolNameIndex;
-          if (newBindings[v] != curVal) {
-            if (offset == open.startOffset &&
-                open.subRangeBindings[v].empty()) {
-              open.scope.bindings[v] = newBindings[v];
-            } else {
-              open.subRangeBindings[v].push_back({offset, newBindings[v]});
-            }
-          }
-        }
       }
       for (size_t d = common; d < targetRanges.size(); ++d) {
         OutRange r;
@@ -1922,7 +1863,6 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
         r.endOffset = offset;
         r.scope = *targetRanges[d].first;
         r.callSite = targetRanges[d].second;
-        r.subRangeBindings.resize(r.scope.bindings.size());
         openStack.push_back(std::move(r));
       }
     }
@@ -1968,12 +1908,6 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
         }
         lastDefScope = int32_t(*r.scope.scopeIndex);
       }
-      if (!r.scope.bindings.empty()) {
-        *sourceMap << ",G";
-        for (const auto& b : r.scope.bindings) {
-          writeBase64VLQUnsigned(*sourceMap, b ? (*b + 1) : 0);
-        }
-      }
       if (r.callSite) {
         *sourceMap << ",I";
         writeBase64VLQUnsigned(*sourceMap, r.callSite->fileIndex);
@@ -1981,21 +1915,6 @@ void WasmBinaryWriter::writeSourceMapEpilog() {
           r.callSite->lineNumber > 0 ? r.callSite->lineNumber - 1 : 0;
         writeBase64VLQUnsigned(*sourceMap, csLine0);
         writeBase64VLQUnsigned(*sourceMap, r.callSite->columnNumber);
-      }
-      for (size_t v = 0; v < r.subRangeBindings.size(); ++v) {
-        if (!r.subRangeBindings[v].empty()) {
-          *sourceMap << ",H";
-          writeBase64VLQUnsigned(*sourceMap, uint32_t(v));
-          size_t lastFromCol = r.startOffset;
-          for (const auto& tr : r.subRangeBindings[v]) {
-            writeBase64VLQUnsigned(*sourceMap, 0);
-            writeBase64VLQUnsigned(*sourceMap,
-                                   uint32_t(tr.fromOffset - lastFromCol));
-            lastFromCol = tr.fromOffset;
-            writeBase64VLQUnsigned(
-              *sourceMap, tr.symbolNameIndex ? (*tr.symbolNameIndex + 1) : 0);
-          }
-        }
       }
       for (const auto& child : r.children) {
         self(child, self);

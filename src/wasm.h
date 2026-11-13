@@ -2470,7 +2470,7 @@ public:
   //
   // ScopeInfo describes the GeneratedRange associated with a frame in a
   // DebugLocations stack, including its reference to an OriginalScope
-  // definition (fileIndex, scopeIndex) and active variable bindings.
+  // definition (fileIndex, scopeIndex).
   struct ScopeInfo {
     enum class StackFrameType : uint8_t {
       None,
@@ -2478,10 +2478,9 @@ public:
       Hidden,
     };
 
-    std::optional<BinaryLocation> fileIndex = std::nullopt;
-    std::optional<BinaryLocation> scopeIndex = std::nullopt;
+    std::optional<BinaryLocation> fileIndex;
+    std::optional<BinaryLocation> scopeIndex;
     StackFrameType stackFrameType = StackFrameType::None;
-    std::vector<std::optional<BinaryLocation>> bindings = {};
 
     bool hasDefinition() const {
       return fileIndex.has_value() && scopeIndex.has_value();
@@ -2495,16 +2494,13 @@ public:
       if (scopeIndex != other.scopeIndex) {
         return scopeIndex < other.scopeIndex;
       }
-      if (stackFrameType != other.stackFrameType) {
-        return stackFrameType < other.stackFrameType;
-      }
-      return bindings < other.bindings;
+      return stackFrameType < other.stackFrameType;
     }
   };
   struct DebugLocation {
     BinaryLocation fileIndex = -1, lineNumber = -1, columnNumber = -1;
-    std::optional<BinaryLocation> symbolNameIndex = std::nullopt;
-    std::optional<ScopeInfo> scope = std::nullopt;
+    std::optional<BinaryLocation> symbolNameIndex;
+    std::optional<ScopeInfo> scope;
     bool hasPosition() const { return fileIndex != BinaryLocation(-1); }
     bool operator==(const DebugLocation& other) const {
       return fileIndex == other.fileIndex && lineNumber == other.lineNumber &&
@@ -2832,7 +2828,6 @@ public:
     std::optional<BinaryLocation> nameIndex;
     std::optional<BinaryLocation> kindIndex;
     bool isStackFrame = false;
-    std::vector<std::optional<BinaryLocation>> variables;
     std::vector<OriginalScope> children;
     bool operator==(const OriginalScope& other) const = default;
     bool operator!=(const OriginalScope& other) const = default;
