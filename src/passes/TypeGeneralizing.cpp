@@ -222,7 +222,9 @@ struct Generalizer : public ChildTyper<Generalizer> {
     }
   }
 
-  // Get the constrained type from a single (non-tuple) constraint.
+  // Get the constrained type from a single (non-tuple) constraint. This does
+  // not take into consideration the enabled features, see
+  // getSingleValidConstraintType below.
   std::optional<Type> getSingleConstraintType(Type type, VarType constraint) {
     assert(type.size() == 1);
     if (!type.isRef()) {
@@ -263,11 +265,31 @@ struct Generalizer : public ChildTyper<Generalizer> {
     }
   }
 
+  // Get the constrained type from a single (non-tuple) constraint, as above,
+  // and also making sure that the type change is valid for the features.
   std::optional<Type> getSingleValidConstraintType(Type type, VarType constraint) {
     auto ret = getSingleConstraintType(type, constraint);
+    // If custom descriptors are disabled, we still use exact types in the IR,
+    // and we accept trivial casts that do not change the exactness. In this
+    // pass we must therefore avoid making a cast non-trivial:
+    //
+    //  (ref.cast (exact $A)
+    //    (local.get $x))
+    //
+    // Imagine that we generalized the local to inexact, then the cast would no
+    // longer be trivial, and we would fail validation.
     if (ret && ret->isRef() && ret->getExactness() != type.getExactness() &&
         !wasm.features.hasCustomDescriptors()) {
-      ret = type;
+      // Make the type exact, to match the original exactness (that is the
+      // only direction possible, as we generalize types). However, we cannot
+      // make a basic type exact, so in that case we give up and do not
+      // generalize.
+      assert(type.getExactness() == Exact);
+      if (ret->getHeapType().isBasic()) {
+        ret = type;
+      } else {
+        ret = ret->with(Exact);
+      }
     }
     return ret;
   }
