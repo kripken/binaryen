@@ -74,13 +74,6 @@ public:
   // Set the debug location to be attached to the next visited, created, or
   // pushed instruction.
   void setDebugLocation(const Function::DebugLocations&);
-  void setDebugLocation(const std::optional<Function::DebugLocation>& loc) {
-    if (loc) {
-      setDebugLocation(Function::DebugLocations{*loc});
-    } else {
-      setDebugLocation(Function::DebugLocations{});
-    }
-  }
 
   // Give the builder a pointer to the counter tracking the current location in
   // the binary. If this pointer is non-null, the builder will record the binary

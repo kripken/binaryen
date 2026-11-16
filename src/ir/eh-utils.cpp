@@ -161,19 +161,9 @@ void handleBlockNestedPop(Try* try_, Function* func, Module& wasm) {
     if (isInvalid) {
       Expression* pop = *popPtr;
       Index newLocal = builder.addVar(func, pop->type);
-      auto* get = builder.makeLocalGet(newLocal, pop->type);
-      auto* set = builder.makeLocalSet(newLocal, pop);
-      if (auto it = func->debugLocations.find(pop);
-          it != func->debugLocations.end()) {
-        func->debugLocations[get] = it->second;
-        func->debugLocations[set] = it->second;
-      } else if (auto it = func->debugLocations.find(try_);
-                 it != func->debugLocations.end()) {
-        func->debugLocations[get] = it->second;
-        func->debugLocations[set] = it->second;
-      }
-      *popPtr = get;
-      catchBody = builder.makeSequence(set, catchBody);
+      *popPtr = builder.makeLocalGet(newLocal, pop->type);
+      catchBody =
+        builder.makeSequence(builder.makeLocalSet(newLocal, pop), catchBody);
     }
   }
 }

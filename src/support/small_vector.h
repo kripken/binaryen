@@ -91,7 +91,7 @@ public:
 
   template<typename... ArgTypes> void emplace_back(ArgTypes&&... Args) {
     if (usedFixed < N) {
-      fixed[usedFixed++] = T(std::forward<ArgTypes>(Args)...);
+      new (&fixed[usedFixed++]) T(std::forward<ArgTypes>(Args)...);
     } else {
       flexible.emplace_back(std::forward<ArgTypes>(Args)...);
     }
