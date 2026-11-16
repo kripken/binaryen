@@ -688,6 +688,8 @@ static void doCodeInlining(Module* module,
         auto inlinedLocs = std::move(it->second);
         Function::DebugLocations combined = callLocs;
         if (!combined[0].scope && callLocs.back().hasPosition()) {
+          // The outermost caller is the physical Wasm function containing the
+          // inlined code.
           Function::ScopeInfo callerScope;
           callerScope.stackFrameType =
             Function::ScopeInfo::StackFrameType::Original;
@@ -698,6 +700,8 @@ static void doCodeInlining(Module* module,
           if (!clearedFirstScopeFrame && loc.scope) {
             clearedFirstScopeFrame = true;
             if (callLocs.back().hasPosition()) {
+              // Now that the callee has been inlined, its GeneratedRange no
+              // longer has its own physical Wasm stack frame.
               loc.scope->stackFrameType =
                 Function::ScopeInfo::StackFrameType::None;
             }

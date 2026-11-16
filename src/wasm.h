@@ -2472,6 +2472,15 @@ public:
   // DebugLocations stack, including its reference to an OriginalScope
   // definition (fileIndex, scopeIndex).
   struct ScopeInfo {
+    // Whether this GeneratedRange corresponds to a physical stack frame in the
+    // generated Wasm binary (as opposed to OriginalScope::isStackFrame, which
+    // describes whether the original authored scope was a function):
+    // - None: Not a physical Wasm function frame (e.g. a lexical block, or an
+    //   inlined function body whose frame only exists virtually).
+    // - Original: A physical Wasm function frame corresponding to an original
+    //   authored function.
+    // - Hidden: A physical Wasm function frame that should be hidden from stack
+    //   traces (e.g. an outlined or compiler-synthesized helper function).
     enum class StackFrameType : uint8_t {
       None,
       Original,
