@@ -2812,6 +2812,10 @@ public:
   // source map and are encoded as in the original JSON (UTF-8 encoded with
   // with escaped quotes and slashes). The string values are uninterpreted in
   // Binaryen, and they are written directly back out without re-encoding.
+  //
+  // The source map "sources" array. File indices in DebugLocation and ScopeInfo
+  // index into this vector (as well as parallel per-source vectors such as
+  // debugInfoSourcesContent and debugInfoScopes).
   std::vector<std::string> debugInfoFileNames;
   std::vector<std::string> debugInfoSymbolNames;
   std::string debugInfoSourceRoot;
@@ -2832,8 +2836,18 @@ public:
     bool operator==(const OriginalScope& other) const = default;
     bool operator!=(const OriginalScope& other) const = default;
   };
-  // Per-source list of root OriginalScopes (or nullopt if the source has a
-  // null entry in "scopes"). Empty if the source map has no "scopes" field.
+  // The source map "scopes" array, indexed in parallel with debugInfoFileNames:
+  // debugInfoScopes[i] contains the root OriginalScopes for
+  // debugInfoFileNames[i], or std::nullopt if that source file has no scope
+  // info ("null" in JSON).
+  //
+  // Length relationship with debugInfoFileNames:
+  // - Empty when the module has no scope info (e.g. no "scopes" field in the
+  //   input source map), even when debugInfoFileNames is non-empty.
+  // - Otherwise parallel to debugInfoFileNames, though it may be shorter if the
+  //   input "scopes" array omitted trailing entries or if new files were added
+  //   to debugInfoFileNames afterwards (e.g. during module merging); any
+  //   missing trailing entries are treated as std::nullopt.
   std::vector<std::optional<std::vector<OriginalScope>>> debugInfoScopes;
 
   // `features` are the features allowed to be used in this module and should be

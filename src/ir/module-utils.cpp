@@ -262,6 +262,9 @@ void copyModuleItems(const Module& in, Module& out) {
   }
 
   if (!in.debugInfoScopes.empty()) {
+    // debugInfoScopes is indexed in parallel with debugInfoFileNames (which was
+    // just extended above), but may be empty or shorter if `out` previously had
+    // no scopes or fewer files. Pad missing entries with std::nullopt.
     if (out.debugInfoScopes.size() < out.debugInfoFileNames.size()) {
       out.debugInfoScopes.resize(out.debugInfoFileNames.size());
     }
