@@ -2105,27 +2105,11 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
         assert(wasm.debugInfoFileNames.size() == it->second);
         wasm.debugInfoFileNames.push_back(std::string(file));
       }
-      locs.push_back(Function::DebugLocation{
-        it->second, *line, *col, symbolNameIndex, std::nullopt});
+      locs.push_back(
+        Function::DebugLocation{it->second, *line, *col, symbolNameIndex});
     }
     if (!hasSrcAnnotation) {
       return;
-    }
-    if (locs.size() > 1) {
-      // Multiple `;;@` annotations on an instruction represent an inlined call
-      // stack ordered from outermost caller (`i == 0`) to innermost inlined
-      // callee (`i > 0`). In the generated Wasm binary, only the outermost
-      // caller (`i == 0`) is an actual Wasm function with a physical runtime
-      // stack frame (`StackFrameType::Original`); the inner entries (`i > 0`)
-      // were inlined into it and have no physical Wasm stack frame of their own
-      // (`StackFrameType::None`).
-      for (size_t i = 0; i < locs.size(); ++i) {
-        Function::ScopeInfo scope;
-        scope.stackFrameType = (i == 0)
-                                 ? Function::ScopeInfo::StackFrameType::Original
-                                 : Function::ScopeInfo::StackFrameType::None;
-        locs[i].scope = scope;
-      }
     }
     irBuilder.setDebugLocation(locs);
   }

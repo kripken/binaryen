@@ -32,12 +32,7 @@ namespace wasm::ModuleUtils {
 static void updateLocation(Function::DebugLocations& locations,
                            const std::vector<Index>& fileIndexMap) {
   for (auto& loc : locations) {
-    if (loc.hasPosition()) {
-      loc.fileIndex = fileIndexMap[loc.fileIndex];
-    }
-    if (loc.scope && loc.scope->fileIndex) {
-      loc.scope->fileIndex = fileIndexMap[*loc.scope->fileIndex];
-    }
+    loc.fileIndex = fileIndexMap[loc.fileIndex];
   }
 }
 
@@ -49,19 +44,6 @@ static void updateSymbol(Function::DebugLocations& locations,
     if (loc.symbolNameIndex) {
       loc.symbolNameIndex = symbolIndexMap[*loc.symbolNameIndex];
     }
-  }
-}
-
-static void updateScopeSymbols(Module::OriginalScope& scope,
-                               const std::vector<Index>& symbolIndexMap) {
-  if (scope.nameIndex) {
-    scope.nameIndex = symbolIndexMap[*scope.nameIndex];
-  }
-  if (scope.kindIndex) {
-    scope.kindIndex = symbolIndexMap[*scope.kindIndex];
-  }
-  for (auto& child : scope.children) {
-    updateScopeSymbols(child, symbolIndexMap);
   }
 }
 
@@ -261,34 +243,6 @@ void copyModuleItems(const Module& in, Module& out) {
     }
   }
 
-  if (!in.debugInfoScopes.empty()) {
-    // debugInfoScopes is indexed in parallel with debugInfoFileNames (which was
-    // just extended above), but may be empty or shorter if `out` previously had
-    // no scopes or fewer files. Pad missing entries with std::nullopt.
-    if (out.debugInfoScopes.size() < out.debugInfoFileNames.size()) {
-      out.debugInfoScopes.resize(out.debugInfoFileNames.size());
-    }
-    for (Index i = 0; i < in.debugInfoScopes.size(); i++) {
-      if (!in.debugInfoScopes[i]) {
-        continue;
-      }
-      Index dstFile =
-        (fileIndexMap && i < fileIndexMap->size()) ? (*fileIndexMap)[i] : i;
-      if (dstFile >= out.debugInfoScopes.size()) {
-        out.debugInfoScopes.resize(dstFile + 1);
-      }
-      if (!out.debugInfoScopes[dstFile]) {
-        auto scopesCopy = *in.debugInfoScopes[i];
-        if (symbolNameIndexMap) {
-          for (auto& scope : scopesCopy) {
-            updateScopeSymbols(scope, *symbolNameIndexMap);
-          }
-        }
-        out.debugInfoScopes[dstFile] = std::move(scopesCopy);
-      }
-    }
-  }
-
   for (auto& curr : in.functions) {
     copyFunction(curr.get(), out, Name(), fileIndexMap, symbolNameIndexMap);
   }
@@ -332,7 +286,6 @@ void copyModule(const Module& in, Module& out) {
   out.customSections = in.customSections;
   out.debugInfoFileNames = in.debugInfoFileNames;
   out.debugInfoSymbolNames = in.debugInfoSymbolNames;
-  out.debugInfoScopes = in.debugInfoScopes;
   out.features = in.features;
 }
 

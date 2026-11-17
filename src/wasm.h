@@ -2465,56 +2465,14 @@ public:
   std::unordered_set<Name> explicitLabelNames;
 
   // Source maps debugging info: map expression nodes to their file, line, col,
-  // symbol name, and optional scope/range info (ordered from outermost to
-  // innermost inlined frame).
-  //
-  // ScopeInfo describes the GeneratedRange associated with a frame in a
-  // DebugLocations stack, including its reference to an OriginalScope
-  // definition (fileIndex, scopeIndex).
-  struct ScopeInfo {
-    // Whether this GeneratedRange corresponds to a physical stack frame in the
-    // generated Wasm binary (as opposed to OriginalScope::isStackFrame, which
-    // describes whether the original authored scope was a function):
-    // - None: Not a physical Wasm function frame (e.g. a lexical block, or an
-    //   inlined function body whose frame only exists virtually).
-    // - Original: A physical Wasm function frame corresponding to an original
-    //   authored function.
-    // - Hidden: A physical Wasm function frame that should be hidden from stack
-    //   traces (e.g. an outlined or compiler-synthesized helper function).
-    enum class StackFrameType : uint8_t {
-      None,
-      Original,
-      Hidden,
-    };
-
-    std::optional<BinaryLocation> fileIndex;
-    std::optional<BinaryLocation> scopeIndex;
-    StackFrameType stackFrameType = StackFrameType::None;
-
-    bool hasDefinition() const {
-      return fileIndex.has_value() && scopeIndex.has_value();
-    }
-    bool operator==(const ScopeInfo& other) const = default;
-    bool operator!=(const ScopeInfo& other) const = default;
-    bool operator<(const ScopeInfo& other) const {
-      if (fileIndex != other.fileIndex) {
-        return fileIndex < other.fileIndex;
-      }
-      if (scopeIndex != other.scopeIndex) {
-        return scopeIndex < other.scopeIndex;
-      }
-      return stackFrameType < other.stackFrameType;
-    }
-  };
+  // symbol name.
   struct DebugLocation {
     BinaryLocation fileIndex = -1, lineNumber = -1, columnNumber = -1;
     std::optional<BinaryLocation> symbolNameIndex;
-    std::optional<ScopeInfo> scope;
-    bool hasPosition() const { return fileIndex != BinaryLocation(-1); }
     bool operator==(const DebugLocation& other) const {
       return fileIndex == other.fileIndex && lineNumber == other.lineNumber &&
              columnNumber == other.columnNumber &&
-             symbolNameIndex == other.symbolNameIndex && scope == other.scope;
+             symbolNameIndex == other.symbolNameIndex;
     }
     bool operator!=(const DebugLocation& other) const {
       return !(*this == other);
@@ -2524,34 +2482,20 @@ public:
              : lineNumber != other.lineNumber ? lineNumber < other.lineNumber
              : columnNumber != other.columnNumber
                ? columnNumber < other.columnNumber
-             : symbolNameIndex != other.symbolNameIndex
-               ? symbolNameIndex < other.symbolNameIndex
-               : scope < other.scope;
+               : symbolNameIndex < other.symbolNameIndex;
     }
     void dump() const {
-      std::cerr << (symbolNameIndex ? int(symbolNameIndex.value()) : -1)
-                << " @ " << int(fileIndex) << ":" << int(lineNumber) << ":"
-                << int(columnNumber);
-      if (scope) {
-        std::cerr << " [scope ";
-        if (scope->hasDefinition()) {
-          std::cerr << *scope->fileIndex << ":" << *scope->scopeIndex;
-        } else {
-          std::cerr << "undef";
-        }
-        if (scope->stackFrameType == ScopeInfo::StackFrameType::Original) {
-          std::cerr << " frame";
-        } else if (scope->stackFrameType == ScopeInfo::StackFrameType::Hidden) {
-          std::cerr << " frame hidden";
-        }
-        std::cerr << "]";
-      }
-      std::cerr << "\n";
+      std::cerr << (symbolNameIndex ? symbolNameIndex.value() : -1) << " @ "
+                << fileIndex << ":" << lineNumber << ":" << columnNumber
+                << "\n";
     }
   };
+  // DebugLocations holds the source location stack for an expression, ordered
+  // from outermost caller to innermost inlined frame (a single element for
+  // non-inlined code, or multiple elements when inlined). One can explicitly
+  // set the debug location of an expression to an empty vector to stop the
+  // propagation of debug locations.
   using DebugLocations = SmallVector<DebugLocation, 1>;
-  // One can explicitly set the debug location of an expression to an empty
-  // DebugLocations vector to stop the propagation of debug locations.
   std::unordered_map<Expression*, DebugLocations> debugLocations;
   DebugLocations prologLocation;
   DebugLocations epilogLocation;
@@ -2821,43 +2765,11 @@ public:
   // source map and are encoded as in the original JSON (UTF-8 encoded with
   // with escaped quotes and slashes). The string values are uninterpreted in
   // Binaryen, and they are written directly back out without re-encoding.
-  //
-  // The source map "sources" array. File indices in DebugLocation and ScopeInfo
-  // index into this vector (as well as parallel per-source vectors such as
-  // debugInfoSourcesContent and debugInfoScopes).
   std::vector<std::string> debugInfoFileNames;
   std::vector<std::string> debugInfoSymbolNames;
   std::string debugInfoSourceRoot;
   std::string debugInfoFile;
   std::vector<std::string> debugInfoSourcesContent;
-
-  // A lexical scope in an original source file, as encoded in the source map's
-  // "scopes" field.
-  struct OriginalScope {
-    BinaryLocation startLine = 1;
-    BinaryLocation startColumn = 0;
-    BinaryLocation endLine = 1;
-    BinaryLocation endColumn = 0;
-    std::optional<BinaryLocation> nameIndex;
-    std::optional<BinaryLocation> kindIndex;
-    bool isStackFrame = false;
-    std::vector<OriginalScope> children;
-    bool operator==(const OriginalScope& other) const = default;
-    bool operator!=(const OriginalScope& other) const = default;
-  };
-  // The source map "scopes" array, indexed in parallel with debugInfoFileNames:
-  // debugInfoScopes[i] contains the root OriginalScopes for
-  // debugInfoFileNames[i], or std::nullopt if that source file has no scope
-  // info ("null" in JSON).
-  //
-  // Length relationship with debugInfoFileNames:
-  // - Empty when the module has no scope info (e.g. no "scopes" field in the
-  //   input source map), even when debugInfoFileNames is non-empty.
-  // - Otherwise parallel to debugInfoFileNames, though it may be shorter if the
-  //   input "scopes" array omitted trailing entries or if new files were added
-  //   to debugInfoFileNames afterwards (e.g. during module merging); any
-  //   missing trailing entries are treated as std::nullopt.
-  std::vector<std::optional<std::vector<OriginalScope>>> debugInfoScopes;
 
   // `features` are the features allowed to be used in this module and should be
   // respected regardless of the value of`hasFeaturesSection`.

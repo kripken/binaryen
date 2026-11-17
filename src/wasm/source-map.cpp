@@ -37,7 +37,7 @@ void accumulatePosition(uint32_t& lineAcc,
   }
 }
 
-std::optional<BinaryLocation>
+std::optional<uint32_t>
 accumulateIndex(int64_t& acc, int32_t inc, size_t numNames) {
   acc += inc;
   if (acc < 0) {
@@ -46,15 +46,7 @@ accumulateIndex(int64_t& acc, int32_t inc, size_t numNames) {
   if (uint64_t(acc) >= numNames) {
     return std::nullopt;
   }
-  return BinaryLocation(acc);
-}
-
-void flattenOriginalScopes(const std::vector<Module::OriginalScope>& scopes,
-                           std::vector<const Module::OriginalScope*>& out) {
-  for (const auto& s : scopes) {
-    out.push_back(&s);
-    flattenOriginalScopes(s.children, out);
-  }
+  return uint32_t(acc);
 }
 
 } // anonymous namespace
@@ -150,8 +142,14 @@ void SourceMapReader::parse(Module& wasm) {
     throw MapParseException("Source map mappings is not a string");
   }
 
-  std::vector<std::vector<const Module::OriginalScope*>> flattenedScopes(
-    wasm.debugInfoFileNames.size());
+  // Flattened pre-order OriginalScope entries per source file, used locally
+  // while decoding "ranges" to resolve scope names and relative call sites.
+  struct ParsedScope {
+    uint32_t line = 1;
+    uint32_t col = 0;
+    std::optional<uint32_t> symbol;
+  };
+  std::vector<std::vector<ParsedScope>> parsedScopes;
 
   if (json.has("scopes")) {
     json::Ref sc = json["scopes"];
@@ -159,20 +157,17 @@ void SourceMapReader::parse(Module& wasm) {
       throw MapParseException("Source map scopes is not an array");
     }
     size_t numScopes = sc->size();
-    wasm.debugInfoScopes.reserve(
-      std::max(numScopes, wasm.debugInfoFileNames.size()));
+    parsedScopes.resize(numScopes);
     for (size_t i = 0; i < numScopes; i++) {
       json::Ref v = sc[i];
       if (v->isNull()) {
-        wasm.debugInfoScopes.push_back(std::nullopt);
         continue;
       }
       if (!v->isString()) {
         throw MapParseException("Source map scopes contains non-string");
       }
       std::string_view scopeStr = v->getCString();
-      std::vector<Module::OriginalScope> sourceRootScopes;
-      std::vector<Module::OriginalScope> stack;
+      size_t openDepth = 0;
       uint32_t scopeLine = 0;
       uint32_t scopeCol = 0;
       int64_t scopeNameIndex = 0;
@@ -189,26 +184,24 @@ void SourceMapReader::parse(Module& wasm) {
           uint32_t relLine = readBase64VLQUnsigned(scopeStr, p);
           uint32_t relCol = readBase64VLQUnsigned(scopeStr, p);
           accumulatePosition(scopeLine, scopeCol, relLine, relCol);
-          Module::OriginalScope scope;
-          scope.startLine = scopeLine + 1;
-          scope.startColumn = scopeCol;
-          scope.endLine = scope.startLine;
-          scope.endColumn = scope.startColumn;
-          scope.isStackFrame = (flags & 0x4) != 0;
+          ParsedScope scope;
+          scope.line = scopeLine + 1;
+          scope.col = scopeCol;
           if (flags & 0x1) {
             int32_t relName = readBase64VLQSigned(scopeStr, p);
-            scope.nameIndex = accumulateIndex(
+            scope.symbol = accumulateIndex(
               scopeNameIndex, relName, wasm.debugInfoSymbolNames.size());
           }
           if (flags & 0x2) {
             int32_t relKind = readBase64VLQSigned(scopeStr, p);
-            scope.kindIndex = accumulateIndex(
+            accumulateIndex(
               scopeKindIndex, relKind, wasm.debugInfoSymbolNames.size());
           }
           while (p < scopeStr.size() && scopeStr[p] != ',') {
             readBase64VLQUnsigned(scopeStr, p);
           }
-          stack.push_back(std::move(scope));
+          parsedScopes[i].push_back(scope);
+          ++openDepth;
         } else if (tag == 2) { // 'C': OriginalScopeEnd
           uint32_t relLine = readBase64VLQUnsigned(scopeStr, p);
           uint32_t relCol = readBase64VLQUnsigned(scopeStr, p);
@@ -216,18 +209,10 @@ void SourceMapReader::parse(Module& wasm) {
           while (p < scopeStr.size() && scopeStr[p] != ',') {
             readBase64VLQUnsigned(scopeStr, p);
           }
-          if (stack.empty()) {
+          if (openDepth == 0) {
             throw MapParseException("Unexpected OriginalScopeEnd in scopes");
           }
-          auto finished = std::move(stack.back());
-          stack.pop_back();
-          finished.endLine = scopeLine + 1;
-          finished.endColumn = scopeCol;
-          if (stack.empty()) {
-            sourceRootScopes.push_back(std::move(finished));
-          } else {
-            stack.back().children.push_back(std::move(finished));
-          }
+          --openDepth;
         } else {
           // OriginalScopeVariables ('D' = 3), VendorExtensionItem ('V' = 21),
           // or InvalidScopeItem: ignore.
@@ -242,18 +227,8 @@ void SourceMapReader::parse(Module& wasm) {
           ++p;
         }
       }
-      if (!stack.empty()) {
+      if (openDepth != 0) {
         throw MapParseException("Unclosed scope in scopes");
-      }
-      wasm.debugInfoScopes.push_back(std::move(sourceRootScopes));
-    }
-    while (wasm.debugInfoScopes.size() < wasm.debugInfoFileNames.size()) {
-      wasm.debugInfoScopes.push_back(std::nullopt);
-    }
-    flattenedScopes.resize(wasm.debugInfoScopes.size());
-    for (size_t i = 0; i < wasm.debugInfoScopes.size(); i++) {
-      if (wasm.debugInfoScopes[i]) {
-        flattenOriginalScopes(*wasm.debugInfoScopes[i], flattenedScopes[i]);
       }
     }
   }
@@ -274,12 +249,18 @@ void SourceMapReader::parse(Module& wasm) {
       throw MapParseException("Source map ranges is not an array or string");
     }
 
+    struct OpenRange {
+      DecodedRange range;
+      std::optional<uint32_t> defFile;
+      std::optional<uint32_t> defScope;
+    };
+
     for (std::string_view rangeStr : rangeSegments) {
       uint32_t rangeLine = 0;
       uint32_t rangeCol = 0;
       int64_t defSourceIndex = 0;
       int64_t defScopeIndex = 0;
-      std::vector<DecodedRange> stack;
+      std::vector<OpenRange> stack;
       size_t p = 0;
       while (p < rangeStr.size()) {
         if (rangeStr[p] == ',') {
@@ -293,14 +274,9 @@ void SourceMapReader::parse(Module& wasm) {
             (flags & 0x1) ? readBase64VLQUnsigned(rangeStr, p) : 0;
           uint32_t relCol = readBase64VLQUnsigned(rangeStr, p);
           accumulatePosition(rangeLine, rangeCol, relLine, relCol);
-          DecodedRange r;
-          r.startOffset = rangeCol;
-          r.endOffset = rangeCol;
-          if ((flags & 0xc) == 0xc) {
-            r.stackFrameType = Function::ScopeInfo::StackFrameType::Hidden;
-          } else if (flags & 0x4) {
-            r.stackFrameType = Function::ScopeInfo::StackFrameType::Original;
-          }
+          OpenRange open;
+          open.range.startOffset = rangeCol;
+          open.range.endOffset = rangeCol;
           if (flags & 0x2) {
             int32_t srcOffset = readBase64VLQSigned(rangeStr, p);
             defSourceIndex += srcOffset;
@@ -318,19 +294,18 @@ void SourceMapReader::parse(Module& wasm) {
             if (defScopeIndex < 0) {
               defScopeIndex = 0;
             }
-            if (size_t(defSourceIndex) < flattenedScopes.size() &&
-                size_t(defScopeIndex) <
-                  flattenedScopes[defSourceIndex].size()) {
-              r.defFile = uint32_t(defSourceIndex);
-              r.defScope = uint32_t(defScopeIndex);
-              r.defSymbol =
-                flattenedScopes[defSourceIndex][defScopeIndex]->nameIndex;
+            if (size_t(defSourceIndex) < parsedScopes.size() &&
+                size_t(defScopeIndex) < parsedScopes[defSourceIndex].size()) {
+              open.defFile = uint32_t(defSourceIndex);
+              open.defScope = uint32_t(defScopeIndex);
+              open.range.symbol =
+                parsedScopes[defSourceIndex][defScopeIndex].symbol;
             }
           }
           while (p < rangeStr.size() && rangeStr[p] != ',') {
             readBase64VLQUnsigned(rangeStr, p);
           }
-          stack.push_back(std::move(r));
+          stack.push_back(std::move(open));
         } else if (tag == 5) { // 'F': GeneratedRangeEnd
           uint32_t v1 = readBase64VLQUnsigned(rangeStr, p);
           if (p < rangeStr.size() && rangeStr[p] != ',') {
@@ -345,13 +320,13 @@ void SourceMapReader::parse(Module& wasm) {
           if (stack.empty()) {
             throw MapParseException("Unexpected GeneratedRangeEnd in ranges");
           }
-          auto finished = std::move(stack.back());
+          auto finished = std::move(stack.back().range);
           stack.pop_back();
           finished.endOffset = rangeCol;
           if (stack.empty()) {
             rootRanges.push_back(std::move(finished));
           } else {
-            stack.back().children.push_back(std::move(finished));
+            stack.back().range.children.push_back(std::move(finished));
           }
         } else if (tag == 8) { // 'I': GeneratedRangeCallSite
           if (stack.empty()) {
@@ -364,7 +339,8 @@ void SourceMapReader::parse(Module& wasm) {
           while (p < rangeStr.size() && rangeStr[p] != ',') {
             readBase64VLQUnsigned(rangeStr, p);
           }
-          stack.back().callSite = CallSitePos{csSource, csLine + 1, csCol};
+          stack.back().range.callSite =
+            CallSitePos{csSource, csLine + 1, csCol};
         } else if (tag == 9) { // 'J': GeneratedRangeRelativeCallSite
           if (stack.empty()) {
             throw MapParseException(
@@ -376,7 +352,7 @@ void SourceMapReader::parse(Module& wasm) {
           }
           if (!vals.empty() && vals.size() <= 3) {
             uint32_t parentIdx = (vals.size() == 3) ? vals[0] : 0;
-            const DecodedRange* parentDefRange = nullptr;
+            const OpenRange* parentDefRange = nullptr;
             uint32_t seenDefs = 0;
             for (int i = int(stack.size()) - 2; i >= 0; --i) {
               if (stack[i].defFile && stack[i].defScope) {
@@ -388,12 +364,11 @@ void SourceMapReader::parse(Module& wasm) {
               }
             }
             if (parentDefRange) {
-              const auto* parentScope =
-                flattenedScopes[*parentDefRange->defFile]
-                               [*parentDefRange->defScope];
+              const auto& parentScope = parsedScopes[*parentDefRange->defFile]
+                                                    [*parentDefRange->defScope];
               uint32_t csFile = *parentDefRange->defFile;
-              uint32_t csLine = parentScope->startLine;
-              uint32_t csCol = parentScope->startColumn;
+              uint32_t csLine = parentScope.line;
+              uint32_t csCol = parentScope.col;
               if (vals.size() == 3) {
                 csLine += vals[1];
                 csCol = vals[2];
@@ -403,7 +378,7 @@ void SourceMapReader::parse(Module& wasm) {
               } else {
                 csCol += vals[0];
               }
-              stack.back().callSite = CallSitePos{csFile, csLine, csCol};
+              stack.back().range.callSite = CallSitePos{csFile, csLine, csCol};
             }
           }
         } else {
@@ -484,6 +459,13 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
     location += readBase64VLQ();
   }
 
+  if (!hasInfo) {
+    return {};
+  }
+
+  auto sym = hasSymbol ? symbol : std::optional<uint32_t>{};
+  Function::DebugLocations result;
+
   SmallVector<const DecodedRange*, 4> activeRanges;
   const std::vector<DecodedRange>* rangeList = &rootRanges;
   while (!rangeList->empty()) {
@@ -512,55 +494,31 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
     rangeList = &match->children;
   }
 
-  auto sym = hasSymbol ? symbol : std::optional<uint32_t>{};
-  Function::DebugLocations result;
   if (activeRanges.empty()) {
-    if (hasInfo) {
-      result.push_back(
-        Function::DebugLocation{file, line, col, sym, std::nullopt});
-    }
+    result.push_back(Function::DebugLocation{file, line, col, sym});
     return result;
   }
 
-  // If the outermost active range has a callSite (e.g. a top-level inlined
-  // range with no enclosing parent GeneratedRange), record that outer position
-  // first with no ScopeInfo.
+  std::optional<uint32_t> frameSym = activeRanges[0]->symbol;
   if (activeRanges[0]->callSite) {
+    // Top-level inlined range with no enclosing parent GeneratedRange.
     const auto& cs = *activeRanges[0]->callSite;
-    result.push_back(Function::DebugLocation{
-      cs.file, cs.line, cs.col, std::nullopt, std::nullopt});
+    result.push_back(
+      Function::DebugLocation{cs.file, cs.line, cs.col, std::nullopt});
   }
 
-  for (size_t i = 0; i < activeRanges.size(); ++i) {
+  for (size_t i = 1; i < activeRanges.size(); ++i) {
     const auto* r = activeRanges[i];
-    Function::ScopeInfo scopeInfo;
-    scopeInfo.fileIndex = r->defFile;
-    scopeInfo.scopeIndex = r->defScope;
-    scopeInfo.stackFrameType = r->stackFrameType;
-
-    BinaryLocation posFile = -1;
-    BinaryLocation posLine = -1;
-    BinaryLocation posCol = -1;
-    std::optional<BinaryLocation> posSym;
-    if (i + 1 < activeRanges.size()) {
-      if (activeRanges[i + 1]->callSite) {
-        const auto& cs = *activeRanges[i + 1]->callSite;
-        posFile = cs.file;
-        posLine = cs.line;
-        posCol = cs.col;
-        posSym = r->defSymbol;
-      }
-    } else if (hasInfo) {
-      posFile = file;
-      posLine = line;
-      posCol = col;
-      posSym = sym;
+    if (r->callSite) {
+      const auto& cs = *r->callSite;
+      result.push_back(
+        Function::DebugLocation{cs.file, cs.line, cs.col, frameSym});
+      frameSym = r->symbol;
     }
-
-    result.push_back(Function::DebugLocation{
-      posFile, posLine, posCol, posSym, std::move(scopeInfo)});
   }
 
+  result.push_back(
+    Function::DebugLocation{file, line, col, sym ? sym : frameSym});
   return result;
 }
 

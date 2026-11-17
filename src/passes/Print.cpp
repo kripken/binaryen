@@ -2753,30 +2753,18 @@ void PrintSExpression::printDebugLocation(
   if (minify) {
     return;
   }
-  Function::DebugLocations printable;
-  if (!locations.empty() && locations.back().hasPosition()) {
-    for (const auto& loc : locations) {
-      if (loc.hasPosition()) {
-        printable.push_back(Function::DebugLocation{loc.fileIndex,
-                                                    loc.lineNumber,
-                                                    loc.columnNumber,
-                                                    loc.symbolNameIndex,
-                                                    std::nullopt});
-      }
-    }
-  }
   // Do not skip repeated debug info in full mode, for less-confusing debugging:
   // full mode prints out everything in the most verbose manner.
-  if (lastPrintedLocation == printable && indent > lastPrintIndent && !full) {
+  if (lastPrintedLocation == locations && indent > lastPrintIndent && !full) {
     return;
   }
-  lastPrintedLocation = printable;
+  lastPrintedLocation = locations;
   lastPrintIndent = indent;
-  if (printable.empty()) {
+  if (locations.empty()) {
     o << ";;@\n";
     doIndent(o, indent);
   } else {
-    for (const auto& loc : printable) {
+    for (const auto& loc : locations) {
       auto fileName = currModule->debugInfoFileNames[loc.fileIndex];
       o << ";;@ " << fileName << ":" << loc.lineNumber << ":"
         << loc.columnNumber;
@@ -2797,8 +2785,7 @@ void PrintSExpression::printMetadata(Expression* curr) {
   if (currFunction) {
     // Show a debug location, if there is one.
     if (auto iter = currFunction->debugLocations.find(curr);
-        iter != currFunction->debugLocations.end() && !iter->second.empty() &&
-        iter->second.back().hasPosition()) {
+        iter != currFunction->debugLocations.end()) {
       printDebugLocation(iter->second);
     } else {
       printDebugLocation({});
@@ -3350,8 +3337,7 @@ void PrintSExpression::visitDefinedFunction(Function* curr) {
   currFunction = curr;
   lastPrintedLocation.clear();
   lastPrintIndent = 0;
-  if (!currFunction->prologLocation.empty() &&
-      currFunction->prologLocation.back().hasPosition()) {
+  if (!currFunction->prologLocation.empty()) {
     printDebugLocation(currFunction->prologLocation);
   }
   printCodeAnnotations(curr->funcAnnotations);
@@ -3387,8 +3373,7 @@ void PrintSExpression::visitDefinedFunction(Function* curr) {
     }
     assert(controlFlowDepth == 0);
   }
-  if (!currFunction->epilogLocation.empty() &&
-      currFunction->epilogLocation.back().hasPosition()) {
+  if (!currFunction->epilogLocation.empty()) {
     // Print last debug location: mix of decIndent and printDebugLocation
     // logic.
     doIndent(o, indent);

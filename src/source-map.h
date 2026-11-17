@@ -65,11 +65,7 @@ class SourceMapReader {
   struct DecodedRange {
     size_t startOffset = 0;
     size_t endOffset = 0;
-    std::optional<uint32_t> defFile;
-    std::optional<uint32_t> defScope;
-    std::optional<uint32_t> defSymbol;
-    Function::ScopeInfo::StackFrameType stackFrameType =
-      Function::ScopeInfo::StackFrameType::None;
+    std::optional<uint32_t> symbol;
     std::optional<CallSitePos> callSite;
     std::vector<DecodedRange> children;
   };

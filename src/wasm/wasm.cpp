@@ -2109,7 +2109,6 @@ void Module::updateMaps() {
 void Module::clearDebugInfo() {
   debugInfoFileNames.clear();
   debugInfoSymbolNames.clear();
-  debugInfoScopes.clear();
 }
 
 } // namespace wasm
