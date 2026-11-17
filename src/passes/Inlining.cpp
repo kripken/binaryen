@@ -641,19 +641,41 @@ static void doCodeInlining(Module* module,
   }
 
   // Generate and update the inlined contents
-  std::optional<Function::DebugLocations> callLocs;
-  if (auto it = into->debugLocations.find(call);
-      it != into->debugLocations.end() && !it->second.empty()) {
-    callLocs = it->second;
-  }
   auto* contents = ExpressionManipulator::copy(from->body, *module);
   metadata::copyBetweenFunctions(from->body, contents, from, into);
   updater.walk(contents);
-  if (callLocs) {
-    into->debugLocations[block] = *callLocs;
+
+  // Handle source map scopes.
+  if (auto it = into->debugLocations.find(call);
+      it != into->debugLocations.end() && !it->second.empty()) {
+    auto callLocs = it->second;
+
+    // Mark the block as having the locations of the call.
+    into->debugLocations[block] = callLocs;
     for (auto* initExpr : block->list) {
-      into->debugLocations[initExpr] = *callLocs;
+      into->debugLocations[initExpr] = callLocs;
     }
+
+    // For the inlined contents inside the block, add scoping info: we had
+    //
+    //   func called() {
+    //     //@ a.cpp:10:1
+    //     x++;
+    //   }
+    //
+    //   func caller() {
+    //     //@ b.cpp:20:2
+    //     called();
+    //   }
+    //
+    // and after inlining, we have two stack frames:
+    //
+    //   func caller() {
+    //     //@ b.cpp:20:2
+    //     //@ a.cpp:10:1
+    //     x++;
+    //   }
+    //
     struct InlinedDebugUpdater
       : public PostWalker<InlinedDebugUpdater,
                           UnifiedExpressionVisitor<InlinedDebugUpdater>> {
@@ -665,26 +687,12 @@ static void doCodeInlining(Module* module,
       void visitExpression(Expression* curr) {
         auto it = into->debugLocations.find(curr);
         if (it == into->debugLocations.end() || it->second.empty()) {
-          // If the caller has active scopes, preserve them on unmapped
-          // instructions in the inlined body so the caller's range does not get
-          // split.
-          bool callerHasScope = false;
-          for (const auto& loc : callLocs) {
-            if (loc.scope) {
-              callerHasScope = true;
-              break;
-            }
-          }
-          if (callerHasScope && it == into->debugLocations.end()) {
-            auto callerScopesOnly = callLocs;
-            callerScopesOnly.back().fileIndex = -1;
-            callerScopesOnly.back().lineNumber = -1;
-            callerScopesOnly.back().columnNumber = -1;
-            callerScopesOnly.back().symbolNameIndex.reset();
-            into->debugLocations[curr] = std::move(callerScopesOnly);
-          }
+          // No debug info on this instruction, so do not add anything. Things
+          // that were untracked can remain untracked.
           return;
         }
+
+        // This was tracked, so add the scope.
         auto inlinedLocs = std::move(it->second);
         Function::DebugLocations combined = callLocs;
         if (!combined[0].scope && callLocs.back().hasPosition()) {
@@ -715,8 +723,10 @@ static void doCodeInlining(Module* module,
         it->second = std::move(combined);
       }
     };
-    InlinedDebugUpdater(into, *callLocs).walk(contents);
+    InlinedDebugUpdater(into, callLocs).walk(contents);
   }
+
+  // Finish up the block.
   block->list.push_back(contents);
   block->type = retType;
 
