@@ -1984,22 +1984,10 @@ void WasmBinaryWriter::writeDylinkSection() {
 }
 
 void WasmBinaryWriter::writeDebugLocation(const Function::DebugLocations& loc) {
-  if (loc.empty()) {
+  if (loc.empty() || loc == lastDebugLocation) {
     return;
   }
   auto offset = o.size();
-  if (!sourceMapLocations.empty() &&
-      sourceMapLocations.back().first == offset) {
-    sourceMapLocations.pop_back();
-  }
-  if (!sourceMapLocations.empty() && sourceMapLocations.back().second &&
-      *sourceMapLocations.back().second == loc) {
-    lastDebugLocation = loc;
-    return;
-  }
-  if (loc == lastDebugLocation) {
-    return;
-  }
   sourceMapLocations.emplace_back(offset, &loc);
   lastDebugLocation = loc;
 }
@@ -2016,10 +2004,14 @@ void WasmBinaryWriter::writeNoDebugLocation() {
   if (!sourceMapLocations.empty() &&
       sourceMapLocations.back().second != nullptr) {
     sourceMapLocations.emplace_back(o.size(), nullptr);
+
+    // Initialize the state of debug info to indicate there is no current
+    // debug info relevant. This sets |lastDebugLocation| to an empty vector,
+    // so that later places with debug info can see that they differ from
+    // it (without this, if we had some debug info, then a nullptr for none,
+    // and then the same debug info, we could get confused).
+    initializeDebugInfo();
   }
-  // Initialize the state of debug info to indicate there is no current
-  // debug info relevant.
-  initializeDebugInfo();
 }
 
 void WasmBinaryWriter::writeSourceMapLocation(Expression* curr,
@@ -2032,12 +2024,6 @@ void WasmBinaryWriter::writeSourceMapLocation(Expression* curr,
     // There is debug information here, write it out.
     writeDebugLocation(iter->second);
   } else {
-    if (auto* block = curr->dynCast<Block>(); block && !block->name.is()) {
-      return;
-    }
-    if (curr->is<Pop>() || curr->is<TupleMake>()) {
-      return;
-    }
     // This expression has no debug location.
     writeNoDebugLocation();
   }
@@ -5721,8 +5707,7 @@ void WasmBinaryReader::readElementSegments() {
       } else {
         auto elemKind = getU32LEB();
         if (elemKind != 0x0) {
-          throwError("unexpected passive segment elemkind, expected 0, got " +
-                     std::to_string(elemKind));
+          throwError("unexpected passive segment elemkind, expected 0, got " + std::to_string(elemKind));
         }
       }
       auto num = getU32LEB();
@@ -5759,8 +5744,7 @@ void WasmBinaryReader::readElementSegments() {
       } else {
         auto elemKind = getU32LEB();
         if (elemKind != 0x0) {
-          throwError("unexpected passive segment elemkind, expected 0, got " +
-                     std::to_string(elemKind));
+          throwError("unexpected passive segment elemkind, expected 0, got " + std::to_string(elemKind));
         }
       }
     }
