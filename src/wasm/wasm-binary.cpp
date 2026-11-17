@@ -2013,14 +2013,9 @@ void WasmBinaryWriter::writeNoDebugLocation() {
   // single one is enough to make it clear that the debug information
   // before us is valid no longer. We also don't need to write one if
   // there is nothing before us.
-  auto offset = o.size();
-  if (!sourceMapLocations.empty() &&
-      sourceMapLocations.back().first == offset) {
-    sourceMapLocations.pop_back();
-  }
   if (!sourceMapLocations.empty() &&
       sourceMapLocations.back().second != nullptr) {
-    sourceMapLocations.emplace_back(offset, nullptr);
+    sourceMapLocations.emplace_back(o.size(), nullptr);
   }
   // Initialize the state of debug info to indicate there is no current
   // debug info relevant.
