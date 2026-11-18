@@ -495,7 +495,7 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
   }
 
   if (activeRanges.empty()) {
-    result.push_back(Function::DebugLocation{file, line, col, sym});
+    result.emplace_back(file, line, col, sym);
     return result;
   }
 
@@ -503,22 +503,19 @@ SourceMapReader::readDebugLocationAt(size_t currLocation) {
   if (activeRanges[0]->callSite) {
     // Top-level inlined range with no enclosing parent GeneratedRange.
     const auto& cs = *activeRanges[0]->callSite;
-    result.push_back(
-      Function::DebugLocation{cs.file, cs.line, cs.col, std::nullopt});
+    result.emplace_back(cs.file, cs.line, cs.col, std::nullopt);
   }
 
   for (size_t i = 1; i < activeRanges.size(); ++i) {
     const auto* r = activeRanges[i];
     if (r->callSite) {
       const auto& cs = *r->callSite;
-      result.push_back(
-        Function::DebugLocation{cs.file, cs.line, cs.col, frameSym});
+      result.emplace_back(cs.file, cs.line, cs.col, frameSym);
       frameSym = r->symbol;
     }
   }
 
-  result.push_back(
-    Function::DebugLocation{file, line, col, sym ? sym : frameSym});
+  result.emplace_back(file, line, col, sym ? sym : frameSym);
   return result;
 }
 

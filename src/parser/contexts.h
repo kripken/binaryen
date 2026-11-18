@@ -2105,8 +2105,7 @@ struct ParseDefsCtx : TypeParserCtx<ParseDefsCtx>, AnnotationParserCtx {
         assert(wasm.debugInfoFileNames.size() == it->second);
         wasm.debugInfoFileNames.push_back(std::string(file));
       }
-      locs.push_back(
-        Function::DebugLocation{it->second, *line, *col, symbolNameIndex});
+      locs.emplace_back(it->second, *line, *col, symbolNameIndex);
     }
     if (!hasSrcAnnotation) {
       return;
