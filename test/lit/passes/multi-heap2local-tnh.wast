@@ -7,8 +7,11 @@
   ;; CHECK:      (type $struct (struct (field (mut i32))))
   ;; TNH__:      (type $struct (struct (field (mut i32))))
   (type $struct (struct (field (mut i32))))
+  ;; CHECK:      (type $struct-nn (struct (field (ref $struct))))
+  ;; TNH__:      (type $struct-nn (struct (field (ref $struct))))
+  (type $struct-nn (struct (field (ref $struct))))
 
-  ;; CHECK:      (func $no-param-value (type $1) (param $ref (ref null $struct)) (param $x i32) (result i32)
+  ;; CHECK:      (func $no-param-value (type $2) (param $ref (ref null $struct)) (param $x i32) (result i32)
   ;; CHECK-NEXT:  (if
   ;; CHECK-NEXT:   (local.get $x)
   ;; CHECK-NEXT:   (then
@@ -28,7 +31,7 @@
   ;; CHECK-NEXT:   (local.get $ref)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  ;; TNH__:      (func $no-param-value (type $1) (param $ref (ref null $struct)) (param $x i32) (result i32)
+  ;; TNH__:      (func $no-param-value (type $2) (param $ref (ref null $struct)) (param $x i32) (result i32)
   ;; TNH__-NEXT:  (if
   ;; TNH__-NEXT:   (local.get $x)
   ;; TNH__-NEXT:   (then
@@ -67,7 +70,7 @@
     )
   )
 
-  ;; CHECK:      (func $maybe-var-value (type $2) (param $x i32) (result i32)
+  ;; CHECK:      (func $maybe-var-value (type $3) (param $x i32) (result i32)
   ;; CHECK-NEXT:  (local $ref (ref null $struct))
   ;; CHECK-NEXT:  (if
   ;; CHECK-NEXT:   (local.get $x)
@@ -88,7 +91,7 @@
   ;; CHECK-NEXT:   (local.get $ref)
   ;; CHECK-NEXT:  )
   ;; CHECK-NEXT: )
-  ;; TNH__:      (func $maybe-var-value (type $2) (param $x i32) (result i32)
+  ;; TNH__:      (func $maybe-var-value (type $3) (param $x i32) (result i32)
   ;; TNH__-NEXT:  (local $ref (ref null $struct))
   ;; TNH__-NEXT:  (local $2 i32)
   ;; TNH__-NEXT:  (if
@@ -140,6 +143,243 @@
     )
     (struct.get $struct 0
       (local.get $ref)
+    )
+  )
+
+  ;; CHECK:      (func $maybe-var-copy (type $3) (param $x i32) (result i32)
+  ;; CHECK-NEXT:  (local $a (ref null $struct))
+  ;; CHECK-NEXT:  (local $b (ref null $struct))
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $x)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $a
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (i32.const 1)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (local.set $a
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (i32.const 2)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $b
+  ;; CHECK-NEXT:   (local.get $a)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $b)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; TNH__:      (func $maybe-var-copy (type $3) (param $x i32) (result i32)
+  ;; TNH__-NEXT:  (local $a (ref null $struct))
+  ;; TNH__-NEXT:  (local $b (ref null $struct))
+  ;; TNH__-NEXT:  (local $3 i32)
+  ;; TNH__-NEXT:  (local $4 i32)
+  ;; TNH__-NEXT:  (if
+  ;; TNH__-NEXT:   (local.get $x)
+  ;; TNH__-NEXT:   (then
+  ;; TNH__-NEXT:    (block
+  ;; TNH__-NEXT:     (local.set $a
+  ;; TNH__-NEXT:      (struct.new $struct
+  ;; TNH__-NEXT:       (i32.const 1)
+  ;; TNH__-NEXT:      )
+  ;; TNH__-NEXT:     )
+  ;; TNH__-NEXT:     (local.set $3
+  ;; TNH__-NEXT:      (struct.get $struct 0
+  ;; TNH__-NEXT:       (local.get $a)
+  ;; TNH__-NEXT:      )
+  ;; TNH__-NEXT:     )
+  ;; TNH__-NEXT:    )
+  ;; TNH__-NEXT:    (block
+  ;; TNH__-NEXT:     (local.set $a
+  ;; TNH__-NEXT:      (struct.new $struct
+  ;; TNH__-NEXT:       (i32.const 2)
+  ;; TNH__-NEXT:      )
+  ;; TNH__-NEXT:     )
+  ;; TNH__-NEXT:     (local.set $3
+  ;; TNH__-NEXT:      (struct.get $struct 0
+  ;; TNH__-NEXT:       (local.get $a)
+  ;; TNH__-NEXT:      )
+  ;; TNH__-NEXT:     )
+  ;; TNH__-NEXT:    )
+  ;; TNH__-NEXT:   )
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT:  (local.set $4
+  ;; TNH__-NEXT:   (local.get $3)
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT:  (local.get $4)
+  ;; TNH__-NEXT: )
+  (func $maybe-var-copy (param $x i32) (result i32)
+    ;; $a may be null when copied into $b. Since field 0 is defaultable, copying
+    ;; the default under -tnh does not introduce a trap (if $a was null, the
+    ;; struct.get on $b would have trapped), so we can optimize under -tnh.
+    (local $a (ref null $struct))
+    (local $b (ref null $struct))
+    (if
+      (local.get $x)
+      (then
+        (local.set $a
+          (struct.new $struct (i32.const 1))
+        )
+        (local.set $a
+          (struct.new $struct (i32.const 2))
+        )
+      )
+    )
+    (local.set $b
+      (local.get $a)
+    )
+    (struct.get $struct 0
+      (local.get $b)
+    )
+  )
+
+  ;; CHECK:      (func $no-uninit-copy-non-defaultable-field (type $4) (param $x i32) (param $s (ref $struct)) (result (ref $struct))
+  ;; CHECK-NEXT:  (local $a (ref null $struct-nn))
+  ;; CHECK-NEXT:  (local $b (ref null $struct-nn))
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $x)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $a
+  ;; CHECK-NEXT:     (struct.new $struct-nn
+  ;; CHECK-NEXT:      (local.get $s)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $b
+  ;; CHECK-NEXT:   (local.get $a)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $b
+  ;; CHECK-NEXT:   (struct.new $struct-nn
+  ;; CHECK-NEXT:    (local.get $s)
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct-nn 0
+  ;; CHECK-NEXT:   (local.get $b)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; TNH__:      (func $no-uninit-copy-non-defaultable-field (type $4) (param $x i32) (param $s (ref $struct)) (result (ref $struct))
+  ;; TNH__-NEXT:  (local $a (ref null $struct-nn))
+  ;; TNH__-NEXT:  (local $b (ref null $struct-nn))
+  ;; TNH__-NEXT:  (if
+  ;; TNH__-NEXT:   (local.get $x)
+  ;; TNH__-NEXT:   (then
+  ;; TNH__-NEXT:    (local.set $a
+  ;; TNH__-NEXT:     (struct.new $struct-nn
+  ;; TNH__-NEXT:      (local.get $s)
+  ;; TNH__-NEXT:     )
+  ;; TNH__-NEXT:    )
+  ;; TNH__-NEXT:   )
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT:  (local.set $b
+  ;; TNH__-NEXT:   (local.get $a)
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT:  (local.set $b
+  ;; TNH__-NEXT:   (struct.new $struct-nn
+  ;; TNH__-NEXT:    (local.get $s)
+  ;; TNH__-NEXT:   )
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT:  (struct.get $struct-nn 0
+  ;; TNH__-NEXT:   (local.get $b)
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT: )
+  (func $no-uninit-copy-non-defaultable-field (param $x i32) (param $s (ref $struct)) (result (ref $struct))
+    ;; $a may be null when copied into $b, and $b is then overwritten so the
+    ;; original function never traps. Because field 0 is non-defaultable,
+    ;; turning the copy into a read of $a's field local would introduce a
+    ;; ref.as_non_null trap at the copy site. We must NOT optimize even with
+    ;; -tnh.
+    (local $a (ref null $struct-nn))
+    (local $b (ref null $struct-nn))
+    (if
+      (local.get $x)
+      (then
+        (local.set $a
+          (struct.new $struct-nn (local.get $s))
+        )
+      )
+    )
+    (local.set $b
+      (local.get $a)
+    )
+    (local.set $b
+      (struct.new $struct-nn (local.get $s))
+    )
+    (struct.get $struct-nn 0
+      (local.get $b)
+    )
+  )
+
+  ;; CHECK:      (func $no-param-copy (type $2) (param $a (ref null $struct)) (param $x i32) (result i32)
+  ;; CHECK-NEXT:  (local $b (ref null $struct))
+  ;; CHECK-NEXT:  (if
+  ;; CHECK-NEXT:   (local.get $x)
+  ;; CHECK-NEXT:   (then
+  ;; CHECK-NEXT:    (local.set $a
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (i32.const 1)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:    (local.set $a
+  ;; CHECK-NEXT:     (struct.new $struct
+  ;; CHECK-NEXT:      (i32.const 2)
+  ;; CHECK-NEXT:     )
+  ;; CHECK-NEXT:    )
+  ;; CHECK-NEXT:   )
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (local.set $b
+  ;; CHECK-NEXT:   (local.get $a)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT:  (struct.get $struct 0
+  ;; CHECK-NEXT:   (local.get $b)
+  ;; CHECK-NEXT:  )
+  ;; CHECK-NEXT: )
+  ;; TNH__:      (func $no-param-copy (type $2) (param $a (ref null $struct)) (param $x i32) (result i32)
+  ;; TNH__-NEXT:  (local $b (ref null $struct))
+  ;; TNH__-NEXT:  (if
+  ;; TNH__-NEXT:   (local.get $x)
+  ;; TNH__-NEXT:   (then
+  ;; TNH__-NEXT:    (local.set $a
+  ;; TNH__-NEXT:     (struct.new $struct
+  ;; TNH__-NEXT:      (i32.const 1)
+  ;; TNH__-NEXT:     )
+  ;; TNH__-NEXT:    )
+  ;; TNH__-NEXT:    (local.set $a
+  ;; TNH__-NEXT:     (struct.new $struct
+  ;; TNH__-NEXT:      (i32.const 2)
+  ;; TNH__-NEXT:     )
+  ;; TNH__-NEXT:    )
+  ;; TNH__-NEXT:   )
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT:  (local.set $b
+  ;; TNH__-NEXT:   (local.get $a)
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT:  (struct.get $struct 0
+  ;; TNH__-NEXT:   (local.get $b)
+  ;; TNH__-NEXT:  )
+  ;; TNH__-NEXT: )
+  (func $no-param-copy (param $a (ref null $struct)) (param $x i32) (result i32)
+    ;; $a is a param whose incoming value may be copied into $b. Even under
+    ;; -tnh we must NOT optimize.
+    (local $b (ref null $struct))
+    (if
+      (local.get $x)
+      (then
+        (local.set $a
+          (struct.new $struct (i32.const 1))
+        )
+        (local.set $a
+          (struct.new $struct (i32.const 2))
+        )
+      )
+    )
+    (local.set $b
+      (local.get $a)
+    )
+    (struct.get $struct 0
+      (local.get $b)
     )
   )
 )
