@@ -39,6 +39,7 @@
 #include <ir/match.h>
 #include <ir/ordering.h>
 #include <ir/properties.h>
+#include <ir/trap-on-null.h>
 #include <ir/type-updating.h>
 #include <ir/utils.h>
 #include <pass.h>
@@ -212,7 +213,8 @@ template<class Opt> struct Match::Internal::MatchSelf<PureMatcherKind<Opt>> {
 
 // Main pass class
 struct OptimizeInstructions
-  : public WalkerPass<PostWalker<OptimizeInstructions>>,
+  : public WalkerPass<
+      TrapOnNullWalker<OptimizeInstructions, PostWalker<OptimizeInstructions>>>,
     public Bits::LocalInfoProvider {
   bool isFunctionParallel() override { return true; }
 
@@ -276,7 +278,7 @@ struct OptimizeInstructions
       refinalize = true;
     }
 
-    WalkerPass<PostWalker<OptimizeInstructions>>::replaceCurrent(rep);
+    Super::replaceCurrent(rep);
     // We may be able to apply multiple patterns as one may open opportunities
     // for others. NB: patterns must not have cycles
 
@@ -1384,10 +1386,6 @@ struct OptimizeInstructions
   }
 
   void visitCallRef(CallRef* curr) {
-    skipNonNullCast(curr->target, curr);
-    if (trapOnNull(curr, curr->target)) {
-      return;
-    }
     if (curr->target->type == Type::unreachable) {
       // The call_ref is not reached; leave this for DCE.
       return;
@@ -1493,10 +1491,6 @@ struct OptimizeInstructions
   }
 
   void visitResume(Resume* curr) {
-    skipNonNullCast(curr->cont, curr);
-    if (trapOnNull(curr, curr->cont)) {
-      return;
-    }
     if (curr->type == Type::unreachable) {
       return;
     }
@@ -1899,6 +1893,35 @@ struct OptimizeInstructions
     return false;
   }
 
+  template<typename T> bool visitTrapOnNull(T* curr) {
+    if constexpr (std::is_same_v<T, StructNew> || std::is_same_v<T, RefAs>) {
+      if (curr->type == Type::unreachable) {
+        // Skip the specific visitor as well; leave unreachable code for DCE.
+        return true;
+      }
+    }
+    if constexpr (std::is_same_v<T, RefCast>) {
+      // Note we must check the ref's type here and not our own, since we only
+      // refinalize at the end, which means our type may not have been updated
+      // yet after a change in the child.
+      if (curr->ref->type == Type::unreachable ||
+          (curr->desc && curr->desc->type == Type::unreachable)) {
+        return true;
+      }
+      // For RefCast, only skip non-null casts on `desc`; `visitRefCast`
+      // handles `ref.as_non_null` on `ref` directly (for both nullable and
+      // non-nullable casts, and after cast evaluation).
+      if (curr->desc) {
+        skipNonNullCast(curr->desc, curr);
+      }
+    } else {
+      TrapOnNull<T>::forEach(
+        curr, [&](Expression*& ref) { skipNonNullCast(ref, curr); });
+    }
+    return TrapOnNull<T>::forEach(
+      curr, [&](Expression*& ref) { return trapOnNull(curr, ref); });
+  }
+
   void visitRefEq(RefEq* curr) {
     Builder builder(*getModule());
 
@@ -1970,10 +1993,6 @@ struct OptimizeInstructions
       // Leave this for DCE.
       return;
     }
-    if (curr->desc) {
-      skipNonNullCast(curr->desc, curr);
-      trapOnNull(curr, curr->desc);
-    }
 
     // If values are provided, but they are all the default, then we can remove
     // them (in reachable code).
@@ -2013,8 +2032,6 @@ struct OptimizeInstructions
   }
 
   void visitStructGet(StructGet* curr) {
-    skipNonNullCast(curr->ref, curr);
-    trapOnNull(curr, curr->ref);
     // Relax acquire loads of unshared fields to unordered because they cannot
     // synchronize with other threads.
     // TODO: Relax all other memory orderings as well.
@@ -2025,11 +2042,6 @@ struct OptimizeInstructions
   }
 
   void visitStructSet(StructSet* curr) {
-    skipNonNullCast(curr->ref, curr);
-    if (trapOnNull(curr, curr->ref)) {
-      return;
-    }
-
     if (curr->ref->type != Type::unreachable && curr->value->type.isInteger()) {
       // We must avoid the case of a null type.
       auto heapType = curr->ref->type.getHeapType();
@@ -2049,11 +2061,6 @@ struct OptimizeInstructions
   }
 
   void visitStructRMW(StructRMW* curr) {
-    skipNonNullCast(curr->ref, curr);
-    if (trapOnNull(curr, curr->ref)) {
-      return;
-    }
-
     if (!curr->ref->type.isStruct()) {
       return;
     }
@@ -2176,11 +2183,6 @@ struct OptimizeInstructions
   }
 
   void visitStructCmpxchg(StructCmpxchg* curr) {
-    skipNonNullCast(curr->ref, curr);
-    if (trapOnNull(curr, curr->ref)) {
-      return;
-    }
-
     if (!curr->ref->type.isStruct()) {
       return;
     }
@@ -2467,17 +2469,7 @@ struct OptimizeInstructions
     replaceCurrent(builder.makeArrayNewFixed(heapType, values));
   }
 
-  void visitArrayGet(ArrayGet* curr) {
-    skipNonNullCast(curr->ref, curr);
-    trapOnNull(curr, curr->ref);
-  }
-
   void visitArraySet(ArraySet* curr) {
-    skipNonNullCast(curr->ref, curr);
-    if (trapOnNull(curr, curr->ref)) {
-      return;
-    }
-
     if (curr->value->type.isInteger()) {
       if (auto field = GCTypeUtils::getField(curr->ref->type)) {
         optimizeStoredValue(curr->value, field->getByteSize());
@@ -2485,28 +2477,7 @@ struct OptimizeInstructions
     }
   }
 
-  void visitArrayLen(ArrayLen* curr) {
-    skipNonNullCast(curr->ref, curr);
-    trapOnNull(curr, curr->ref);
-  }
-
-  void visitArrayCopy(ArrayCopy* curr) {
-    skipNonNullCast(curr->destRef, curr);
-    skipNonNullCast(curr->srcRef, curr);
-    trapOnNull(curr, curr->destRef) || trapOnNull(curr, curr->srcRef);
-  }
-
-  void visitArrayRMW(ArrayRMW* curr) {
-    skipNonNullCast(curr->ref, curr);
-    trapOnNull(curr, curr->ref);
-    // TODO: more opts like StructRMW
-  }
-
-  void visitArrayCmpxchg(ArrayCmpxchg* curr) {
-    skipNonNullCast(curr->ref, curr);
-    trapOnNull(curr, curr->ref);
-    // TODO: more opts like StructCmpxchg
-  }
+  // TODO: more opts for ArrayRMW and ArrayCmpxchg like StructRMW/StructCmpxchg
 
   bool optimizeKnownCastResult(RefCast* curr, Type refType) {
     Builder builder(*getModule());
@@ -2674,28 +2645,6 @@ struct OptimizeInstructions
   }
 
   void visitRefCast(RefCast* curr) {
-    // Note we must check the ref's type here and not our own, since we only
-    // refinalize at the end, which means our type may not have been updated yet
-    // after a change in the child.
-    // TODO: we could update unreachability up the stack perhaps, or just move
-    //       all patterns that can add unreachability to a pass that does so
-    //       already like vacuum or dce.
-    if (curr->ref->type == Type::unreachable ||
-        (curr->desc && curr->desc->type == Type::unreachable)) {
-      return;
-    }
-
-    if (curr->type.isNonNullableRef() && trapOnNull(curr, curr->ref)) {
-      return;
-    }
-
-    if (curr->desc) {
-      skipNonNullCast(curr->desc, curr);
-      if (trapOnNull(curr, curr->desc)) {
-        return;
-      }
-    }
-
     Builder builder(*getModule());
 
     // Look at all the fallthrough values to get the most precise possible type
@@ -2861,13 +2810,6 @@ struct OptimizeInstructions
     }
   }
 
-  void visitBrOn(BrOn* curr) {
-    if (curr->desc) {
-      skipNonNullCast(curr->desc, curr);
-      trapOnNull(curr, curr->desc);
-    }
-  }
-
   void visitRefIsNull(RefIsNull* curr) {
     if (curr->type == Type::unreachable) {
       return;
@@ -2932,10 +2874,6 @@ struct OptimizeInstructions
     }
 
     assert(curr->op == RefAsNonNull);
-    if (trapOnNull(curr, curr->value)) {
-      return;
-    }
-    skipNonNullCast(curr->value, curr);
     if (!curr->value->type.isNullableRef()) {
       replaceCurrent(curr->value);
       return;
@@ -2955,11 +2893,6 @@ struct OptimizeInstructions
       cast->type = cast->type.with(NonNullable);
       replaceCurrent(cast);
     }
-  }
-
-  void visitRefGetDesc(RefGetDesc* curr) {
-    skipNonNullCast(curr->ref, curr);
-    trapOnNull(curr, curr->ref);
   }
 
   void visitPublish(Publish* curr) {

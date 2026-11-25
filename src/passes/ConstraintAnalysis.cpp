@@ -67,14 +67,17 @@
 //
 
 #include <algorithm>
+#include <variant>
 
 #include "cfg/cfg-traversal.h"
 #include "cfg/wto.h"
 #include "ir/constraint.h"
 #include "ir/drop.h"
+#include "ir/iteration.h"
 #include "ir/literal-utils.h"
 #include "ir/local-graph.h"
 #include "ir/properties.h"
+#include "ir/trap-on-null.h"
 #include "ir/utils.h"
 #include "pass.h"
 #include "support/unique_deferring_queue.h"
@@ -94,14 +97,41 @@ using namespace wasm::constraint;
 
 namespace {
 
+// Check whether an expression contains any LocalSet to `local`.
+bool writesLocal(Expression* expr, Index local) {
+  struct Finder : public PostWalker<Finder> {
+    Index local;
+    bool found = false;
+
+    void visitLocalSet(LocalSet* curr) {
+      if (curr->index == local) {
+        found = true;
+      }
+    }
+  };
+  Finder finder;
+  finder.local = local;
+  finder.walk(expr);
+  return finder.found;
+}
+
+// A local that is known to be non-null at a point in a basic block (for
+// example, because an instruction just executed that traps if it is null).
+struct NonNull {
+  Index index;
+};
+
+using Action = std::variant<Expression**, NonNull>;
+
 // Information in a basic block.
 struct Info {
   // For WTOWorklist
   bool inQueue;
   Index index;
 
-  // All relevant operations: local gets and sets and uses of them.
-  std::vector<Expression**> actions;
+  // All relevant operations: local gets and sets and uses of them, as well as
+  // inferred non-nullability constraints.
+  std::vector<Action> actions;
 
   // The branching instruction at the end of the block (or nullptr if there is
   // something like a return or an unreachable, which are terminators that don't
@@ -122,8 +152,9 @@ struct Info {
 };
 
 struct ConstraintAnalysis
-  : public WalkerPass<
-      CFGWalker<ConstraintAnalysis, Visitor<ConstraintAnalysis>, Info>> {
+  : public WalkerPass<TrapOnNullWalker<
+      ConstraintAnalysis,
+      CFGWalker<ConstraintAnalysis, Visitor<ConstraintAnalysis>, Info>>> {
   bool isFunctionParallel() override { return true; }
 
   // Locals are not modified here.
@@ -133,8 +164,9 @@ struct ConstraintAnalysis
     return std::make_unique<ConstraintAnalysis>();
   }
 
-  using Super = WalkerPass<
-    CFGWalker<ConstraintAnalysis, Visitor<ConstraintAnalysis>, Info>>;
+  using Super = WalkerPass<TrapOnNullWalker<
+    ConstraintAnalysis,
+    CFGWalker<ConstraintAnalysis, Visitor<ConstraintAnalysis>, Info>>>;
 
   // Branches outside of the function can be ignored, as we only look at local
   // state in the function.
@@ -162,6 +194,14 @@ struct ConstraintAnalysis
     return !type.isFloat() || fastMath;
   }
 
+  // Tracking of local writes during the initial walk, so we can quickly check
+  // in O(1) whether a local was written inside a trap-on-null expression after
+  // its trapping reference operand was evaluated.
+  Index writeTime = 0;
+  std::vector<Index> lastWriteTime;
+  std::vector<LocalSet*> lastWriteExpr;
+  SmallVector<Index, 8> trapOnNullStartTimes;
+
   void doWalkFunction(Function* func) {
     fastMath = getPassOptions().fastMath;
 
@@ -171,7 +211,19 @@ struct ConstraintAnalysis
       relevantLocals[i] = isRelevantType(func->getLocalType(i));
     }
 
+    writeTime = 0;
+    lastWriteTime.assign(func->getNumLocals(), 0);
+    lastWriteExpr.assign(func->getNumLocals(), nullptr);
+    trapOnNullStartTimes.clear();
+
     Super::doWalkFunction(func);
+  }
+
+  static void scan(ConstraintAnalysis* self, Expression** currp) {
+    if (canTrapOnNull(*currp)) {
+      self->trapOnNullStartTimes.push_back(self->writeTime);
+    }
+    Super::scan(self, currp);
   }
 
   // Store the actions we care about.
@@ -182,6 +234,12 @@ struct ConstraintAnalysis
     }
   }
 
+  void addNonNullAction(Index local) {
+    if (currBasicBlock) {
+      currBasicBlock->contents.actions.push_back(NonNull{local});
+    }
+  }
+
   void visitLocalGet(LocalGet* curr) {
     if (isRelevantType(curr->type)) {
       addAction();
@@ -189,6 +247,8 @@ struct ConstraintAnalysis
   }
 
   void visitLocalSet(LocalSet* curr) {
+    lastWriteTime[curr->index] = ++writeTime;
+    lastWriteExpr[curr->index] = curr;
     if (isRelevantType(getFunction()->getLocalType(curr->index))) {
       addAction();
     }
@@ -198,6 +258,144 @@ struct ConstraintAnalysis
   void visitBinary(Binary* curr) { addAction(); }
   void visitRefEq(RefEq* curr) { addAction(); }
   void visitRefIsNull(RefIsNull* curr) { addAction(); }
+
+  void visitDrop(Drop* curr) {
+    if (!currBasicBlock) {
+      return;
+    }
+    if (auto* as = curr->value->dynCast<RefAs>();
+        as && as->op == RefAsNonNull) {
+      // Insert the Drop action before any NonNull actions that were just added
+      // by the RefAs itself, so that optimize() checks whether the value was
+      // already proven non-null *before* this RefAs executes. Note that the
+      // RefAs's own Expression** action precedes its NonNull actions, acting as
+      // a barrier against any NonNull actions from inside as->value.
+      auto& actions = currBasicBlock->contents.actions;
+      auto it = actions.end();
+      while (it != actions.begin() &&
+             std::holds_alternative<NonNull>(*(it - 1))) {
+        --it;
+      }
+      actions.insert(it, getCurrentPointer());
+    }
+  }
+
+  template<typename T> void visitTrapOnNull(T* curr) {
+    auto startTime = trapOnNullStartTimes.back();
+    trapOnNullStartTimes.pop_back();
+    if (!currBasicBlock) {
+      return;
+    }
+    if constexpr (std::is_same_v<T, RefAs>) {
+      if (curr->op == RefAsNonNull) {
+        // Add the RefAs action before any NonNull action it implies, so
+        // optimize() can check whether the input is already proven null.
+        addAction();
+      }
+    }
+    TrapOnNull<T>::forEach(
+      curr, [&](Expression*& ref) { noteTrapOnNull(curr, ref, startTime); });
+  }
+
+  // Given an expression `curr` and one of its operands `ref` that causes `curr`
+  // to trap if null, infer non-nullability constraints for any nullable local
+  // whose value falls through to `ref`, provided no sibling child evaluated
+  // after `ref` writes to that local.
+  void noteTrapOnNull(Expression* curr, Expression*& ref, Index startTime) {
+    if (!ref->type.isNullableRef()) {
+      return;
+    }
+
+    struct Candidate {
+      Index local;
+      // Non-null if this candidate came from a local.tee.
+      LocalSet* tee;
+    };
+    SmallVector<Candidate, 2> candidates;
+    auto addCandidate = [&](Index local, LocalSet* tee) {
+      if (!relevantLocals[local] ||
+          !getFunction()->getLocalType(local).isNullableRef()) {
+        return;
+      }
+      for (auto& existing : candidates) {
+        if (existing.local == local) {
+          return;
+        }
+      }
+      candidates.push_back({local, tee});
+    };
+
+    auto* expr = ref;
+    while (1) {
+      if (auto* get = expr->dynCast<LocalGet>()) {
+        addCandidate(get->index, nullptr);
+        break;
+      }
+      if (auto* set = expr->dynCast<LocalSet>()) {
+        assert(set->isTee());
+        addCandidate(set->index, set);
+      }
+      auto* next = Properties::getImmediateFallthrough(
+        expr, getPassOptions(), *getModule());
+      if (next == expr) {
+        break;
+      }
+      expr = next;
+    }
+
+    if (candidates.empty()) {
+      return;
+    }
+
+    // Check whether `ref` has any sibling children evaluated after it. Note
+    // that ChildIterator stores children in reverse execution order, so
+    // `children.front()` is the last child evaluated and `children.back()` is
+    // the first.
+    ChildIterator iter(curr);
+    if (iter.children[0] == &ref) {
+      for (auto& c : candidates) {
+        addNonNullAction(c.local);
+      }
+      return;
+    }
+
+    for (auto& c : candidates) {
+      if (lastWriteTime[c.local] <= startTime) {
+        // This local was not written anywhere inside `curr`.
+        addNonNullAction(c.local);
+        continue;
+      }
+      if (c.tee) {
+        // This local was written by `c.tee` itself. No later child wrote it iff
+        // `c.tee` is still the most recent write to it.
+        if (lastWriteExpr[c.local] == c.tee) {
+          addNonNullAction(c.local);
+        }
+        continue;
+      }
+      if (ref->is<LocalGet>() && iter.children.back() == &ref) {
+        // `ref` is the first child and contains no writes, yet `c.local` was
+        // written inside `curr`, so a later sibling must have written it.
+        continue;
+      }
+
+      // Rare fallback: check sibling children evaluated after `ref` directly.
+      bool seenRef = false;
+      bool modified = false;
+      for (auto*& child : iter) {
+        if (&child == &ref) {
+          seenRef = true;
+        } else if (seenRef && writesLocal(child, c.local)) {
+          modified = true;
+          break;
+        }
+      }
+      assert(seenRef);
+      if (!modified) {
+        addNonNullAction(c.local);
+      }
+    }
+  }
 
   static void doStartIfTrue(ConstraintAnalysis* self, Expression** currp) {
     // We are right after the condition, so we are in the block before the If's
@@ -216,6 +414,8 @@ struct ConstraintAnalysis
   }
 
   void visitFunction(Function* curr) {
+    assert(trapOnNullStartTimes.empty());
+
     if (!entry) {
       // Body is unreachable, no entry block.
       return;
@@ -268,11 +468,11 @@ struct ConstraintAnalysis
       std::cout << block << " start constraints: " << constraints << '\n';
 #endif
 
-      for (auto** currp : block->contents.actions) {
+      for (auto& action : block->contents.actions) {
         if (constraints.unreachable) {
           break;
         }
-        applyToConstraints(*currp, constraints);
+        applyToConstraints(action, constraints);
       }
 
       if (constraints.unreachable) {
@@ -359,7 +559,18 @@ struct ConstraintAnalysis
       // at each intermediate point inside the block. (Flowing between blocks is
       // of course not needed at this stage.)
       auto& constraints = block->contents.startConstraints;
-      for (auto** currp : block->contents.actions) {
+      for (auto& action : block->contents.actions) {
+        if (auto* nonNull = std::get_if<NonNull>(&action)) {
+#if CONSTRAINT_DEBUG
+          std::cout << block << " applying non-null to $" << nonNull->index
+                    << '\n';
+#endif
+          if (!constraints.unreachable) {
+            applyNonNull(nonNull->index, constraints);
+          }
+          continue;
+        }
+        auto** currp = std::get<Expression**>(action);
 #if CONSTRAINT_DEBUG
         std::cout << block << " trying to optimize " << **currp << '\n';
 #endif
@@ -428,11 +639,98 @@ struct ConstraintAnalysis
     return nullptr;
   }
 
+  // Check whether the constraints prove that `expr` (a nullable ref expression)
+  // is null (True), non-null (False), or Unknown.
+  Result provesNull(Expression* expr,
+                    const BasicBlockConstraintMap& constraints) {
+    if (!expr->type.isNullableRef()) {
+      return expr->type.isNonNullableRef() ? False : Unknown;
+    }
+    while (1) {
+      if (auto* get = expr->dynCast<LocalGet>()) {
+        if (relevantLocals[get->index]) {
+          auto localType = getFunction()->getLocalType(get->index);
+          if (localType.isNullableRef()) {
+            auto zero = Literal::makeZero(localType);
+            auto res =
+              constraints.proves({get->index, Constraint{Abstract::Eq, {zero}}});
+            if (res != Unknown) {
+              return res;
+            }
+          }
+        }
+        break;
+      }
+      if (auto* set = expr->dynCast<LocalSet>()) {
+        assert(set->isTee());
+        if (relevantLocals[set->index]) {
+          auto localType = getFunction()->getLocalType(set->index);
+          if (localType.isNullableRef()) {
+            auto zero = Literal::makeZero(localType);
+            auto res =
+              constraints.proves({set->index, Constraint{Abstract::Eq, {zero}}});
+            if (res != Unknown) {
+              return res;
+            }
+          }
+        }
+      }
+      auto* next = Properties::getImmediateFallthrough(
+        expr, getPassOptions(), *getModule());
+      if (next == expr) {
+        break;
+      }
+      expr = next;
+    }
+    return Unknown;
+  }
+
   // Given an expression and the constraints on it, parse it into a constraint
   // if we can, and optimize it.
   void optimizeConstraint(Expression** currp,
                           const BasicBlockConstraintMap& constraints) {
     auto* curr = *currp;
+
+    // Optimize (ref.as_non_null x): if x is proven null, this always traps.
+    // (When x is proven non-null, we cannot remove ref.as_non_null in general
+    // because the parent may require a non-nullable type; the dropped case is
+    // handled below.)
+    if (auto* as = curr->dynCast<RefAs>()) {
+      if (as->op == RefAsNonNull &&
+          provesNull(as->value, constraints) == True) {
+        auto& wasm = *getModule();
+        *currp = getDroppedChildrenAndAppend(as,
+                                             wasm,
+                                             getPassOptions(),
+                                             Builder(wasm).makeUnreachable(),
+                                             DropMode::IgnoreParentEffects);
+        refinalize = true;
+      }
+      return;
+    }
+
+    // Optimize (drop (ref.as_non_null x)): if x is proven non-null, the
+    // ref.as_non_null cannot trap and its non-nullable result type is unused,
+    // so we can remove it (and the drop itself if x has no side effects).
+    if (auto* drop = curr->dynCast<Drop>()) {
+      if (drop->value->is<Unreachable>()) {
+        *currp = drop->value;
+        refinalize = true;
+        return;
+      }
+      if (auto* as = drop->value->dynCast<RefAs>();
+          as && as->op == RefAsNonNull) {
+        if (provesNull(as->value, constraints) == False) {
+          if (EffectAnalyzer(getPassOptions(), *getModule(), as->value)
+                .hasUnremovableSideEffects()) {
+            drop->value = as->value;
+          } else {
+            *currp = Builder(*getModule()).makeNop();
+          }
+        }
+      }
+      return;
+    }
 
     // Note that we don't need to try to parse a series of constraints with
     // ParsedAndedConstraints: if there is a tree of ANDed things, we will
@@ -547,6 +845,23 @@ struct ConstraintAnalysis
   // How many times we processed each Binary action.
   std::unordered_map<Binary*, Index> binaryActionCounts;
 
+  void applyNonNull(Index index, BasicBlockConstraintMap& constraints) {
+    auto localType = getFunction()->getLocalType(index);
+    assert(localType.isNullableRef());
+    auto zero = Literal::makeZero(localType);
+    auto c = Constraint{Abstract::Ne, {zero}};
+    constraints.approximateAnd(index, c);
+  }
+
+  void applyToConstraints(const Action& action,
+                          BasicBlockConstraintMap& constraints) {
+    if (auto* nonNull = std::get_if<NonNull>(&action)) {
+      applyNonNull(nonNull->index, constraints);
+      return;
+    }
+    applyToConstraints(*std::get<Expression**>(action), constraints);
+  }
+
   // Given an expression, apply it to the constraints. For example, a local.set
   // sets the value for that local.
   void applyToConstraints(Expression* curr,
@@ -631,12 +946,9 @@ struct ConstraintAnalysis
       //
       //  (local.set $x (ref.as_non_null (..)))
       //
-      // TODO: infer non-nullability from e.g. the ref of a struct.get
       auto localType = getFunction()->getLocalType(set->index);
       if (localType.isNullableRef() && set->value->type.isNonNullableRef()) {
-        auto zero = Literal::makeZero(localType);
-        auto c = Constraint{Abstract::Ne, {zero}};
-        constraints.approximateAnd(set->index, c);
+        applyNonNull(set->index, constraints);
       }
     }
   }

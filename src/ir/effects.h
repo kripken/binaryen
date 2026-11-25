@@ -692,6 +692,8 @@ private:
     // causes trapping. That is, handle the case of the type proving that the
     // input is null.
     // Returns true iff there is no need to consider further effects.
+    // Note: ir/trap-on-null.h also tracks trap-on-null inputs for optimization
+    // passes; keep these in sync when adding new instructions.
     bool trapOnNull(Type type) {
       if (type == Type::unreachable) {
         return true;
